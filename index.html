@@ -1092,7 +1092,7 @@ async function loadDayData() {
   const locId = STATE.currentLocationId;
   if (!locId) return;
 
-  const { data: sessions } = await supabase
+  const { data: sessions } = await sb
     .from('class_sessions')
     .select('*')
     .eq('location_id', locId)
@@ -1140,7 +1140,7 @@ async function getOrCreateSession(locationId, date, hour) {
 
   if (error) { console.error('Error creando sesión:', error); return null; }
 
-  const { data: refreshed } = await supabase
+  const { data: refreshed } = await sb
     .from('class_sessions').select('*').eq('id', data).single();
   if (refreshed) STATE.classSessions.push(refreshed);
 
@@ -1928,7 +1928,7 @@ async function markAttendance(studentId, hour, status, notes) {
   if (!booking) {
     const student = STATE.students.find(s => s.id === studentId);
     const source = student && student.modality === 'fixed' ? 'fixed' : 'flexible';
-    const { data, error } = await supabase
+    const { data, error } = await sb
       .from('session_bookings')
       .insert({ session_id: sessionId, student_id: studentId, source })
       .select()
@@ -1956,7 +1956,7 @@ async function markAttendance(studentId, hour, status, notes) {
   };
 
   if (existing) {
-    const { data, error } = await supabase
+    const { data, error } = await sb
       .from('attendance')
       .update(payload)
       .eq('id', existing.id)
@@ -1966,7 +1966,7 @@ async function markAttendance(studentId, hour, status, notes) {
     const idx = STATE.attendances.findIndex(a => a.id === existing.id);
     STATE.attendances[idx] = data;
   } else {
-    const { data, error } = await supabase
+    const { data, error } = await sb
       .from('attendance')
       .insert(payload)
       .select()
