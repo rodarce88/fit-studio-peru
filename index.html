@@ -819,16 +819,17 @@
 // ============================================
 // SUPABASE CONFIG — paste your credentials here
 // ============================================
-const SUPABASE_URL = '';     // ← PEGA AQUÍ tu Project URL
-const SUPABASE_KEY = '';     // ← PEGA AQUÍ tu anon public key
+const SUPABASE_URL = 'https://jcvizioahuqvmhwfnbop.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Impjdml6aW9haHVxdm1od2ZuYm9wIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc1MjIzODIsImV4cCI6MjA5MzA5ODM4Mn0.0EYHVITqA85IhtBUbGddHEWcVKIU_MeSzSxrdzNyvhI';
 // Si están vacíos, la app corre en MODO DEMO (datos en localStorage).
 // ============================================
 
-let supabase = null;
+// Renombramos a 'sb' para evitar conflicto con la global 'supabase' de la librería
+let sb = null;
 let isOnline = false;
 
 if (SUPABASE_URL && SUPABASE_KEY) {
-  supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+  sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 }
 
 // ============================================
@@ -864,7 +865,7 @@ async function checkConnection() {
     return false;
   }
   try {
-    const { error } = await supabase.from('locations').select('id').limit(1);
+    const { error } = await sb.from('locations').select('id').limit(1);
     if (error) throw error;
     statusEl.className = 'conn-status conn-online';
     textEl.textContent = 'Conectado';
@@ -894,12 +895,12 @@ async function loadAll() {
 
 async function loadFromSupabase() {
   const [locations, students, instructors, packages, fixedBookings, schedules] = await Promise.all([
-    supabase.from('locations').select('*').eq('is_active', true).order('name'),
-    supabase.from('students').select('*').eq('status', 'active').order('first_name'),
-    supabase.from('instructors').select('*').eq('is_active', true).order('full_name'),
-    supabase.from('packages').select('*').eq('is_active', true).order('display_order'),
-    supabase.from('fixed_bookings').select('*').eq('is_active', true),
-    supabase.from('instructor_schedules').select('*').eq('is_active', true),
+    sb.from('locations').select('*').eq('is_active', true).order('name'),
+    sb.from('students').select('*').eq('status', 'active').order('first_name'),
+    sb.from('instructors').select('*').eq('is_active', true).order('full_name'),
+    sb.from('packages').select('*').eq('is_active', true).order('display_order'),
+    sb.from('fixed_bookings').select('*').eq('is_active', true),
+    sb.from('instructor_schedules').select('*').eq('is_active', true),
   ]);
 
   if (locations.error) { showToast('Error cargando sedes: ' + locations.error.message, 'error'); return; }
@@ -1102,8 +1103,8 @@ async function loadDayData() {
   if (STATE.classSessions.length > 0) {
     const sessionIds = STATE.classSessions.map(s => s.id);
     const [bookings, attendances] = await Promise.all([
-      supabase.from('session_bookings').select('*').in('session_id', sessionIds),
-      supabase.from('attendance').select('*').in('session_id', sessionIds),
+      sb.from('session_bookings').select('*').in('session_id', sessionIds),
+      sb.from('attendance').select('*').in('session_id', sessionIds),
     ]);
     STATE.sessionBookings = bookings.data || [];
     STATE.attendances = attendances.data || [];
@@ -1130,7 +1131,7 @@ async function getOrCreateSession(locationId, date, hour) {
   const inst = resolveInstructor(locationId, date, dow, hour);
   const instructorId = (inst && inst.id) || null;
 
-  const { data, error } = await supabase.rpc('ensure_class_session', {
+  const { data, error } = await sb.rpc('ensure_class_session', {
     p_location_id: locationId,
     p_date: dateStr,
     p_hour: hour,
@@ -1557,8 +1558,8 @@ async function saveStudent() {
 
   if (isOnline) {
     const result = isEdit
-      ? await supabase.from('students').update(data).eq('id', id).select().single()
-      : await supabase.from('students').insert(data).select().single();
+      ? await sb.from('students').update(data).eq('id', id).select().single()
+      : await sb.from('students').insert(data).select().single();
     if (result.error) { showToast('Error: ' + result.error.message, 'error'); return; }
 
     if (isEdit) {
@@ -1587,7 +1588,7 @@ async function deactivateStudent() {
   const id = document.getElementById('f-student-id').value;
   if (!confirm('¿Desactivar este alumno? No se borrará, solo se ocultará.')) return;
   if (isOnline) {
-    const { error } = await supabase.from('students').update({ status: 'inactive' }).eq('id', id);
+    const { error } = await sb.from('students').update({ status: 'inactive' }).eq('id', id);
     if (error) { showToast('Error: ' + error.message, 'error'); return; }
   }
   STATE.students = STATE.students.filter(s => s.id !== id);
@@ -1624,8 +1625,8 @@ async function saveInstructor() {
 
   if (isOnline) {
     const result = isEdit
-      ? await supabase.from('instructors').update(data).eq('id', id).select().single()
-      : await supabase.from('instructors').insert(data).select().single();
+      ? await sb.from('instructors').update(data).eq('id', id).select().single()
+      : await sb.from('instructors').insert(data).select().single();
     if (result.error) { showToast('Error: ' + result.error.message, 'error'); return; }
     if (isEdit) {
       const idx = STATE.instructors.findIndex(i => i.id === id);
@@ -1651,7 +1652,7 @@ async function deactivateInstructor() {
   const id = document.getElementById('fi-id').value;
   if (!confirm('¿Desactivar este profesor?')) return;
   if (isOnline) {
-    const { error } = await supabase.from('instructors').update({ is_active: false }).eq('id', id);
+    const { error } = await sb.from('instructors').update({ is_active: false }).eq('id', id);
     if (error) { showToast('Error: ' + error.message, 'error'); return; }
   }
   STATE.instructors = STATE.instructors.filter(i => i.id !== id);
@@ -1824,7 +1825,7 @@ async function saveInstructorSchedule() {
 
   // Borrar los existentes vigentes (los del rango que estamos editando)
   for (const s of existing) {
-    await supabase.from('instructor_schedules').delete().eq('id', s.id);
+    await sb.from('instructor_schedules').delete().eq('id', s.id);
   }
 
   // Insertar nuevos
@@ -1842,12 +1843,12 @@ async function saveInstructorSchedule() {
   });
 
   if (newRows.length > 0) {
-    const { error } = await supabase.from('instructor_schedules').insert(newRows);
+    const { error } = await sb.from('instructor_schedules').insert(newRows);
     if (error) { showToast('Error: ' + error.message, 'error'); return; }
   }
 
   // Recargar schedules en STATE
-  const { data } = await supabase.from('instructor_schedules').select('*').eq('is_active', true);
+  const { data } = await sb.from('instructor_schedules').select('*').eq('is_active', true);
   STATE.schedules = data || [];
 
   showToast(`✓ ${newRows.length} horarios guardados`, 'success');
@@ -1861,14 +1862,14 @@ async function deleteAllSchedulesForInstructor() {
   const locId = document.getElementById('sched-location').value;
   const instructorId = SCHEDULE_CTX.instructorId;
 
-  const { error } = await supabase.from('instructor_schedules')
+  const { error } = await sb.from('instructor_schedules')
     .delete()
     .eq('instructor_id', instructorId)
     .eq('location_id', locId);
 
   if (error) { showToast('Error: ' + error.message, 'error'); return; }
 
-  const { data } = await supabase.from('instructor_schedules').select('*').eq('is_active', true);
+  const { data } = await sb.from('instructor_schedules').select('*').eq('is_active', true);
   STATE.schedules = data || [];
   showToast('Horarios eliminados', 'success');
   closeModals();
@@ -2068,7 +2069,7 @@ async function clearAttendance(studentId, hour) {
   const att = findAttendance(studentId, session.id);
   if (!att) { closeAbsenceMenu(); return; }
 
-  const { error } = await supabase.from('attendance').delete().eq('id', att.id);
+  const { error } = await sb.from('attendance').delete().eq('id', att.id);
   if (error) { showToast('Error: ' + error.message, 'error'); return; }
 
   STATE.attendances = STATE.attendances.filter(a => a.id !== att.id);
