@@ -723,6 +723,91 @@
   </div>
 </div>
 
+<!-- CHANGE INSTRUCTOR MODAL (cambio puntual de una clase / día / mañana / tarde) -->
+<div class="modal-backdrop" id="change-instructor-modal" onclick="if(event.target===this) closeModals()">
+  <div class="modal-card">
+    <div class="modal-header">
+      <div class="modal-title">Cambiar <em>profesor</em></div>
+      <button class="modal-close" onclick="closeModals()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div id="change-instructor-context" style="background: var(--fit-lavender-pale); padding: 14px 18px; border-radius: var(--radius-md); margin-bottom: 18px; font-size: 13px; color: var(--ink-soft);"></div>
+
+      <div class="form-row" style="margin-bottom: 16px;">
+        <label>Alcance del cambio <span class="req">*</span></label>
+        <select id="change-scope" onchange="updateChangeScope()">
+          <option value="single">Solo esta clase</option>
+          <option value="morning">Toda la mañana (6am-1pm)</option>
+          <option value="afternoon">Toda la tarde (4pm-9pm)</option>
+          <option value="all-day">Todo el día</option>
+        </select>
+      </div>
+
+      <div class="form-row" style="margin-bottom: 16px;">
+        <label>Nuevo profesor <span class="req">*</span></label>
+        <select id="change-new-instructor"></select>
+      </div>
+
+      <div class="form-row" style="margin-bottom: 16px;">
+        <label>Motivo (opcional)</label>
+        <input type="text" id="change-reason" placeholder="ej: Reemplazo por enfermedad, vacaciones..." />
+      </div>
+
+      <div style="background: var(--info-soft); border-left: 3px solid var(--info); padding: 12px 14px; border-radius: var(--radius-sm); font-size: 12px; color: var(--info);">
+        💡 Este cambio aplica solo a la fecha seleccionada. No modifica el horario fijo del profesor. Para cambios estructurales usá "Editar horarios fijos" en el perfil del profesor.
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModals()">Cancelar</button>
+      <button class="btn btn-primary" onclick="applyInstructorChange()">Aplicar cambio</button>
+    </div>
+  </div>
+</div>
+
+<!-- INSTRUCTOR SCHEDULE MODAL (editar horarios fijos del profesor) -->
+<div class="modal-backdrop" id="instructor-schedule-modal" onclick="if(event.target===this) closeModals()">
+  <div class="modal-card" style="width: 720px;">
+    <div class="modal-header">
+      <div class="modal-title" id="schedule-modal-title">Horarios de <em>profesor</em></div>
+      <button class="modal-close" onclick="closeModals()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-bottom: 16px;">
+        <div class="form-row">
+          <label>Sede</label>
+          <select id="sched-location"></select>
+        </div>
+        <div class="form-row">
+          <label>Vigente desde</label>
+          <input type="date" id="sched-from" />
+        </div>
+        <div class="form-row">
+          <label>Vigente hasta (opcional)</label>
+          <input type="date" id="sched-to" />
+        </div>
+      </div>
+
+      <div style="font-size: 12px; color: var(--ink-mute); margin-bottom: 8px;">
+        Marca los horarios donde dicta clases. Click para activar/desactivar.
+      </div>
+
+      <div id="schedule-grid-editor" style="border: 1px solid var(--line); border-radius: var(--radius-md); overflow: hidden;"></div>
+
+      <div style="margin-top: 16px; display: flex; gap: 10px; align-items: center;">
+        <button class="btn btn-ghost" style="font-size: 12px; padding: 6px 12px;" onclick="schedulePreset('mornings')">Lun-Vie 6-11am</button>
+        <button class="btn btn-ghost" style="font-size: 12px; padding: 6px 12px;" onclick="schedulePreset('afternoons')">Lun-Vie 4-8pm</button>
+        <button class="btn btn-ghost" style="font-size: 12px; padding: 6px 12px;" onclick="schedulePreset('weekends')">Fines de semana</button>
+        <button class="btn btn-ghost" style="font-size: 12px; padding: 6px 12px;" onclick="schedulePreset('clear')">Limpiar todo</button>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModals()">Cancelar</button>
+      <button class="btn btn-danger" id="schedule-delete-all" onclick="deleteAllSchedulesForInstructor()" style="display:none;">Eliminar todos</button>
+      <button class="btn btn-primary" onclick="saveInstructorSchedule()">Guardar horarios</button>
+    </div>
+  </div>
+</div>
+
 <!-- TOAST -->
 <div class="toast" id="toast"></div>
 
@@ -734,12 +819,12 @@
 // ============================================
 // SUPABASE CONFIG — paste your credentials here
 // ============================================
-const SUPABASE_URL = 'https://jcvizioahuqvmhwfnbop.supabase.co';     // ← PEGA AQUÍ tu Project URL
-const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Impjdml6aW9haHVxdm1od2ZuYm9wIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc1MjIzODIsImV4cCI6MjA5MzA5ODM4Mn0.0EYHVITqA85IhtBUbGddHEWcVKIU_MeSzSxrdzNyvhI';
+const SUPABASE_URL = '';     // ← PEGA AQUÍ tu Project URL
+const SUPABASE_KEY = '';     // ← PEGA AQUÍ tu anon public key
 // Si están vacíos, la app corre en MODO DEMO (datos en localStorage).
 // ============================================
 
-// supabase already declared above
+let supabase = null;
 let isOnline = false;
 
 if (SUPABASE_URL && SUPABASE_KEY) {
@@ -756,6 +841,8 @@ const STATE = {
   instructors: [],
   packages: [],
   fixedBookings: [],
+  schedules: [],          // instructor_schedules con effective_from / effective_to
+  classOverrides: {},     // cambios puntuales del día: key = 'YYYY-MM-DD-locId-hour' -> instructor_id
   currentDate: new Date(),
   currentFilter: 'all',
 };
@@ -803,12 +890,13 @@ async function loadAll() {
 }
 
 async function loadFromSupabase() {
-  const [locations, students, instructors, packages, fixedBookings] = await Promise.all([
+  const [locations, students, instructors, packages, fixedBookings, schedules] = await Promise.all([
     supabase.from('locations').select('*').eq('is_active', true).order('name'),
     supabase.from('students').select('*').eq('status', 'active').order('first_name'),
     supabase.from('instructors').select('*').eq('is_active', true).order('full_name'),
     supabase.from('packages').select('*').eq('is_active', true).order('display_order'),
     supabase.from('fixed_bookings').select('*').eq('is_active', true),
+    supabase.from('instructor_schedules').select('*').eq('is_active', true),
   ]);
 
   if (locations.error) { showToast('Error cargando sedes: ' + locations.error.message, 'error'); return; }
@@ -818,6 +906,8 @@ async function loadFromSupabase() {
   STATE.instructors = instructors.data || [];
   STATE.packages = packages.data || [];
   STATE.fixedBookings = fixedBookings.data || [];
+  STATE.schedules = schedules.data || [];
+  STATE.classOverrides = STATE.classOverrides || {};  // memoria local: cambios puntuales del día
 
   // Default to Santa Cruz if exists, otherwise first
   const sc = STATE.locations.find(l => l.slug === 'santa-cruz');
@@ -869,6 +959,54 @@ function renderAll() {
 
 function getCurrentLocation() {
   return STATE.locations.find(l => l.id === STATE.currentLocationId) || STATE.locations[0];
+}
+
+// ============================================
+// INSTRUCTOR RESOLUTION
+// Lookup real basado en fecha + sede + día_semana + hora
+// Aplica fechas de vigencia (effective_from/to)
+// ============================================
+function resolveInstructor(locationId, date, dow, hour) {
+  // 1. Override puntual del día (si la coordinadora cambió este slot)
+  const dateKey = date.toISOString().slice(0,10);
+  const overrideKey = `${dateKey}-${locationId}-${hour}`;
+  if (STATE.classOverrides[overrideKey]) {
+    const overrideId = STATE.classOverrides[overrideKey];
+    const inst = STATE.instructors.find(i => i.id === overrideId);
+    if (inst) return { ...inst, _isOverride: true };
+  }
+
+  // 2. Buscar en instructor_schedules vigentes
+  const dateStr = dateKey;
+  const candidates = STATE.schedules.filter(s => {
+    if (s.location_id !== locationId) return false;
+    if (s.day_of_week !== dow) return false;
+    if (s.hour !== hour) return false;
+    if (s.effective_from && dateStr < s.effective_from) return false;
+    if (s.effective_to && dateStr > s.effective_to) return false;
+    return true;
+  });
+
+  if (candidates.length === 0) {
+    return { id: null, initials: '?', full_name: 'Sin asignar', certifications: 'Asignar profesor', _isUnassigned: true };
+  }
+
+  // Tomar el primero (si hay solapamientos, algo va mal pero no rompe)
+  const sched = candidates[0];
+  const inst = STATE.instructors.find(i => i.id === sched.instructor_id);
+  return inst || { id: null, initials: '?', full_name: 'Profesor desconocido', certifications: '', _isUnassigned: true };
+}
+
+function getInstructorColor(inst) {
+  if (!inst || inst._isUnassigned) return '#9CA3AF';
+  const colors = {
+    'AL': '#5B2A8F',  // Alex - morado FIT
+    'V':  '#DB2777',  // Valeria - magenta
+    'AG': '#7C3AED',  // Angie - violeta
+    'AR': '#0891B2',  // Artem - cyan
+    'AP': '#B45309',  // Andrés - ámbar
+  };
+  return colors[inst.initials] || '#7C3AED';
 }
 
 function renderLocationSwitcher() {
@@ -995,9 +1133,9 @@ function renderTimeline() {
     const isCurrentClass = STATE.currentDate.toDateString() === now.toDateString() && now.getHours() === h;
     const stateClass = isCurrentClass ? 'is-current is-open' : (occ === 0 ? 'is-empty' : '');
 
-    // Get instructor for this slot (placeholder logic)
-    const inst = STATE.instructors[0] || { initials: 'AL', full_name: 'Profesor', certifications: '' };
-    const instColor = inst.initials === 'AL' ? '#5B2A8F' : (inst.initials === 'V' ? '#DB2777' : '#7C3AED');
+    // Resolver profesor REAL para esta clase basado en fecha + sede + día_semana + hora
+    const inst = resolveInstructor(loc.id, STATE.currentDate, dow, h);
+    const instColor = getInstructorColor(inst);
 
     const studentRows = studentsAtHour.map(s => `
       <div class="student-row">
@@ -1034,11 +1172,11 @@ function renderTimeline() {
             <div class="class-time">${formatHour(h)}</div>
             <div class="class-time-end">hasta ${formatHour(h)}:50</div>
           </div>
-          <div class="class-instructor">
-            <div class="instructor-avatar" style="--inst-color: ${instColor};">${inst.initials}</div>
+          <div class="class-instructor" onclick="event.stopPropagation(); openChangeInstructorModal(${h}, ${dow})" style="cursor: pointer;" title="Click para cambiar profesor">
+            <div class="instructor-avatar" style="--inst-color: ${instColor}; ${inst._isUnassigned ? 'border: 2px dashed var(--warn);' : ''}">${inst.initials}</div>
             <div class="instructor-info">
-              <div class="instructor-name">${escape(inst.full_name)}</div>
-              <div class="instructor-meta">${escape(inst.certifications || '')}</div>
+              <div class="instructor-name">${escape(inst.full_name)} ${inst._isOverride ? '<span style="font-size:9px;color:var(--warn);background:var(--warn-soft);padding:1px 6px;border-radius:999px;margin-left:4px;">REEMPLAZO</span>' : ''}</div>
+              <div class="instructor-meta">${inst._isUnassigned ? '⚠ Asignar profesor' : escape(inst.certifications || '')}</div>
             </div>
           </div>
           <div class="class-occupancy">
@@ -1132,17 +1270,43 @@ function renderInstructors() {
     grid.innerHTML = '<div class="empty-state"><h3>No hay <em>profesores</em> registrados</h3><p>Click en "Agregar profesor" para crear el primero.</p></div>';
     return;
   }
+  const today = new Date().toISOString().slice(0,10);
   grid.innerHTML = STATE.instructors.map(i => {
-    const color = i.initials === 'AL' ? '#5B2A8F' : (i.initials === 'V' ? '#DB2777' : '#7C3AED');
+    const color = getInstructorColor(i);
+    // Contar slots vigentes hoy
+    const activeSlots = STATE.schedules.filter(s =>
+      s.instructor_id === i.id &&
+      (!s.effective_from || s.effective_from <= today) &&
+      (!s.effective_to || s.effective_to >= today)
+    );
+    const sedeCounts = {};
+    activeSlots.forEach(s => {
+      const loc = STATE.locations.find(l => l.id === s.location_id);
+      const name = loc ? loc.name : '?';
+      sedeCounts[name] = (sedeCounts[name] || 0) + 1;
+    });
+    const sedeText = Object.entries(sedeCounts).map(([n,c]) => `${n} (${c}h)`).join(' · ') || 'Sin horarios asignados';
+
     return `
-      <div onclick='openInstructorModal(${JSON.stringify(i.id).replace(/'/g, "&#39;")})' style="background: white; border-radius: var(--radius-lg); border: 1px solid var(--line); overflow: hidden; cursor: pointer; transition: all 0.2s;" onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='var(--shadow-md)';" onmouseout="this.style.transform=''; this.style.boxShadow='';">
+      <div style="background: white; border-radius: var(--radius-lg); border: 1px solid var(--line); overflow: hidden; transition: all 0.2s;" onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='var(--shadow-md)';" onmouseout="this.style.transform=''; this.style.boxShadow='';">
         <div style="height: 100px; background: linear-gradient(135deg, ${color} 0%, color-mix(in srgb, ${color} 60%, white) 100%); position: relative;">
           <div style="position: absolute; bottom: -28px; left: 22px; width: 64px; height: 64px; border-radius: 50%; background: linear-gradient(135deg, ${color}, color-mix(in srgb, ${color} 60%, white)); border: 4px solid white; display: grid; place-items: center; color: white; font-weight: 700; font-size: 20px;">${escape(i.initials)}</div>
         </div>
-        <div style="padding: 36px 22px 22px;">
+        <div style="padding: 36px 22px 18px;">
           <div style="font-family: var(--display); font-size: 19px; font-weight: 400;">${escape(i.full_name)}</div>
           <div style="font-size: 12px; color: var(--ink-mute); margin-top: 2px;">${escape(i.certifications || 'Sin certificaciones registradas')}</div>
-          ${i.email ? `<div style="margin-top: 10px; font-size: 12px; color: var(--ink-soft);">📧 ${escape(i.email)}</div>` : ''}
+          <div style="margin-top: 12px; padding: 8px 10px; background: var(--fit-cream); border-radius: var(--radius-sm); font-size: 11px; color: var(--ink-soft);">
+            <strong>Horarios vigentes:</strong> ${sedeText}
+          </div>
+          ${i.hire_date ? `<div style="margin-top: 8px; font-size: 11px; color: var(--ink-mute);">Ingreso: ${i.hire_date}</div>` : ''}
+        </div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; border-top: 1px solid var(--line-soft);">
+          <button onclick='openInstructorModal(${JSON.stringify(i.id).replace(/'/g, "&#39;")})' style="padding: 12px; font-size: 12px; font-weight: 500; color: var(--ink-soft); border-right: 1px solid var(--line-soft); transition: background 0.15s;" onmouseover="this.style.background='var(--fit-lavender-pale)'; this.style.color='var(--fit-purple)'" onmouseout="this.style.background=''; this.style.color='var(--ink-soft)'">
+            ✎ Editar perfil
+          </button>
+          <button onclick='openInstructorScheduleModal(${JSON.stringify(i.id).replace(/'/g, "&#39;")})' style="padding: 12px; font-size: 12px; font-weight: 500; color: var(--ink-soft); transition: background 0.15s;" onmouseover="this.style.background='var(--fit-lavender-pale)'; this.style.color='var(--fit-purple)'" onmouseout="this.style.background=''; this.style.color='var(--ink-soft)'">
+            🕐 Horarios
+          </button>
         </div>
       </div>
     `;
@@ -1394,6 +1558,221 @@ async function deactivateInstructor() {
 }
 
 // ============================================
+// CHANGE INSTRUCTOR MODAL — cambio puntual de día
+// ============================================
+let CHANGE_CTX = { hour: null, dow: null };
+
+function openChangeInstructorModal(hour, dow) {
+  CHANGE_CTX = { hour, dow };
+  const loc = getCurrentLocation();
+  const days = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
+  const dateStr = STATE.currentDate.toLocaleDateString('es-PE', { weekday:'long', day:'numeric', month:'long' });
+  const currentInst = resolveInstructor(loc.id, STATE.currentDate, dow, hour);
+
+  document.getElementById('change-instructor-context').innerHTML = `
+    <strong>${dateStr}</strong> · ${formatHour(hour)} · ${loc.name}<br>
+    <span style="color: var(--ink-mute);">Profesor actual:</span> <strong>${escape(currentInst.full_name)}</strong>
+  `;
+
+  // Llenar selector de profesores
+  const sel = document.getElementById('change-new-instructor');
+  sel.innerHTML = STATE.instructors
+    .filter(i => i.id !== currentInst.id)
+    .map(i => `<option value="${i.id}">${escape(i.full_name)} (${escape(i.initials)})</option>`)
+    .join('');
+
+  document.getElementById('change-scope').value = 'single';
+  document.getElementById('change-reason').value = '';
+  document.getElementById('change-instructor-modal').classList.add('is-open');
+}
+
+function updateChangeScope() {
+  // visual feedback opcional
+}
+
+function applyInstructorChange() {
+  const scope = document.getElementById('change-scope').value;
+  const newInstId = document.getElementById('change-new-instructor').value;
+  const reason = document.getElementById('change-reason').value.trim();
+  const loc = getCurrentLocation();
+  const dateKey = STATE.currentDate.toISOString().slice(0,10);
+
+  // Determinar qué horas afecta
+  let hours = [];
+  if (scope === 'single') hours = [CHANGE_CTX.hour];
+  else if (scope === 'morning') hours = [6,7,8,9,10,11,12];
+  else if (scope === 'afternoon') hours = [16,17,18,19,20];
+  else if (scope === 'all-day') hours = [6,7,8,9,10,11,16,17,18,19,20];
+
+  // Aplicar override en memoria (TODO: persistir en class_sessions cuando agreguemos asistencia)
+  hours.forEach(h => {
+    const key = `${dateKey}-${loc.id}-${h}`;
+    STATE.classOverrides[key] = newInstId;
+  });
+
+  // Guardar en localStorage para que persista entre recargas hasta que tengamos class_sessions
+  try {
+    localStorage.setItem('classOverrides', JSON.stringify(STATE.classOverrides));
+  } catch(e) {}
+
+  const inst = STATE.instructors.find(i => i.id === newInstId);
+  showToast(`✓ ${inst.full_name} asignada/o a ${hours.length} clase${hours.length>1?'s':''}`, 'success');
+  closeModals();
+  renderTimeline();
+}
+
+// ============================================
+// INSTRUCTOR SCHEDULE MODAL — editar horario fijo
+// ============================================
+let SCHEDULE_CTX = { instructorId: null, marks: new Set() };
+
+function openInstructorScheduleModal(instructorId) {
+  SCHEDULE_CTX = { instructorId, marks: new Set() };
+  const inst = STATE.instructors.find(i => i.id === instructorId);
+  document.getElementById('schedule-modal-title').innerHTML = `Horarios de <em>${escape(inst.full_name)}</em>`;
+
+  // Selector de sede
+  const sedeSel = document.getElementById('sched-location');
+  sedeSel.innerHTML = STATE.locations.map(l => `<option value="${l.id}">${escape(l.name)}</option>`).join('');
+  sedeSel.value = STATE.currentLocationId;
+  sedeSel.onchange = () => loadScheduleEditorMarks();
+
+  // Fechas default
+  document.getElementById('sched-from').value = new Date().toISOString().slice(0,10);
+  document.getElementById('sched-to').value = '';
+
+  loadScheduleEditorMarks();
+  renderScheduleEditor();
+  document.getElementById('schedule-delete-all').style.display = 'inline-flex';
+  document.getElementById('instructor-schedule-modal').classList.add('is-open');
+}
+
+function loadScheduleEditorMarks() {
+  const locId = document.getElementById('sched-location').value;
+  const dateRef = document.getElementById('sched-from').value || new Date().toISOString().slice(0,10);
+  // Cargar slots existentes del profesor en esa sede vigentes en la fecha de referencia
+  SCHEDULE_CTX.marks = new Set();
+  STATE.schedules
+    .filter(s => s.instructor_id === SCHEDULE_CTX.instructorId && s.location_id === locId)
+    .filter(s => !s.effective_from || s.effective_from <= dateRef)
+    .filter(s => !s.effective_to || s.effective_to >= dateRef)
+    .forEach(s => SCHEDULE_CTX.marks.add(`${s.day_of_week}-${s.hour}`));
+  renderScheduleEditor();
+}
+
+function renderScheduleEditor() {
+  const grid = document.getElementById('schedule-grid-editor');
+  const days = [1,2,3,4,5,6,0];
+  const dayLabels = ['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'];
+  const hours = [6,7,8,9,10,11,16,17,18,19,20];
+
+  let html = `<div style="display: grid; grid-template-columns: 60px repeat(7, 1fr); background: var(--fit-cream); border-bottom: 1px solid var(--line);">
+    <div style="padding: 10px; font-size: 11px; color: var(--ink-mute);"></div>`;
+  dayLabels.forEach(d => html += `<div style="padding: 10px; text-align: center; font-size: 11px; font-weight: 600; color: var(--ink-soft);">${d}</div>`);
+  html += `</div>`;
+
+  hours.forEach(h => {
+    html += `<div style="display: grid; grid-template-columns: 60px repeat(7, 1fr); border-bottom: 1px solid var(--line-soft);">
+      <div style="padding: 10px 8px; font-size: 11px; color: var(--ink-mute); text-align: right; font-family: var(--display);">${formatHour(h)}</div>`;
+    days.forEach(dow => {
+      const key = `${dow}-${h}`;
+      const isMarked = SCHEDULE_CTX.marks.has(key);
+      html += `<div onclick="toggleScheduleSlot(${dow}, ${h})" style="padding: 10px; text-align: center; cursor: pointer; border-left: 1px solid var(--line-soft); ${isMarked ? 'background: var(--fit-purple); color: white;' : 'background: white; color: var(--ink-faint);'}">${isMarked ? '✓' : '+'}</div>`;
+    });
+    html += `</div>`;
+  });
+  grid.innerHTML = html;
+}
+
+function toggleScheduleSlot(dow, hour) {
+  const key = `${dow}-${hour}`;
+  if (SCHEDULE_CTX.marks.has(key)) SCHEDULE_CTX.marks.delete(key);
+  else SCHEDULE_CTX.marks.add(key);
+  renderScheduleEditor();
+}
+
+function schedulePreset(preset) {
+  const days = [1,2,3,4,5];
+  if (preset === 'mornings') days.forEach(d => [6,7,8,9,10,11].forEach(h => SCHEDULE_CTX.marks.add(`${d}-${h}`)));
+  else if (preset === 'afternoons') days.forEach(d => [16,17,18,19,20].forEach(h => SCHEDULE_CTX.marks.add(`${d}-${h}`)));
+  else if (preset === 'weekends') [6,0].forEach(d => [7,8,9,10,11].forEach(h => SCHEDULE_CTX.marks.add(`${d}-${h}`)));
+  else if (preset === 'clear') SCHEDULE_CTX.marks.clear();
+  renderScheduleEditor();
+}
+
+async function saveInstructorSchedule() {
+  if (!isOnline) {
+    showToast('Necesita conexión a Supabase para guardar horarios', 'error');
+    return;
+  }
+  const locId = document.getElementById('sched-location').value;
+  const effFrom = document.getElementById('sched-from').value || null;
+  const effTo = document.getElementById('sched-to').value || null;
+  const instructorId = SCHEDULE_CTX.instructorId;
+
+  // 1. Cerrar (desactivar) todos los schedules vigentes del profesor en esa sede
+  // Marcamos como inactivos los que ya no están en la nueva selección
+  // Estrategia simple: borramos todos los schedules vigentes y reinsertamos
+  const existing = STATE.schedules.filter(s => 
+    s.instructor_id === instructorId && 
+    s.location_id === locId &&
+    (!s.effective_to || s.effective_to >= effFrom)
+  );
+
+  // Borrar los existentes vigentes (los del rango que estamos editando)
+  for (const s of existing) {
+    await supabase.from('instructor_schedules').delete().eq('id', s.id);
+  }
+
+  // Insertar nuevos
+  const newRows = Array.from(SCHEDULE_CTX.marks).map(key => {
+    const [dow, hour] = key.split('-').map(Number);
+    return {
+      instructor_id: instructorId,
+      location_id: locId,
+      day_of_week: dow,
+      hour: hour,
+      effective_from: effFrom,
+      effective_to: effTo,
+      is_active: true,
+    };
+  });
+
+  if (newRows.length > 0) {
+    const { error } = await supabase.from('instructor_schedules').insert(newRows);
+    if (error) { showToast('Error: ' + error.message, 'error'); return; }
+  }
+
+  // Recargar schedules en STATE
+  const { data } = await supabase.from('instructor_schedules').select('*').eq('is_active', true);
+  STATE.schedules = data || [];
+
+  showToast(`✓ ${newRows.length} horarios guardados`, 'success');
+  closeModals();
+  renderAll();
+}
+
+async function deleteAllSchedulesForInstructor() {
+  if (!confirm('¿Eliminar TODOS los horarios fijos de este profesor en esta sede? (No afecta clases ya dictadas, solo el horario futuro)')) return;
+  if (!isOnline) { showToast('Necesita conexión', 'error'); return; }
+  const locId = document.getElementById('sched-location').value;
+  const instructorId = SCHEDULE_CTX.instructorId;
+
+  const { error } = await supabase.from('instructor_schedules')
+    .delete()
+    .eq('instructor_id', instructorId)
+    .eq('location_id', locId);
+
+  if (error) { showToast('Error: ' + error.message, 'error'); return; }
+
+  const { data } = await supabase.from('instructor_schedules').select('*').eq('is_active', true);
+  STATE.schedules = data || [];
+  showToast('Horarios eliminados', 'success');
+  closeModals();
+  renderAll();
+}
+
+// ============================================
 // FILTERS, SEARCH, NAV
 // ============================================
 function filterStudents() { renderStudents(); }
@@ -1477,6 +1856,11 @@ function showToast(msg, type = '') {
 // ============================================
 document.addEventListener('DOMContentLoaded', () => {
   setDateDisplay();
+  // Cargar overrides puntuales de localStorage
+  try {
+    const saved = localStorage.getItem('classOverrides');
+    if (saved) STATE.classOverrides = JSON.parse(saved);
+  } catch(e) {}
   loadAll();
 });
 </script>
