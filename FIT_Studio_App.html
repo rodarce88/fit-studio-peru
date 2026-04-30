@@ -1,0 +1,1485 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>FIT Studio Peru — Sistema</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght,SOFT@9..144,300..900,0..100&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  /* ============================================
+     DESIGN TOKENS — same brand from mockup
+     ============================================ */
+  :root {
+    --fit-purple: #5B2A8F;
+    --fit-purple-deep: #401D6B;
+    --fit-purple-soft: #8B5FBF;
+    --fit-lavender: #E8DFF5;
+    --fit-lavender-pale: #F4EFFB;
+    --fit-cream: #FAF8F5;
+    --ink: #1A1419;
+    --ink-soft: #4A4350;
+    --ink-mute: #8B8493;
+    --ink-faint: #C9C3D1;
+    --line: #EBE5F0;
+    --line-soft: #F2EDF5;
+    --bg: #FBFAFC;
+    --white: #FFFFFF;
+    --warn: #C2410C;
+    --warn-soft: #FFF1E8;
+    --danger: #B91C1C;
+    --danger-soft: #FEEAEA;
+    --good: #15803D;
+    --good-soft: #ECFDF3;
+    --info: #1E40AF;
+    --info-soft: #EAF0FE;
+    --display: 'Fraunces', Georgia, serif;
+    --body: 'Outfit', -apple-system, BlinkMacSystemFont, sans-serif;
+    --sidebar-w: 240px;
+    --topbar-h: 72px;
+    --radius-sm: 10px;
+    --radius-md: 16px;
+    --radius-lg: 22px;
+    --radius-pill: 999px;
+    --shadow-sm: 0 1px 2px rgba(91, 42, 143, 0.04);
+    --shadow-md: 0 4px 14px rgba(91, 42, 143, 0.06);
+    --shadow-lg: 0 18px 40px rgba(91, 42, 143, 0.10);
+    --shadow-purple: 0 8px 24px rgba(91, 42, 143, 0.18);
+  }
+  *, *::before, *::after { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body { font-family: var(--body); font-size: 15px; color: var(--ink); background: var(--bg); -webkit-font-smoothing: antialiased; line-height: 1.5; min-height: 100vh; }
+  button { font-family: inherit; cursor: pointer; border: none; background: none; color: inherit; }
+  input, select, textarea { font-family: inherit; font-size: inherit; color: inherit; }
+  h1, h2, h3, h4 { margin: 0; font-weight: 500; letter-spacing: -0.01em; }
+
+  /* TOPBAR */
+  .topbar {
+    position: fixed; top: 0; left: 0; right: 0; height: var(--topbar-h);
+    background: white; border-bottom: 1px solid var(--line); z-index: 100;
+    display: flex; align-items: center; padding: 0 28px; gap: 28px;
+  }
+  .topbar-logo { display: flex; align-items: center; gap: 12px; width: calc(var(--sidebar-w) - 28px); }
+  .logo-mark {
+    width: 40px; height: 40px; background: var(--fit-purple); border-radius: 50%;
+    display: grid; place-items: center; color: white; font-weight: 800; font-size: 14px;
+    box-shadow: var(--shadow-purple);
+  }
+  .logo-text { display: flex; flex-direction: column; line-height: 1; }
+  .logo-text-1 { font-family: var(--display); font-size: 17px; font-weight: 500; }
+  .logo-text-2 { font-size: 11px; color: var(--ink-mute); text-transform: uppercase; letter-spacing: 0.12em; margin-top: 3px; }
+  .topbar-center { flex: 1; display: flex; align-items: center; gap: 20px; }
+
+  .location-switcher {
+    display: flex; align-items: center; gap: 12px; padding: 8px 16px 8px 10px;
+    background: var(--fit-lavender-pale); border-radius: var(--radius-pill);
+    border: 1px solid transparent; transition: all 0.2s; cursor: pointer;
+  }
+  .location-switcher:hover { background: var(--fit-lavender); border-color: var(--fit-purple-soft); }
+  .location-pin { width: 28px; height: 28px; background: var(--fit-purple); color: white; border-radius: 50%; display: grid; place-items: center; font-size: 13px; }
+  .location-info { line-height: 1.15; }
+  .location-label { font-size: 10px; color: var(--ink-mute); text-transform: uppercase; letter-spacing: 0.1em; }
+  .location-name { font-size: 14px; font-weight: 500; }
+  .location-caret { color: var(--fit-purple); margin-left: 4px; }
+
+  .conn-status {
+    display: flex; align-items: center; gap: 8px; padding: 6px 14px;
+    border: 1px solid var(--line); border-radius: var(--radius-pill); font-size: 11px; color: var(--ink-mute);
+  }
+  .conn-dot { width: 8px; height: 8px; border-radius: 50%; }
+  .conn-online .conn-dot { background: var(--good); box-shadow: 0 0 0 3px rgba(21, 128, 61, 0.15); }
+  .conn-offline .conn-dot { background: var(--warn); }
+  .conn-error .conn-dot { background: var(--danger); }
+
+  .date-display { margin-left: auto; text-align: right; line-height: 1.15; }
+  .date-display-day { font-family: var(--display); font-size: 20px; font-style: italic; color: var(--fit-purple); font-weight: 400; }
+  .date-display-full { font-size: 12px; color: var(--ink-mute); margin-top: 1px; }
+
+  .topbar-user { display: flex; align-items: center; gap: 12px; padding: 6px 14px 6px 6px; border: 1px solid var(--line); border-radius: var(--radius-pill); cursor: pointer; transition: all 0.2s; }
+  .topbar-user:hover { border-color: var(--fit-purple-soft); background: var(--fit-lavender-pale); }
+  .user-avatar { width: 32px; height: 32px; background: linear-gradient(135deg, var(--fit-purple), var(--fit-purple-soft)); color: white; border-radius: 50%; display: grid; place-items: center; font-weight: 600; font-size: 12px; }
+  .user-info { line-height: 1.15; }
+  .user-name { font-size: 13px; font-weight: 500; }
+  .user-role { font-size: 11px; color: var(--ink-mute); }
+
+  /* SIDEBAR */
+  .sidebar {
+    position: fixed; top: var(--topbar-h); left: 0; bottom: 0; width: var(--sidebar-w);
+    background: white; border-right: 1px solid var(--line); padding: 24px 16px; overflow-y: auto;
+  }
+  .nav-group { margin-bottom: 28px; }
+  .nav-group-title { font-size: 10px; color: var(--ink-mute); text-transform: uppercase; letter-spacing: 0.14em; padding: 0 12px 8px; font-weight: 500; }
+  .nav-item {
+    display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: var(--radius-sm);
+    font-size: 14px; color: var(--ink-soft); margin-bottom: 2px; transition: all 0.15s;
+    width: 100%; text-align: left; position: relative;
+  }
+  .nav-item:hover { background: var(--fit-lavender-pale); color: var(--fit-purple); }
+  .nav-item.is-active { background: var(--fit-lavender); color: var(--fit-purple); font-weight: 500; }
+  .nav-item.is-active::before { content: ''; position: absolute; left: -16px; top: 50%; transform: translateY(-50%); width: 3px; height: 22px; background: var(--fit-purple); border-radius: 0 3px 3px 0; }
+  .nav-icon { width: 18px; height: 18px; display: grid; place-items: center; flex-shrink: 0; }
+  .nav-badge { margin-left: auto; background: var(--fit-purple); color: white; font-size: 10px; font-weight: 600; padding: 2px 7px; border-radius: var(--radius-pill); min-width: 20px; text-align: center; }
+  .nav-badge.warn { background: var(--warn); }
+
+  /* MAIN */
+  .main { margin-left: var(--sidebar-w); margin-top: var(--topbar-h); padding: 32px 36px 80px; min-height: calc(100vh - var(--topbar-h)); }
+  .view { display: none; }
+  .view.is-active { display: block; }
+
+  .page-header { margin-bottom: 28px; display: flex; align-items: end; justify-content: space-between; gap: 20px; }
+  .page-title { font-family: var(--display); font-size: 38px; font-weight: 350; line-height: 1; letter-spacing: -0.02em; }
+  .page-title em { font-style: italic; color: var(--fit-purple); font-weight: 400; }
+  .page-sub { font-size: 14px; color: var(--ink-mute); margin-top: 8px; }
+  .page-actions { display: flex; gap: 10px; }
+
+  .btn { padding: 10px 18px; border-radius: var(--radius-pill); font-size: 13px; font-weight: 500; transition: all 0.2s; display: inline-flex; align-items: center; gap: 8px; border: 1px solid transparent; white-space: nowrap; }
+  .btn-primary { background: var(--fit-purple); color: white; box-shadow: var(--shadow-purple); }
+  .btn-primary:hover { background: var(--fit-purple-deep); transform: translateY(-1px); }
+  .btn-ghost { background: white; border-color: var(--line); color: var(--ink-soft); }
+  .btn-ghost:hover { border-color: var(--fit-purple-soft); color: var(--fit-purple); background: var(--fit-lavender-pale); }
+  .btn-danger { background: var(--danger-soft); color: var(--danger); }
+  .btn-danger:hover { background: var(--danger); color: white; }
+
+  /* KPI */
+  .kpi-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 28px; }
+  .kpi { background: white; border-radius: var(--radius-md); padding: 22px; border: 1px solid var(--line); position: relative; overflow: hidden; transition: transform 0.2s; }
+  .kpi:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); }
+  .kpi.kpi-purple { background: linear-gradient(135deg, var(--fit-purple) 0%, var(--fit-purple-deep) 100%); color: white; border-color: var(--fit-purple-deep); }
+  .kpi-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.12em; color: var(--ink-mute); margin-bottom: 8px; font-weight: 500; }
+  .kpi-purple .kpi-label { color: rgba(255,255,255,0.75); }
+  .kpi-value { font-family: var(--display); font-size: 42px; font-weight: 350; line-height: 1; }
+  .kpi-sub { font-size: 12px; color: var(--ink-mute); margin-top: 8px; }
+  .kpi-purple .kpi-sub { color: rgba(255,255,255,0.75); }
+  .kpi-icon { position: absolute; top: 22px; right: 22px; width: 36px; height: 36px; border-radius: 50%; background: var(--fit-lavender); color: var(--fit-purple); display: grid; place-items: center; }
+  .kpi-purple .kpi-icon { background: rgba(255,255,255,0.15); color: white; }
+
+  /* TIMELINE */
+  .layout-grid { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 24px; }
+  .timeline-card, .panel, .table-card { background: white; border-radius: var(--radius-lg); border: 1px solid var(--line); overflow: hidden; box-shadow: var(--shadow-sm); }
+  .timeline-header { padding: 22px 26px; border-bottom: 1px solid var(--line-soft); display: flex; align-items: center; justify-content: space-between; background: var(--fit-cream); }
+  .timeline-title { display: flex; align-items: baseline; gap: 10px; }
+  .timeline-title h2 { font-family: var(--display); font-size: 24px; font-weight: 400; }
+  .timeline-title em { font-style: italic; color: var(--fit-purple); }
+  .day-nav { display: flex; align-items: center; gap: 4px; padding: 4px; background: white; border-radius: var(--radius-pill); border: 1px solid var(--line); }
+  .day-nav button { padding: 6px 14px; border-radius: var(--radius-pill); font-size: 12px; color: var(--ink-mute); font-weight: 500; transition: all 0.2s; }
+  .day-nav button.is-active { background: var(--fit-purple); color: white; }
+  .day-nav button:hover:not(.is-active) { color: var(--fit-purple); }
+  .day-nav .nav-arrow { padding: 6px 10px; }
+
+  .timeline-body { padding: 12px 16px 20px; }
+  .class-block { border: 1px solid var(--line-soft); border-radius: var(--radius-md); margin-bottom: 12px; transition: all 0.2s; background: white; }
+  .class-block:hover { border-color: var(--fit-purple-soft); box-shadow: var(--shadow-md); }
+  .class-block.is-current { border-color: var(--fit-purple); border-width: 2px; background: var(--fit-lavender-pale); }
+  .class-block.is-empty { background: var(--fit-cream); }
+
+  .class-header { padding: 16px 20px; display: grid; grid-template-columns: 80px 1fr auto auto; align-items: center; gap: 16px; cursor: pointer; }
+  .class-time { font-family: var(--display); font-size: 22px; font-weight: 400; line-height: 1; }
+  .class-time-end { font-size: 11px; color: var(--ink-mute); margin-top: 3px; font-family: var(--body); }
+  .class-instructor { display: flex; align-items: center; gap: 10px; }
+  .instructor-avatar { width: 38px; height: 38px; border-radius: 50%; background: var(--inst-color, var(--fit-purple)); display: grid; place-items: center; color: white; font-weight: 600; font-size: 13px; flex-shrink: 0; }
+  .instructor-info { line-height: 1.2; }
+  .instructor-name { font-weight: 500; font-size: 14px; }
+  .instructor-meta { font-size: 11px; color: var(--ink-mute); }
+
+  .class-occupancy { display: flex; align-items: center; gap: 12px; min-width: 120px; justify-content: flex-end; }
+  .occupancy-bar { width: 60px; height: 6px; background: var(--line); border-radius: var(--radius-pill); overflow: hidden; }
+  .occupancy-fill { height: 100%; background: linear-gradient(90deg, var(--fit-purple), var(--fit-purple-soft)); border-radius: inherit; transition: width 0.3s; }
+  .occupancy-fill.warn { background: linear-gradient(90deg, #C2410C, #F59E0B); }
+  .occupancy-fill.full { background: linear-gradient(90deg, #15803D, #22C55E); }
+  .occupancy-num { font-family: var(--display); font-size: 18px; font-weight: 400; color: var(--fit-purple); }
+  .occupancy-num span { color: var(--ink-mute); font-size: 13px; }
+  .class-toggle { width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; color: var(--ink-mute); transition: all 0.2s; }
+  .class-block.is-open .class-toggle { transform: rotate(180deg); color: var(--fit-purple); }
+  .class-students { border-top: 1px solid var(--line-soft); padding: 10px 20px 18px; display: none; }
+  .class-block.is-open .class-students { display: block; }
+
+  .student-row { display: grid; grid-template-columns: auto 1fr auto auto; gap: 14px; align-items: center; padding: 10px 4px; border-bottom: 1px solid var(--line-soft); font-size: 13px; }
+  .student-row:last-child { border-bottom: none; }
+  .student-row:hover { background: var(--fit-lavender-pale); border-radius: var(--radius-sm); }
+  .student-avatar { width: 32px; height: 32px; border-radius: 50%; background: var(--fit-lavender); color: var(--fit-purple); display: grid; place-items: center; font-weight: 600; font-size: 11px; }
+  .student-name { font-weight: 500; }
+  .student-meta { font-size: 11px; color: var(--ink-mute); margin-top: 1px; display: flex; gap: 8px; align-items: center; }
+  .modality-pill { padding: 1px 7px; border-radius: var(--radius-pill); font-size: 9px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
+  .modality-fixed { background: var(--info-soft); color: var(--info); }
+  .modality-flexible { background: var(--warn-soft); color: var(--warn); }
+  .modality-trial { background: #F0E6FF; color: #6B21A8; }
+
+  .attendance-toggle { display: flex; gap: 4px; }
+  .att-btn { width: 32px; height: 32px; border-radius: 50%; border: 1.5px solid var(--line); display: grid; place-items: center; color: var(--ink-faint); transition: all 0.15s; }
+  .att-btn:hover { border-color: var(--fit-purple); color: var(--fit-purple); }
+  .att-btn.is-attended { background: var(--good); border-color: var(--good); color: white; }
+  .att-btn.is-noshow { background: var(--danger); border-color: var(--danger); color: white; }
+
+  .empty-slot { display: flex; align-items: center; gap: 12px; padding: 10px 4px; color: var(--ink-mute); font-size: 13px; font-style: italic; cursor: pointer; }
+  .empty-slot-dot { width: 32px; height: 32px; border-radius: 50%; border: 1.5px dashed var(--ink-faint); color: var(--ink-faint); display: grid; place-items: center; }
+  .empty-slot:hover .empty-slot-dot { border-color: var(--fit-purple); color: var(--fit-purple); background: var(--fit-lavender-pale); }
+
+  /* PANEL (right sidebar) */
+  .panel { margin-bottom: 16px; }
+  .panel-header { padding: 18px 20px 14px; border-bottom: 1px solid var(--line-soft); display: flex; align-items: center; justify-content: space-between; }
+  .panel-title { font-family: var(--display); font-size: 17px; font-weight: 400; }
+  .panel-title em { font-style: italic; color: var(--fit-purple); }
+  .panel-count { font-size: 11px; color: white; background: var(--fit-purple); padding: 2px 9px; border-radius: var(--radius-pill); font-weight: 600; }
+  .panel-count.warn { background: var(--warn); }
+  .panel-body { padding: 8px 0; }
+  .alert-row { padding: 12px 20px; display: grid; grid-template-columns: 32px 1fr auto; gap: 12px; align-items: center; transition: background 0.15s; cursor: pointer; border-bottom: 1px solid var(--line-soft); }
+  .alert-row:last-child { border-bottom: none; }
+  .alert-row:hover { background: var(--fit-lavender-pale); }
+  .alert-icon { width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; flex-shrink: 0; }
+  .alert-icon.warn { background: var(--warn-soft); color: var(--warn); }
+  .alert-icon.danger { background: var(--danger-soft); color: var(--danger); }
+  .alert-icon.info { background: var(--info-soft); color: var(--info); }
+  .alert-icon.purple { background: var(--fit-lavender); color: var(--fit-purple); }
+  .alert-content { line-height: 1.3; min-width: 0; }
+  .alert-name { font-size: 13px; font-weight: 500; }
+  .alert-desc { font-size: 11px; color: var(--ink-mute); margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .alert-action { color: var(--fit-purple); font-size: 11px; font-weight: 600; padding: 4px 10px; border-radius: var(--radius-pill); background: var(--fit-lavender); }
+
+  /* STUDENT TABLE */
+  .table-toolbar { padding: 18px 24px; border-bottom: 1px solid var(--line-soft); display: flex; gap: 14px; align-items: center; background: var(--fit-cream); flex-wrap: wrap; }
+  .search-input {
+    flex: 1; min-width: 240px; padding: 10px 16px 10px 40px; border: 1px solid var(--line); border-radius: var(--radius-pill);
+    background: white url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='none' stroke='%238B8493' stroke-width='2' viewBox='0 0 24 24'><circle cx='11' cy='11' r='8'/><path d='m21 21-4.3-4.3'/></svg>") no-repeat 14px center;
+    font-size: 14px; outline: none; transition: border-color 0.2s;
+  }
+  .search-input:focus { border-color: var(--fit-purple); }
+  .filter-chip { padding: 8px 14px; border-radius: var(--radius-pill); background: white; border: 1px solid var(--line); font-size: 12px; color: var(--ink-soft); font-weight: 500; transition: all 0.2s; }
+  .filter-chip.is-active { background: var(--fit-purple); color: white; border-color: var(--fit-purple); }
+  .filter-chip:hover:not(.is-active) { border-color: var(--fit-purple-soft); }
+
+  table.data-table { width: 100%; border-collapse: collapse; }
+  .data-table th { text-align: left; padding: 14px 24px; font-size: 11px; color: var(--ink-mute); text-transform: uppercase; letter-spacing: 0.1em; font-weight: 500; background: var(--fit-cream); border-bottom: 1px solid var(--line); }
+  .data-table td { padding: 14px 24px; border-bottom: 1px solid var(--line-soft); font-size: 13px; vertical-align: middle; }
+  .data-table tr:hover { background: var(--fit-lavender-pale); cursor: pointer; }
+  .data-table tr:last-child td { border-bottom: none; }
+  .student-cell { display: flex; align-items: center; gap: 12px; }
+
+  /* MODAL */
+  .modal-backdrop { position: fixed; inset: 0; background: rgba(26, 20, 25, 0.5); backdrop-filter: blur(6px); display: none; z-index: 200; align-items: center; justify-content: center; }
+  .modal-backdrop.is-open { display: flex; }
+  .modal-card { background: white; border-radius: var(--radius-lg); width: 600px; max-width: 95vw; max-height: 90vh; overflow: hidden; box-shadow: var(--shadow-lg); display: flex; flex-direction: column; }
+  .modal-header { padding: 22px 26px; border-bottom: 1px solid var(--line-soft); display: flex; align-items: center; justify-content: space-between; }
+  .modal-title { font-family: var(--display); font-size: 22px; font-weight: 400; }
+  .modal-title em { font-style: italic; color: var(--fit-purple); }
+  .modal-close { width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; color: var(--ink-mute); transition: all 0.2s; }
+  .modal-close:hover { background: var(--line-soft); color: var(--ink); }
+  .modal-body { padding: 24px 26px; overflow-y: auto; flex: 1; }
+  .modal-footer { padding: 16px 26px; border-top: 1px solid var(--line-soft); display: flex; gap: 10px; justify-content: flex-end; background: var(--fit-cream); }
+
+  /* FORM */
+  .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .form-grid .form-row.full { grid-column: 1 / -1; }
+  .form-row { display: flex; flex-direction: column; gap: 6px; }
+  .form-row label { font-size: 12px; color: var(--ink-soft); font-weight: 500; }
+  .form-row label .req { color: var(--danger); }
+  .form-row input, .form-row select, .form-row textarea {
+    padding: 10px 14px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: white; transition: border-color 0.2s;
+  }
+  .form-row input:focus, .form-row select:focus, .form-row textarea:focus { outline: none; border-color: var(--fit-purple); box-shadow: 0 0 0 3px rgba(91, 42, 143, 0.1); }
+  .form-row textarea { resize: vertical; min-height: 70px; font-family: inherit; }
+
+  /* TOAST */
+  .toast { position: fixed; bottom: 24px; right: 24px; padding: 14px 20px; background: var(--ink); color: white; border-radius: var(--radius-md); box-shadow: var(--shadow-lg); font-size: 14px; z-index: 300; display: none; align-items: center; gap: 10px; }
+  .toast.is-show { display: flex; animation: slideUp 0.3s ease; }
+  .toast.toast-error { background: var(--danger); }
+  .toast.toast-success { background: var(--good); }
+  @keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+
+  /* LOADING */
+  .skel { background: linear-gradient(90deg, var(--line-soft) 25%, var(--line) 50%, var(--line-soft) 75%); background-size: 200% 100%; animation: shimmer 1.5s infinite; border-radius: var(--radius-sm); height: 16px; }
+  @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+
+  /* RESPONSIVE */
+  @media (max-width: 1100px) {
+    .layout-grid { grid-template-columns: 1fr; }
+    .kpi-row { grid-template-columns: repeat(2, 1fr); }
+  }
+  @media (max-width: 800px) {
+    :root { --sidebar-w: 0px; }
+    .sidebar { display: none; }
+    .main { padding: 24px 18px 80px; }
+    .topbar { padding: 0 18px; gap: 14px; }
+    .topbar-logo { width: auto; }
+    .logo-text, .date-display-full { display: none; }
+    .topbar-user .user-info, .conn-status span:not(.conn-dot) { display: none; }
+    .page-title { font-size: 30px; }
+    .form-grid { grid-template-columns: 1fr; }
+    .class-header { grid-template-columns: 60px 1fr auto; }
+    .class-occupancy { display: none; }
+  }
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--line); border-radius: 5px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--ink-faint); }
+
+  .empty-state { padding: 60px 20px; text-align: center; color: var(--ink-mute); }
+  .empty-state h3 { font-family: var(--display); font-size: 22px; color: var(--ink); margin-bottom: 8px; }
+  .empty-state h3 em { font-style: italic; color: var(--fit-purple); }
+</style>
+</head>
+<body>
+
+<!-- TOPBAR -->
+<header class="topbar">
+  <div class="topbar-logo">
+    <div class="logo-mark">FIT</div>
+    <div class="logo-text">
+      <div class="logo-text-1">Studio Peru</div>
+      <div class="logo-text-2">Pilates Reformer</div>
+    </div>
+  </div>
+  <div class="topbar-center">
+    <button class="location-switcher" onclick="openLocationModal()">
+      <div class="location-pin">
+        <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+      </div>
+      <div class="location-info">
+        <div class="location-label">Sede</div>
+        <div class="location-name" id="current-location-name">Cargando...</div>
+      </div>
+      <svg class="location-caret" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg>
+    </button>
+    <div id="conn-status" class="conn-status conn-offline">
+      <div class="conn-dot"></div>
+      <span id="conn-text">Sin conexión</span>
+    </div>
+  </div>
+  <div class="date-display">
+    <div class="date-display-day" id="date-day">—</div>
+    <div class="date-display-full" id="date-full">—</div>
+  </div>
+  <button class="topbar-user">
+    <div class="user-avatar">VC</div>
+    <div class="user-info">
+      <div class="user-name">Coordinador</div>
+      <div class="user-role" id="user-role-text">Modo demo</div>
+    </div>
+  </button>
+</header>
+
+<!-- SIDEBAR -->
+<aside class="sidebar">
+  <div class="nav-group">
+    <div class="nav-group-title">Operación</div>
+    <button class="nav-item is-active" data-view="dashboard" onclick="showView('dashboard', this)">
+      <span class="nav-icon"><svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/></svg></span>
+      Mi día
+    </button>
+    <button class="nav-item" data-view="students" onclick="showView('students', this)">
+      <span class="nav-icon"><svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg></span>
+      Alumnos
+      <span class="nav-badge" id="badge-students">—</span>
+    </button>
+    <button class="nav-item" data-view="instructors" onclick="showView('instructors', this)">
+      <span class="nav-icon"><svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></span>
+      Profesores
+    </button>
+    <button class="nav-item" data-view="schedule" onclick="showView('schedule', this)">
+      <span class="nav-icon"><svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg></span>
+      Horarios
+    </button>
+  </div>
+  <div class="nav-group">
+    <div class="nav-group-title">Más</div>
+    <button class="nav-item" data-view="packages" onclick="showView('packages', this)">
+      <span class="nav-icon"><svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="m7.5 4.27 9 5.15"/><path d="M21 8 12 13 3 8"/><path d="M3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8z"/></svg></span>
+      Paquetes
+    </button>
+  </div>
+</aside>
+
+<!-- MAIN -->
+<main class="main">
+
+  <!-- DASHBOARD -->
+  <section class="view is-active" id="view-dashboard">
+    <div class="page-header">
+      <div>
+        <h1 class="page-title">Hoy en <em id="dash-loc-name">Santa Cruz</em></h1>
+        <div class="page-sub" id="dash-sub">Cargando datos...</div>
+      </div>
+      <div class="page-actions">
+        <button class="btn btn-primary" onclick="openStudentModal()">
+          <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+          Nuevo alumno
+        </button>
+      </div>
+    </div>
+
+    <div class="kpi-row">
+      <div class="kpi kpi-purple">
+        <div class="kpi-icon"><svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="7" r="4"/><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/></svg></div>
+        <div class="kpi-label">Reservados hoy</div>
+        <div class="kpi-value" id="kpi-today">—</div>
+        <div class="kpi-sub" id="kpi-today-sub">en clases programadas</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-icon"><svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div>
+        <div class="kpi-label">Total alumnos</div>
+        <div class="kpi-value" id="kpi-total">—</div>
+        <div class="kpi-sub" id="kpi-total-sub">activos en sede</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-icon" style="background: var(--info-soft); color: var(--info);"><svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 11l18-8-8 18-3-7z"/></svg></div>
+        <div class="kpi-label">Horario fijo</div>
+        <div class="kpi-value" id="kpi-fixed">—</div>
+        <div class="kpi-sub">no requieren confirmación</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-icon" style="background: var(--warn-soft); color: var(--warn);"><svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 9v4M12 17h.01"/><circle cx="12" cy="12" r="10"/></svg></div>
+        <div class="kpi-label">Datos incompletos</div>
+        <div class="kpi-value" id="kpi-incomplete" style="color: var(--warn);">—</div>
+        <div class="kpi-sub">falta email o documento</div>
+      </div>
+    </div>
+
+    <div class="layout-grid">
+      <div class="timeline-card">
+        <div class="timeline-header">
+          <div class="timeline-title">
+            <h2>Clases de <em id="timeline-day-title">hoy</em></h2>
+          </div>
+          <div class="day-nav">
+            <button class="nav-arrow" onclick="changeDay(-1)">‹</button>
+            <button id="day-today-btn" class="is-active" onclick="goToday()">Hoy</button>
+            <button class="nav-arrow" onclick="changeDay(1)">›</button>
+          </div>
+        </div>
+        <div class="timeline-body" id="timeline-body">
+          <div class="empty-state">
+            <h3>Cargando <em>clases</em>...</h3>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <div class="panel">
+          <div class="panel-header">
+            <div class="panel-title"><em>Acciones</em> rápidas</div>
+          </div>
+          <div class="panel-body">
+            <div class="alert-row" onclick="openStudentModal()">
+              <div class="alert-icon purple"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></div>
+              <div class="alert-content">
+                <div class="alert-name">Registrar alumno nuevo</div>
+                <div class="alert-desc">Ficha completa con consentimiento</div>
+              </div>
+            </div>
+            <div class="alert-row" onclick="openInstructorModal()">
+              <div class="alert-icon purple"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="7" r="4"/><path d="M16 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/></svg></div>
+              <div class="alert-content">
+                <div class="alert-name">Agregar profesor</div>
+                <div class="alert-desc">Perfil + foto + horarios</div>
+              </div>
+            </div>
+            <div class="alert-row" onclick="showView('students', document.querySelector('[data-view=students]'))">
+              <div class="alert-icon info"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg></div>
+              <div class="alert-content">
+                <div class="alert-name">Buscar alumno</div>
+                <div class="alert-desc">Por nombre, DNI, celular</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-header">
+            <div class="panel-title">Datos <em>incompletos</em></div>
+            <span class="panel-count warn" id="incomplete-count">—</span>
+          </div>
+          <div class="panel-body" id="incomplete-list"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- STUDENTS -->
+  <section class="view" id="view-students">
+    <div class="page-header">
+      <div>
+        <h1 class="page-title"><em>Alumnos</em></h1>
+        <div class="page-sub" id="students-sub">Cargando...</div>
+      </div>
+      <div class="page-actions">
+        <button class="btn btn-primary" onclick="openStudentModal()">+ Nuevo alumno</button>
+      </div>
+    </div>
+    <div class="table-card">
+      <div class="table-toolbar">
+        <input type="text" class="search-input" id="student-search" placeholder="Buscar por nombre, DNI, email..." oninput="filterStudents()" />
+        <button class="filter-chip is-active" data-filter="all" onclick="setFilter(this)">Todos</button>
+        <button class="filter-chip" data-filter="fixed" onclick="setFilter(this)">★ Fijo</button>
+        <button class="filter-chip" data-filter="flexible" onclick="setFilter(this)">↻ Flexible</button>
+        <button class="filter-chip" data-filter="incomplete" onclick="setFilter(this)">⚠ Datos faltantes</button>
+      </div>
+      <div style="overflow-x: auto;">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Alumno</th>
+              <th>Email</th>
+              <th>Documento</th>
+              <th>Modalidad</th>
+              <th>Horario fijo</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="students-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- INSTRUCTORS -->
+  <section class="view" id="view-instructors">
+    <div class="page-header">
+      <div>
+        <h1 class="page-title"><em>Profesores</em></h1>
+        <div class="page-sub">Equipo certificado</div>
+      </div>
+      <div class="page-actions">
+        <button class="btn btn-primary" onclick="openInstructorModal()">+ Agregar profesor</button>
+      </div>
+    </div>
+    <div id="instructors-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 18px;"></div>
+  </section>
+
+  <!-- SCHEDULE -->
+  <section class="view" id="view-schedule">
+    <div class="page-header">
+      <div>
+        <h1 class="page-title">Horario <em>semanal</em></h1>
+        <div class="page-sub" id="schedule-sub">Vista por hora y día</div>
+      </div>
+    </div>
+    <div class="table-card" style="overflow-x: auto;">
+      <table class="data-table" id="schedule-table"></table>
+    </div>
+  </section>
+
+  <!-- PACKAGES -->
+  <section class="view" id="view-packages">
+    <div class="page-header">
+      <div>
+        <h1 class="page-title"><em>Paquetes</em></h1>
+        <div class="page-sub">Tarifario · todos vencen en 30 días</div>
+      </div>
+    </div>
+    <div id="packages-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 16px;"></div>
+  </section>
+
+</main>
+
+<!-- LOCATION MODAL -->
+<div class="modal-backdrop" id="location-modal" onclick="if(event.target===this) closeModals()">
+  <div class="modal-card" style="width: 480px;">
+    <div class="modal-header">
+      <div class="modal-title">Cambiar de <em>sede</em></div>
+      <button class="modal-close" onclick="closeModals()">✕</button>
+    </div>
+    <div id="location-options" style="padding: 8px 0 16px;"></div>
+  </div>
+</div>
+
+<!-- STUDENT MODAL -->
+<div class="modal-backdrop" id="student-modal" onclick="if(event.target===this) closeModals()">
+  <div class="modal-card">
+    <div class="modal-header">
+      <div class="modal-title" id="student-modal-title">Nuevo <em>alumno</em></div>
+      <button class="modal-close" onclick="closeModals()">✕</button>
+    </div>
+    <div class="modal-body">
+      <form id="student-form" onsubmit="event.preventDefault(); saveStudent();">
+        <input type="hidden" id="f-student-id" />
+        <div class="form-grid">
+          <div class="form-row">
+            <label>Nombre <span class="req">*</span></label>
+            <input type="text" id="f-first-name" required />
+          </div>
+          <div class="form-row">
+            <label>Apellidos</label>
+            <input type="text" id="f-last-name" />
+          </div>
+          <div class="form-row">
+            <label>Email</label>
+            <input type="email" id="f-email" />
+          </div>
+          <div class="form-row">
+            <label>Celular</label>
+            <input type="tel" id="f-phone" placeholder="+51 9..." />
+          </div>
+          <div class="form-row">
+            <label>Tipo de documento</label>
+            <select id="f-doc-type">
+              <option value="">Sin especificar</option>
+              <option value="DNI">DNI</option>
+              <option value="CE">Carné de Extranjería</option>
+              <option value="PASSPORT">Pasaporte</option>
+              <option value="OTHER">Otro</option>
+            </select>
+          </div>
+          <div class="form-row">
+            <label>Número de documento</label>
+            <input type="text" id="f-doc-num" />
+          </div>
+          <div class="form-row">
+            <label>Fecha de nacimiento</label>
+            <input type="date" id="f-birth-date" />
+          </div>
+          <div class="form-row">
+            <label>Modalidad <span class="req">*</span></label>
+            <select id="f-modality" required>
+              <option value="flexible">Flexible (avisa por WhatsApp)</option>
+              <option value="fixed">Fija (siempre mismo horario)</option>
+              <option value="trial">Clase de prueba</option>
+            </select>
+          </div>
+          <div class="form-row">
+            <label>Contacto de emergencia (nombre)</label>
+            <input type="text" id="f-emergency-name" />
+          </div>
+          <div class="form-row">
+            <label>Contacto de emergencia (celular)</label>
+            <input type="tel" id="f-emergency-phone" />
+          </div>
+          <div class="form-row full">
+            <label>Lesiones / condiciones médicas</label>
+            <textarea id="f-medical" placeholder="Describir lesiones previas, embarazo, etc."></textarea>
+          </div>
+          <div class="form-row full">
+            <label>Seguro / cobertura médica</label>
+            <input type="text" id="f-insurance" />
+          </div>
+          <div class="form-row full">
+            <label><input type="checkbox" id="f-needs-confirmation" checked style="margin-right: 6px;" /> Requiere confirmación previa por WhatsApp</label>
+          </div>
+          <div class="form-row full">
+            <label><input type="checkbox" id="f-consent-signed" style="margin-right: 6px;" /> Firmó ficha de consentimiento</label>
+          </div>
+        </div>
+      </form>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModals()">Cancelar</button>
+      <button class="btn btn-danger" id="student-delete-btn" style="display:none" onclick="deactivateStudent()">Desactivar</button>
+      <button class="btn btn-primary" onclick="saveStudent()">Guardar alumno</button>
+    </div>
+  </div>
+</div>
+
+<!-- INSTRUCTOR MODAL -->
+<div class="modal-backdrop" id="instructor-modal" onclick="if(event.target===this) closeModals()">
+  <div class="modal-card">
+    <div class="modal-header">
+      <div class="modal-title" id="instructor-modal-title">Nuevo <em>profesor</em></div>
+      <button class="modal-close" onclick="closeModals()">✕</button>
+    </div>
+    <div class="modal-body">
+      <form id="instructor-form" onsubmit="event.preventDefault(); saveInstructor();">
+        <input type="hidden" id="fi-id" />
+        <div class="form-grid">
+          <div class="form-row">
+            <label>Nombre completo <span class="req">*</span></label>
+            <input type="text" id="fi-full-name" required />
+          </div>
+          <div class="form-row">
+            <label>Iniciales <span class="req">*</span></label>
+            <input type="text" id="fi-initials" required maxlength="4" placeholder="ej: AL" />
+          </div>
+          <div class="form-row">
+            <label>Email</label>
+            <input type="email" id="fi-email" />
+          </div>
+          <div class="form-row">
+            <label>Celular</label>
+            <input type="tel" id="fi-phone" />
+          </div>
+          <div class="form-row">
+            <label>Foto (URL)</label>
+            <input type="url" id="fi-photo" placeholder="https://..." />
+          </div>
+          <div class="form-row">
+            <label>Fecha de ingreso</label>
+            <input type="date" id="fi-hire" />
+          </div>
+          <div class="form-row full">
+            <label>Bio / experiencia</label>
+            <textarea id="fi-bio"></textarea>
+          </div>
+          <div class="form-row full">
+            <label>Certificaciones</label>
+            <input type="text" id="fi-cert" placeholder="ej: Método FIT Studio Peru, certif. 2023" />
+          </div>
+        </div>
+      </form>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModals()">Cancelar</button>
+      <button class="btn btn-danger" id="instructor-delete-btn" style="display:none" onclick="deactivateInstructor()">Desactivar</button>
+      <button class="btn btn-primary" onclick="saveInstructor()">Guardar profesor</button>
+    </div>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div class="toast" id="toast"></div>
+
+<!-- ============================================
+     APPLICATION LOGIC
+     ============================================ -->
+<script>
+
+// ============================================
+// SUPABASE CONFIG — paste your credentials here
+// ============================================
+const SUPABASE_URL = 'https://jcvizioahuqvmhwfnbop.supabase.co';     // ← PEGA AQUÍ tu Project URL
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Impjdml6aW9haHVxdm1od2ZuYm9wIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc1MjIzODIsImV4cCI6MjA5MzA5ODM4Mn0.0EYHVITqA85IhtBUbGddHEWcVKIU_MeSzSxrdzNyvhI';
+// Si están vacíos, la app corre en MODO DEMO (datos en localStorage).
+// ============================================
+
+// supabase already declared above
+let isOnline = false;
+
+if (SUPABASE_URL && SUPABASE_KEY) {
+  supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+}
+
+// ============================================
+// STATE
+// ============================================
+const STATE = {
+  locations: [],
+  currentLocationId: null,
+  students: [],
+  instructors: [],
+  packages: [],
+  fixedBookings: [],
+  currentDate: new Date(),
+  currentFilter: 'all',
+};
+
+// ============================================
+// CONNECTION CHECK
+// ============================================
+async function checkConnection() {
+  const statusEl = document.getElementById('conn-status');
+  const textEl = document.getElementById('conn-text');
+  const roleEl = document.getElementById('user-role-text');
+  if (!supabase) {
+    statusEl.className = 'conn-status conn-offline';
+    textEl.textContent = 'Modo demo';
+    roleEl.textContent = 'Modo demo';
+    return false;
+  }
+  try {
+    const { error } = await supabase.from('locations').select('id').limit(1);
+    if (error) throw error;
+    statusEl.className = 'conn-status conn-online';
+    textEl.textContent = 'Conectado';
+    roleEl.textContent = 'Coordinador · Online';
+    isOnline = true;
+    return true;
+  } catch (e) {
+    console.error('Supabase error:', e);
+    statusEl.className = 'conn-status conn-error';
+    textEl.textContent = 'Error de conexión';
+    return false;
+  }
+}
+
+// ============================================
+// DATA LOADING — Supabase or fallback
+// ============================================
+async function loadAll() {
+  await checkConnection();
+  if (isOnline) {
+    await loadFromSupabase();
+  } else {
+    loadFromMock();
+  }
+  renderAll();
+}
+
+async function loadFromSupabase() {
+  const [locations, students, instructors, packages, fixedBookings] = await Promise.all([
+    supabase.from('locations').select('*').eq('is_active', true).order('name'),
+    supabase.from('students').select('*').eq('status', 'active').order('first_name'),
+    supabase.from('instructors').select('*').eq('is_active', true).order('full_name'),
+    supabase.from('packages').select('*').eq('is_active', true).order('display_order'),
+    supabase.from('fixed_bookings').select('*').eq('is_active', true),
+  ]);
+
+  if (locations.error) { showToast('Error cargando sedes: ' + locations.error.message, 'error'); return; }
+
+  STATE.locations = locations.data || [];
+  STATE.students = students.data || [];
+  STATE.instructors = instructors.data || [];
+  STATE.packages = packages.data || [];
+  STATE.fixedBookings = fixedBookings.data || [];
+
+  // Default to Santa Cruz if exists, otherwise first
+  const sc = STATE.locations.find(l => l.slug === 'santa-cruz');
+  STATE.currentLocationId = sc ? sc.id : (STATE.locations[0]?.id || null);
+}
+
+function loadFromMock() {
+  // Minimal mock data so the UI works offline without Supabase
+  STATE.locations = [
+    { id: '11111111-1111-1111-1111-111111111111', slug: 'santa-cruz', name: 'Santa Cruz', address: 'Av. Sta. Cruz 1341', capacity: 9 },
+    { id: '22222222-2222-2222-2222-222222222222', slug: 'inmaculado-corazon', name: 'Inmaculado Corazón', capacity: 6 },
+    { id: '33333333-3333-3333-3333-333333333333', slug: 'san-antonio', name: 'San Antonio', capacity: 7 },
+  ];
+  STATE.currentLocationId = STATE.locations[0].id;
+  STATE.packages = [
+    { id: 'p1', name: '1 Clase Suelta', sessions: 1, price_pen: 70, display_order: 1 },
+    { id: 'p4', name: 'Paquete 4 Clases', sessions: 4, price_pen: 260, display_order: 2 },
+    { id: 'p8', name: 'Paquete 8 Clases', sessions: 8, price_pen: 480, display_order: 3 },
+    { id: 'p12', name: 'Paquete 12 Clases', sessions: 12, price_pen: 620, display_order: 4 },
+    { id: 'p16', name: 'Paquete 16 Clases', sessions: 16, price_pen: 800, display_order: 5 },
+    { id: 'p20', name: 'Paquete 20 Clases', sessions: 20, price_pen: 1000, display_order: 6 },
+  ];
+  STATE.instructors = [
+    { id: 'i1', initials: 'AL', full_name: 'Alex Canales', certifications: 'Método FIT Studio Peru' },
+    { id: 'i2', initials: 'V', full_name: 'Valeria', certifications: 'Método FIT Studio Peru' },
+    { id: 'i3', initials: 'AN', full_name: 'Profesor AN (sin identificar)', certifications: 'Método FIT Studio Peru' },
+    { id: 'i4', initials: 'AR', full_name: 'Artem', certifications: 'Método FIT Studio Peru' },
+    { id: 'i5', initials: 'AG', full_name: 'Angie', certifications: 'Método FIT Studio Peru' },
+  ];
+  // Load mock students from localStorage if any
+  const localStudents = JSON.parse(localStorage.getItem('mock_students') || '[]');
+  STATE.students = localStudents.length > 0 ? localStudents : [
+    { id: 's1', first_name: 'Demo', last_name: 'Alumno', email: 'demo@example.com', modality: 'flexible', location_id: STATE.currentLocationId, data_complete: true, status: 'active' }
+  ];
+  STATE.fixedBookings = [];
+}
+
+// ============================================
+// RENDER
+// ============================================
+function renderAll() {
+  renderLocationSwitcher();
+  renderDashboard();
+  renderStudents();
+  renderInstructors();
+  renderPackages();
+  renderSchedule();
+}
+
+function getCurrentLocation() {
+  return STATE.locations.find(l => l.id === STATE.currentLocationId) || STATE.locations[0];
+}
+
+function renderLocationSwitcher() {
+  const loc = getCurrentLocation();
+  if (loc) document.getElementById('current-location-name').textContent = loc.name;
+
+  const opts = document.getElementById('location-options');
+  opts.innerHTML = STATE.locations.map(l => `
+    <div onclick="switchLocation('${l.id}')" style="padding: 18px 26px; display: grid; grid-template-columns: 44px 1fr; gap: 16px; align-items: center; cursor: pointer; border-bottom: 1px solid var(--line-soft); transition: background 0.15s;" onmouseover="this.style.background='var(--fit-lavender-pale)'" onmouseout="this.style.background=''">
+      <div style="width: 44px; height: 44px; border-radius: 50%; background: ${l.id === STATE.currentLocationId ? 'var(--fit-purple)' : 'var(--fit-lavender)'}; color: ${l.id === STATE.currentLocationId ? 'white' : 'var(--fit-purple)'}; display: grid; place-items: center;">
+        <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+      </div>
+      <div>
+        <div style="font-family: var(--display); font-size: 17px;">${l.name}</div>
+        <div style="font-size: 12px; color: var(--ink-mute); margin-top: 3px;">${l.address || ''} · ${l.capacity} cupos por clase</div>
+      </div>
+    </div>
+  `).join('');
+}
+
+function switchLocation(id) {
+  STATE.currentLocationId = id;
+  closeModals();
+  renderAll();
+}
+
+function renderDashboard() {
+  const loc = getCurrentLocation();
+  if (!loc) return;
+  document.getElementById('dash-loc-name').textContent = loc.name;
+
+  const locStudents = STATE.students.filter(s => s.location_id === loc.id);
+  const fixedStudents = locStudents.filter(s => s.modality === 'fixed').length;
+  const incompleteStudents = locStudents.filter(s => !s.data_complete);
+
+  document.getElementById('dash-sub').textContent = `${locStudents.length} alumnos · ${loc.capacity} cupos por clase · capacidad semanal ~${loc.capacity * 12 * 5 + loc.capacity * 5 * 2}`;
+  document.getElementById('kpi-total').textContent = locStudents.length;
+  document.getElementById('kpi-total-sub').textContent = `${fixedStudents} fijos · ${locStudents.length - fixedStudents} flexibles`;
+  document.getElementById('kpi-fixed').textContent = fixedStudents;
+  document.getElementById('kpi-incomplete').textContent = incompleteStudents.length;
+  document.getElementById('badge-students').textContent = locStudents.length;
+
+  // Today's bookings
+  const dow = STATE.currentDate.getDay();
+  const todayFixed = STATE.fixedBookings.filter(b => b.location_id === loc.id && b.day_of_week === dow);
+  document.getElementById('kpi-today').textContent = todayFixed.length;
+  document.getElementById('kpi-today-sub').textContent = todayFixed.length > 0 ? 'alumnos fijos del día' : 'sin reservas del día';
+
+  // Incomplete list
+  const incompleteEl = document.getElementById('incomplete-list');
+  document.getElementById('incomplete-count').textContent = incompleteStudents.length;
+  if (incompleteStudents.length === 0) {
+    incompleteEl.innerHTML = '<div style="padding: 30px 20px; text-align: center; color: var(--ink-mute); font-size: 13px;">✓ Todos los alumnos tienen sus datos completos</div>';
+  } else {
+    incompleteEl.innerHTML = incompleteStudents.slice(0, 5).map(s => `
+      <div class="alert-row" onclick='openStudentModal(${JSON.stringify(s.id).replace(/'/g, "&#39;")})'>
+        <div class="alert-icon warn">
+          <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg>
+        </div>
+        <div class="alert-content">
+          <div class="alert-name">${escape(s.first_name)} ${escape(s.last_name || '')}</div>
+          <div class="alert-desc">${!s.email ? 'Falta email' : ''}${!s.email && !s.document_number ? ' · ' : ''}${!s.document_number ? 'Falta documento' : ''}</div>
+        </div>
+        <span class="alert-action">Completar</span>
+      </div>
+    `).join('') + (incompleteStudents.length > 5 ? `<div style="padding: 12px; text-align: center; font-size: 12px; color: var(--ink-mute);">+${incompleteStudents.length - 5} más en la sección Alumnos</div>` : '');
+  }
+
+  renderTimeline();
+}
+
+function renderTimeline() {
+  const body = document.getElementById('timeline-body');
+  const loc = getCurrentLocation();
+  if (!loc) { body.innerHTML = ''; return; }
+
+  const dow = STATE.currentDate.getDay();
+  const days = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+
+  // Update title
+  const today = new Date(); today.setHours(0,0,0,0);
+  const cd = new Date(STATE.currentDate); cd.setHours(0,0,0,0);
+  const diffDays = Math.round((cd - today) / 86400000);
+  let titleText = days[dow];
+  if (diffDays === 0) titleText = 'hoy';
+  else if (diffDays === 1) titleText = 'mañana';
+  else if (diffDays === -1) titleText = 'ayer';
+  document.getElementById('timeline-day-title').textContent = titleText;
+
+  // Determine hours based on day of week
+  const isSunday = dow === 0;
+  const isSaturday = dow === 6;
+  let hours = [];
+  if (isSunday) {
+    hours = [8, 9]; // Santa Cruz dom 8-10
+  } else if (isSaturday) {
+    hours = [7, 8, 9, 10, 11]; // Santa Cruz sáb 7-12
+  } else {
+    hours = [6, 7, 8, 9, 10, 11, 16, 17, 18, 19, 20];
+  }
+
+  // Get bookings for current day
+  const todayBookings = STATE.fixedBookings.filter(b => b.location_id === loc.id && b.day_of_week === dow);
+
+  if (todayBookings.length === 0 && hours.length === 0) {
+    body.innerHTML = '<div class="empty-state"><h3>Sede <em>cerrada</em> hoy</h3><p>No hay clases programadas en este día.</p></div>';
+    return;
+  }
+
+  body.innerHTML = hours.map(h => {
+    const bookingsAtHour = todayBookings.filter(b => b.hour === h);
+    const studentsAtHour = bookingsAtHour
+      .map(b => STATE.students.find(s => s.id === b.student_id))
+      .filter(Boolean);
+
+    const occ = studentsAtHour.length;
+    const cap = loc.capacity;
+    const occPct = Math.min(100, (occ / cap) * 100);
+    let occClass = '';
+    if (occ === cap) occClass = 'full';
+    else if (occ === 0) occClass = 'warn';
+
+    const now = new Date();
+    const isCurrentClass = STATE.currentDate.toDateString() === now.toDateString() && now.getHours() === h;
+    const stateClass = isCurrentClass ? 'is-current is-open' : (occ === 0 ? 'is-empty' : '');
+
+    // Get instructor for this slot (placeholder logic)
+    const inst = STATE.instructors[0] || { initials: 'AL', full_name: 'Profesor', certifications: '' };
+    const instColor = inst.initials === 'AL' ? '#5B2A8F' : (inst.initials === 'V' ? '#DB2777' : '#7C3AED');
+
+    const studentRows = studentsAtHour.map(s => `
+      <div class="student-row">
+        <div class="student-avatar">${initials(s)}</div>
+        <div>
+          <div class="student-name">${escape(s.first_name)} ${escape(s.last_name || '')}</div>
+          <div class="student-meta">
+            <span class="modality-pill modality-${s.modality}">${s.modality === 'fixed' ? '★ Fijo' : (s.modality === 'flexible' ? '↻ Flexible' : '✦ Prueba')}</span>
+            ${!s.data_complete ? '<span style="color: var(--warn);">⚠ datos faltantes</span>' : ''}
+          </div>
+        </div>
+        <div class="attendance-toggle">
+          <button class="att-btn" onclick="markAttendance('${s.id}', '${h}', 'attended', this)" title="Asistió">
+            <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+          </button>
+          <button class="att-btn" onclick="markAttendance('${s.id}', '${h}', 'no_show', this)" title="Faltó">
+            <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
+      </div>
+    `).join('');
+
+    const emptySlots = Array.from({ length: cap - occ }, () => `
+      <div class="empty-slot" onclick="alert('Próximamente: agregar alumno flexible a esta clase')">
+        <div class="empty-slot-dot">+</div>
+        <span>Cupo disponible · clic para agregar alumno flexible</span>
+      </div>
+    `).join('');
+
+    return `
+      <div class="class-block ${stateClass}">
+        <div class="class-header" onclick="this.parentElement.classList.toggle('is-open')">
+          <div>
+            <div class="class-time">${formatHour(h)}</div>
+            <div class="class-time-end">hasta ${formatHour(h)}:50</div>
+          </div>
+          <div class="class-instructor">
+            <div class="instructor-avatar" style="--inst-color: ${instColor};">${inst.initials}</div>
+            <div class="instructor-info">
+              <div class="instructor-name">${escape(inst.full_name)}</div>
+              <div class="instructor-meta">${escape(inst.certifications || '')}</div>
+            </div>
+          </div>
+          <div class="class-occupancy">
+            <div class="occupancy-bar"><div class="occupancy-fill ${occClass}" style="width: ${occPct}%"></div></div>
+            <div class="occupancy-num">${occ}<span>/${cap}</span></div>
+          </div>
+          <button class="class-toggle">
+            <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg>
+          </button>
+        </div>
+        <div class="class-students">
+          ${studentRows || ''}
+          ${emptySlots}
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+function renderStudents() {
+  const loc = getCurrentLocation();
+  if (!loc) return;
+  let list = STATE.students.filter(s => s.location_id === loc.id);
+
+  // Filter
+  if (STATE.currentFilter === 'fixed') list = list.filter(s => s.modality === 'fixed');
+  else if (STATE.currentFilter === 'flexible') list = list.filter(s => s.modality === 'flexible');
+  else if (STATE.currentFilter === 'incomplete') list = list.filter(s => !s.data_complete);
+
+  // Search
+  const q = (document.getElementById('student-search').value || '').toLowerCase().trim();
+  if (q) {
+    list = list.filter(s => {
+      const blob = `${s.first_name} ${s.last_name || ''} ${s.email || ''} ${s.document_number || ''} ${s.phone || ''}`.toLowerCase();
+      return blob.includes(q);
+    });
+  }
+
+  document.getElementById('students-sub').textContent = `${list.length} alumnos · sede ${loc.name}`;
+
+  const tbody = document.getElementById('students-tbody');
+  if (list.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 60px; color: var(--ink-mute);">No hay alumnos que coincidan con la búsqueda</td></tr>';
+    return;
+  }
+
+  // Build a quick map of student → fixed slots
+  const slotsByStudent = {};
+  STATE.fixedBookings.forEach(b => {
+    if (!slotsByStudent[b.student_id]) slotsByStudent[b.student_id] = [];
+    slotsByStudent[b.student_id].push(b);
+  });
+
+  const dayLabels = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+
+  tbody.innerHTML = list.slice(0, 200).map(s => {
+    const slots = slotsByStudent[s.id] || [];
+    const slotsLabel = slots.length === 0 ? '—' :
+      slots.slice(0, 3).map(b => `${dayLabels[b.day_of_week]} ${formatHour(b.hour)}`).join(', ') +
+      (slots.length > 3 ? ` +${slots.length - 3}` : '');
+
+    const modPill = s.modality === 'fixed'
+      ? '<span class="modality-pill modality-fixed">★ Fijo</span>'
+      : (s.modality === 'flexible' ? '<span class="modality-pill modality-flexible">↻ Flexible</span>'
+         : '<span class="modality-pill modality-trial">✦ Prueba</span>');
+
+    return `
+      <tr onclick='openStudentModal(${JSON.stringify(s.id).replace(/'/g, "&#39;")})'>
+        <td>
+          <div class="student-cell">
+            <div class="student-avatar">${initials(s)}</div>
+            <div>
+              <div style="font-weight: 500;">${escape(s.first_name)} ${escape(s.last_name || '')}</div>
+              ${!s.data_complete ? '<div style="font-size: 10px; color: var(--warn); margin-top: 2px;">⚠ Datos incompletos</div>' : ''}
+            </div>
+          </div>
+        </td>
+        <td style="color: var(--ink-soft); font-size: 12px;">${escape(s.email || '—')}</td>
+        <td style="font-size: 12px; color: var(--ink-soft);">${s.document_type ? `${s.document_type} ${escape(s.document_number || '')}` : '—'}</td>
+        <td>${modPill}</td>
+        <td style="font-size: 12px; color: var(--ink-soft);">${slotsLabel}</td>
+        <td><button class="btn btn-ghost" style="padding: 6px 12px; font-size: 11px;" onclick='event.stopPropagation(); openStudentModal(${JSON.stringify(s.id).replace(/'/g, "&#39;")})'>Editar</button></td>
+      </tr>
+    `;
+  }).join('') + (list.length > 200 ? `<tr><td colspan="6" style="text-align: center; padding: 16px; color: var(--ink-mute); font-size: 12px;">Mostrando 200 de ${list.length}. Refina la búsqueda para ver más.</td></tr>` : '');
+}
+
+function renderInstructors() {
+  const grid = document.getElementById('instructors-grid');
+  if (STATE.instructors.length === 0) {
+    grid.innerHTML = '<div class="empty-state"><h3>No hay <em>profesores</em> registrados</h3><p>Click en "Agregar profesor" para crear el primero.</p></div>';
+    return;
+  }
+  grid.innerHTML = STATE.instructors.map(i => {
+    const color = i.initials === 'AL' ? '#5B2A8F' : (i.initials === 'V' ? '#DB2777' : '#7C3AED');
+    return `
+      <div onclick='openInstructorModal(${JSON.stringify(i.id).replace(/'/g, "&#39;")})' style="background: white; border-radius: var(--radius-lg); border: 1px solid var(--line); overflow: hidden; cursor: pointer; transition: all 0.2s;" onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='var(--shadow-md)';" onmouseout="this.style.transform=''; this.style.boxShadow='';">
+        <div style="height: 100px; background: linear-gradient(135deg, ${color} 0%, color-mix(in srgb, ${color} 60%, white) 100%); position: relative;">
+          <div style="position: absolute; bottom: -28px; left: 22px; width: 64px; height: 64px; border-radius: 50%; background: linear-gradient(135deg, ${color}, color-mix(in srgb, ${color} 60%, white)); border: 4px solid white; display: grid; place-items: center; color: white; font-weight: 700; font-size: 20px;">${escape(i.initials)}</div>
+        </div>
+        <div style="padding: 36px 22px 22px;">
+          <div style="font-family: var(--display); font-size: 19px; font-weight: 400;">${escape(i.full_name)}</div>
+          <div style="font-size: 12px; color: var(--ink-mute); margin-top: 2px;">${escape(i.certifications || 'Sin certificaciones registradas')}</div>
+          ${i.email ? `<div style="margin-top: 10px; font-size: 12px; color: var(--ink-soft);">📧 ${escape(i.email)}</div>` : ''}
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+function renderPackages() {
+  const grid = document.getElementById('packages-grid');
+  grid.innerHTML = STATE.packages.map(p => {
+    const colors = ['#A78BFA', '#8B5CF6', '#7C3AED', '#6D28D9', '#5B21B6', '#4C1D95', '#DB2777'];
+    const color = colors[(p.display_order - 1) % colors.length];
+    return `
+      <div style="background: white; border-radius: var(--radius-lg); border: 1px solid var(--line); padding: 22px; position: relative; overflow: hidden;">
+        <div style="position: absolute; top: 0; left: 0; right: 0; height: 4px; background: ${color};"></div>
+        <div style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.12em; color: ${color}; font-weight: 600; margin-bottom: 12px; margin-top: 6px;">${escape(p.name)}</div>
+        <div style="font-family: var(--display); font-size: 42px; font-weight: 400; line-height: 1;">S/<span style="font-style: italic; color: ${color};">${p.price_pen}</span></div>
+        <div style="font-size: 12px; color: var(--ink-mute); margin-top: 4px;">${p.sessions} ${p.sessions === 1 ? 'sesión' : 'sesiones'}</div>
+        <div style="margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--line-soft); font-size: 11px; color: var(--ink-mute);">Vigencia: 30 días</div>
+      </div>
+    `;
+  }).join('');
+}
+
+function renderSchedule() {
+  const loc = getCurrentLocation();
+  if (!loc) return;
+  const table = document.getElementById('schedule-table');
+  document.getElementById('schedule-sub').textContent = `Sede ${loc.name} · capacidad ${loc.capacity} alumnos por clase`;
+
+  const days = [1, 2, 3, 4, 5, 6, 0];  // Lun-Sab-Dom
+  const dayLabels = ['LUN', 'MAR', 'MIÉ', 'JUE', 'VIE', 'SÁB', 'DOM'];
+  const hours = [6, 7, 8, 9, 10, 11, 16, 17, 18, 19, 20];
+
+  let html = '<thead><tr><th style="width: 80px;"></th>';
+  dayLabels.forEach(d => html += `<th style="text-align: center;">${d}</th>`);
+  html += '</tr></thead><tbody>';
+
+  hours.forEach(h => {
+    html += `<tr><td style="font-family: var(--display); font-size: 14px; color: var(--fit-purple); text-align: right; vertical-align: top;">${formatHour(h)}</td>`;
+    days.forEach(dow => {
+      const bookings = STATE.fixedBookings.filter(b => b.location_id === loc.id && b.day_of_week === dow && b.hour === h);
+      const count = bookings.length;
+      const cap = loc.capacity;
+      const pct = Math.min(100, (count / cap) * 100);
+      const cellColor = count === 0 ? '#FBFAFC' : `linear-gradient(90deg, ${pct >= 100 ? '#15803D' : (pct >= 50 ? '#5B2A8F' : '#A78BFA')} ${pct}%, var(--line-soft) ${pct}%)`;
+      html += `<td style="text-align: center; padding: 8px; vertical-align: top;">
+        <div style="background: ${count === 0 ? 'var(--fit-cream)' : 'var(--fit-lavender-pale)'}; border-radius: 8px; padding: 8px; min-height: 40px;">
+          <div style="font-family: var(--display); font-size: 16px; color: ${count === 0 ? 'var(--ink-faint)' : 'var(--fit-purple)'};">${count}<span style="font-size: 10px; color: var(--ink-mute);">/${cap}</span></div>
+          <div style="height: 3px; background: var(--line); border-radius: 2px; margin-top: 4px; overflow: hidden;"><div style="height: 100%; width: ${pct}%; background: ${pct >= 100 ? '#15803D' : 'var(--fit-purple)'};"></div></div>
+        </div>
+      </td>`;
+    });
+    html += '</tr>';
+  });
+  html += '</tbody>';
+  table.innerHTML = html;
+}
+
+// ============================================
+// MODALS
+// ============================================
+function openLocationModal() { document.getElementById('location-modal').classList.add('is-open'); }
+function closeModals() { document.querySelectorAll('.modal-backdrop').forEach(m => m.classList.remove('is-open')); }
+
+function openStudentModal(id) {
+  const f = (k) => document.getElementById(k);
+  const isEdit = !!id;
+  const s = isEdit ? STATE.students.find(x => x.id === id) : null;
+
+  document.getElementById('student-modal-title').innerHTML = isEdit ? `Editar <em>${escape(s.first_name)}</em>` : 'Nuevo <em>alumno</em>';
+  document.getElementById('student-delete-btn').style.display = isEdit ? 'inline-flex' : 'none';
+
+  f('f-student-id').value = s?.id || '';
+  f('f-first-name').value = s?.first_name || '';
+  f('f-last-name').value = s?.last_name || '';
+  f('f-email').value = s?.email || '';
+  f('f-phone').value = s?.phone || '';
+  f('f-doc-type').value = s?.document_type || '';
+  f('f-doc-num').value = s?.document_number || '';
+  f('f-birth-date').value = s?.birth_date || '';
+  f('f-modality').value = s?.modality || 'flexible';
+  f('f-emergency-name').value = s?.emergency_contact_name || '';
+  f('f-emergency-phone').value = s?.emergency_contact_phone || '';
+  f('f-medical').value = s?.medical_notes || '';
+  f('f-insurance').value = s?.insurance_provider || '';
+  f('f-needs-confirmation').checked = s ? s.needs_confirmation !== false : true;
+  f('f-consent-signed').checked = !!s?.consent_signed_at;
+
+  document.getElementById('student-modal').classList.add('is-open');
+}
+
+function openInstructorModal(id) {
+  const f = (k) => document.getElementById(k);
+  const isEdit = !!id;
+  const i = isEdit ? STATE.instructors.find(x => x.id === id) : null;
+
+  document.getElementById('instructor-modal-title').innerHTML = isEdit ? `Editar <em>${escape(i.full_name)}</em>` : 'Nuevo <em>profesor</em>';
+  document.getElementById('instructor-delete-btn').style.display = isEdit ? 'inline-flex' : 'none';
+
+  f('fi-id').value = i?.id || '';
+  f('fi-full-name').value = i?.full_name || '';
+  f('fi-initials').value = i?.initials || '';
+  f('fi-email').value = i?.email || '';
+  f('fi-phone').value = i?.phone || '';
+  f('fi-photo').value = i?.photo_url || '';
+  f('fi-hire').value = i?.hire_date || '';
+  f('fi-bio').value = i?.bio || '';
+  f('fi-cert').value = i?.certifications || '';
+
+  document.getElementById('instructor-modal').classList.add('is-open');
+}
+
+// ============================================
+// CRUD — STUDENTS
+// ============================================
+async function saveStudent() {
+  const f = (k) => document.getElementById(k);
+  const id = f('f-student-id').value;
+  const isEdit = !!id;
+
+  const data = {
+    location_id: STATE.currentLocationId,
+    first_name: f('f-first-name').value.trim(),
+    last_name: f('f-last-name').value.trim() || null,
+    email: f('f-email').value.trim() || null,
+    phone: f('f-phone').value.trim() || null,
+    document_type: f('f-doc-type').value || null,
+    document_number: f('f-doc-num').value.trim() || null,
+    birth_date: f('f-birth-date').value || null,
+    modality: f('f-modality').value,
+    emergency_contact_name: f('f-emergency-name').value.trim() || null,
+    emergency_contact_phone: f('f-emergency-phone').value.trim() || null,
+    medical_notes: f('f-medical').value.trim() || null,
+    insurance_provider: f('f-insurance').value.trim() || null,
+    needs_confirmation: f('f-needs-confirmation').checked,
+    consent_signed_at: f('f-consent-signed').checked ? new Date().toISOString() : null,
+    data_complete: !!(f('f-email').value.trim() && f('f-doc-num').value.trim()),
+    status: 'active',
+  };
+
+  if (!data.first_name) {
+    showToast('El nombre es obligatorio', 'error');
+    return;
+  }
+
+  if (isOnline) {
+    const result = isEdit
+      ? await supabase.from('students').update(data).eq('id', id).select().single()
+      : await supabase.from('students').insert(data).select().single();
+    if (result.error) { showToast('Error: ' + result.error.message, 'error'); return; }
+
+    if (isEdit) {
+      const idx = STATE.students.findIndex(s => s.id === id);
+      if (idx >= 0) STATE.students[idx] = result.data;
+    } else {
+      STATE.students.push(result.data);
+    }
+  } else {
+    if (isEdit) {
+      const idx = STATE.students.findIndex(s => s.id === id);
+      if (idx >= 0) STATE.students[idx] = { ...STATE.students[idx], ...data };
+    } else {
+      data.id = 'local_' + Date.now();
+      STATE.students.push(data);
+    }
+    localStorage.setItem('mock_students', JSON.stringify(STATE.students));
+  }
+
+  showToast(isEdit ? 'Alumno actualizado' : 'Alumno creado ✨', 'success');
+  closeModals();
+  renderAll();
+}
+
+async function deactivateStudent() {
+  const id = document.getElementById('f-student-id').value;
+  if (!confirm('¿Desactivar este alumno? No se borrará, solo se ocultará.')) return;
+  if (isOnline) {
+    const { error } = await supabase.from('students').update({ status: 'inactive' }).eq('id', id);
+    if (error) { showToast('Error: ' + error.message, 'error'); return; }
+  }
+  STATE.students = STATE.students.filter(s => s.id !== id);
+  if (!isOnline) localStorage.setItem('mock_students', JSON.stringify(STATE.students));
+  showToast('Alumno desactivado', 'success');
+  closeModals();
+  renderAll();
+}
+
+// ============================================
+// CRUD — INSTRUCTORS
+// ============================================
+async function saveInstructor() {
+  const f = (k) => document.getElementById(k);
+  const id = f('fi-id').value;
+  const isEdit = !!id;
+
+  const data = {
+    full_name: f('fi-full-name').value.trim(),
+    initials: f('fi-initials').value.trim().toUpperCase(),
+    email: f('fi-email').value.trim() || null,
+    phone: f('fi-phone').value.trim() || null,
+    photo_url: f('fi-photo').value.trim() || null,
+    hire_date: f('fi-hire').value || null,
+    bio: f('fi-bio').value.trim() || null,
+    certifications: f('fi-cert').value.trim() || null,
+    is_active: true,
+  };
+
+  if (!data.full_name || !data.initials) {
+    showToast('Nombre e iniciales son obligatorios', 'error');
+    return;
+  }
+
+  if (isOnline) {
+    const result = isEdit
+      ? await supabase.from('instructors').update(data).eq('id', id).select().single()
+      : await supabase.from('instructors').insert(data).select().single();
+    if (result.error) { showToast('Error: ' + result.error.message, 'error'); return; }
+    if (isEdit) {
+      const idx = STATE.instructors.findIndex(i => i.id === id);
+      if (idx >= 0) STATE.instructors[idx] = result.data;
+    } else {
+      STATE.instructors.push(result.data);
+    }
+  } else {
+    if (isEdit) {
+      const idx = STATE.instructors.findIndex(i => i.id === id);
+      if (idx >= 0) STATE.instructors[idx] = { ...STATE.instructors[idx], ...data };
+    } else {
+      data.id = 'local_' + Date.now();
+      STATE.instructors.push(data);
+    }
+  }
+  showToast(isEdit ? 'Profesor actualizado' : 'Profesor creado ✨', 'success');
+  closeModals();
+  renderAll();
+}
+
+async function deactivateInstructor() {
+  const id = document.getElementById('fi-id').value;
+  if (!confirm('¿Desactivar este profesor?')) return;
+  if (isOnline) {
+    const { error } = await supabase.from('instructors').update({ is_active: false }).eq('id', id);
+    if (error) { showToast('Error: ' + error.message, 'error'); return; }
+  }
+  STATE.instructors = STATE.instructors.filter(i => i.id !== id);
+  showToast('Profesor desactivado', 'success');
+  closeModals();
+  renderAll();
+}
+
+// ============================================
+// FILTERS, SEARCH, NAV
+// ============================================
+function filterStudents() { renderStudents(); }
+function setFilter(btn) {
+  document.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('is-active'));
+  btn.classList.add('is-active');
+  STATE.currentFilter = btn.dataset.filter;
+  renderStudents();
+}
+
+function showView(name, btn) {
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('is-active'));
+  document.getElementById('view-' + name).classList.add('is-active');
+  if (btn) {
+    document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('is-active'));
+    btn.classList.add('is-active');
+  }
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function changeDay(delta) {
+  STATE.currentDate.setDate(STATE.currentDate.getDate() + delta);
+  setDateDisplay();
+  renderTimeline();
+}
+function goToday() {
+  STATE.currentDate = new Date();
+  setDateDisplay();
+  renderTimeline();
+}
+
+function markAttendance(studentId, hour, status, btn) {
+  // Toggle visual state
+  const row = btn.closest('.attendance-toggle');
+  row.querySelectorAll('.att-btn').forEach(b => { b.classList.remove('is-attended', 'is-noshow'); });
+  btn.classList.add(status === 'attended' ? 'is-attended' : 'is-noshow');
+  showToast(status === 'attended' ? '✓ Asistencia registrada' : '✗ Falta registrada', 'success');
+  // TODO: persist to attendance table
+}
+
+// ============================================
+// HELPERS
+// ============================================
+function setDateDisplay() {
+  const days = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
+  const months = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+  const d = STATE.currentDate;
+  document.getElementById('date-day').textContent = days[d.getDay()];
+  document.getElementById('date-full').textContent = `${d.getDate()} de ${months[d.getMonth()]}, ${d.getFullYear()}`;
+}
+
+function initials(s) {
+  const a = (s.first_name || '').trim()[0] || '';
+  const b = (s.last_name || '').trim()[0] || '';
+  return (a + b).toUpperCase() || '?';
+}
+
+function formatHour(h) {
+  if (h === 0) return '12am';
+  if (h < 12) return h + 'am';
+  if (h === 12) return '12pm';
+  return (h - 12) + 'pm';
+}
+
+function escape(s) {
+  if (!s) return '';
+  const div = document.createElement('div');
+  div.textContent = s;
+  return div.innerHTML;
+}
+
+function showToast(msg, type = '') {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast is-show toast-' + type;
+  setTimeout(() => t.classList.remove('is-show'), 3000);
+}
+
+// ============================================
+// INIT
+// ============================================
+document.addEventListener('DOMContentLoaded', () => {
+  setDateDisplay();
+  loadAll();
+});
+</script>
+
+</body>
+</html>
