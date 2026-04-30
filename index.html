@@ -819,12 +819,12 @@
 // ============================================
 // SUPABASE CONFIG — paste your credentials here
 // ============================================
-const SUPABASE_URL = 'https://jcvizioahuqvmhwfnbop.supabase.co';     // ← PEGA AQUÍ tu Project URL
-const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Impjdml6aW9haHVxdm1od2ZuYm9wIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc1MjIzODIsImV4cCI6MjA5MzA5ODM4Mn0.0EYHVITqA85IhtBUbGddHEWcVKIU_MeSzSxrdzNyvhI';     // ← PEGA AQUÍ tu anon public key
+const SUPABASE_URL = '';     // ← PEGA AQUÍ tu Project URL
+const SUPABASE_KEY = '';     // ← PEGA AQUÍ tu anon public key
 // Si están vacíos, la app corre en MODO DEMO (datos en localStorage).
 // ============================================
 
-// supabase already declared above
+let supabase = null;
 let isOnline = false;
 
 if (SUPABASE_URL && SUPABASE_KEY) {
@@ -843,6 +843,9 @@ const STATE = {
   fixedBookings: [],
   schedules: [],          // instructor_schedules con effective_from / effective_to
   classOverrides: {},     // cambios puntuales del día: key = 'YYYY-MM-DD-locId-hour' -> instructor_id
+  classSessions: [],      // class_sessions del día actual (cargadas desde Supabase)
+  sessionBookings: [],    // session_bookings del día (incluye flexibles agregados)
+  attendances: [],        // registros de asistencia del día actual
   currentDate: new Date(),
   currentFilter: 'all',
 };
@@ -948,8 +951,9 @@ function loadFromMock() {
 // ============================================
 // RENDER
 // ============================================
-function renderAll() {
+async function renderAll() {
   renderLocationSwitcher();
+  await loadDayData();
   renderDashboard();
   renderStudents();
   renderInstructors();
@@ -1078,8 +1082,71 @@ function renderDashboard() {
   renderTimeline();
 }
 
-function renderTimeline() {
-  const body = document.getElementById('timeline-body');
+// ============================================
+// LOAD DAY DATA — sessions, bookings, attendances del día actual
+// ============================================
+async function loadDayData() {
+  if (!isOnline) return;
+  const dateStr = STATE.currentDate.toISOString().slice(0,10);
+  const locId = STATE.currentLocationId;
+  if (!locId) return;
+
+  const { data: sessions } = await supabase
+    .from('class_sessions')
+    .select('*')
+    .eq('location_id', locId)
+    .eq('session_date', dateStr);
+
+  STATE.classSessions = sessions || [];
+
+  if (STATE.classSessions.length > 0) {
+    const sessionIds = STATE.classSessions.map(s => s.id);
+    const [bookings, attendances] = await Promise.all([
+      supabase.from('session_bookings').select('*').in('session_id', sessionIds),
+      supabase.from('attendance').select('*').in('session_id', sessionIds),
+    ]);
+    STATE.sessionBookings = bookings.data || [];
+    STATE.attendances = attendances.data || [];
+  } else {
+    STATE.sessionBookings = [];
+    STATE.attendances = [];
+  }
+}
+
+function findAttendance(studentId, sessionId) {
+  return STATE.attendances.find(a => a.student_id === studentId && a.session_id === sessionId);
+}
+
+async function getOrCreateSession(locationId, date, hour) {
+  if (!isOnline) return null;
+  const dateStr = date.toISOString().slice(0,10);
+
+  let session = STATE.classSessions.find(s =>
+    s.location_id === locationId && s.session_date === dateStr && s.hour === hour
+  );
+  if (session) return session.id;
+
+  const dow = date.getDay();
+  const inst = resolveInstructor(locationId, date, dow, hour);
+  const instructorId = (inst && inst.id) || null;
+
+  const { data, error } = await supabase.rpc('ensure_class_session', {
+    p_location_id: locationId,
+    p_date: dateStr,
+    p_hour: hour,
+    p_instructor_id: instructorId,
+  });
+
+  if (error) { console.error('Error creando sesión:', error); return null; }
+
+  const { data: refreshed } = await supabase
+    .from('class_sessions').select('*').eq('id', data).single();
+  if (refreshed) STATE.classSessions.push(refreshed);
+
+  return data;
+}
+
+
   const loc = getCurrentLocation();
   if (!loc) { body.innerHTML = ''; return; }
 
@@ -1137,26 +1204,62 @@ function renderTimeline() {
     const inst = resolveInstructor(loc.id, STATE.currentDate, dow, h);
     const instColor = getInstructorColor(inst);
 
-    const studentRows = studentsAtHour.map(s => `
-      <div class="student-row">
+    // Buscar session existente para este slot
+    const dateStr = STATE.currentDate.toISOString().slice(0,10);
+    const session = STATE.classSessions.find(s =>
+      s.location_id === loc.id && s.session_date === dateStr && s.hour === h
+    );
+    const sessionId = session ? session.id : null;
+    const isCancelled = session && session.is_cancelled;
+
+    const studentRows = studentsAtHour.map(s => {
+      const att = sessionId ? findAttendance(s.id, sessionId) : null;
+      const status = att ? att.status : null;
+
+      // Estado visual según attendance
+      let statusBadge = '';
+      let rowStyle = '';
+      if (status === 'attended') {
+        statusBadge = '<span style="font-size:10px; background:#10b981; color:white; padding:2px 8px; border-radius:999px; font-weight:600;">✓ ASISTIÓ</span>';
+        rowStyle = 'background: #ecfdf5;';
+      } else if (status === 'recoverable') {
+        statusBadge = '<span style="font-size:10px; background:#3b82f6; color:white; padding:2px 8px; border-radius:999px; font-weight:600;">⊙ RECUPERABLE</span>';
+        rowStyle = 'background: #eff6ff;';
+      } else if (status === 'lost') {
+        statusBadge = '<span style="font-size:10px; background:#f97316; color:white; padding:2px 8px; border-radius:999px; font-weight:600;">⚠ PERDIDA</span>';
+        rowStyle = 'background: #fff7ed;';
+      } else if (status === 'no_show') {
+        statusBadge = '<span style="font-size:10px; background:#ef4444; color:white; padding:2px 8px; border-radius:999px; font-weight:600;">✗ NO VINO</span>';
+        rowStyle = 'background: #fef2f2;';
+      } else if (status === 'pending') {
+        statusBadge = '<span style="font-size:10px; background:#a78bfa; color:white; padding:2px 8px; border-radius:999px; font-weight:600;">? PENDIENTE</span>';
+        rowStyle = 'background: #f5f3ff;';
+      } else if (status === 'rescheduled') {
+        statusBadge = '<span style="font-size:10px; background:#8b5cf6; color:white; padding:2px 8px; border-radius:999px; font-weight:600;">↔ MOVIDA</span>';
+        rowStyle = 'background: #faf5ff;';
+      }
+
+      return `
+      <div class="student-row" style="${rowStyle}">
         <div class="student-avatar">${initials(s)}</div>
         <div>
           <div class="student-name">${escape(s.first_name)} ${escape(s.last_name || '')}</div>
           <div class="student-meta">
             <span class="modality-pill modality-${s.modality}">${s.modality === 'fixed' ? '★ Fijo' : (s.modality === 'flexible' ? '↻ Flexible' : '✦ Prueba')}</span>
             ${!s.data_complete ? '<span style="color: var(--warn);">⚠ datos faltantes</span>' : ''}
+            ${statusBadge}
           </div>
         </div>
         <div class="attendance-toggle">
-          <button class="att-btn" onclick="markAttendance('${s.id}', '${h}', 'attended', this)" title="Asistió">
+          <button class="att-btn ${status === 'attended' ? 'is-attended' : ''}" onclick="markAttendance('${s.id}', ${h}, 'attended')" title="Asistió">
             <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
           </button>
-          <button class="att-btn" onclick="markAttendance('${s.id}', '${h}', 'no_show', this)" title="Faltó">
+          <button class="att-btn ${status && status !== 'attended' ? 'is-noshow' : ''}" onclick="openAbsenceMenu('${s.id}', ${h}, event)" title="Falta / cambio">
             <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
           </button>
         </div>
       </div>
-    `).join('');
+    `}).join('');
 
     const emptySlots = Array.from({ length: cap - occ }, () => `
       <div class="empty-slot" onclick="alert('Próximamente: agregar alumno flexible a esta clase')">
@@ -1804,13 +1907,174 @@ function goToday() {
   renderTimeline();
 }
 
-function markAttendance(studentId, hour, status, btn) {
-  // Toggle visual state
-  const row = btn.closest('.attendance-toggle');
-  row.querySelectorAll('.att-btn').forEach(b => { b.classList.remove('is-attended', 'is-noshow'); });
-  btn.classList.add(status === 'attended' ? 'is-attended' : 'is-noshow');
-  showToast(status === 'attended' ? '✓ Asistencia registrada' : '✗ Falta registrada', 'success');
-  // TODO: persist to attendance table
+// ============================================
+// ATTENDANCE — guardar en Supabase con todos los estados
+// ============================================
+async function markAttendance(studentId, hour, status, notes) {
+  if (!isOnline) { showToast('Necesita conexión para registrar asistencia', 'error'); return; }
+
+  const loc = getCurrentLocation();
+  if (!loc) return;
+
+  // 1. Asegurar que la session existe
+  const sessionId = await getOrCreateSession(loc.id, STATE.currentDate, hour);
+  if (!sessionId) { showToast('No se pudo crear la sesión', 'error'); return; }
+
+  // 2. Asegurar que el booking existe
+  let booking = STATE.sessionBookings.find(b => b.session_id === sessionId && b.student_id === studentId);
+  if (!booking) {
+    const student = STATE.students.find(s => s.id === studentId);
+    const source = student && student.modality === 'fixed' ? 'fixed' : 'flexible';
+    const { data, error } = await supabase
+      .from('session_bookings')
+      .insert({ session_id: sessionId, student_id: studentId, source })
+      .select()
+      .single();
+    if (error) { showToast('Error: ' + error.message, 'error'); return; }
+    booking = data;
+    STATE.sessionBookings.push(data);
+  }
+
+  // 3. Lógica de cada estado
+  const isRecoverable = (status === 'recoverable');
+  const countsAgainst = (status === 'attended' || status === 'lost' || status === 'no_show');
+
+  // 4. Upsert attendance
+  const existing = STATE.attendances.find(a => a.booking_id === booking.id);
+  const payload = {
+    booking_id: booking.id,
+    student_id: studentId,
+    session_id: sessionId,
+    status,
+    notes: notes || null,
+    is_recoverable: isRecoverable,
+    counts_against_package: countsAgainst,
+    marked_at: new Date().toISOString(),
+  };
+
+  if (existing) {
+    const { data, error } = await supabase
+      .from('attendance')
+      .update(payload)
+      .eq('id', existing.id)
+      .select()
+      .single();
+    if (error) { showToast('Error: ' + error.message, 'error'); return; }
+    const idx = STATE.attendances.findIndex(a => a.id === existing.id);
+    STATE.attendances[idx] = data;
+  } else {
+    const { data, error } = await supabase
+      .from('attendance')
+      .insert(payload)
+      .select()
+      .single();
+    if (error) { showToast('Error: ' + error.message, 'error'); return; }
+    STATE.attendances.push(data);
+  }
+
+  const labels = {
+    attended: '✓ Asistencia registrada',
+    recoverable: '⊙ Falta justificada · clase recuperable',
+    lost: '⚠ Cancelación tardía · clase perdida',
+    no_show: '✗ No vino sin avisar',
+    pending: '? Marcado como pendiente',
+    rescheduled: '↔ Marcado como reprogramada',
+  };
+  showToast(labels[status] || 'Asistencia actualizada', 'success');
+  closeAbsenceMenu();
+  renderTimeline();
+}
+
+// ============================================
+// ABSENCE MENU — popover con motivos de falta
+// ============================================
+function openAbsenceMenu(studentId, hour, evt) {
+  evt.stopPropagation();
+  closeAbsenceMenu();
+
+  const student = STATE.students.find(s => s.id === studentId);
+  if (!student) return;
+
+  const menu = document.createElement('div');
+  menu.id = 'absence-menu';
+  menu.style.cssText = `
+    position: fixed; z-index: 9999; background: white; border-radius: 12px;
+    box-shadow: 0 12px 32px rgba(0,0,0,0.15); border: 1px solid var(--line);
+    width: 320px; padding: 8px; font-size: 13px;
+  `;
+
+  const rect = evt.currentTarget.getBoundingClientRect();
+  menu.style.top = (rect.bottom + 8) + 'px';
+  menu.style.left = Math.max(8, rect.right - 320) + 'px';
+
+  menu.innerHTML = `
+    <div style="padding: 10px 12px; border-bottom: 1px solid var(--line-soft); font-size: 11px; color: var(--ink-mute); text-transform: uppercase; letter-spacing: 0.5px;">
+      ${escape(student.first_name)} ${escape(student.last_name || '')} · ${formatHour(hour)}
+    </div>
+    <button class="absence-opt" onclick="markAttendance('${studentId}', ${hour}, 'recoverable')" style="width:100%; display:flex; gap:10px; padding:10px 12px; border-radius:8px; border:none; background:white; text-align:left; cursor:pointer; transition:background 0.15s;" onmouseover="this.style.background='#f5f3ff'" onmouseout="this.style.background='white'">
+      <span style="font-size:18px;">⊙</span>
+      <div>
+        <div style="font-weight:600; color:#3b82f6;">Falta justificada · recuperable</div>
+        <div style="font-size:11px; color:var(--ink-mute); margin-top:2px;">Avisó con +4h. No descuenta del paquete. Queda pendiente de recuperar.</div>
+      </div>
+    </button>
+    <button class="absence-opt" onclick="markAttendance('${studentId}', ${hour}, 'lost')" style="width:100%; display:flex; gap:10px; padding:10px 12px; border-radius:8px; border:none; background:white; text-align:left; cursor:pointer; transition:background 0.15s;" onmouseover="this.style.background='#fff7ed'" onmouseout="this.style.background='white'">
+      <span style="font-size:18px;">⚠</span>
+      <div>
+        <div style="font-weight:600; color:#f97316;">Cancelación tardía · clase perdida</div>
+        <div style="font-size:11px; color:var(--ink-mute); margin-top:2px;">Avisó con menos de 4h. Cuenta como falta.</div>
+      </div>
+    </button>
+    <button class="absence-opt" onclick="markAttendance('${studentId}', ${hour}, 'no_show')" style="width:100%; display:flex; gap:10px; padding:10px 12px; border-radius:8px; border:none; background:white; text-align:left; cursor:pointer; transition:background 0.15s;" onmouseover="this.style.background='#fef2f2'" onmouseout="this.style.background='white'">
+      <span style="font-size:18px;">✗</span>
+      <div>
+        <div style="font-weight:600; color:#ef4444;">No vino sin avisar</div>
+        <div style="font-size:11px; color:var(--ink-mute); margin-top:2px;">Cuenta como falta. Queda registro.</div>
+      </div>
+    </button>
+    <button class="absence-opt" onclick="markAttendance('${studentId}', ${hour}, 'pending')" style="width:100%; display:flex; gap:10px; padding:10px 12px; border-radius:8px; border:none; background:white; text-align:left; cursor:pointer; transition:background 0.15s;" onmouseover="this.style.background='#f5f3ff'" onmouseout="this.style.background='white'">
+      <span style="font-size:18px;">?</span>
+      <div>
+        <div style="font-weight:600; color:#a78bfa;">Marcar como pendiente</div>
+        <div style="font-size:11px; color:var(--ink-mute); margin-top:2px;">Aún no se sabe si va a venir.</div>
+      </div>
+    </button>
+    <div style="border-top: 1px solid var(--line-soft); margin: 4px 0;"></div>
+    <button class="absence-opt" onclick="clearAttendance('${studentId}', ${hour})" style="width:100%; padding:8px 12px; border-radius:8px; border:none; background:white; cursor:pointer; font-size:12px; color:var(--ink-mute); text-align:left; transition:background 0.15s;" onmouseover="this.style.background='var(--fit-cream)'" onmouseout="this.style.background='white'">
+      Limpiar marca
+    </button>
+  `;
+
+  document.body.appendChild(menu);
+  setTimeout(() => {
+    document.addEventListener('click', closeAbsenceMenu, { once: true });
+  }, 50);
+}
+
+function closeAbsenceMenu() {
+  const m = document.getElementById('absence-menu');
+  if (m) m.remove();
+}
+
+async function clearAttendance(studentId, hour) {
+  if (!isOnline) return;
+  const loc = getCurrentLocation();
+  const dateStr = STATE.currentDate.toISOString().slice(0,10);
+  const session = STATE.classSessions.find(s =>
+    s.location_id === loc.id && s.session_date === dateStr && s.hour === hour
+  );
+  if (!session) { closeAbsenceMenu(); return; }
+
+  const att = findAttendance(studentId, session.id);
+  if (!att) { closeAbsenceMenu(); return; }
+
+  const { error } = await supabase.from('attendance').delete().eq('id', att.id);
+  if (error) { showToast('Error: ' + error.message, 'error'); return; }
+
+  STATE.attendances = STATE.attendances.filter(a => a.id !== att.id);
+  showToast('Marca eliminada', 'success');
+  closeAbsenceMenu();
+  renderTimeline();
 }
 
 // ============================================
