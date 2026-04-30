@@ -808,6 +808,65 @@
   </div>
 </div>
 
+<!-- MOVE STUDENT MODAL -->
+<div class="modal-backdrop" id="move-student-modal" onclick="if(event.target===this) closeModals()">
+  <div class="modal-card">
+    <div class="modal-header">
+      <div class="modal-title">Mover <em>alumno</em> a otro horario</div>
+      <button class="modal-close" onclick="closeModals()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div id="move-student-context" style="background: var(--fit-lavender-pale); padding: 14px 18px; border-radius: var(--radius-md); margin-bottom: 18px; font-size: 13px; color: var(--ink-soft);"></div>
+
+      <div class="form-row" style="margin-bottom: 16px;">
+        <label>Nueva fecha <span class="req">*</span></label>
+        <input type="date" id="move-date" />
+      </div>
+
+      <div class="form-row" style="margin-bottom: 16px;">
+        <label>Nueva hora <span class="req">*</span></label>
+        <select id="move-hour"></select>
+      </div>
+
+      <div class="form-row" style="margin-bottom: 16px;">
+        <label>Motivo (opcional)</label>
+        <input type="text" id="move-reason" placeholder="ej: cambio puntual, viaje, etc." />
+      </div>
+
+      <div style="background: var(--info-soft); border-left: 3px solid var(--info); padding: 12px 14px; border-radius: var(--radius-sm); font-size: 12px; color: var(--info);">
+        💡 Esto NO cambia el horario fijo del alumno — es solo un movimiento puntual. La clase original queda registrada como "movida".
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModals()">Cancelar</button>
+      <button class="btn btn-primary" onclick="confirmMoveStudent()">Confirmar movimiento</button>
+    </div>
+  </div>
+</div>
+
+<!-- ADD FLEXIBLE MODAL -->
+<div class="modal-backdrop" id="add-flexible-modal" onclick="if(event.target===this) closeModals()">
+  <div class="modal-card">
+    <div class="modal-header">
+      <div class="modal-title">Agregar <em>alumno</em> a la clase</div>
+      <button class="modal-close" onclick="closeModals()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div id="add-flex-context" style="background: var(--fit-lavender-pale); padding: 14px 18px; border-radius: var(--radius-md); margin-bottom: 18px; font-size: 13px; color: var(--ink-soft);"></div>
+
+      <div class="form-row" style="margin-bottom: 12px;">
+        <label>Buscar alumno</label>
+        <input type="text" id="add-flex-search" placeholder="Nombre, apellido o DNI..." oninput="renderFlexibleSearch()" autocomplete="off" />
+      </div>
+
+      <div id="add-flex-results" style="max-height: 320px; overflow-y: auto; border: 1px solid var(--line-soft); border-radius: var(--radius-md); padding: 4px;"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModals()">Cancelar</button>
+    </div>
+  </div>
+</div>
+
 <!-- TOAST -->
 <div class="toast" id="toast"></div>
 
@@ -972,13 +1031,39 @@ function getCurrentLocation() {
 // Aplica fechas de vigencia (effective_from/to)
 // ============================================
 function resolveInstructor(locationId, date, dow, hour) {
-  // 1. Override puntual del día (si la coordinadora cambió este slot)
   const dateKey = date.toISOString().slice(0,10);
+
+  // 0. Si existe class_sessions del día con instructor_id explícito (incluido NULL = quitado)
+  const session = STATE.classSessions && STATE.classSessions.find(s =>
+    s.location_id === locationId && s.session_date === dateKey && s.hour === hour
+  );
+  if (session) {
+    if (session.is_cancelled) {
+      return { id: null, initials: '✗', full_name: 'Clase cancelada', certifications: session.notes || '', _isUnassigned: true, _isCancelled: true };
+    }
+    if (session.instructor_id) {
+      const inst = STATE.instructors.find(i => i.id === session.instructor_id);
+      if (inst) return inst;
+    }
+    // Si la session existe pero instructor_id es null -> sin asignar (fue quitado)
+    if (session.instructor_id === null) {
+      // continuar al schedule fijo solo si NO hay override "__none__"
+      const overrideKey = `${dateKey}-${locationId}-${hour}`;
+      if (STATE.classOverrides[overrideKey] === '__none__') {
+        return { id: null, initials: '?', full_name: 'Sin asignar', certifications: 'Asignar profesor', _isUnassigned: true };
+      }
+    }
+  }
+
+  // 1. Override puntual del día
   const overrideKey = `${dateKey}-${locationId}-${hour}`;
-  if (STATE.classOverrides[overrideKey]) {
+  if (STATE.classOverrides[overrideKey] && STATE.classOverrides[overrideKey] !== '__none__') {
     const overrideId = STATE.classOverrides[overrideKey];
     const inst = STATE.instructors.find(i => i.id === overrideId);
     if (inst) return { ...inst, _isOverride: true };
+  }
+  if (STATE.classOverrides[overrideKey] === '__none__') {
+    return { id: null, initials: '?', full_name: 'Sin asignar', certifications: 'Asignar profesor', _isUnassigned: true };
   }
 
   // 2. Buscar en instructor_schedules vigentes
@@ -996,7 +1081,6 @@ function resolveInstructor(locationId, date, dow, hour) {
     return { id: null, initials: '?', full_name: 'Sin asignar', certifications: 'Asignar profesor', _isUnassigned: true };
   }
 
-  // Tomar el primero (si hay solapamientos, algo va mal pero no rompe)
   const sched = candidates[0];
   const inst = STATE.instructors.find(i => i.id === sched.instructor_id);
   return inst || { id: null, initials: '?', full_name: 'Profesor desconocido', certifications: '', _isUnassigned: true };
@@ -1187,9 +1271,35 @@ function renderTimeline() {
   }
 
   body.innerHTML = hours.map(h => {
+    // Buscar session existente para este slot
+    const dateStr = STATE.currentDate.toISOString().slice(0,10);
+    const session = STATE.classSessions.find(s =>
+      s.location_id === loc.id && s.session_date === dateStr && s.hour === h
+    );
+    const sessionId = session ? session.id : null;
+    const isCancelled = session && session.is_cancelled;
+
+    // Alumnos fijos del día/hora
     const bookingsAtHour = todayBookings.filter(b => b.hour === h);
-    const studentsAtHour = bookingsAtHour
-      .map(b => STATE.students.find(s => s.id === b.student_id))
+    const fixedStudentIds = bookingsAtHour.map(b => b.student_id);
+
+    // session_bookings de esta clase (incluye flexibles agregados y movidos)
+    const liveBookings = sessionId ? STATE.sessionBookings.filter(b => b.session_id === sessionId) : [];
+    // IDs de fijos que se movieron afuera (cancelled_at + source fixed)
+    const movedOutIds = new Set(
+      liveBookings.filter(b => b.cancelled_at && b.source === 'fixed').map(b => b.student_id)
+    );
+    // IDs agregados (flexible o rescheduled, sin cancelled_at)
+    const addedIds = liveBookings.filter(b => !b.cancelled_at).map(b => b.student_id);
+
+    // Combinar: fijos que NO se movieron + agregados, sin duplicar
+    const finalIds = new Set([
+      ...fixedStudentIds.filter(id => !movedOutIds.has(id)),
+      ...addedIds,
+    ]);
+
+    const studentsAtHour = Array.from(finalIds)
+      .map(id => STATE.students.find(s => s.id === id))
       .filter(Boolean);
 
     const occ = studentsAtHour.length;
@@ -1206,14 +1316,6 @@ function renderTimeline() {
     // Resolver profesor REAL para esta clase basado en fecha + sede + día_semana + hora
     const inst = resolveInstructor(loc.id, STATE.currentDate, dow, h);
     const instColor = getInstructorColor(inst);
-
-    // Buscar session existente para este slot
-    const dateStr = STATE.currentDate.toISOString().slice(0,10);
-    const session = STATE.classSessions.find(s =>
-      s.location_id === loc.id && s.session_date === dateStr && s.hour === h
-    );
-    const sessionId = session ? session.id : null;
-    const isCancelled = session && session.is_cancelled;
 
     const studentRows = studentsAtHour.map(s => {
       const att = sessionId ? findAttendance(s.id, sessionId) : null;
@@ -1260,23 +1362,26 @@ function renderTimeline() {
           <button class="att-btn ${status && status !== 'attended' ? 'is-noshow' : ''}" onclick="openAbsenceMenu('${s.id}', ${h}, event)" title="Falta / cambio">
             <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
           </button>
+          <button class="att-btn" onclick="openMoveStudentModal('${s.id}', ${h})" title="Mover a otro horario / día" style="background: var(--fit-lavender-pale); color: var(--fit-purple);">
+            <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
+          </button>
         </div>
       </div>
     `}).join('');
 
-    const emptySlots = Array.from({ length: cap - occ }, () => `
-      <div class="empty-slot" onclick="alert('Próximamente: agregar alumno flexible a esta clase')">
+    const emptySlots = isCancelled ? '' : Array.from({ length: cap - occ }, () => `
+      <div class="empty-slot" onclick="openAddFlexibleModal(${h})">
         <div class="empty-slot-dot">+</div>
         <span>Cupo disponible · clic para agregar alumno flexible</span>
       </div>
     `).join('');
 
     return `
-      <div class="class-block ${stateClass}">
+      <div class="class-block ${stateClass} ${isCancelled ? 'is-cancelled' : ''}" ${isCancelled ? 'style="opacity:0.5; background: repeating-linear-gradient(45deg, transparent, transparent 10px, rgba(0,0,0,0.03) 10px, rgba(0,0,0,0.03) 20px);"' : ''}>
         <div class="class-header" onclick="this.parentElement.classList.toggle('is-open')">
           <div>
-            <div class="class-time">${formatHour(h)}</div>
-            <div class="class-time-end">hasta ${formatHour(h)}:50</div>
+            <div class="class-time">${formatHour(h)} ${isCancelled ? '<span style="font-size:11px;color:var(--err);background:#fef2f2;padding:2px 8px;border-radius:999px;margin-left:6px;">✗ CANCELADA</span>' : ''}</div>
+            <div class="class-time-end">${isCancelled ? (session && session.notes ? escape(session.notes) : 'Clase cancelada') : 'hasta ' + formatHour(h) + ':50'}</div>
           </div>
           <div class="class-instructor" onclick="event.stopPropagation(); openChangeInstructorModal(${h}, ${dow})" style="cursor: pointer;" title="Click para cambiar profesor">
             <div class="instructor-avatar" style="--inst-color: ${instColor}; ${inst._isUnassigned ? 'border: 2px dashed var(--warn);' : ''}">${inst.initials}</div>
@@ -1289,6 +1394,9 @@ function renderTimeline() {
             <div class="occupancy-bar"><div class="occupancy-fill ${occClass}" style="width: ${occPct}%"></div></div>
             <div class="occupancy-num">${occ}<span>/${cap}</span></div>
           </div>
+          <button class="class-toggle" onclick="event.stopPropagation(); openClassMenu(${h}, event)" title="Más opciones" style="margin-right: 4px;">
+            <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="1"/><circle cx="12" cy="5" r="1"/><circle cx="12" cy="19" r="1"/></svg>
+          </button>
           <button class="class-toggle">
             <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg>
           </button>
@@ -2077,6 +2185,359 @@ async function clearAttendance(studentId, hour) {
   STATE.attendances = STATE.attendances.filter(a => a.id !== att.id);
   showToast('Marca eliminada', 'success');
   closeAbsenceMenu();
+  renderTimeline();
+}
+
+// ============================================
+// MOVE STUDENT — mover alumno a otra hora/día
+// ============================================
+let MOVE_CTX = { studentId: null, fromHour: null };
+
+function openMoveStudentModal(studentId, fromHour) {
+  const student = STATE.students.find(s => s.id === studentId);
+  if (!student) return;
+  MOVE_CTX = { studentId, fromHour };
+
+  const loc = getCurrentLocation();
+  const dateStr = STATE.currentDate.toISOString().slice(0,10);
+  document.getElementById('move-student-context').innerHTML = `
+    <strong>${escape(student.first_name)} ${escape(student.last_name || '')}</strong><br>
+    <span style="color: var(--ink-mute);">Clase actual:</span> ${formatHour(fromHour)} · ${dateStr} · ${loc.name}
+  `;
+
+  // Default: hoy mismo
+  document.getElementById('move-date').value = dateStr;
+  refreshMoveHourOptions();
+  document.getElementById('move-date').onchange = refreshMoveHourOptions;
+  document.getElementById('move-reason').value = '';
+  document.getElementById('move-student-modal').classList.add('is-open');
+}
+
+function refreshMoveHourOptions() {
+  const dateStr = document.getElementById('move-date').value;
+  if (!dateStr) return;
+  const date = new Date(dateStr + 'T12:00:00');
+  const dow = date.getDay();
+  // Determinar horas según día
+  let hours = [];
+  if (dow === 0) hours = [8, 9];                                      // Dom 8-10
+  else if (dow === 6) hours = [7, 8, 9, 10, 11];                      // Sáb 7-12
+  else hours = [6, 7, 8, 9, 10, 11, 16, 17, 18, 19, 20];              // Lun-Vie
+
+  const sel = document.getElementById('move-hour');
+  sel.innerHTML = hours.map(h => `<option value="${h}">${formatHour(h)}</option>`).join('');
+}
+
+async function confirmMoveStudent() {
+  if (!isOnline) { showToast('Necesita conexión', 'error'); return; }
+  const newDateStr = document.getElementById('move-date').value;
+  const newHour = parseInt(document.getElementById('move-hour').value);
+  const reason = document.getElementById('move-reason').value.trim();
+  const loc = getCurrentLocation();
+  const fromDateStr = STATE.currentDate.toISOString().slice(0,10);
+
+  // 1. Asegurar session destino
+  const newDate = new Date(newDateStr + 'T12:00:00');
+  const destSessionId = await getOrCreateSession(loc.id, newDate, newHour);
+  if (!destSessionId) { showToast('No se pudo crear la clase destino', 'error'); return; }
+
+  // 2. Asegurar session origen
+  const fromSessionId = await getOrCreateSession(loc.id, STATE.currentDate, MOVE_CTX.fromHour);
+
+  // 3. Buscar booking original (puede no existir si es alumno fijo sin booking creado aún)
+  let originalBooking = STATE.sessionBookings.find(b =>
+    b.session_id === fromSessionId && b.student_id === MOVE_CTX.studentId
+  );
+
+  // Si no existe, lo creamos para tener la trazabilidad
+  if (!originalBooking) {
+    const { data, error } = await sb.from('session_bookings').insert({
+      session_id: fromSessionId,
+      student_id: MOVE_CTX.studentId,
+      source: 'fixed',
+    }).select().single();
+    if (!error) {
+      originalBooking = data;
+      STATE.sessionBookings.push(data);
+    }
+  }
+
+  // 4. Marcar la original como rescheduled (cancelled_at + cancelled_reason)
+  if (originalBooking) {
+    await sb.from('session_bookings').update({
+      cancelled_at: new Date().toISOString(),
+      cancelled_reason: 'Movida a ' + newDateStr + ' ' + formatHour(newHour) + (reason ? ' · ' + reason : ''),
+    }).eq('id', originalBooking.id);
+
+    // Marcar attendance como rescheduled
+    const existing = findAttendance(MOVE_CTX.studentId, fromSessionId);
+    const attPayload = {
+      booking_id: originalBooking.id,
+      student_id: MOVE_CTX.studentId,
+      session_id: fromSessionId,
+      status: 'rescheduled',
+      notes: 'Movida a ' + newDateStr + ' ' + formatHour(newHour),
+      counts_against_package: false,
+      marked_at: new Date().toISOString(),
+    };
+    if (existing) {
+      const { data } = await sb.from('attendance').update(attPayload).eq('id', existing.id).select().single();
+      const idx = STATE.attendances.findIndex(a => a.id === existing.id);
+      if (data) STATE.attendances[idx] = data;
+    } else {
+      const { data } = await sb.from('attendance').insert(attPayload).select().single();
+      if (data) STATE.attendances.push(data);
+    }
+  }
+
+  // 5. Crear nuevo booking en la sesión destino
+  const newBookingPayload = {
+    session_id: destSessionId,
+    student_id: MOVE_CTX.studentId,
+    source: 'rescheduled',
+    rescheduled_from_booking_id: originalBooking ? originalBooking.id : null,
+    notes: reason || null,
+  };
+  const { error: insErr } = await sb.from('session_bookings').insert(newBookingPayload);
+  if (insErr) {
+    if (insErr.message && insErr.message.includes('duplicate')) {
+      showToast('El alumno ya está en esa clase destino', 'error');
+    } else {
+      showToast('Error: ' + insErr.message, 'error');
+    }
+    return;
+  }
+
+  showToast('✓ Alumno movido correctamente', 'success');
+  closeModals();
+  renderAll();
+}
+
+// ============================================
+// ADD FLEXIBLE — agregar alumno a una clase del día
+// ============================================
+let ADD_FLEX_CTX = { hour: null };
+
+function openAddFlexibleModal(hour) {
+  ADD_FLEX_CTX = { hour };
+  const loc = getCurrentLocation();
+  const dateStr = STATE.currentDate.toISOString().slice(0,10);
+  document.getElementById('add-flex-context').innerHTML = `
+    <strong>${formatHour(hour)}</strong> · ${dateStr} · ${loc.name}<br>
+    <span style="color: var(--ink-mute);">Buscá un alumno por nombre, apellido o documento.</span>
+  `;
+  document.getElementById('add-flex-search').value = '';
+  renderFlexibleSearch();
+  document.getElementById('add-flexible-modal').classList.add('is-open');
+  setTimeout(() => document.getElementById('add-flex-search').focus(), 100);
+}
+
+function renderFlexibleSearch() {
+  const q = (document.getElementById('add-flex-search').value || '').toLowerCase().trim();
+  const loc = getCurrentLocation();
+  const container = document.getElementById('add-flex-results');
+
+  let list = STATE.students.filter(s => s.location_id === loc.id);
+  if (q) {
+    list = list.filter(s => {
+      const full = (s.first_name + ' ' + (s.last_name || '')).toLowerCase();
+      const doc = (s.document || '').toLowerCase();
+      return full.includes(q) || doc.includes(q);
+    });
+  }
+  list = list.slice(0, 30);
+
+  if (list.length === 0) {
+    container.innerHTML = '<div style="padding: 32px; text-align: center; color: var(--ink-mute); font-size: 13px;">Sin resultados. Probá otro nombre.</div>';
+    return;
+  }
+
+  container.innerHTML = list.map(s => `
+    <div onclick="addStudentToClass('${s.id}')" style="display: grid; grid-template-columns: 36px 1fr auto; gap: 12px; align-items: center; padding: 10px 12px; cursor: pointer; border-radius: 8px; transition: background 0.15s;" onmouseover="this.style.background='var(--fit-lavender-pale)'" onmouseout="this.style.background=''">
+      <div class="student-avatar">${initials(s)}</div>
+      <div>
+        <div style="font-weight: 500; font-size: 14px;">${escape(s.first_name)} ${escape(s.last_name || '')}</div>
+        <div style="font-size: 11px; color: var(--ink-mute);">
+          <span class="modality-pill modality-${s.modality}" style="font-size:9px;">${s.modality === 'fixed' ? '★ Fijo' : (s.modality === 'flexible' ? '↻ Flex' : '✦ Prueba')}</span>
+          ${s.document ? ' · ' + escape(s.document) : ''}
+        </div>
+      </div>
+      <button class="btn btn-primary" style="padding: 4px 12px; font-size: 11px;">Agregar</button>
+    </div>
+  `).join('');
+}
+
+async function addStudentToClass(studentId) {
+  if (!isOnline) { showToast('Necesita conexión', 'error'); return; }
+  const loc = getCurrentLocation();
+  const sessionId = await getOrCreateSession(loc.id, STATE.currentDate, ADD_FLEX_CTX.hour);
+  if (!sessionId) { showToast('Error creando la clase', 'error'); return; }
+
+  // Verificar que no esté ya
+  const existing = STATE.sessionBookings.find(b => b.session_id === sessionId && b.student_id === studentId);
+  if (existing) {
+    showToast('El alumno ya está en esta clase', 'error');
+    return;
+  }
+
+  const student = STATE.students.find(s => s.id === studentId);
+  const source = student && student.modality === 'flexible' ? 'flexible' : 'fixed';
+
+  const { data, error } = await sb.from('session_bookings').insert({
+    session_id: sessionId,
+    student_id: studentId,
+    source,
+  }).select().single();
+
+  if (error) { showToast('Error: ' + error.message, 'error'); return; }
+
+  STATE.sessionBookings.push(data);
+  showToast(`✓ ${student.first_name} agregado/a a la clase de ${formatHour(ADD_FLEX_CTX.hour)}`, 'success');
+  closeModals();
+  renderAll();
+}
+
+// ============================================
+// CLASS MENU — cancelar clase, quitar profesor
+// ============================================
+function openClassMenu(hour, evt) {
+  evt.stopPropagation();
+  closeClassMenu();
+  const loc = getCurrentLocation();
+  const dateStr = STATE.currentDate.toISOString().slice(0,10);
+  const session = STATE.classSessions.find(s =>
+    s.location_id === loc.id && s.session_date === dateStr && s.hour === hour
+  );
+  const isCancelled = session && session.is_cancelled;
+
+  const menu = document.createElement('div');
+  menu.id = 'class-menu';
+  menu.style.cssText = `
+    position: fixed; z-index: 9999; background: white; border-radius: 12px;
+    box-shadow: 0 12px 32px rgba(0,0,0,0.15); border: 1px solid var(--line);
+    width: 260px; padding: 6px; font-size: 13px;
+  `;
+  const rect = evt.currentTarget.getBoundingClientRect();
+  menu.style.top = (rect.bottom + 8) + 'px';
+  menu.style.left = Math.max(8, rect.right - 260) + 'px';
+
+  menu.innerHTML = `
+    <div style="padding: 8px 12px; border-bottom: 1px solid var(--line-soft); font-size: 11px; color: var(--ink-mute); text-transform: uppercase; letter-spacing: 0.5px;">
+      Clase ${formatHour(hour)} · ${dateStr.slice(5)}
+    </div>
+    ${!isCancelled ? `
+      <button onclick="cancelClass(${hour})" style="width:100%; display:flex; gap:10px; padding:10px 12px; border-radius:8px; border:none; background:white; text-align:left; cursor:pointer; transition:background 0.15s;" onmouseover="this.style.background='#fef2f2'" onmouseout="this.style.background='white'">
+        <span style="font-size:16px;">✗</span>
+        <div>
+          <div style="font-weight:600; color:#ef4444;">Cancelar esta clase</div>
+          <div style="font-size:11px; color:var(--ink-mute); margin-top:2px;">Feriado, problema, etc. Los alumnos NO pierden la clase.</div>
+        </div>
+      </button>
+    ` : `
+      <button onclick="restoreClass(${hour})" style="width:100%; display:flex; gap:10px; padding:10px 12px; border-radius:8px; border:none; background:white; text-align:left; cursor:pointer; transition:background 0.15s;" onmouseover="this.style.background='#ecfdf5'" onmouseout="this.style.background='white'">
+        <span style="font-size:16px;">↻</span>
+        <div>
+          <div style="font-weight:600; color:#10b981;">Restaurar clase</div>
+          <div style="font-size:11px; color:var(--ink-mute); margin-top:2px;">Volver a habilitar esta clase.</div>
+        </div>
+      </button>
+    `}
+    <button onclick="removeInstructorFromClass(${hour})" style="width:100%; display:flex; gap:10px; padding:10px 12px; border-radius:8px; border:none; background:white; text-align:left; cursor:pointer; transition:background 0.15s;" onmouseover="this.style.background='var(--fit-lavender-pale)'" onmouseout="this.style.background='white'">
+      <span style="font-size:16px;">⊘</span>
+      <div>
+        <div style="font-weight:600; color:var(--ink);">Quitar profesor de esta clase</div>
+        <div style="font-size:11px; color:var(--ink-mute); margin-top:2px;">Solo este día. No afecta el horario fijo.</div>
+      </div>
+    </button>
+  `;
+  document.body.appendChild(menu);
+  setTimeout(() => document.addEventListener('click', closeClassMenu, { once: true }), 50);
+}
+
+function closeClassMenu() {
+  const m = document.getElementById('class-menu');
+  if (m) m.remove();
+}
+
+async function cancelClass(hour) {
+  if (!isOnline) { showToast('Necesita conexión', 'error'); return; }
+  const reason = prompt('Motivo de la cancelación (ej: Feriado del 1 de mayo):');
+  if (reason === null) { closeClassMenu(); return; }
+
+  const loc = getCurrentLocation();
+  const sessionId = await getOrCreateSession(loc.id, STATE.currentDate, hour);
+  if (!sessionId) { showToast('Error', 'error'); return; }
+
+  const { data, error } = await sb.from('class_sessions')
+    .update({ is_cancelled: true, notes: reason || 'Clase cancelada' })
+    .eq('id', sessionId)
+    .select()
+    .single();
+
+  if (error) { showToast('Error: ' + error.message, 'error'); return; }
+
+  // Actualizar cache
+  const idx = STATE.classSessions.findIndex(s => s.id === sessionId);
+  if (idx >= 0) STATE.classSessions[idx] = data;
+  else STATE.classSessions.push(data);
+
+  showToast(`✗ Clase de ${formatHour(hour)} cancelada`, 'success');
+  closeClassMenu();
+  renderTimeline();
+}
+
+async function restoreClass(hour) {
+  if (!isOnline) return;
+  const loc = getCurrentLocation();
+  const dateStr = STATE.currentDate.toISOString().slice(0,10);
+  const session = STATE.classSessions.find(s =>
+    s.location_id === loc.id && s.session_date === dateStr && s.hour === hour
+  );
+  if (!session) { closeClassMenu(); return; }
+
+  const { data, error } = await sb.from('class_sessions')
+    .update({ is_cancelled: false, notes: null })
+    .eq('id', session.id)
+    .select()
+    .single();
+
+  if (error) { showToast('Error: ' + error.message, 'error'); return; }
+  const idx = STATE.classSessions.findIndex(s => s.id === session.id);
+  STATE.classSessions[idx] = data;
+
+  showToast('✓ Clase restaurada', 'success');
+  closeClassMenu();
+  renderTimeline();
+}
+
+async function removeInstructorFromClass(hour) {
+  if (!isOnline) return;
+  if (!confirm('¿Quitar profesor de esta clase? Quedará "Sin asignar" hasta que asignes uno nuevo.')) {
+    closeClassMenu();
+    return;
+  }
+  const loc = getCurrentLocation();
+  const sessionId = await getOrCreateSession(loc.id, STATE.currentDate, hour);
+  if (!sessionId) return;
+
+  const { error } = await sb.from('class_sessions')
+    .update({ instructor_id: null })
+    .eq('id', sessionId);
+
+  if (error) { showToast('Error: ' + error.message, 'error'); return; }
+
+  // Actualizar cache
+  const idx = STATE.classSessions.findIndex(s => s.id === sessionId);
+  if (idx >= 0) STATE.classSessions[idx].instructor_id = null;
+
+  // También guardar override en localStorage para que resolveInstructor lo respete
+  const dateStr = STATE.currentDate.toISOString().slice(0,10);
+  const overrideKey = `${dateStr}-${loc.id}-${hour}`;
+  STATE.classOverrides[overrideKey] = '__none__';
+  try { localStorage.setItem('classOverrides', JSON.stringify(STATE.classOverrides)); } catch(e) {}
+
+  showToast('Profesor quitado de la clase', 'success');
+  closeClassMenu();
   renderTimeline();
 }
 
