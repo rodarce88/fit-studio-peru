@@ -1148,6 +1148,8 @@ async function getOrCreateSession(locationId, date, hour) {
 }
 
 
+function renderTimeline() {
+  const body = document.getElementById('timeline-body');
   const loc = getCurrentLocation();
   if (!loc) { body.innerHTML = ''; return; }
 
