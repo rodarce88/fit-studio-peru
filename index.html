@@ -3439,23 +3439,43 @@ async function checkAuthAndRoute() {
 }
 
 async function detectRole(authUser) {
-  // 1. instructor
+  const email = (authUser.email || '').toLowerCase();
+
+  // Permitir override por URL para testing: ?role=instructor | student | coordinator
+  // Solo aplica si la cuenta efectivamente tiene ese rol disponible.
+  const params = new URLSearchParams(window.location.search);
+  const forced = params.get('role');
+
+  // Detectar todos los roles posibles primero
+  let coordinatorMatch = null;
+  let instructorRec = null;
+  let studentRec = null;
+
+  if (COORDINATOR_EMAILS.includes(email)) coordinatorMatch = { type: 'list' };
+  if (!coordinatorMatch) {
+    try {
+      const { data: usr } = await sb.from('users').select('*').eq('email', email).maybeSingle();
+      if (usr) coordinatorMatch = usr;
+    } catch(e) { /* tabla users opcional */ }
+  }
   try {
     const { data: inst } = await sb.from('instructors').select('*').eq('auth_user_id', authUser.id).eq('is_active', true).maybeSingle();
-    if (inst) return { authUser, role: 'instructor', record: inst };
+    if (inst) instructorRec = inst;
   } catch(e) { console.error('detectRole instructor', e); }
-  // 2. student
   try {
     const { data: stud } = await sb.from('students').select('*').eq('auth_user_id', authUser.id).eq('status', 'active').maybeSingle();
-    if (stud) return { authUser, role: 'student', record: stud };
+    if (stud) studentRec = stud;
   } catch(e) { console.error('detectRole student', e); }
-  // 3. coordinator
-  const email = (authUser.email || '').toLowerCase();
-  if (COORDINATOR_EMAILS.includes(email)) return { authUser, role: 'coordinator', record: null };
-  try {
-    const { data: usr } = await sb.from('users').select('*').eq('email', email).maybeSingle();
-    if (usr) return { authUser, role: 'coordinator', record: usr };
-  } catch(e) { /* tabla users opcional */ }
+
+  // Si hay override en URL, respetarlo (si el rol existe para esta cuenta)
+  if (forced === 'instructor' && instructorRec) return { authUser, role: 'instructor', record: instructorRec };
+  if (forced === 'student' && studentRec) return { authUser, role: 'student', record: studentRec };
+  if (forced === 'coordinator' && coordinatorMatch) return { authUser, role: 'coordinator', record: coordinatorMatch.type === 'list' ? null : coordinatorMatch };
+
+  // Sin override: prioridad coordinador > instructor > alumno
+  if (coordinatorMatch) return { authUser, role: 'coordinator', record: coordinatorMatch.type === 'list' ? null : coordinatorMatch };
+  if (instructorRec) return { authUser, role: 'instructor', record: instructorRec };
+  if (studentRec) return { authUser, role: 'student', record: studentRec };
   return { authUser, role: null, record: null };
 }
 
