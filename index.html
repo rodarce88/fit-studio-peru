@@ -2032,6 +2032,7 @@ function openInstructorModal(id) {
     }
     if (canResend && i.email) {
       statusHtml += ` <button type="button" onclick="resendInstructorActivation('${i.id}')" style="margin-left: 12px; padding: 5px 12px; font-size: 11px; background: var(--fit-purple); color: white; border: none; border-radius: 999px; cursor: pointer;">Reenviar email</button>`;
+      statusHtml += ` <button type="button" onclick="copyActivationLink('instructor', '${i.id}')" style="margin-left: 6px; padding: 5px 12px; font-size: 11px; background: white; color: var(--fit-purple); border: 1px solid var(--fit-purple); border-radius: 999px; cursor: pointer;">Copiar link</button>`;
     }
     text.innerHTML = statusHtml;
   } else {
@@ -2472,6 +2473,7 @@ function renderConsentBlock(student) {
         <p style="font-size: 12px; color: #633806; margin: 0 0 12px;">El alumno todavía no firmó.</p>
         <div style="display: flex; gap: 8px; flex-wrap: wrap;">
           <button type="button" onclick="sendStudentConsentEmail('${student.id}')" style="padding: 8px 14px; font-size: 13px; background: var(--fit-purple); color: white; border: none; border-radius: 999px; cursor: pointer;">Reenviar email</button>
+          <button type="button" onclick="copyActivationLink('student', '${student.id}')" style="padding: 8px 14px; font-size: 13px; background: white; color: var(--fit-purple); border: 1px solid var(--fit-purple); border-radius: 999px; cursor: pointer;">Copiar link</button>
           <button type="button" onclick="markStudentConsentManual('${student.id}')" style="padding: 8px 14px; font-size: 13px; background: transparent; color: var(--ink); border: 1px solid var(--line); border-radius: 999px; cursor: pointer;">Marcar como firmado manualmente</button>
         </div>
       </div>
@@ -2490,6 +2492,7 @@ function renderConsentBlock(student) {
       <p style="font-size: 12px; color: var(--ink-mute); margin: 6px 0 12px;">${hasEmail ? 'El alumno aún no recibió el consentimiento.' : 'Para enviar por email, primero agrega el email del alumno y guarda los cambios.'}</p>
       <div style="display: flex; gap: 8px; flex-wrap: wrap;">
         ${hasEmail ? `<button type="button" onclick="sendStudentConsentEmail('${student.id}')" style="padding: 8px 14px; font-size: 13px; background: var(--fit-purple); color: white; border: none; border-radius: 999px; cursor: pointer;">Enviar email de consentimiento</button>` : ''}
+        <button type="button" onclick="copyActivationLink('student', '${student.id}')" style="padding: 8px 14px; font-size: 13px; background: white; color: var(--fit-purple); border: 1px solid var(--fit-purple); border-radius: 999px; cursor: pointer;">Generar y copiar link</button>
         <button type="button" onclick="markStudentConsentManual('${student.id}')" style="padding: 8px 14px; font-size: 13px; background: transparent; color: var(--ink); border: 1px solid var(--line); border-radius: 999px; cursor: pointer;">Marcar como firmado manualmente</button>
       </div>
     </div>
@@ -4225,6 +4228,78 @@ function recoveryMessage(name, daysLeft) {
 
 function renewalMessage(name, remaining) {
   return `Hola ${name||''}, ya solo te queda${remaining===1?' 1 clase':'n 0 clases'} en tu paquete. ¿Te separamos uno nuevo? — FIT Studio Peru`;
+}
+
+// ============================================
+// COPIAR LINK DE ACTIVACIÓN (alternativa a email cuando Resend está en sandbox)
+// ============================================
+async function copyActivationLink(type, recordId) {
+  if (!isOnline) { showToast('Conexión requerida', 'error'); return; }
+  const baseUrl = window.location.origin;
+
+  if (type === 'instructor') {
+    const { data: inst, error } = await sb.from('instructors').select('id, activation_token').eq('id', recordId).single();
+    if (error) { showToast('Error: '+error.message, 'error'); return; }
+    let token = inst.activation_token;
+    if (!token) {
+      // Generar token si no tiene (cuenta nunca tuvo email enviado)
+      token = generateToken();
+      const { error: upErr } = await sb.from('instructors').update({
+        activation_token: token,
+        activation_sent_at: new Date().toISOString(),
+        status: 'pending',
+      }).eq('id', recordId);
+      if (upErr) { showToast('Error generando token: '+upErr.message, 'error'); return; }
+      const idx = STATE.instructors.findIndex(x => x.id === recordId);
+      if (idx >= 0) STATE.instructors[idx].activation_token = token;
+    }
+    const link = `${baseUrl}/activate.html?token=${token}&type=instructor&id=${inst.id}`;
+    await copyToClipboard(link);
+    showToast('✓ Link copiado. Pégalo en WhatsApp o navegador.', 'success');
+    return;
+  }
+
+  if (type === 'student') {
+    const { data: stud, error } = await sb.from('students').select('id, consent_token, consent_sent_at').eq('id', recordId).single();
+    if (error) { showToast('Error: '+error.message, 'error'); return; }
+    let token = stud.consent_token;
+    if (!token) {
+      token = generateToken();
+      const { error: upErr } = await sb.from('students').update({
+        consent_token: token,
+        consent_sent_at: new Date().toISOString(),
+      }).eq('id', recordId);
+      if (upErr) { showToast('Error generando token: '+upErr.message, 'error'); return; }
+      const idx = STATE.students.findIndex(x => x.id === recordId);
+      if (idx >= 0) {
+        STATE.students[idx].consent_token = token;
+        STATE.students[idx].consent_sent_at = new Date().toISOString();
+      }
+    }
+    const link = `${baseUrl}/activate.html?token=${token}&type=student&id=${stud.id}`;
+    await copyToClipboard(link);
+    showToast('✓ Link copiado. Pégalo en WhatsApp o navegador.', 'success');
+    // Refrescar el bloque de consent
+    const s = STATE.students.find(x => x.id === recordId);
+    if (s) renderConsentBlock(s);
+    return;
+  }
+}
+
+async function copyToClipboard(text) {
+  try {
+    await navigator.clipboard.writeText(text);
+  } catch (e) {
+    // Fallback para navegadores antiguos
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand('copy');
+    document.body.removeChild(ta);
+  }
 }
 
 // ============================================
