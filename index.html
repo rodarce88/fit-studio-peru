@@ -2433,7 +2433,13 @@ function getConsentBadge(s) {
 
 function renderConsentBlock(student) {
   const block = document.getElementById('consent-block');
-  if (!block) return;
+  console.log('[renderConsentBlock] called with student:', student?.id, 'block found:', !!block);
+  if (!block) {
+    console.error('[renderConsentBlock] consent-block element NOT found in DOM');
+    return;
+  }
+
+  try {
 
   // Caso A: alumno nuevo (sin guardar todavía)
   if (!student) {
@@ -2446,10 +2452,12 @@ function renderConsentBlock(student) {
         <p style="font-size: 12px; color: var(--ink-mute); margin: 0;">Después de guardar al alumno podrás enviarle el consentimiento por email o marcarlo como firmado manualmente.</p>
       </div>
     `;
+    console.log('[renderConsentBlock] case A: new student');
     return;
   }
 
   const isSigned = student.consent_signed || !!student.consent_signed_at;
+  console.log('[renderConsentBlock] isSigned:', isSigned, 'consent_sent_at:', student.consent_sent_at, 'email:', student.email);
 
   // Caso B: firmado
   if (isSigned) {
@@ -2486,6 +2494,7 @@ function renderConsentBlock(student) {
 
   // Caso D: alumno existente, sin enviar todavía
   const hasEmail = !!student.email;
+  console.log('[renderConsentBlock] case D: not sent, hasEmail:', hasEmail);
   block.innerHTML = `
     <div style="background: var(--bg); border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 14px 16px;">
       <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
@@ -2500,6 +2509,17 @@ function renderConsentBlock(student) {
       </div>
     </div>
   `;
+
+  } catch (err) {
+    // Fallback robusto: si algo falló en el render, al menos mostramos el botón de copiar link.
+    console.error('[renderConsentBlock] error:', err);
+    block.innerHTML = `
+      <div style="background: var(--warn-soft); border: 1px solid var(--warn); border-radius: var(--radius-sm); padding: 14px 16px;">
+        <div style="font-size: 13px; color: var(--warn); margin-bottom: 8px;">⚠ Error renderizando estado del consentimiento (revisa consola). Igual puedes copiar el link:</div>
+        <button type="button" onclick="copyActivationLink('student', '${student?.id || ''}')" style="padding: 8px 14px; font-size: 13px; background: var(--fit-purple); color: white; border: none; border-radius: 999px; cursor: pointer;">Copiar link de activación</button>
+      </div>
+    `;
+  }
 }
 
 async function sendStudentConsentEmail(studentId) {
