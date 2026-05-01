@@ -4341,8 +4341,7 @@ function openStudentModalWithPackages(id) {
     renderPaymentsHistoryBlock(s);
   }, 50);
 }
-// No reemplazamos openStudentModal global. En su lugar, hookeamos al final usando un patch:
-// Hacemos que cada vez que se abra el modal del alumno, también se rendericen los nuevos bloques.
+// Patch: hookeamos al final de openStudentModal para renderizar bloques nuevos.
 (function patchOpenStudentModal() {
   const orig = window.openStudentModal;
   if (typeof orig !== 'function') return;
@@ -4352,6 +4351,15 @@ function openStudentModalWithPackages(id) {
     const s = sid ? STATE.students.find(x => x.id === sid) : null;
     renderActivePackageBlock(s);
     renderPaymentsHistoryBlock(s);
+    // Re-render consent block AL FINAL para que sobreviva cualquier side-effect async
+    setTimeout(() => {
+      const checkBlock = document.getElementById('consent-block');
+      console.log('[patch] 100ms post-open, consent-block length:', checkBlock?.innerHTML.length);
+      if (checkBlock && (!checkBlock.innerHTML || checkBlock.innerHTML.trim().length < 20)) {
+        console.log('[patch] consent-block parece vacío, re-rendering');
+        renderConsentBlock(s);
+      }
+    }, 100);
   };
 })();
 
