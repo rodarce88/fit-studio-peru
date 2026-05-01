@@ -366,6 +366,7 @@ async function activateInstructor(instructorId) {
   }
 
   const result = await resp.json().catch(() => ({}));
+  console.log('[activate-account] response:', resp.status, result);
   if (!resp.ok) {
     alert('Error: ' + (result.error || 'no se pudo activar') + (result.details ? '\n\n' + result.details : ''));
     return;
@@ -375,6 +376,7 @@ async function activateInstructor(instructorId) {
   const { data: instructor } = await sb.from('instructors').select('email').eq('id', instructorId).single();
   const { error: loginErr } = await sb.auth.signInWithPassword({ email: instructor.email, password: pw1 });
   if (loginErr) {
+    console.error('[auto-login] failed:', loginErr);
     showSuccess('¡Cuenta activada! Ya puedes iniciar sesión.');
     return;
   }
