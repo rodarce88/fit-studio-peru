@@ -1237,6 +1237,23 @@ function renderTimeline() {
   const loc = getCurrentLocation();
   if (!loc) { body.innerHTML = ''; return; }
 
+  // Guardar qué clases (por hora) estaban abiertas antes de re-renderizar
+  const openHours = new Set();
+  body.querySelectorAll('.class-block.is-open').forEach(block => {
+    const timeEl = block.querySelector('.class-time');
+    if (timeEl) {
+      // Extraer hora del texto (ej "6am", "10am", "5pm")
+      const match = timeEl.textContent.trim().match(/(\d+)\s*(am|pm)/i);
+      if (match) {
+        let h = parseInt(match[1]);
+        const ap = match[2].toLowerCase();
+        if (ap === 'pm' && h !== 12) h += 12;
+        if (ap === 'am' && h === 12) h = 0;
+        openHours.add(h);
+      }
+    }
+  });
+
   const dow = STATE.currentDate.getDay();
   const days = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
 
@@ -1311,7 +1328,8 @@ function renderTimeline() {
 
     const now = new Date();
     const isCurrentClass = STATE.currentDate.toDateString() === now.toDateString() && now.getHours() === h;
-    const stateClass = isCurrentClass ? 'is-current is-open' : (occ === 0 ? 'is-empty' : '');
+    const wasOpen = openHours.has(h);
+    const stateClass = isCurrentClass ? 'is-current is-open' : (wasOpen ? 'is-open' : (occ === 0 ? 'is-empty' : ''));
 
     // Resolver profesor REAL para esta clase basado en fecha + sede + día_semana + hora
     const inst = resolveInstructor(loc.id, STATE.currentDate, dow, h);
@@ -2007,14 +2025,16 @@ function showView(name, btn) {
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
-function changeDay(delta) {
+async function changeDay(delta) {
   STATE.currentDate.setDate(STATE.currentDate.getDate() + delta);
   setDateDisplay();
+  await loadDayData();
   renderTimeline();
 }
-function goToday() {
+async function goToday() {
   STATE.currentDate = new Date();
   setDateDisplay();
+  await loadDayData();
   renderTimeline();
 }
 
@@ -2310,7 +2330,8 @@ async function confirmMoveStudent() {
 
   showToast('✓ Alumno movido correctamente', 'success');
   closeModals();
-  renderAll();
+  await loadDayData();
+  renderTimeline();
 }
 
 // ============================================
@@ -2394,7 +2415,7 @@ async function addStudentToClass(studentId) {
   STATE.sessionBookings.push(data);
   showToast(`✓ ${student.first_name} agregado/a a la clase de ${formatHour(ADD_FLEX_CTX.hour)}`, 'success');
   closeModals();
-  renderAll();
+  renderTimeline();
 }
 
 // ============================================
