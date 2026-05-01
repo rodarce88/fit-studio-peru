@@ -679,26 +679,55 @@
     <div class="modal-body">
       <form id="instructor-form" onsubmit="event.preventDefault(); saveInstructor();">
         <input type="hidden" id="fi-id" />
+
+        <!-- Foto upload -->
+        <div style="display: flex; gap: 18px; align-items: center; margin-bottom: 18px; padding: 14px; background: var(--fit-pale, #F4EFFB); border-radius: var(--radius-md);">
+          <div id="fi-photo-preview" style="width: 80px; height: 80px; border-radius: 50%; background: var(--fit-purple, #5B2A8F); color: white; display: flex; align-items: center; justify-content: center; font-size: 26px; font-weight: 600; overflow: hidden; flex-shrink: 0;">
+            <span id="fi-photo-initials">??</span>
+          </div>
+          <div style="flex: 1;">
+            <label style="display: block; font-size: 13px; color: var(--ink-soft); margin-bottom: 4px;">Foto del profesor</label>
+            <div style="display: flex; gap: 8px; align-items: center;">
+              <input type="file" id="fi-photo-file" accept="image/*" onchange="handlePhotoUpload(event)" style="display: none;" />
+              <button type="button" class="btn btn-ghost" style="font-size: 12px; padding: 6px 14px;" onclick="document.getElementById('fi-photo-file').click()">Seleccionar foto</button>
+              <button type="button" id="fi-photo-clear" class="btn btn-ghost" style="font-size: 12px; padding: 6px 14px; display: none;" onclick="clearPhoto()">Quitar</button>
+              <span id="fi-photo-status" style="font-size: 12px; color: var(--ink-soft);"></span>
+            </div>
+            <div style="font-size: 11px; color: var(--ink-soft); margin-top: 4px;">Se comprime automáticamente. Máx 2 MB.</div>
+          </div>
+          <input type="hidden" id="fi-photo-url" />
+        </div>
+
         <div class="form-grid">
           <div class="form-row">
-            <label>Nombre completo <span class="req">*</span></label>
-            <input type="text" id="fi-full-name" required />
+            <label>Nombre <span class="req">*</span></label>
+            <input type="text" id="fi-first-name" required oninput="updatePhotoInitials()" />
+          </div>
+          <div class="form-row">
+            <label>Apellidos <span class="req">*</span></label>
+            <input type="text" id="fi-last-name" required oninput="updatePhotoInitials()" />
+          </div>
+          <div class="form-row">
+            <label>Apodo / cómo prefiere que le llamen</label>
+            <input type="text" id="fi-handle" placeholder="ej: Juanca, Vale, Ag" />
+            <div style="font-size: 11px; color: var(--ink-soft); margin-top: 4px;">Si lo llenas, este nombre aparecerá visible para alumnos.</div>
           </div>
           <div class="form-row">
             <label>Iniciales <span class="req">*</span></label>
             <input type="text" id="fi-initials" required maxlength="4" placeholder="ej: AL" />
           </div>
           <div class="form-row">
-            <label>Email</label>
-            <input type="email" id="fi-email" />
+            <label>Email <span class="req">*</span></label>
+            <input type="email" id="fi-email" required />
+            <div style="font-size: 11px; color: var(--ink-soft); margin-top: 4px;">Recibirá email de activación de cuenta.</div>
           </div>
           <div class="form-row">
             <label>Celular</label>
-            <input type="tel" id="fi-phone" />
+            <input type="tel" id="fi-phone" placeholder="+51 9..." />
           </div>
           <div class="form-row">
-            <label>Foto (URL)</label>
-            <input type="url" id="fi-photo" placeholder="https://..." />
+            <label>DNI / documento</label>
+            <input type="text" id="fi-doc-num" />
           </div>
           <div class="form-row">
             <label>Fecha de ingreso</label>
@@ -706,12 +735,16 @@
           </div>
           <div class="form-row full">
             <label>Bio / experiencia</label>
-            <textarea id="fi-bio"></textarea>
+            <textarea id="fi-bio" placeholder="Breve descripción de su experiencia, formación, etc."></textarea>
           </div>
           <div class="form-row full">
-            <label>Certificaciones</label>
+            <label>Certificaciones / especialidad</label>
             <input type="text" id="fi-cert" placeholder="ej: Método FIT Studio Peru, certif. 2023" />
           </div>
+        </div>
+
+        <div id="fi-status-block" style="display:none; padding: 12px 14px; background: var(--fit-pale, #F4EFFB); border-radius: var(--radius-md); margin-top: 14px; font-size: 13px;">
+          <strong>Estado de la cuenta:</strong> <span id="fi-status-text">—</span>
         </div>
       </form>
     </div>
@@ -1519,14 +1552,29 @@ function renderInstructors() {
     });
     const sedeText = Object.entries(sedeCounts).map(([n,c]) => `${n} (${c}h)`).join(' · ') || 'Sin horarios asignados';
 
+    const displayName = i.handle || i.first_name || i.full_name || '';
+    const formalName = i.full_name || ((i.first_name || '') + ' ' + (i.last_name || '')).trim() || displayName;
+    const showHandle = i.handle && i.handle !== i.first_name;
+    const photoBlock = i.photo_url
+      ? `<img src="${escape(i.photo_url)}" style="width: 100%; height: 100%; object-fit: cover;" alt="${escape(displayName)}" />`
+      : escape(i.initials);
+
+    let statusBadge = '';
+    if (i.status === 'pending') {
+      statusBadge = `<span style="display: inline-block; padding: 2px 8px; background: #FAEEDA; color: #854F0B; border-radius: 999px; font-size: 10px; font-weight: 500; margin-left: 6px;">Pendiente</span>`;
+    } else if (i.status === 'inactive') {
+      statusBadge = `<span style="display: inline-block; padding: 2px 8px; background: #F1EFE8; color: #5F5E5A; border-radius: 999px; font-size: 10px; font-weight: 500; margin-left: 6px;">Inactivo</span>`;
+    }
+
     return `
       <div style="background: white; border-radius: var(--radius-lg); border: 1px solid var(--line); overflow: hidden; transition: all 0.2s;" onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='var(--shadow-md)';" onmouseout="this.style.transform=''; this.style.boxShadow='';">
         <div style="height: 100px; background: linear-gradient(135deg, ${color} 0%, color-mix(in srgb, ${color} 60%, white) 100%); position: relative;">
-          <div style="position: absolute; bottom: -28px; left: 22px; width: 64px; height: 64px; border-radius: 50%; background: linear-gradient(135deg, ${color}, color-mix(in srgb, ${color} 60%, white)); border: 4px solid white; display: grid; place-items: center; color: white; font-weight: 700; font-size: 20px;">${escape(i.initials)}</div>
+          <div style="position: absolute; bottom: -28px; left: 22px; width: 64px; height: 64px; border-radius: 50%; background: linear-gradient(135deg, ${color}, color-mix(in srgb, ${color} 60%, white)); border: 4px solid white; display: grid; place-items: center; color: white; font-weight: 700; font-size: 20px; overflow: hidden;">${photoBlock}</div>
         </div>
         <div style="padding: 36px 22px 18px;">
-          <div style="font-family: var(--display); font-size: 19px; font-weight: 400;">${escape(i.full_name)}</div>
-          <div style="font-size: 12px; color: var(--ink-mute); margin-top: 2px;">${escape(i.certifications || 'Sin certificaciones registradas')}</div>
+          <div style="font-family: var(--display); font-size: 19px; font-weight: 400; display: flex; align-items: center; flex-wrap: wrap;">${escape(displayName)}${statusBadge}</div>
+          ${showHandle ? `<div style="font-size: 11px; color: var(--ink-mute); margin-top: 2px;">${escape(formalName)}</div>` : ''}
+          <div style="font-size: 12px; color: var(--ink-mute); margin-top: 4px;">${escape(i.certifications || i.specialty || 'Sin certificaciones registradas')}</div>
           <div style="margin-top: 12px; padding: 8px 10px; background: var(--fit-cream); border-radius: var(--radius-sm); font-size: 11px; color: var(--ink-soft);">
             <strong>Horarios vigentes:</strong> ${sedeText}
           </div>
@@ -1635,20 +1683,178 @@ function openInstructorModal(id) {
   const isEdit = !!id;
   const i = isEdit ? STATE.instructors.find(x => x.id === id) : null;
 
-  document.getElementById('instructor-modal-title').innerHTML = isEdit ? `Editar <em>${escape(i.full_name)}</em>` : 'Nuevo <em>profesor</em>';
+  document.getElementById('instructor-modal-title').innerHTML = isEdit ? `Editar <em>${escape(i.handle || i.first_name || i.full_name)}</em>` : 'Nuevo <em>profesor</em>';
   document.getElementById('instructor-delete-btn').style.display = isEdit ? 'inline-flex' : 'none';
 
+  // Si el profesor existente tenía full_name, intentar separarlo
+  let firstName = i?.first_name || '';
+  let lastName = i?.last_name || '';
+  if (i && !firstName && i.full_name) {
+    const parts = i.full_name.trim().split(/\s+/);
+    firstName = parts[0] || '';
+    lastName = parts.slice(1).join(' ');
+  }
+
   f('fi-id').value = i?.id || '';
-  f('fi-full-name').value = i?.full_name || '';
+  f('fi-first-name').value = firstName;
+  f('fi-last-name').value = lastName;
+  f('fi-handle').value = i?.handle || '';
   f('fi-initials').value = i?.initials || '';
   f('fi-email').value = i?.email || '';
   f('fi-phone').value = i?.phone || '';
-  f('fi-photo').value = i?.photo_url || '';
+  f('fi-doc-num').value = i?.document_number || '';
+  f('fi-photo-url').value = i?.photo_url || '';
   f('fi-hire').value = i?.hire_date || '';
   f('fi-bio').value = i?.bio || '';
-  f('fi-cert').value = i?.certifications || '';
+  f('fi-cert').value = i?.certifications || i?.specialty || '';
+
+  // Foto preview
+  renderPhotoPreview(i?.photo_url, firstName, lastName);
+  f('fi-photo-status').textContent = '';
+  f('fi-photo-clear').style.display = i?.photo_url ? 'inline-flex' : 'none';
+
+  // Estado de cuenta
+  if (isEdit && i) {
+    const block = document.getElementById('fi-status-block');
+    const text = document.getElementById('fi-status-text');
+    block.style.display = 'block';
+    if (i.status === 'active' && i.activated_at) {
+      text.innerHTML = `<span style="color: #0F6E56;">● Activa</span> · activada ${formatDate(i.activated_at)}`;
+    } else if (i.status === 'pending' && i.activation_sent_at) {
+      text.innerHTML = `<span style="color: #BA7517;">● Pendiente</span> · email enviado ${formatDate(i.activation_sent_at)}`;
+    } else if (i.status === 'inactive') {
+      text.innerHTML = `<span style="color: #A32D2D;">● Inactiva</span>`;
+    } else {
+      text.innerHTML = `<span style="color: #888;">● Sin activar</span>`;
+    }
+  } else {
+    document.getElementById('fi-status-block').style.display = 'none';
+  }
 
   document.getElementById('instructor-modal').classList.add('is-open');
+}
+
+function updatePhotoInitials() {
+  const f = (k) => document.getElementById(k);
+  const first = f('fi-first-name').value.trim();
+  const last = f('fi-last-name').value.trim();
+  const initials = ((first[0] || '') + (last[0] || '')).toUpperCase() || '??';
+  if (!f('fi-photo-url').value) {
+    f('fi-photo-initials').textContent = initials;
+  }
+  // Auto-llenar iniciales si está vacío
+  if (!f('fi-initials').value && (first || last)) {
+    f('fi-initials').value = initials;
+  }
+}
+
+function renderPhotoPreview(photoUrl, firstName, lastName) {
+  const preview = document.getElementById('fi-photo-preview');
+  if (photoUrl) {
+    preview.innerHTML = `<img src="${escape(photoUrl)}" style="width: 100%; height: 100%; object-fit: cover;" />`;
+  } else {
+    const initials = ((firstName?.[0] || '') + (lastName?.[0] || '')).toUpperCase() || '??';
+    preview.innerHTML = `<span id="fi-photo-initials">${initials}</span>`;
+  }
+}
+
+async function handlePhotoUpload(evt) {
+  const file = evt.target.files[0];
+  if (!file) return;
+  if (file.size > 2 * 1024 * 1024) {
+    showToast('La foto es muy grande. Máximo 2 MB.', 'error');
+    return;
+  }
+
+  const status = document.getElementById('fi-photo-status');
+  status.textContent = 'Comprimiendo...';
+
+  try {
+    // Comprimir en cliente
+    const compressed = await compressImage(file, 400, 0.85);
+    status.textContent = 'Subiendo...';
+
+    if (isOnline && sb) {
+      // Subir a Supabase Storage
+      const ext = 'jpg';
+      const fileName = `instructor-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+      const { data, error } = await sb.storage
+        .from('instructor-photos')
+        .upload(fileName, compressed, { contentType: 'image/jpeg', upsert: false });
+
+      if (error) {
+        showToast('Error subiendo foto: ' + error.message, 'error');
+        status.textContent = '';
+        return;
+      }
+
+      const { data: urlData } = sb.storage.from('instructor-photos').getPublicUrl(fileName);
+      const url = urlData.publicUrl;
+      document.getElementById('fi-photo-url').value = url;
+      renderPhotoPreview(url);
+      document.getElementById('fi-photo-clear').style.display = 'inline-flex';
+      status.textContent = '✓ Foto cargada';
+      setTimeout(() => { status.textContent = ''; }, 2000);
+    } else {
+      // Modo offline: usar data URL
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        document.getElementById('fi-photo-url').value = e.target.result;
+        renderPhotoPreview(e.target.result);
+        document.getElementById('fi-photo-clear').style.display = 'inline-flex';
+        status.textContent = '✓ Foto cargada (local)';
+      };
+      reader.readAsDataURL(compressed);
+    }
+  } catch (err) {
+    console.error(err);
+    showToast('Error procesando la foto', 'error');
+    status.textContent = '';
+  }
+}
+
+function clearPhoto() {
+  document.getElementById('fi-photo-url').value = '';
+  document.getElementById('fi-photo-file').value = '';
+  document.getElementById('fi-photo-clear').style.display = 'none';
+  document.getElementById('fi-photo-status').textContent = '';
+  const first = document.getElementById('fi-first-name').value;
+  const last = document.getElementById('fi-last-name').value;
+  renderPhotoPreview(null, first, last);
+}
+
+function compressImage(file, maxSize, quality) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      let { width, height } = img;
+      if (width > height && width > maxSize) {
+        height = Math.round(height * maxSize / width);
+        width = maxSize;
+      } else if (height > maxSize) {
+        width = Math.round(width * maxSize / height);
+        height = maxSize;
+      }
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, width, height);
+      canvas.toBlob((blob) => {
+        if (blob) resolve(blob); else reject(new Error('compression failed'));
+      }, 'image/jpeg', quality);
+    };
+    img.onerror = reject;
+    img.src = url;
+  });
+}
+
+function formatDate(isoStr) {
+  if (!isoStr) return '';
+  const d = new Date(isoStr);
+  return d.toLocaleDateString('es-PE', { day: '2-digit', month: 'short', year: 'numeric' });
 }
 
 // ============================================
@@ -1734,28 +1940,54 @@ async function saveInstructor() {
   const id = f('fi-id').value;
   const isEdit = !!id;
 
-  const data = {
-    full_name: f('fi-full-name').value.trim(),
-    initials: f('fi-initials').value.trim().toUpperCase(),
-    email: f('fi-email').value.trim() || null,
-    phone: f('fi-phone').value.trim() || null,
-    photo_url: f('fi-photo').value.trim() || null,
-    hire_date: f('fi-hire').value || null,
-    bio: f('fi-bio').value.trim() || null,
-    certifications: f('fi-cert').value.trim() || null,
-    is_active: true,
-  };
+  const firstName = f('fi-first-name').value.trim();
+  const lastName = f('fi-last-name').value.trim();
+  const handle = f('fi-handle').value.trim();
+  const email = f('fi-email').value.trim();
 
-  if (!data.full_name || !data.initials) {
-    showToast('Nombre e iniciales son obligatorios', 'error');
+  if (!firstName || !lastName) {
+    showToast('Nombre y apellidos son obligatorios', 'error');
+    return;
+  }
+  if (!email) {
+    showToast('Email es obligatorio para enviar la activación', 'error');
+    return;
+  }
+  if (!f('fi-initials').value.trim()) {
+    showToast('Las iniciales son obligatorias', 'error');
     return;
   }
 
+  const data = {
+    first_name: firstName,
+    last_name: lastName,
+    full_name: (firstName + ' ' + lastName).trim(),
+    handle: handle || firstName,
+    initials: f('fi-initials').value.trim().toUpperCase(),
+    email: email,
+    phone: f('fi-phone').value.trim() || null,
+    document_number: f('fi-doc-num').value.trim() || null,
+    photo_url: f('fi-photo-url').value.trim() || null,
+    hire_date: f('fi-hire').value || null,
+    bio: f('fi-bio').value.trim() || null,
+    certifications: f('fi-cert').value.trim() || null,
+    specialty: f('fi-cert').value.trim() || null,
+    is_active: true,
+  };
+
+  // Si es nuevo, marcar como pendiente de activación
+  if (!isEdit) {
+    data.status = 'pending';
+    data.activation_token = generateToken();
+  }
+
+  let savedInstructor;
   if (isOnline) {
     const result = isEdit
       ? await sb.from('instructors').update(data).eq('id', id).select().single()
       : await sb.from('instructors').insert(data).select().single();
     if (result.error) { showToast('Error: ' + result.error.message, 'error'); return; }
+    savedInstructor = result.data;
     if (isEdit) {
       const idx = STATE.instructors.findIndex(i => i.id === id);
       if (idx >= 0) STATE.instructors[idx] = result.data;
@@ -1765,15 +1997,73 @@ async function saveInstructor() {
   } else {
     if (isEdit) {
       const idx = STATE.instructors.findIndex(i => i.id === id);
-      if (idx >= 0) STATE.instructors[idx] = { ...STATE.instructors[idx], ...data };
+      if (idx >= 0) {
+        STATE.instructors[idx] = { ...STATE.instructors[idx], ...data };
+        savedInstructor = STATE.instructors[idx];
+      }
     } else {
       data.id = 'local_' + Date.now();
       STATE.instructors.push(data);
+      savedInstructor = data;
     }
   }
-  showToast(isEdit ? 'Profesor actualizado' : 'Profesor creado ✨', 'success');
-  closeModals();
-  renderAll();
+
+  // Si es nuevo, enviar email de activación
+  if (!isEdit && savedInstructor && email) {
+    showToast('Profesor creado. Enviando email de activación...', 'success');
+    closeModals();
+    renderAll();
+    // Disparar email asincrónicamente
+    sendInstructorActivationEmail(savedInstructor).catch(err => {
+      console.error('Error enviando email:', err);
+      showToast('Profesor creado pero falló envío de email. Reintentar manualmente.', 'error');
+    });
+  } else {
+    showToast(isEdit ? 'Profesor actualizado' : 'Profesor creado', 'success');
+    closeModals();
+    renderAll();
+  }
+}
+
+function generateToken() {
+  // Token aleatorio de 32 chars
+  const arr = new Uint8Array(24);
+  crypto.getRandomValues(arr);
+  return Array.from(arr).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+async function sendInstructorActivationEmail(instructor) {
+  try {
+    const baseUrl = window.location.origin;
+    const activationLink = `${baseUrl}/activate?token=${instructor.activation_token}&type=instructor&id=${instructor.id}`;
+
+    const response = await fetch('/api/send-activation', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        type: 'instructor',
+        to: instructor.email,
+        firstName: instructor.first_name,
+        handle: instructor.handle,
+        activationLink: activationLink,
+        instructorId: instructor.id,
+      })
+    });
+
+    if (!response.ok) {
+      const err = await response.text();
+      throw new Error('Email API error: ' + err);
+    }
+
+    // Marcar timestamp de envío
+    if (isOnline) {
+      await sb.from('instructors').update({ activation_sent_at: new Date().toISOString() }).eq('id', instructor.id);
+    }
+    showToast(`✓ Email enviado a ${instructor.email}`, 'success');
+  } catch (err) {
+    console.error(err);
+    throw err;
+  }
 }
 
 async function deactivateInstructor() {

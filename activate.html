@@ -1,0 +1,538 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Activar cuenta — FIT Studio Peru</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;1,9..144,400&family=Outfit:wght@300;400;500;600&display=swap" rel="stylesheet" />
+<style>
+:root {
+  --fit-purple: #5B2A8F;
+  --fit-purple-deep: #401D6B;
+  --fit-soft: #8B5FBF;
+  --fit-lavender: #E8DFF5;
+  --fit-pale: #F4EFFB;
+  --fit-cream: #FAF8F5;
+  --ink-dark: #2C2C2A;
+  --ink-soft: #5F5E5A;
+  --ink-mute: #888780;
+  --line: #E0DDD5;
+  --success: #0F6E56;
+  --success-bg: #E1F5EE;
+  --danger: #A32D2D;
+  --display: 'Fraunces', Georgia, serif;
+  --sans: 'Outfit', -apple-system, BlinkMacSystemFont, sans-serif;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: var(--sans);
+  background: var(--fit-cream);
+  color: var(--ink-dark);
+  line-height: 1.6;
+  min-height: 100vh;
+  padding: 30px 20px;
+}
+.shell { max-width: 720px; margin: 0 auto; }
+.brand-header {
+  text-align: center;
+  margin-bottom: 30px;
+}
+.brand-logo {
+  display: inline-block;
+  width: 60px; height: 60px;
+  background: var(--fit-purple);
+  border-radius: 50%;
+  color: white;
+  font-weight: 700;
+  font-size: 18px;
+  letter-spacing: 1px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.brand-name {
+  font-family: var(--display);
+  font-size: 28px;
+  font-weight: 400;
+  color: var(--fit-purple-deep);
+  margin-top: 16px;
+  font-style: italic;
+}
+.brand-sub {
+  font-size: 11px;
+  color: var(--ink-mute);
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  margin-top: 4px;
+}
+.card {
+  background: white;
+  border-radius: 16px;
+  padding: 40px;
+  box-shadow: 0 2px 12px rgba(91, 42, 143, 0.05);
+}
+h1 {
+  font-family: var(--display);
+  font-size: 28px;
+  font-weight: 400;
+  font-style: italic;
+  color: var(--fit-purple-deep);
+  margin-bottom: 14px;
+}
+h2 {
+  font-family: var(--display);
+  font-size: 20px;
+  font-weight: 500;
+  color: var(--fit-purple-deep);
+  margin: 28px 0 12px;
+}
+h3 {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--ink-dark);
+  margin: 18px 0 8px;
+}
+p { margin-bottom: 14px; color: var(--ink-soft); }
+ul { margin: 0 0 14px 22px; color: var(--ink-soft); }
+ul li { margin-bottom: 6px; }
+.consent-box {
+  background: var(--fit-cream);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 24px;
+  max-height: 480px;
+  overflow-y: auto;
+  margin: 20px 0;
+  font-size: 14px;
+}
+.consent-box h2 { font-size: 17px; margin-top: 18px; }
+.consent-box h2:first-child { margin-top: 0; }
+.checkbox-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 16px;
+  background: var(--fit-pale);
+  border-radius: 10px;
+  margin-bottom: 14px;
+}
+.checkbox-row input[type="checkbox"] {
+  width: 20px;
+  height: 20px;
+  margin-top: 2px;
+  accent-color: var(--fit-purple);
+  flex-shrink: 0;
+}
+.checkbox-row label {
+  font-size: 14px;
+  color: var(--ink-dark);
+  cursor: pointer;
+  flex: 1;
+}
+.btn-primary {
+  display: inline-block;
+  background: var(--fit-purple);
+  color: white;
+  border: none;
+  padding: 14px 32px;
+  border-radius: 999px;
+  font-size: 15px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-family: var(--sans);
+}
+.btn-primary:hover { background: var(--fit-purple-deep); transform: translateY(-1px); }
+.btn-primary:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+.btn-google {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  background: white;
+  border: 1.5px solid var(--line);
+  padding: 14px;
+  border-radius: 999px;
+  font-size: 15px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  color: var(--ink-dark);
+  font-family: var(--sans);
+}
+.btn-google:hover { border-color: var(--fit-purple); }
+.divider {
+  text-align: center;
+  margin: 20px 0;
+  color: var(--ink-mute);
+  font-size: 13px;
+  position: relative;
+}
+.divider::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: var(--line);
+  z-index: 0;
+}
+.divider span {
+  background: white;
+  padding: 0 12px;
+  position: relative;
+  z-index: 1;
+}
+.field {
+  margin-bottom: 14px;
+}
+.field label {
+  display: block;
+  font-size: 13px;
+  color: var(--ink-soft);
+  margin-bottom: 6px;
+  font-weight: 500;
+}
+.field input {
+  width: 100%;
+  padding: 12px 14px;
+  border: 1.5px solid var(--line);
+  border-radius: 10px;
+  font-size: 14px;
+  font-family: var(--sans);
+  transition: border-color 0.15s;
+}
+.field input:focus {
+  outline: none;
+  border-color: var(--fit-purple);
+}
+.success-state {
+  text-align: center;
+  padding: 40px 20px;
+}
+.success-icon {
+  width: 80px;
+  height: 80px;
+  background: var(--success-bg);
+  color: var(--success);
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 40px;
+  margin-bottom: 20px;
+}
+.error-state {
+  background: #FCEBEB;
+  color: #791F1F;
+  padding: 16px;
+  border-radius: 10px;
+  margin-bottom: 20px;
+  font-size: 14px;
+}
+.loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px;
+  color: var(--ink-mute);
+}
+@media (max-width: 600px) {
+  .card { padding: 24px; }
+  h1 { font-size: 24px; }
+}
+</style>
+</head>
+<body>
+
+<div class="shell">
+
+  <div class="brand-header">
+    <div class="brand-logo">FIT</div>
+    <div class="brand-name">Studio Peru</div>
+    <div class="brand-sub">Pilates Reformer</div>
+  </div>
+
+  <div class="card" id="content">
+    <div class="loading">Verificando link...</div>
+  </div>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+const SUPABASE_URL = 'https://jcvizioahuqvmhwfnbop.supabase.co';
+const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Impjdml6aW9haHVxdm1od2ZuYm9wIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc1MjIzODIsImV4cCI6MjA5MzA5ODM4Mn0.0EYHVITqA85IhtBUbGddHEWcVKIU_MeSzSxrdzNyvhI';
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
+
+const params = new URLSearchParams(window.location.search);
+const token = params.get('token');
+const type = params.get('type'); // 'instructor' o 'student'
+const id = params.get('id');
+
+const content = document.getElementById('content');
+
+async function init() {
+  if (!token || !type || !id) {
+    showError('Link inválido. Faltan parámetros.');
+    return;
+  }
+
+  if (type === 'instructor') {
+    await loadInstructor();
+  } else if (type === 'student') {
+    await loadStudent();
+  } else {
+    showError('Tipo de activación no reconocido.');
+  }
+}
+
+async function loadInstructor() {
+  const { data, error } = await sb
+    .from('instructors')
+    .select('*')
+    .eq('id', id)
+    .eq('activation_token', token)
+    .single();
+
+  if (error || !data) {
+    showError('Este link ya fue usado o no es válido.');
+    return;
+  }
+
+  if (data.status === 'active' && data.activated_at) {
+    showSuccess(`Tu cuenta ya está activa, ${data.handle || data.first_name}. Podés iniciar sesión cuando quieras.`);
+    return;
+  }
+
+  renderInstructorActivation(data);
+}
+
+function renderInstructorActivation(instructor) {
+  const greet = instructor.handle || instructor.first_name;
+  content.innerHTML = `
+    <h1>¡Hola, ${escape(greet)}!</h1>
+    <p>Bienvenido al equipo de FIT Studio Peru. Para activar tu cuenta, elegí cómo querés iniciar sesión:</p>
+
+    <div style="margin: 24px 0;">
+      <button class="btn-google" onclick="loginWithGoogleInstructor('${instructor.id}')">
+        <svg width="18" height="18" viewBox="0 0 24 24"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg>
+        Continuar con Google
+      </button>
+    </div>
+
+    <div class="divider"><span>o crear contraseña</span></div>
+
+    <form onsubmit="event.preventDefault(); activateInstructor('${instructor.id}')">
+      <div class="field">
+        <label>Email</label>
+        <input type="email" value="${escape(instructor.email)}" disabled />
+      </div>
+      <div class="field">
+        <label>Crear contraseña</label>
+        <input type="password" id="pw1" minlength="8" placeholder="Mínimo 8 caracteres" required />
+      </div>
+      <div class="field">
+        <label>Repetir contraseña</label>
+        <input type="password" id="pw2" minlength="8" required />
+      </div>
+      <button type="submit" class="btn-primary" style="width: 100%;">Activar cuenta</button>
+    </form>
+  `;
+}
+
+async function activateInstructor(instructorId) {
+  const pw1 = document.getElementById('pw1').value;
+  const pw2 = document.getElementById('pw2').value;
+  if (pw1 !== pw2) { alert('Las contraseñas no coinciden'); return; }
+  if (pw1.length < 8) { alert('Mínimo 8 caracteres'); return; }
+
+  // Crear cuenta en Supabase Auth
+  const { data: instructor } = await sb.from('instructors').select('email').eq('id', instructorId).single();
+
+  const { data: authData, error: authError } = await sb.auth.signUp({
+    email: instructor.email,
+    password: pw1,
+  });
+
+  if (authError) {
+    alert('Error: ' + authError.message);
+    return;
+  }
+
+  // Marcar como activo
+  await sb.from('instructors').update({
+    status: 'active',
+    activated_at: new Date().toISOString(),
+    activation_token: null,
+    auth_user_id: authData.user?.id,
+  }).eq('id', instructorId);
+
+  showSuccess('¡Cuenta activada! Ya podés iniciar sesión en el sistema.');
+}
+
+async function loginWithGoogleInstructor(instructorId) {
+  // Guardar el ID en localStorage para procesar después del callback
+  localStorage.setItem('pending_activation_instructor', instructorId);
+
+  const { error } = await sb.auth.signInWithOAuth({
+    provider: 'google',
+    options: {
+      redirectTo: window.location.origin + '/activate-callback.html',
+    }
+  });
+
+  if (error) alert('Error con Google: ' + error.message);
+}
+
+async function loadStudent() {
+  const { data, error } = await sb
+    .from('students')
+    .select('*')
+    .eq('id', id)
+    .eq('consent_token', token)
+    .single();
+
+  if (error || !data) {
+    showError('Este link ya fue usado o no es válido.');
+    return;
+  }
+
+  if (data.consent_signed) {
+    showSuccess(`Ya firmaste tu consentimiento, ${data.first_name}. Tu cuenta está lista.`);
+    return;
+  }
+
+  renderStudentConsent(data);
+}
+
+function renderStudentConsent(student) {
+  content.innerHTML = `
+    <h1>Hola, ${escape(student.first_name)}</h1>
+    <p>Antes de tu primera clase en FIT Studio Peru, necesitamos que leas y aceptes nuestro consentimiento informado. Es un documento estándar y nos protege a los dos.</p>
+
+    <div class="consent-box" id="consent-text">
+      <h2>1. Sobre la actividad</h2>
+      <p>El Pilates Reformer es un sistema de ejercicio físico de bajo impacto que mejora la fuerza, flexibilidad, postura y bienestar general. La práctica se realiza en máquinas reformer bajo la guía de un instructor certificado.</p>
+
+      <h3>Beneficios</h3>
+      <ul>
+        <li>Mejora de la fuerza muscular y resistencia</li>
+        <li>Aumento de la flexibilidad y rango de movimiento</li>
+        <li>Corrección postural</li>
+        <li>Reducción del estrés</li>
+        <li>Mejora del bienestar físico y mental general</li>
+      </ul>
+
+      <h3>Riesgos potenciales</h3>
+      <p>Como toda actividad física, el Pilates Reformer puede implicar riesgos de lesión muscular, articular o cardiovascular. Estos riesgos se minimizan considerablemente cuando el alumno informa con honestidad su estado de salud, sigue las indicaciones del instructor y respeta sus propias limitaciones físicas.</p>
+
+      <h2>2. Mis responsabilidades como alumno</h2>
+      <p>Al firmar este consentimiento, me comprometo a:</p>
+      <ul>
+        <li>Informar antes de iniciar cualquier condición médica preexistente, lesión, embarazo, cirugía reciente o cualquier otra condición que pueda afectar mi práctica.</li>
+        <li>Comunicar al instructor cualquier dolor, molestia, mareo o malestar que sienta durante la clase.</li>
+        <li>Seguir las indicaciones del instructor en todo momento.</li>
+        <li>No realizar ejercicios que sienta que están fuera de mi capacidad.</li>
+        <li>Mantener actualizada mi información médica si hay cambios relevantes en mi salud.</li>
+        <li>Cuidar el equipamiento y reportar cualquier desperfecto.</li>
+      </ul>
+
+      <h2>3. Política de cancelación y recuperación</h2>
+      <ul>
+        <li><strong>Cancelación con más de 4 horas de anticipación:</strong> la clase queda como recuperable dentro del periodo de validez del paquete.</li>
+        <li><strong>Cancelación con menos de 4 horas o ausencia sin aviso:</strong> la clase se considera tomada y se descuenta del paquete.</li>
+        <li><strong>Validez de paquetes:</strong> 30 días desde la fecha de compra.</li>
+        <li><strong>Congelación de paquete:</strong> en casos de lesión o viaje, previa coordinación con el estudio.</li>
+      </ul>
+
+      <h2>4. Datos personales y privacidad</h2>
+      <p>De acuerdo con la Ley N° 29733 de Protección de Datos Personales del Perú, autorizo a FIT Studio Peru a recolectar y tratar mis datos personales para gestión de mi reserva y paquete, comunicaciones del estudio, atención de emergencias médicas y análisis estadísticos internos.</p>
+      <p>Mis datos serán almacenados de forma segura y no serán compartidos con terceros sin mi autorización expresa, salvo cuando lo requiera la ley. Tengo derecho a acceder, rectificar, eliminar o revocar este consentimiento en cualquier momento.</p>
+
+      <h2>5. Declaración de salud</h2>
+      <ul>
+        <li>He leído y comprendido completamente este documento.</li>
+        <li>La información que he proporcionado sobre mi estado de salud es veraz y completa.</li>
+        <li>Soy mayor de edad o cuento con autorización de mi padre, madre o tutor legal.</li>
+        <li>Participo en la actividad de manera libre y voluntaria, asumiendo los riesgos inherentes a la práctica del Pilates Reformer.</li>
+        <li>Entiendo que FIT Studio Peru, sus instructores y personal toman las medidas razonables para mi seguridad, pero no son responsables de lesiones derivadas de información médica omitida o de la inobservancia de las indicaciones del instructor.</li>
+      </ul>
+    </div>
+
+    <div class="checkbox-row">
+      <input type="checkbox" id="accept-consent" />
+      <label for="accept-consent">He leído y acepto el consentimiento informado de FIT Studio Peru. Esta aceptación constituye mi firma electrónica conforme a la Ley N° 27269.</label>
+    </div>
+
+    <div class="checkbox-row">
+      <input type="checkbox" id="accept-image" />
+      <label for="accept-image">Autorizo el uso de mi imagen en redes sociales y material promocional del estudio. (Opcional, podés cambiarlo en cualquier momento.)</label>
+    </div>
+
+    <button class="btn-primary" id="sign-btn" style="width: 100%;" onclick="signConsent('${student.id}')">Firmar y crear mi acceso</button>
+  `;
+
+  document.getElementById('accept-consent').addEventListener('change', (e) => {
+    document.getElementById('sign-btn').disabled = !e.target.checked;
+  });
+  document.getElementById('sign-btn').disabled = true;
+}
+
+async function signConsent(studentId) {
+  const accepted = document.getElementById('accept-consent').checked;
+  const allowImage = document.getElementById('accept-image').checked;
+  if (!accepted) { alert('Debés aceptar el consentimiento para continuar.'); return; }
+
+  const consentText = document.getElementById('consent-text').innerText;
+
+  // Registrar en consent_log
+  await sb.from('consent_log').insert({
+    student_id: studentId,
+    consent_version: 'v1.0',
+    full_consent_text: consentText,
+    user_agent: navigator.userAgent,
+  });
+
+  // Marcar firmado en student
+  await sb.from('students').update({
+    consent_signed: true,
+    consent_signed_at: new Date().toISOString(),
+    consent_token: null,
+    image_consent: allowImage,
+  }).eq('id', studentId);
+
+  showSuccess('¡Listo! Tu consentimiento fue registrado. Ya podés ir a tu primera clase con tranquilidad.');
+}
+
+function showSuccess(message) {
+  content.innerHTML = `
+    <div class="success-state">
+      <div class="success-icon">✓</div>
+      <h1>Todo listo</h1>
+      <p>${escape(message)}</p>
+    </div>
+  `;
+}
+
+function showError(message) {
+  content.innerHTML = `
+    <div class="error-state">${escape(message)}</div>
+    <p>Si crees que es un error, contactá con la coordinación del estudio.</p>
+  `;
+}
+
+function escape(s) {
+  if (!s) return '';
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+init();
+</script>
+
+</body>
+</html>

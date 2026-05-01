@@ -1,0 +1,9 @@
+{
+  "name": "fit-studio-peru",
+  "version": "1.0.0",
+  "description": "Sistema de gestión multi-sede para FIT Studio Peru",
+  "private": true,
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
