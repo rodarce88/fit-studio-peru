@@ -512,11 +512,12 @@ async function signConsent(studentId) {
     user_agent: navigator.userAgent,
   });
 
-  // Marcar firmado en student
+  // Marcar firmado en student. NO nulificamos consent_token todavía: el endpoint
+  // /api/activate-account lo necesita para validar que el alumno completó el flujo.
+  // El token se nulifica cuando el endpoint crea/actualiza la cuenta auth.
   await sb.from('students').update({
     consent_signed: true,
     consent_signed_at: new Date().toISOString(),
-    consent_token: null,
     image_consent: allowImage,
   }).eq('id', studentId);
 
@@ -548,7 +549,7 @@ function renderStudentAuthCreation(student) {
     <form onsubmit="event.preventDefault(); createStudentPasswordAccount('${student.id}')">
       <div class="field">
         <label>Email</label>
-        <input type="email" value="${escape(student.email || '')}" disabled />
+        <input type="email" id="student-email-display" value="${escape(student.email || '')}" disabled />
       </div>
       <div class="field">
         <label>Crear contraseña</label>
@@ -571,43 +572,37 @@ async function createStudentPasswordAccount(studentId) {
   if (pw1 !== pw2) { alert('Las contraseñas no coinciden'); return; }
   if (pw1.length < 8) { alert('Mínimo 8 caracteres'); return; }
 
-  const { data: student } = await sb.from('students').select('email, consent_token').eq('id', studentId).single();
-  if (!student?.email) { alert('Falta tu email. Contacta a la coordinación del estudio.'); return; }
+  // Leer email del input visible (no re-fetchamos de la BD para evitar fallas por RLS)
+  const emailInput = document.getElementById('student-email-display');
+  const email = emailInput?.value?.trim();
+  if (!email) { alert('Falta tu email. Contacta a la coordinación del estudio.'); return; }
 
-  // El consent_token original ya fue puesto en NULL al firmar. Para reutilizarlo en el endpoint,
-  // generamos uno temporal (la lógica de activación lo valida y luego lo limpia).
-  // Como ya firmaste arriba, usamos un token "post-consent" que es el id mismo (el endpoint usa el
-  // consent_token actual; al haber sido nulificado, debemos usar otro mecanismo).
-  // Solución pragmática: reactivamos consent_token temporalmente desde el cliente.
-  const tempToken = crypto.randomUUID();
-  await sb.from('students').update({ consent_token: tempToken }).eq('id', studentId);
-
+  // Llamar al endpoint serverless. Usa el token original de la URL.
+  // Nota: signConsent ahora deja consent_token intacto para que este flujo funcione.
   let resp;
   try {
     resp = await fetch('/api/activate-account', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ type: 'student', id: studentId, token: tempToken, password: pw1 }),
+      body: JSON.stringify({ type: 'student', id: studentId, token: token, password: pw1 }),
     });
   } catch (e) {
-    await sb.from('students').update({ consent_token: null }).eq('id', studentId);
     alert('Error de red: ' + e.message);
     return;
   }
 
   const result = await resp.json().catch(() => ({}));
-  // Limpiar token temporal pase lo que pase
-  await sb.from('students').update({ consent_token: null }).eq('id', studentId);
-
+  console.log('[activate-account student] response:', resp.status, result);
   if (!resp.ok) {
     alert('Error: ' + (result.error || 'no se pudo activar') + (result.details ? '\n\n' + result.details : ''));
     return;
   }
 
-  // Auto-login tras crear cuenta
-  const { error: loginErr } = await sb.auth.signInWithPassword({ email: student.email, password: pw1 });
+  // Auto-login
+  const { error: loginErr } = await sb.auth.signInWithPassword({ email, password: pw1 });
   if (loginErr) {
-    showSuccess('¡Cuenta creada! Ya puedes iniciar sesión en el sistema.');
+    console.error('[auto-login] failed:', loginErr);
+    showSuccess('¡Cuenta creada! Ya puedes iniciar sesión.');
     return;
   }
 

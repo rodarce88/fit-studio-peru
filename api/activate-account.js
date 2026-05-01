@@ -142,6 +142,7 @@ export default async function handler(req, res) {
       updates.activation_token = null;
     } else {
       updates.account_status = 'active';
+      updates.consent_token = null;  // limpiar al completar activación
     }
 
     const updRes = await fetch(`${supabaseUrl}/rest/v1/${tableName}?id=eq.${encodeURIComponent(id)}`, {
