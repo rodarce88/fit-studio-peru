@@ -4360,6 +4360,24 @@ function openStudentModalWithPackages(id) {
     setTimeout(() => {
       const checkBlock = document.getElementById('consent-block');
       console.log('[patch] 100ms post-open, consent-block length:', checkBlock?.innerHTML.length);
+      if (checkBlock) {
+        const cs = getComputedStyle(checkBlock);
+        const rect = checkBlock.getBoundingClientRect();
+        console.log('[debug] computed styles:', {
+          display: cs.display, visibility: cs.visibility, opacity: cs.opacity,
+          height: cs.height, minHeight: cs.minHeight, maxHeight: cs.maxHeight,
+          overflow: cs.overflow, position: cs.position, transform: cs.transform,
+          width: cs.width,
+        });
+        console.log('[debug] bounding rect:', { top: rect.top, height: rect.height, width: rect.width });
+        console.log('[debug] parent:', checkBlock.parentElement?.className, getComputedStyle(checkBlock.parentElement).display);
+        const firstChild = checkBlock.firstElementChild;
+        if (firstChild) {
+          const fcs = getComputedStyle(firstChild);
+          console.log('[debug] first child:', firstChild.tagName, { display: fcs.display, height: fcs.height, visibility: fcs.visibility });
+          console.log('[debug] first child rect:', firstChild.getBoundingClientRect());
+        }
+      }
       if (checkBlock && (!checkBlock.innerHTML || checkBlock.innerHTML.trim().length < 20)) {
         console.log('[patch] consent-block parece vacío, re-rendering');
         renderConsentBlock(s);
