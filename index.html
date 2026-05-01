@@ -808,7 +808,7 @@
           </div>
           <div class="form-row full">
             <label>Consentimiento informado</label>
-            <div id="consent-block" style="margin-top: 4px;"></div>
+            <div id="firma-area" style="margin-top: 4px;"></div>
           </div>
           <div class="form-row full">
             <label>Paquete activo</label>
@@ -2432,12 +2432,8 @@ function getConsentBadge(s) {
 }
 
 function renderConsentBlock(student) {
-  const block = document.getElementById('consent-block');
-  console.log('[renderConsentBlock] called with student:', student?.id, 'block found:', !!block);
-  if (!block) {
-    console.error('[renderConsentBlock] consent-block element NOT found in DOM');
-    return;
-  }
+  const block = document.getElementById('firma-area');
+  if (!block) return;
 
   try {
 
@@ -2452,12 +2448,10 @@ function renderConsentBlock(student) {
         <p style="font-size: 12px; color: var(--ink-mute); margin: 0;">Después de guardar al alumno podrás enviarle el consentimiento por email o marcarlo como firmado manualmente.</p>
       </div>
     `;
-    console.log('[renderConsentBlock] case A: new student');
     return;
   }
 
   const isSigned = student.consent_signed || !!student.consent_signed_at;
-  console.log('[renderConsentBlock] isSigned:', isSigned, 'consent_sent_at:', student.consent_sent_at, 'email:', student.email);
 
   // Caso B: firmado
   if (isSigned) {
@@ -2494,9 +2488,7 @@ function renderConsentBlock(student) {
 
   // Caso D: alumno existente, sin enviar todavía
   const hasEmail = !!student.email;
-  console.log('[renderConsentBlock] case D: not sent, hasEmail:', hasEmail);
   block.innerHTML = `
-    <div style="background: yellow !important; color: black !important; padding: 16px !important; border: 4px solid red !important; font-weight: bold; margin-bottom: 8px;">DEBUG case D, hasEmail=${hasEmail}, studentId=${student.id}</div>
     <div style="background: var(--bg); border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 14px 16px;">
       <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
         <span style="width: 8px; height: 8px; border-radius: 50%; background: var(--ink-faint); display: inline-block;"></span>
@@ -2504,16 +2496,12 @@ function renderConsentBlock(student) {
       </div>
       <p style="font-size: 12px; color: var(--ink-mute); margin: 6px 0 12px;">${hasEmail ? 'El alumno aún no recibió el consentimiento.' : 'Para enviar por email, primero agrega el email del alumno y guarda los cambios.'}</p>
       <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-        ${hasEmail ? `<button type="button" onclick="sendStudentConsentEmail('${student.id}')" style="padding: 8px 14px; font-size: 13px; background: #5B2A8F; color: white; border: none; border-radius: 999px; cursor: pointer;">Enviar email de consentimiento</button>` : ''}
-        <button type="button" onclick="copyActivationLink('student', '${student.id}')" style="padding: 8px 14px; font-size: 13px; background: white; color: #5B2A8F; border: 1px solid #5B2A8F; border-radius: 999px; cursor: pointer;">Copiar link</button>
-        <button type="button" onclick="markStudentConsentManual('${student.id}')" style="padding: 8px 14px; font-size: 13px; background: transparent; color: #1a1a1a; border: 1px solid #ccc; border-radius: 999px; cursor: pointer;">Marcar como firmado manualmente</button>
+        ${hasEmail ? `<button type="button" onclick="sendStudentConsentEmail('${student.id}')" style="padding: 8px 14px; font-size: 13px; background: var(--fit-purple); color: white; border: none; border-radius: 999px; cursor: pointer;">Enviar email</button>` : ''}
+        <button type="button" onclick="copyActivationLink('student', '${student.id}')" style="padding: 8px 14px; font-size: 13px; background: white; color: var(--fit-purple); border: 1px solid var(--fit-purple); border-radius: 999px; cursor: pointer;">Copiar link</button>
+        <button type="button" onclick="markStudentConsentManual('${student.id}')" style="padding: 8px 14px; font-size: 13px; background: transparent; color: var(--ink); border: 1px solid var(--line); border-radius: 999px; cursor: pointer;">Marcar como firmado manualmente</button>
       </div>
     </div>
   `;
-  // Force visibility en caso de que algo herede display:none
-  block.style.display = 'block';
-  block.style.visibility = 'visible';
-  block.style.minHeight = '50px';
 
   } catch (err) {
     // Fallback robusto: si algo falló en el render, al menos mostramos el botón de copiar link.
@@ -4356,30 +4344,10 @@ function openStudentModalWithPackages(id) {
     const s = sid ? STATE.students.find(x => x.id === sid) : null;
     renderActivePackageBlock(s);
     renderPaymentsHistoryBlock(s);
-    // Re-render consent block AL FINAL para que sobreviva cualquier side-effect async
+    // Safety net: si por alguna razón firma-area se quedó vacío, re-renderizar.
     setTimeout(() => {
-      const checkBlock = document.getElementById('consent-block');
-      console.log('[patch] 100ms post-open, consent-block length:', checkBlock?.innerHTML.length);
-      if (checkBlock) {
-        const cs = getComputedStyle(checkBlock);
-        const rect = checkBlock.getBoundingClientRect();
-        console.log('[debug] computed styles:', {
-          display: cs.display, visibility: cs.visibility, opacity: cs.opacity,
-          height: cs.height, minHeight: cs.minHeight, maxHeight: cs.maxHeight,
-          overflow: cs.overflow, position: cs.position, transform: cs.transform,
-          width: cs.width,
-        });
-        console.log('[debug] bounding rect:', { top: rect.top, height: rect.height, width: rect.width });
-        console.log('[debug] parent:', checkBlock.parentElement?.className, getComputedStyle(checkBlock.parentElement).display);
-        const firstChild = checkBlock.firstElementChild;
-        if (firstChild) {
-          const fcs = getComputedStyle(firstChild);
-          console.log('[debug] first child:', firstChild.tagName, { display: fcs.display, height: fcs.height, visibility: fcs.visibility });
-          console.log('[debug] first child rect:', firstChild.getBoundingClientRect());
-        }
-      }
+      const checkBlock = document.getElementById('firma-area');
       if (checkBlock && (!checkBlock.innerHTML || checkBlock.innerHTML.trim().length < 20)) {
-        console.log('[patch] consent-block parece vacío, re-rendering');
         renderConsentBlock(s);
       }
     }, 100);
