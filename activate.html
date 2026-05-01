@@ -305,7 +305,7 @@ async function loadInstructor() {
   }
 
   if (data.status === 'active' && data.activated_at) {
-    showSuccess(`Tu cuenta ya está activa, ${data.handle || data.first_name}. Podés iniciar sesión cuando quieras.`);
+    showSuccess(`Tu cuenta ya está activa, ${data.handle || data.first_name}. Puedes iniciar sesión cuando quieras.`);
     return;
   }
 
@@ -316,7 +316,7 @@ function renderInstructorActivation(instructor) {
   const greet = instructor.handle || instructor.first_name;
   content.innerHTML = `
     <h1>¡Hola, ${escape(greet)}!</h1>
-    <p>Bienvenido al equipo de FIT Studio Peru. Para activar tu cuenta, elegí cómo querés iniciar sesión:</p>
+    <p>Bienvenido al equipo de FIT Studio Peru. Para activar tu cuenta, elige cómo quieres iniciar sesión:</p>
 
     <div style="margin: 24px 0;">
       <button class="btn-google" onclick="loginWithGoogleInstructor('${instructor.id}')">
@@ -372,7 +372,7 @@ async function activateInstructor(instructorId) {
     auth_user_id: authData.user?.id,
   }).eq('id', instructorId);
 
-  showSuccess('¡Cuenta activada! Ya podés iniciar sesión en el sistema.');
+  showSuccess('¡Cuenta activada! Ya puedes iniciar sesión en el sistema.');
 }
 
 async function loginWithGoogleInstructor(instructorId) {
@@ -471,7 +471,7 @@ function renderStudentConsent(student) {
 
     <div class="checkbox-row">
       <input type="checkbox" id="accept-image" />
-      <label for="accept-image">Autorizo el uso de mi imagen en redes sociales y material promocional del estudio. (Opcional, podés cambiarlo en cualquier momento.)</label>
+      <label for="accept-image">Autorizo el uso de mi imagen en redes sociales y material promocional del estudio. (Opcional, puedes cambiarlo en cualquier momento.)</label>
     </div>
 
     <button class="btn-primary" id="sign-btn" style="width: 100%;" onclick="signConsent('${student.id}')">Firmar y crear mi acceso</button>
@@ -486,7 +486,7 @@ function renderStudentConsent(student) {
 async function signConsent(studentId) {
   const accepted = document.getElementById('accept-consent').checked;
   const allowImage = document.getElementById('accept-image').checked;
-  if (!accepted) { alert('Debés aceptar el consentimiento para continuar.'); return; }
+  if (!accepted) { alert('Debes aceptar el consentimiento para continuar.'); return; }
 
   const consentText = document.getElementById('consent-text').innerText;
 
@@ -506,7 +506,7 @@ async function signConsent(studentId) {
     image_consent: allowImage,
   }).eq('id', studentId);
 
-  showSuccess('¡Listo! Tu consentimiento fue registrado. Ya podés ir a tu primera clase con tranquilidad.');
+  showSuccess('¡Listo! Tu consentimiento fue registrado. Ya puedes ir a tu primera clase con tranquilidad.');
 }
 
 function showSuccess(message) {
@@ -522,7 +522,7 @@ function showSuccess(message) {
 function showError(message) {
   content.innerHTML = `
     <div class="error-state">${escape(message)}</div>
-    <p>Si crees que es un error, contactá con la coordinación del estudio.</p>
+    <p>Si crees que es un error, contacta con la coordinación del estudio.</p>
   `;
 }
 
