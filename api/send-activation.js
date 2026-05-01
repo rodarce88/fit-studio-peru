@@ -143,7 +143,7 @@ function buildInstructorEmail({ firstName, handle, activationLink }) {
 
     <p style="margin:0 0 16px;">Estamos felices de tenerte como parte del equipo de profesores de FIT Studio Peru. Acabamos de crear tu cuenta en nuestro sistema de gestión.</p>
 
-    <p style="margin:0 0 16px;">Para activar tu acceso y empezar a usar la plataforma, hacé click en el siguiente botón:</p>
+    <p style="margin:0 0 16px;">Para activar tu acceso y empezar a usar la plataforma, haz click en el siguiente botón:</p>
 
     <div style="text-align:center; margin:32px 0;">
       <a href="${activationLink}" style="display:inline-block; background-color:${FIT_PURPLE}; color:#ffffff; text-decoration:none; padding:14px 32px; border-radius:999px; font-weight:500; font-size:15px;">Activar mi cuenta</a>
@@ -159,10 +159,10 @@ function buildInstructorEmail({ firstName, handle, activationLink }) {
       </ul>
     </div>
 
-    <p style="margin:24px 0 0; font-size:13px; color:${TEXT_GREY};">Si el botón no funciona, copiá y pegá este link en tu navegador:<br/>
+    <p style="margin:24px 0 0; font-size:13px; color:${TEXT_GREY};">Si el botón no funciona, copia y pega este link en tu navegador:<br/>
     <span style="word-break:break-all; color:${FIT_PURPLE};">${activationLink}</span></p>
 
-    <p style="margin:24px 0 0;">Cualquier consulta, escribinos al WhatsApp del estudio. ¡Bienvenido!</p>
+    <p style="margin:24px 0 0;">Cualquier consulta, escríbenos al WhatsApp del estudio. ¡Bienvenido!</p>
   `;
   return emailLayout(content, 'Este link es personal e intransferible. No lo compartas.');
 }
@@ -190,7 +190,7 @@ function buildStudentEmail({ firstName, consentLink, activationLink }) {
       </ul>
     </div>
 
-    <p style="margin:24px 0 0; font-size:13px; color:${TEXT_GREY};">Si el botón no funciona, copiá y pegá este link en tu navegador:<br/>
+    <p style="margin:24px 0 0; font-size:13px; color:${TEXT_GREY};">Si el botón no funciona, copia y pega este link en tu navegador:<br/>
     <span style="word-break:break-all; color:${FIT_PURPLE};">${link}</span></p>
 
     <p style="margin:24px 0 0;">Nos vemos pronto en el estudio.</p>
