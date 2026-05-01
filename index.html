@@ -2035,7 +2035,7 @@ function generateToken() {
 async function sendInstructorActivationEmail(instructor) {
   try {
     const baseUrl = window.location.origin;
-    const activationLink = `${baseUrl}/activate?token=${instructor.activation_token}&type=instructor&id=${instructor.id}`;
+    const activationLink = `${baseUrl}/activate.html?token=${instructor.activation_token}&type=instructor&id=${instructor.id}`;
 
     const response = await fetch('/api/send-activation', {
       method: 'POST',

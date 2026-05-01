@@ -1,0 +1,9 @@
+{
+  "rewrites": [
+    {
+      "source": "/activate",
+      "destination": "/activate.html"
+    }
+  ],
+  "cleanUrls": true
+}
