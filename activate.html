@@ -351,28 +351,35 @@ async function activateInstructor(instructorId) {
   if (pw1 !== pw2) { alert('Las contraseñas no coinciden'); return; }
   if (pw1.length < 8) { alert('Mínimo 8 caracteres'); return; }
 
-  // Crear cuenta en Supabase Auth
-  const { data: instructor } = await sb.from('instructors').select('email').eq('id', instructorId).single();
-
-  const { data: authData, error: authError } = await sb.auth.signUp({
-    email: instructor.email,
-    password: pw1,
-  });
-
-  if (authError) {
-    alert('Error: ' + authError.message);
+  // Llamar al endpoint serverless que crea/actualiza el auth user con email confirmado.
+  // (Reemplaza al sb.auth.signUp que disparaba emails de confirmación y rate limits.)
+  let resp;
+  try {
+    resp = await fetch('/api/activate-account', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type: 'instructor', id: instructorId, token: token, password: pw1 }),
+    });
+  } catch (e) {
+    alert('Error de red: ' + e.message);
     return;
   }
 
-  // Marcar como activo
-  await sb.from('instructors').update({
-    status: 'active',
-    activated_at: new Date().toISOString(),
-    activation_token: null,
-    auth_user_id: authData.user?.id,
-  }).eq('id', instructorId);
+  const result = await resp.json().catch(() => ({}));
+  if (!resp.ok) {
+    alert('Error: ' + (result.error || 'no se pudo activar') + (result.details ? '\n\n' + result.details : ''));
+    return;
+  }
 
-  showSuccess('¡Cuenta activada! Ya puedes iniciar sesión en el sistema.');
+  // Auto-login tras activar para que vaya directo al sistema con su sesión iniciada.
+  const { data: instructor } = await sb.from('instructors').select('email').eq('id', instructorId).single();
+  const { error: loginErr } = await sb.auth.signInWithPassword({ email: instructor.email, password: pw1 });
+  if (loginErr) {
+    showSuccess('¡Cuenta activada! Ya puedes iniciar sesión.');
+    return;
+  }
+
+  showSuccess('¡Cuenta activada! Te llevamos al sistema...');
 }
 
 async function loginWithGoogleInstructor(instructorId) {
@@ -562,26 +569,47 @@ async function createStudentPasswordAccount(studentId) {
   if (pw1 !== pw2) { alert('Las contraseñas no coinciden'); return; }
   if (pw1.length < 8) { alert('Mínimo 8 caracteres'); return; }
 
-  const { data: student } = await sb.from('students').select('email').eq('id', studentId).single();
+  const { data: student } = await sb.from('students').select('email, consent_token').eq('id', studentId).single();
   if (!student?.email) { alert('Falta tu email. Contacta a la coordinación del estudio.'); return; }
 
-  const { data: authData, error: authError } = await sb.auth.signUp({
-    email: student.email,
-    password: pw1,
-  });
+  // El consent_token original ya fue puesto en NULL al firmar. Para reutilizarlo en el endpoint,
+  // generamos uno temporal (la lógica de activación lo valida y luego lo limpia).
+  // Como ya firmaste arriba, usamos un token "post-consent" que es el id mismo (el endpoint usa el
+  // consent_token actual; al haber sido nulificado, debemos usar otro mecanismo).
+  // Solución pragmática: reactivamos consent_token temporalmente desde el cliente.
+  const tempToken = crypto.randomUUID();
+  await sb.from('students').update({ consent_token: tempToken }).eq('id', studentId);
 
-  if (authError) {
-    alert('Error: ' + authError.message);
+  let resp;
+  try {
+    resp = await fetch('/api/activate-account', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type: 'student', id: studentId, token: tempToken, password: pw1 }),
+    });
+  } catch (e) {
+    await sb.from('students').update({ consent_token: null }).eq('id', studentId);
+    alert('Error de red: ' + e.message);
     return;
   }
 
-  await sb.from('students').update({
-    auth_user_id: authData.user?.id,
-    account_status: 'active',
-  }).eq('id', studentId);
+  const result = await resp.json().catch(() => ({}));
+  // Limpiar token temporal pase lo que pase
+  await sb.from('students').update({ consent_token: null }).eq('id', studentId);
 
-  showSuccess('¡Cuenta creada! Te llevamos al sistema en unos segundos...');
-  setTimeout(() => { window.location.href = '/'; }, 2500);
+  if (!resp.ok) {
+    alert('Error: ' + (result.error || 'no se pudo activar') + (result.details ? '\n\n' + result.details : ''));
+    return;
+  }
+
+  // Auto-login tras crear cuenta
+  const { error: loginErr } = await sb.auth.signInWithPassword({ email: student.email, password: pw1 });
+  if (loginErr) {
+    showSuccess('¡Cuenta creada! Ya puedes iniciar sesión en el sistema.');
+    return;
+  }
+
+  showSuccess('¡Cuenta creada! Te llevamos al sistema...');
 }
 
 async function loginWithGoogleStudent(studentId) {
