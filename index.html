@@ -317,9 +317,68 @@
   .empty-state { padding: 60px 20px; text-align: center; color: var(--ink-mute); }
   .empty-state h3 { font-family: var(--display); font-size: 22px; color: var(--ink); margin-bottom: 8px; }
   .empty-state h3 em { font-style: italic; color: var(--fit-purple); }
+
+  /* Role-based layout (oculta sidebar para profesor / alumno) */
+  body.no-sidebar .sidebar { display: none; }
+  body.no-sidebar .main { margin-left: 0; padding: 32px 24px 80px; max-width: 980px; }
+  body.no-sidebar .topbar-logo { width: auto; }
+
+  /* Class card para vista profesor */
+  .inst-class-card { background: white; border: 1px solid var(--line); border-radius: var(--radius-lg); padding: 18px 20px; }
+  .inst-class-card-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+  .inst-class-time { font-family: var(--display); font-size: 22px; font-weight: 500; color: var(--fit-purple); font-style: italic; }
+  .inst-class-loc { font-size: 12px; color: var(--ink-mute); text-transform: uppercase; letter-spacing: 0.1em; }
+
+  /* Active package card */
+  .pkg-card { background: linear-gradient(135deg, var(--fit-purple) 0%, var(--fit-purple-deep) 100%); color: white; border-radius: var(--radius-lg); padding: 24px; }
+  .pkg-card-name { font-family: var(--display); font-size: 22px; font-style: italic; margin-bottom: 4px; }
+  .pkg-card-meta { font-size: 12px; opacity: 0.85; text-transform: uppercase; letter-spacing: 0.08em; }
+  .pkg-card-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; margin-top: 18px; padding-top: 18px; border-top: 1px solid rgba(255,255,255,0.2); }
+  .pkg-stat-num { font-family: var(--display); font-size: 28px; font-weight: 500; }
+  .pkg-stat-lbl { font-size: 11px; opacity: 0.85; text-transform: uppercase; letter-spacing: 0.08em; }
 </style>
 </head>
 <body>
+
+<!-- LOGIN VIEW (se muestra antes de autenticar) -->
+<div id="login-view" style="display:none; min-height:100vh; align-items:center; justify-content:center; padding:30px 20px; background:var(--fit-cream);">
+  <div style="max-width:440px; width:100%; background:white; border-radius:var(--radius-lg); padding:40px; box-shadow:var(--shadow-md);">
+    <div style="text-align:center; margin-bottom:28px;">
+      <div class="logo-mark" style="margin:0 auto 14px;">FIT</div>
+      <div style="font-family:var(--display); font-size:24px; font-weight:400; color:var(--fit-purple-deep); font-style:italic;">Studio Peru</div>
+      <div style="font-size:11px; color:var(--ink-mute); letter-spacing:0.18em; text-transform:uppercase; margin-top:4px;">Sistema de gestión</div>
+    </div>
+
+    <button id="btn-google-login" onclick="loginWithGoogle()" style="display:flex; align-items:center; justify-content:center; gap:10px; width:100%; background:white; border:1.5px solid var(--line); padding:13px; border-radius:999px; font-size:15px; font-weight:500; cursor:pointer; font-family:var(--body); color:var(--ink); transition:all 0.2s;" onmouseover="this.style.borderColor='var(--fit-purple)'" onmouseout="this.style.borderColor='var(--line)'">
+      <svg width="18" height="18" viewBox="0 0 24 24"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg>
+      Continuar con Google
+    </button>
+
+    <div style="text-align:center; margin:18px 0; color:var(--ink-mute); font-size:13px; position:relative;">
+      <span style="background:white; padding:0 12px; position:relative; z-index:1;">o con correo y contraseña</span>
+      <div style="position:absolute; top:50%; left:0; right:0; height:1px; background:var(--line); z-index:0;"></div>
+    </div>
+
+    <form onsubmit="event.preventDefault(); loginWithPassword();">
+      <div style="margin-bottom:12px;">
+        <label style="display:block; font-size:12px; color:var(--ink-soft); margin-bottom:6px;">Email</label>
+        <input type="email" id="login-email" required style="width:100%; padding:11px 14px; border:1.5px solid var(--line); border-radius:10px; font-size:14px; font-family:var(--body);" />
+      </div>
+      <div style="margin-bottom:14px;">
+        <label style="display:block; font-size:12px; color:var(--ink-soft); margin-bottom:6px;">Contraseña</label>
+        <input type="password" id="login-password" required style="width:100%; padding:11px 14px; border:1.5px solid var(--line); border-radius:10px; font-size:14px; font-family:var(--body);" />
+      </div>
+      <button type="submit" style="width:100%; background:var(--fit-purple); color:white; border:none; padding:12px; border-radius:999px; font-size:15px; font-weight:500; cursor:pointer; font-family:var(--body);">Ingresar</button>
+    </form>
+
+    <div id="login-error" style="display:none; margin-top:14px; padding:12px; background:var(--danger-soft); color:var(--danger); border-radius:8px; font-size:13px;"></div>
+
+    <p style="margin-top:24px; font-size:12px; color:var(--ink-mute); text-align:center; line-height:1.5;">¿Eres alumno o profesor nuevo? Pide a la coordinación que te envíe el link de activación a tu correo.</p>
+  </div>
+</div>
+
+<!-- APP LAYOUT (se muestra solo después de auth + rol detectado) -->
+<div id="app-layout" style="display:none;">
 
 <!-- TOPBAR -->
 <header class="topbar">
@@ -379,6 +438,16 @@
     <button class="nav-item" data-view="schedule" onclick="showView('schedule', this)">
       <span class="nav-icon"><svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg></span>
       Horarios
+    </button>
+    <button class="nav-item" data-view="pending-recovery" onclick="showView('pending-recovery', this)">
+      <span class="nav-icon"><svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M12 8v4l3 2"/><circle cx="12" cy="12" r="10"/></svg></span>
+      Recuperar
+      <span class="nav-badge" id="badge-recovery">—</span>
+    </button>
+    <button class="nav-item" data-view="renewals" onclick="showView('renewals', this)">
+      <span class="nav-icon"><svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M3 22v-6h6"/><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 2v6h-6"/></svg></span>
+      Renovar
+      <span class="nav-badge" id="badge-renewals">—</span>
     </button>
   </div>
   <div class="nav-group">
@@ -571,6 +640,87 @@
     <div id="packages-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 16px;"></div>
   </section>
 
+  <!-- INSTRUCTOR DAY VIEW (vista profesor) -->
+  <section class="view" id="view-instructor-day">
+    <div class="page-header">
+      <div>
+        <h1 class="page-title">Mis <em>clases</em> de hoy</h1>
+        <div class="page-sub" id="inst-day-sub">—</div>
+      </div>
+      <div class="page-actions">
+        <button class="btn btn-primary" id="confirm-shift-btn" onclick="confirmMyShift()" style="display:none;">Confirmar mi turno</button>
+      </div>
+    </div>
+    <div id="instructor-classes-list" style="display:flex; flex-direction:column; gap:14px;"></div>
+  </section>
+
+  <!-- STUDENT DAY VIEW (vista alumno) -->
+  <section class="view" id="view-student-home">
+    <div class="page-header">
+      <div>
+        <h1 class="page-title">Hola, <em id="student-greet-name">—</em></h1>
+        <div class="page-sub" id="student-greet-sub">—</div>
+      </div>
+    </div>
+    <div id="student-active-package"></div>
+    <div style="margin-top:24px;">
+      <h2 style="font-family:var(--display); font-size:20px; font-style:italic; color:var(--fit-purple-deep); margin-bottom:14px;">Próximas <em>clases</em></h2>
+      <div id="student-upcoming-classes" style="display:flex; flex-direction:column; gap:10px;"></div>
+    </div>
+    <div style="margin-top:24px;">
+      <h2 style="font-family:var(--display); font-size:20px; font-style:italic; color:var(--fit-purple-deep); margin-bottom:14px;">Pendientes de <em>recuperar</em></h2>
+      <div id="student-recoverables" style="display:flex; flex-direction:column; gap:10px;"></div>
+    </div>
+  </section>
+
+  <!-- PENDING RECOVERY VIEW (coordinador) -->
+  <section class="view" id="view-pending-recovery">
+    <div class="page-header">
+      <div>
+        <h1 class="page-title">Pendientes de <em>recuperar</em></h1>
+        <div class="page-sub" id="pending-recovery-sub">Clases recuperables ordenadas por vencimiento</div>
+      </div>
+    </div>
+    <div class="table-card">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Alumno</th>
+            <th>Clase original</th>
+            <th>Vence</th>
+            <th>Días restantes</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="pending-recovery-tbody"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- RENEWALS VIEW (coordinador) -->
+  <section class="view" id="view-renewals">
+    <div class="page-header">
+      <div>
+        <h1 class="page-title">Próximos a <em>renovar</em></h1>
+        <div class="page-sub">Alumnos con 1 o menos clases en el paquete activo</div>
+      </div>
+    </div>
+    <div class="table-card">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Alumno</th>
+            <th>Paquete</th>
+            <th>Clases restantes</th>
+            <th>Vence</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="renewals-tbody"></tbody>
+      </table>
+    </div>
+  </section>
+
 </main>
 
 <!-- LOCATION MODAL -->
@@ -659,6 +809,14 @@
           <div class="form-row full">
             <label>Consentimiento informado</label>
             <div id="consent-block" style="margin-top: 4px;"></div>
+          </div>
+          <div class="form-row full">
+            <label>Paquete activo</label>
+            <div id="active-package-block" style="margin-top: 4px;"></div>
+          </div>
+          <div class="form-row full">
+            <label>Historial de pagos</label>
+            <div id="payments-history-block" style="margin-top: 4px;"></div>
           </div>
         </div>
       </form>
@@ -902,8 +1060,143 @@
   </div>
 </div>
 
+<!-- ASSIGN PACKAGE MODAL -->
+<div class="modal-backdrop" id="assign-package-modal" onclick="if(event.target===this) closeModals()">
+  <div class="modal-card" style="width: 540px;">
+    <div class="modal-header">
+      <div class="modal-title">Asignar <em>paquete</em></div>
+      <button class="modal-close" onclick="closeModals()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div id="assign-pkg-student" style="background: var(--fit-lavender-pale); padding: 14px 18px; border-radius: var(--radius-md); margin-bottom: 18px; font-size: 13px;"></div>
+      <input type="hidden" id="assign-pkg-student-id" />
+      <div class="form-row" style="margin-bottom: 14px;">
+        <label>Paquete <span class="req">*</span></label>
+        <select id="assign-pkg-id" onchange="updateAssignPkgPreview()" required>
+          <option value="">Selecciona un paquete</option>
+        </select>
+      </div>
+      <div class="form-grid">
+        <div class="form-row">
+          <label>Fecha de compra <span class="req">*</span></label>
+          <input type="date" id="assign-pkg-purchase" required onchange="updateAssignPkgPreview()" />
+        </div>
+        <div class="form-row">
+          <label>Vencimiento (auto)</label>
+          <input type="date" id="assign-pkg-expiration" disabled />
+        </div>
+        <div class="form-row">
+          <label>Precio pagado (S/)</label>
+          <input type="number" id="assign-pkg-price" step="0.01" min="0" />
+        </div>
+        <div class="form-row">
+          <label>Clases totales</label>
+          <input type="number" id="assign-pkg-classes" min="1" />
+        </div>
+      </div>
+      <div style="background: var(--info-soft); border-left: 3px solid var(--info); padding: 12px 14px; border-radius: var(--radius-sm); font-size: 12px; color: var(--info); margin-top: 12px;">
+        💡 Al guardar, podrás registrar el pago en el siguiente paso.
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModals()">Cancelar</button>
+      <button class="btn btn-primary" onclick="saveAssignPackage()">Asignar paquete</button>
+    </div>
+  </div>
+</div>
+
+<!-- REGISTER PAYMENT MODAL -->
+<div class="modal-backdrop" id="payment-modal" onclick="if(event.target===this) closeModals()">
+  <div class="modal-card" style="width: 540px;">
+    <div class="modal-header">
+      <div class="modal-title">Registrar <em>pago</em></div>
+      <button class="modal-close" onclick="closeModals()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div id="payment-context" style="background: var(--fit-lavender-pale); padding: 14px 18px; border-radius: var(--radius-md); margin-bottom: 18px; font-size: 13px;"></div>
+      <input type="hidden" id="pay-student-id" />
+      <input type="hidden" id="pay-package-id" />
+      <div class="form-grid">
+        <div class="form-row">
+          <label>Monto (S/) <span class="req">*</span></label>
+          <input type="number" id="pay-amount" step="0.01" min="0" required />
+        </div>
+        <div class="form-row">
+          <label>Método <span class="req">*</span></label>
+          <select id="pay-method" required>
+            <option value="cash">Efectivo</option>
+            <option value="yape">Yape</option>
+            <option value="plin">Plin</option>
+            <option value="transfer">Transferencia</option>
+            <option value="pos">POS / tarjeta</option>
+            <option value="other">Otro</option>
+          </select>
+        </div>
+        <div class="form-row">
+          <label>Fecha</label>
+          <input type="date" id="pay-date" />
+        </div>
+        <div class="form-row">
+          <label>Referencia / nro. operación</label>
+          <input type="text" id="pay-reference" />
+        </div>
+        <div class="form-row full">
+          <label>Comprobante (foto opcional)</label>
+          <input type="file" id="pay-receipt" accept="image/*" onchange="handleReceiptUpload(event)" />
+          <div id="pay-receipt-preview" style="margin-top:8px;"></div>
+          <input type="hidden" id="pay-receipt-url" />
+        </div>
+        <div class="form-row full">
+          <label>Notas</label>
+          <textarea id="pay-notes" rows="2"></textarea>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModals()">Cancelar</button>
+      <button class="btn btn-primary" onclick="saveRegisterPayment()">Guardar pago</button>
+    </div>
+  </div>
+</div>
+
+<!-- FREEZE PACKAGE MODAL -->
+<div class="modal-backdrop" id="freeze-modal" onclick="if(event.target===this) closeModals()">
+  <div class="modal-card" style="width: 480px;">
+    <div class="modal-header">
+      <div class="modal-title">Congelar <em>paquete</em></div>
+      <button class="modal-close" onclick="closeModals()">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="freeze-pkg-id" />
+      <div class="form-row" style="margin-bottom:12px;">
+        <label>Motivo <span class="req">*</span></label>
+        <select id="freeze-reason" required>
+          <option value="injury">Lesión</option>
+          <option value="travel">Viaje</option>
+          <option value="medical">Tema médico</option>
+          <option value="personal">Motivo personal</option>
+          <option value="other">Otro</option>
+        </select>
+      </div>
+      <div class="form-row">
+        <label>Notas (opcional)</label>
+        <textarea id="freeze-notes" rows="2"></textarea>
+      </div>
+      <div style="background: var(--warn-soft); border-left: 3px solid var(--warn); padding: 12px 14px; border-radius: var(--radius-sm); font-size: 12px; color: var(--warn); margin-top: 12px;">
+        Mientras esté congelado, el alumno se oculta de los horarios. Al reactivar, el vencimiento se recalcula a 30 días desde la fecha de reactivación.
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModals()">Cancelar</button>
+      <button class="btn btn-primary" onclick="saveFreezePackage()">Congelar</button>
+    </div>
+  </div>
+</div>
+
 <!-- TOAST -->
 <div class="toast" id="toast"></div>
+
+</div><!-- /app-layout -->
 
 <!-- ============================================
      APPLICATION LOGIC
@@ -3114,7 +3407,845 @@ function showToast(msg, type = '') {
 }
 
 // ============================================
-// INIT
+// AUTH & ROLES
+// ============================================
+let CURRENT_USER = null;  // { authUser, role: 'coordinator'|'instructor'|'student', record }
+
+// Lista de emails que cuentan como coordinador (configurable rápido).
+// En el futuro: tabla `users` con columna role.
+const COORDINATOR_EMAILS = [
+  'rodrigoarce@gmail.com',
+  'rodrigo.arce.valdez@gmail.com',
+  'anahi.fitstudio@gmail.com',
+  'anahi@fitstudioperu.com',
+];
+
+async function checkAuthAndRoute() {
+  if (!sb) { showLoginScreen(); return; }
+  const { data: { session } } = await sb.auth.getSession();
+  if (!session) { showLoginScreen(); return; }
+  const role = await detectRole(session.user);
+  if (!role || !role.role) {
+    await sb.auth.signOut();
+    showLoginScreen('Tu cuenta no está vinculada a ningún profesor o alumno. Contacta a la coordinación.');
+    return;
+  }
+  CURRENT_USER = role;
+  showAppLayout();
+  await initForRole();
+}
+
+async function detectRole(authUser) {
+  // 1. instructor
+  try {
+    const { data: inst } = await sb.from('instructors').select('*').eq('auth_user_id', authUser.id).eq('is_active', true).maybeSingle();
+    if (inst) return { authUser, role: 'instructor', record: inst };
+  } catch(e) { console.error('detectRole instructor', e); }
+  // 2. student
+  try {
+    const { data: stud } = await sb.from('students').select('*').eq('auth_user_id', authUser.id).eq('status', 'active').maybeSingle();
+    if (stud) return { authUser, role: 'student', record: stud };
+  } catch(e) { console.error('detectRole student', e); }
+  // 3. coordinator
+  const email = (authUser.email || '').toLowerCase();
+  if (COORDINATOR_EMAILS.includes(email)) return { authUser, role: 'coordinator', record: null };
+  try {
+    const { data: usr } = await sb.from('users').select('*').eq('email', email).maybeSingle();
+    if (usr) return { authUser, role: 'coordinator', record: usr };
+  } catch(e) { /* tabla users opcional */ }
+  return { authUser, role: null, record: null };
+}
+
+function showLoginScreen(errMsg) {
+  const lv = document.getElementById('login-view');
+  const al = document.getElementById('app-layout');
+  lv.style.display = 'flex';
+  al.style.display = 'none';
+  if (errMsg) {
+    const el = document.getElementById('login-error');
+    el.textContent = errMsg;
+    el.style.display = 'block';
+  }
+}
+
+function showAppLayout() {
+  document.getElementById('login-view').style.display = 'none';
+  document.getElementById('app-layout').style.display = 'block';
+}
+
+async function loginWithGoogle() {
+  if (!sb) { showLoginScreen('Sistema sin configurar'); return; }
+  const { error } = await sb.auth.signInWithOAuth({
+    provider: 'google',
+    options: { redirectTo: window.location.origin + '/' }
+  });
+  if (error) showLoginScreen('Error con Google: ' + error.message);
+}
+
+async function loginWithPassword() {
+  const email = document.getElementById('login-email').value.trim();
+  const pw = document.getElementById('login-password').value;
+  const errEl = document.getElementById('login-error');
+  errEl.style.display = 'none';
+  const { error } = await sb.auth.signInWithPassword({ email, password: pw });
+  if (error) {
+    errEl.textContent = error.message;
+    errEl.style.display = 'block';
+    return;
+  }
+  window.location.reload();
+}
+
+async function logout() {
+  if (sb) await sb.auth.signOut();
+  window.location.reload();
+}
+
+async function initForRole() {
+  const role = CURRENT_USER.role;
+
+  // User pill
+  const userPill = document.querySelector('.topbar-user');
+  if (userPill) {
+    if (role === 'coordinator') {
+      userPill.innerHTML = `
+        <div class="user-avatar">CO</div>
+        <div class="user-info">
+          <div class="user-name">Coordinación</div>
+          <div class="user-role">${escape(CURRENT_USER.authUser.email || '')}</div>
+        </div>
+      `;
+    } else if (role === 'instructor') {
+      const i = CURRENT_USER.record;
+      userPill.innerHTML = `
+        <div class="user-avatar">${escape(i.initials || (i.first_name || '?')[0])}</div>
+        <div class="user-info">
+          <div class="user-name">${escape(i.handle || i.first_name || '')}</div>
+          <div class="user-role">Profesor</div>
+        </div>
+      `;
+    } else if (role === 'student') {
+      const s = CURRENT_USER.record;
+      const ini = ((s.first_name||'?')[0] + ((s.last_name||'')[0] || '')).toUpperCase();
+      userPill.innerHTML = `
+        <div class="user-avatar">${escape(ini)}</div>
+        <div class="user-info">
+          <div class="user-name">${escape(s.first_name || '')}</div>
+          <div class="user-role">Alumno</div>
+        </div>
+      `;
+    }
+    userPill.onclick = () => { if (confirm('¿Cerrar sesión?')) logout(); };
+    userPill.style.cursor = 'pointer';
+  }
+
+  // Sidebar visibility
+  if (role === 'instructor' || role === 'student') {
+    document.body.classList.add('no-sidebar');
+    // Ocultar selector de sede para alumno (solo ve sus propias clases)
+    if (role === 'student') {
+      const sw = document.querySelector('.location-switcher');
+      if (sw) sw.style.display = 'none';
+    }
+  }
+
+  // Cargar datos comunes
+  await loadAll();
+
+  // Default view per role
+  if (role === 'instructor') {
+    showView('instructor-day', null);
+    renderInstructorDay();
+  } else if (role === 'student') {
+    showView('student-home', null);
+    renderStudentHome();
+  }
+  // coordinator: dashboard ya está activo
+}
+
+// ============================================
+// INSTRUCTOR DAY VIEW
+// ============================================
+async function renderInstructorDay() {
+  if (!CURRENT_USER || CURRENT_USER.role !== 'instructor') return;
+  const inst = CURRENT_USER.record;
+  const today = new Date();
+  const todayIso = today.toISOString().slice(0,10);
+  const dow = today.getDay();
+  const dayLabels = ['domingo','lunes','martes','miércoles','jueves','viernes','sábado'];
+
+  document.getElementById('inst-day-sub').textContent = `${dayLabels[dow]} ${today.getDate()} · ${inst.full_name || inst.first_name + ' ' + (inst.last_name || '')}`;
+
+  // Buscar sus turnos del día (instructor_schedules con dow + locations)
+  const schedules = STATE.schedules.filter(s => s.instructor_id === inst.id && s.day_of_week === dow);
+
+  // Aplicar overrides por fecha (cambios puntuales)
+  // Nota: STATE.classOverrides puede tener cambios puntuales de profesor
+
+  if (schedules.length === 0) {
+    document.getElementById('instructor-classes-list').innerHTML = '<div class="empty-state"><h3>No tienes <em>clases</em> hoy</h3><p>Disfruta tu día libre.</p></div>';
+    document.getElementById('confirm-shift-btn').style.display = 'none';
+    return;
+  }
+
+  // Para cada turno, contar alumnos confirmados
+  const list = document.getElementById('instructor-classes-list');
+  let html = '';
+  for (const sched of schedules.sort((a,b) => a.hour - b.hour)) {
+    const loc = STATE.locations.find(l => l.id === sched.location_id);
+    const fixed = STATE.fixedBookings.filter(b => b.location_id === sched.location_id && b.day_of_week === dow && b.hour === sched.hour);
+    // Buscar session_id si existe
+    let session = null;
+    let bookings = [];
+    let attendanceRecs = [];
+    if (isOnline) {
+      const { data: sess } = await sb.from('class_sessions').select('*').eq('location_id', sched.location_id).eq('date', todayIso).eq('hour', sched.hour).maybeSingle();
+      if (sess) {
+        session = sess;
+        const { data: bs } = await sb.from('session_bookings').select('*').eq('session_id', sess.id);
+        bookings = bs || [];
+        const { data: at } = await sb.from('attendance').select('*').eq('session_id', sess.id);
+        attendanceRecs = at || [];
+      }
+    }
+    const presentStudentIds = new Set([
+      ...fixed.map(f => f.student_id),
+      ...bookings.map(b => b.student_id),
+    ]);
+    const studentsInClass = [...presentStudentIds].map(sid => STATE.students.find(s => s.id === sid)).filter(Boolean);
+
+    html += `
+      <div class="inst-class-card">
+        <div class="inst-class-card-head">
+          <div>
+            <div class="inst-class-time">${formatHour(sched.hour)}</div>
+            <div class="inst-class-loc">Sede ${escape(loc ? loc.name : '—')} · ${studentsInClass.length} ${studentsInClass.length === 1 ? 'alumno' : 'alumnos'}</div>
+          </div>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 8px;">
+          ${studentsInClass.length === 0 ? '<div style="color: var(--ink-mute); font-size: 13px; padding: 8px 0;">Sin alumnos reservados.</div>' : studentsInClass.map(s => {
+            const att = attendanceRecs.find(a => a.student_id === s.id);
+            const status = att ? att.status : 'pendiente';
+            const statusBadge = renderAttendanceBadge(status);
+            return `
+              <div style="display: flex; align-items: center; justify-content: space-between; padding: 10px 12px; background: var(--bg); border-radius: var(--radius-sm);">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                  <div class="student-avatar" style="width:32px;height:32px;font-size:11px;">${initials(s)}</div>
+                  <span style="font-size: 14px;">${escape(s.first_name)} ${escape(s.last_name||'')}</span>
+                </div>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                  ${statusBadge}
+                  <button onclick="instructorMarkAttendance('${s.id}', ${sched.hour}, '${sched.location_id}', '${todayIso}', this)" style="padding: 5px 12px; font-size: 11px; background: var(--fit-purple); color: white; border: none; border-radius: 999px; cursor: pointer;">Marcar</button>
+                </div>
+              </div>
+            `;
+          }).join('')}
+        </div>
+      </div>
+    `;
+  }
+  list.innerHTML = html;
+
+  // Botón confirmar turno (si todavía no confirmó hoy)
+  const confirmedKey = `shift_confirmed_${inst.id}_${todayIso}`;
+  const alreadyConfirmed = localStorage.getItem(confirmedKey) === '1';
+  const btn = document.getElementById('confirm-shift-btn');
+  btn.style.display = 'inline-flex';
+  if (alreadyConfirmed) {
+    btn.textContent = '✓ Turno confirmado';
+    btn.disabled = true;
+    btn.style.opacity = '0.6';
+  } else {
+    btn.textContent = 'Confirmar mi turno';
+    btn.disabled = false;
+    btn.style.opacity = '1';
+  }
+}
+
+function renderAttendanceBadge(status) {
+  const map = {
+    asistio: { c: '#0F6E56', bg: '#E1F5EE', t: '✓ Asistió' },
+    recuperable: { c: '#BA7517', bg: '#FAEEDA', t: '⊙ Recuperable' },
+    perdida: { c: '#A32D2D', bg: '#FCEBEB', t: '✗ Perdida' },
+    no_show: { c: '#A32D2D', bg: '#FCEBEB', t: '✗ No vino' },
+    pendiente: { c: '#888', bg: '#F1EFE8', t: '○ Pendiente' },
+  };
+  const x = map[status] || map.pendiente;
+  return `<span style="font-size: 11px; padding: 3px 8px; background: ${x.bg}; color: ${x.c}; border-radius: 999px; font-weight: 500;">${x.t}</span>`;
+}
+
+async function instructorMarkAttendance(studentId, hour, locationId, dateIso, btn) {
+  if (!isOnline) { showToast('Necesitas conexión', 'error'); return; }
+  // Reusar markAttendance del coordinador, adaptándola
+  // Crear/asegurar session
+  const { data: existing } = await sb.from('class_sessions').select('*').eq('location_id', locationId).eq('date', dateIso).eq('hour', hour).maybeSingle();
+  let sessionId = existing?.id;
+  if (!sessionId) {
+    const { data: created, error } = await sb.from('class_sessions').insert({
+      location_id: locationId, date: dateIso, hour: hour, instructor_id: CURRENT_USER.record.id, status: 'scheduled'
+    }).select().single();
+    if (error) { showToast('Error: '+error.message, 'error'); return; }
+    sessionId = created.id;
+  }
+  // Toggle simple: pendiente → asistio. Para más estados, usar un menú.
+  const status = 'asistio';
+  await sb.from('attendance').upsert({
+    session_id: sessionId, student_id: studentId, status: status, marked_by: CURRENT_USER.authUser.id, marked_at: new Date().toISOString()
+  }, { onConflict: 'session_id,student_id' });
+  showToast('✓ Asistencia marcada', 'success');
+  renderInstructorDay();
+}
+
+async function confirmMyShift() {
+  if (!CURRENT_USER || CURRENT_USER.role !== 'instructor') return;
+  const today = new Date().toISOString().slice(0,10);
+  const key = `shift_confirmed_${CURRENT_USER.record.id}_${today}`;
+  localStorage.setItem(key, '1');
+  // Idealmente esto va a una tabla shift_confirmations(instructor_id, date, confirmed_at)
+  // Por ahora solo localStorage. TODO: migrar a tabla cuando agreguemos la migración.
+  showToast('✓ Turno confirmado para hoy', 'success');
+  renderInstructorDay();
+}
+
+// ============================================
+// STUDENT HOME VIEW
+// ============================================
+async function renderStudentHome() {
+  if (!CURRENT_USER || CURRENT_USER.role !== 'student') return;
+  const stud = CURRENT_USER.record;
+
+  document.getElementById('student-greet-name').textContent = stud.first_name || '';
+  document.getElementById('student-greet-sub').textContent = (STATE.locations.find(l => l.id === stud.location_id)?.name) ? `Sede ${STATE.locations.find(l => l.id === stud.location_id).name}` : '';
+
+  // Cargar paquete activo del alumno
+  const pkgs = await loadStudentPackages(stud.id);
+  const active = pkgs.find(p => !p.is_frozen && new Date(p.expiration_date) >= new Date());
+  const pkgBlock = document.getElementById('student-active-package');
+  if (active) {
+    const cat = STATE.packages.find(p => p.id === active.package_id);
+    const remaining = (active.classes_total || 0) - (active.classes_used || 0);
+    pkgBlock.innerHTML = `
+      <div class="pkg-card">
+        <div class="pkg-card-name">${escape(cat?.name || 'Paquete')}</div>
+        <div class="pkg-card-meta">Vence ${formatDate(active.expiration_date)}</div>
+        <div class="pkg-card-stats">
+          <div><div class="pkg-stat-num">${remaining}</div><div class="pkg-stat-lbl">Restantes</div></div>
+          <div><div class="pkg-stat-num">${active.classes_used || 0}</div><div class="pkg-stat-lbl">Tomadas</div></div>
+          <div><div class="pkg-stat-num">${active.classes_recoverable || 0}</div><div class="pkg-stat-lbl">Recuperables</div></div>
+        </div>
+      </div>
+    `;
+  } else {
+    pkgBlock.innerHTML = `
+      <div style="background: var(--fit-cream); border: 1px solid var(--line); border-radius: var(--radius-lg); padding: 24px; text-align: center;">
+        <div style="font-family: var(--display); font-style: italic; font-size: 18px; color: var(--ink-mute);">Sin paquete activo</div>
+        <p style="font-size: 13px; color: var(--ink-mute); margin-top: 8px;">Contacta a la coordinación para asignar tu paquete.</p>
+      </div>
+    `;
+  }
+
+  // Próximas clases (fixed bookings del alumno)
+  const upcoming = STATE.fixedBookings.filter(b => b.student_id === stud.id);
+  const dayLabels = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
+  const upBlock = document.getElementById('student-upcoming-classes');
+  if (upcoming.length === 0) {
+    upBlock.innerHTML = '<p style="color: var(--ink-mute); font-size: 13px;">No tienes clases reservadas.</p>';
+  } else {
+    upBlock.innerHTML = upcoming.slice(0, 6).map(b => `
+      <div style="background: white; border: 1px solid var(--line); border-radius: var(--radius-md); padding: 14px 18px; display: flex; align-items: center; justify-content: space-between;">
+        <div>
+          <div style="font-weight: 500;">${dayLabels[b.day_of_week]} · ${formatHour(b.hour)}</div>
+          <div style="font-size: 12px; color: var(--ink-mute); margin-top: 2px;">Clase fija semanal</div>
+        </div>
+      </div>
+    `).join('');
+  }
+
+  // Recuperables: ver attendance del alumno con status='recuperable' no consumidas
+  const recBlock = document.getElementById('student-recoverables');
+  if (isOnline) {
+    const { data: recs } = await sb.from('attendance').select('*, class_sessions(date, hour, location_id)').eq('student_id', stud.id).eq('status', 'recuperable');
+    if (recs && recs.length > 0) {
+      recBlock.innerHTML = recs.map(r => {
+        const sess = r.class_sessions;
+        return `
+          <div style="background: var(--warn-soft); border: 1px solid var(--warn); border-radius: var(--radius-md); padding: 12px 16px;">
+            <div style="font-weight: 500; color: #412402;">⊙ Clase del ${formatDate(sess.date)} a las ${formatHour(sess.hour)}</div>
+            <div style="font-size: 12px; color: #633806; margin-top: 2px;">Recuperable hasta el vencimiento del paquete.</div>
+          </div>
+        `;
+      }).join('');
+    } else {
+      recBlock.innerHTML = '<p style="color: var(--ink-mute); font-size: 13px;">No tienes clases pendientes de recuperar.</p>';
+    }
+  } else {
+    recBlock.innerHTML = '<p style="color: var(--ink-mute); font-size: 13px;">Conexión requerida.</p>';
+  }
+}
+
+// ============================================
+// PACKAGES & PAYMENTS
+// ============================================
+async function loadStudentPackages(studentId) {
+  if (!isOnline) return [];
+  const { data, error } = await sb.from('student_packages').select('*').eq('student_id', studentId).order('purchase_date', { ascending: false });
+  if (error) { console.error(error); return []; }
+  return data || [];
+}
+
+async function loadStudentPayments(studentId) {
+  if (!isOnline) return [];
+  const { data, error } = await sb.from('payments').select('*').eq('student_id', studentId).order('payment_date', { ascending: false });
+  if (error) { console.error(error); return []; }
+  return data || [];
+}
+
+async function renderActivePackageBlock(student) {
+  const block = document.getElementById('active-package-block');
+  if (!block) return;
+  if (!student) {
+    block.innerHTML = `<div style="background: var(--bg); border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 14px 16px; font-size: 13px; color: var(--ink-mute);">Después de guardar al alumno podrás asignar un paquete.</div>`;
+    return;
+  }
+  if (!isOnline) {
+    block.innerHTML = `<div style="font-size: 13px; color: var(--ink-mute);">Conexión requerida.</div>`;
+    return;
+  }
+  const pkgs = await loadStudentPackages(student.id);
+  const active = pkgs.find(p => !p.is_frozen && new Date(p.expiration_date) >= new Date());
+  const frozen = pkgs.find(p => p.is_frozen);
+
+  if (active) {
+    const cat = STATE.packages.find(p => p.id === active.package_id);
+    const remaining = (active.classes_total || 0) - (active.classes_used || 0);
+    const expiresIn = Math.ceil((new Date(active.expiration_date) - new Date()) / (1000*60*60*24));
+    block.innerHTML = `
+      <div style="background: var(--fit-lavender-pale); border: 1px solid var(--fit-purple-soft); border-radius: var(--radius-sm); padding: 14px 16px;">
+        <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 10px;">
+          <div>
+            <div style="font-weight: 500; color: var(--fit-purple-deep);">${escape(cat?.name || 'Paquete')}</div>
+            <div style="font-size: 12px; color: var(--ink-soft); margin-top: 2px;">Compra ${formatDate(active.purchase_date)} · vence ${formatDate(active.expiration_date)} (en ${expiresIn} días)</div>
+          </div>
+          <div style="text-align: right;">
+            <div style="font-family: var(--display); font-size: 22px; color: var(--fit-purple); font-style: italic;">${remaining}/${active.classes_total}</div>
+            <div style="font-size: 10px; color: var(--ink-mute); text-transform: uppercase; letter-spacing: 0.08em;">Restantes</div>
+          </div>
+        </div>
+        <div style="font-size: 12px; color: var(--ink-soft); margin-bottom: 10px;">Tomadas: ${active.classes_used || 0} · Recuperables: ${active.classes_recoverable || 0} ${active.price_paid ? '· Pagado: S/' + active.price_paid : ''}</div>
+        <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+          <button type="button" onclick="openPaymentModal('${student.id}', '${active.id}')" style="padding: 7px 14px; font-size: 12px; background: var(--fit-purple); color: white; border: none; border-radius: 999px; cursor: pointer;">+ Registrar pago</button>
+          <button type="button" onclick="openFreezeModal('${active.id}')" style="padding: 7px 14px; font-size: 12px; background: transparent; color: var(--ink); border: 1px solid var(--line); border-radius: 999px; cursor: pointer;">Congelar</button>
+          <button type="button" onclick="openAssignPackageModal('${student.id}')" style="padding: 7px 14px; font-size: 12px; background: transparent; color: var(--ink); border: 1px solid var(--line); border-radius: 999px; cursor: pointer;">Asignar otro paquete</button>
+        </div>
+      </div>
+    `;
+  } else if (frozen) {
+    const cat = STATE.packages.find(p => p.id === frozen.package_id);
+    block.innerHTML = `
+      <div style="background: var(--info-soft); border: 1px solid var(--info); border-radius: var(--radius-sm); padding: 14px 16px;">
+        <div style="font-weight: 500; color: var(--info);">❄ Paquete congelado: ${escape(cat?.name || '')}</div>
+        <div style="font-size: 12px; color: var(--info); margin-top: 4px;">${escape(frozen.freeze_reason || '')}</div>
+        <button type="button" onclick="reactivatePackage('${frozen.id}')" style="margin-top: 10px; padding: 7px 14px; font-size: 12px; background: var(--fit-purple); color: white; border: none; border-radius: 999px; cursor: pointer;">Reactivar paquete</button>
+      </div>
+    `;
+  } else {
+    block.innerHTML = `
+      <div style="background: var(--bg); border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 14px 16px;">
+        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+          <span style="width: 8px; height: 8px; border-radius: 50%; background: var(--ink-faint); display: inline-block;"></span>
+          <span style="font-size: 13px; color: var(--ink-soft);">Sin paquete activo</span>
+        </div>
+        <button type="button" onclick="openAssignPackageModal('${student.id}')" style="padding: 8px 14px; font-size: 13px; background: var(--fit-purple); color: white; border: none; border-radius: 999px; cursor: pointer;">Asignar paquete</button>
+      </div>
+    `;
+  }
+}
+
+async function renderPaymentsHistoryBlock(student) {
+  const block = document.getElementById('payments-history-block');
+  if (!block) return;
+  if (!student || !isOnline) {
+    block.innerHTML = `<div style="font-size: 13px; color: var(--ink-mute);">${student ? 'Conexión requerida.' : 'Disponible al guardar.'}</div>`;
+    return;
+  }
+  const payments = await loadStudentPayments(student.id);
+  if (!payments || payments.length === 0) {
+    block.innerHTML = `<div style="font-size: 13px; color: var(--ink-mute); padding: 4px 0;">Sin pagos registrados.</div>`;
+    return;
+  }
+  const methodLabels = { cash: 'Efectivo', yape: 'Yape', plin: 'Plin', transfer: 'Transferencia', pos: 'POS', other: 'Otro' };
+  block.innerHTML = `
+    <div style="border: 1px solid var(--line); border-radius: var(--radius-sm); overflow: hidden;">
+      ${payments.slice(0, 10).map(p => `
+        <div style="padding: 10px 14px; border-bottom: 1px solid var(--line-soft); display: flex; justify-content: space-between; align-items: center;">
+          <div>
+            <div style="font-weight: 500;">S/${p.amount} <span style="color: var(--ink-mute); font-weight: 400; font-size: 12px;">· ${methodLabels[p.method] || p.method}</span></div>
+            <div style="font-size: 11px; color: var(--ink-mute);">${formatDate(p.payment_date)}${p.reference ? ' · '+escape(p.reference) : ''}</div>
+          </div>
+          ${p.receipt_url ? `<a href="${p.receipt_url}" target="_blank" style="font-size: 11px; color: var(--fit-purple);">Ver comprobante →</a>` : ''}
+        </div>
+      `).join('').replace(/border-bottom: 1px solid var\(--line-soft\);(?!.*border-bottom)/, '')}
+    </div>
+  `;
+}
+
+function openAssignPackageModal(studentId) {
+  const student = STATE.students.find(s => s.id === studentId);
+  if (!student) return;
+  document.getElementById('assign-pkg-student-id').value = studentId;
+  document.getElementById('assign-pkg-student').innerHTML = `<strong>${escape(student.first_name)} ${escape(student.last_name||'')}</strong> · ${escape(student.email||'sin email')}`;
+
+  const select = document.getElementById('assign-pkg-id');
+  select.innerHTML = '<option value="">Selecciona un paquete</option>' +
+    STATE.packages.map(p => `<option value="${p.id}" data-classes="${p.sessions}" data-price="${p.price_pen}">${escape(p.name)} — S/${p.price_pen} (${p.sessions} ${p.sessions===1?'sesión':'sesiones'})</option>`).join('');
+
+  const today = new Date().toISOString().slice(0,10);
+  document.getElementById('assign-pkg-purchase').value = today;
+  document.getElementById('assign-pkg-price').value = '';
+  document.getElementById('assign-pkg-classes').value = '';
+  document.getElementById('assign-pkg-expiration').value = '';
+  document.getElementById('assign-package-modal').classList.add('is-open');
+}
+
+function updateAssignPkgPreview() {
+  const select = document.getElementById('assign-pkg-id');
+  const opt = select.options[select.selectedIndex];
+  if (opt && opt.dataset.classes) {
+    document.getElementById('assign-pkg-classes').value = opt.dataset.classes;
+    document.getElementById('assign-pkg-price').value = opt.dataset.price;
+  }
+  const purchase = document.getElementById('assign-pkg-purchase').value;
+  if (purchase) {
+    const exp = new Date(purchase + 'T12:00:00');
+    exp.setDate(exp.getDate() + 30);
+    document.getElementById('assign-pkg-expiration').value = exp.toISOString().slice(0,10);
+  }
+}
+
+async function saveAssignPackage() {
+  if (!isOnline) { showToast('Conexión requerida', 'error'); return; }
+  const studentId = document.getElementById('assign-pkg-student-id').value;
+  const packageId = document.getElementById('assign-pkg-id').value;
+  const purchaseDate = document.getElementById('assign-pkg-purchase').value;
+  const expirationDate = document.getElementById('assign-pkg-expiration').value;
+  const price = parseFloat(document.getElementById('assign-pkg-price').value) || null;
+  const classes = parseInt(document.getElementById('assign-pkg-classes').value, 10);
+
+  if (!packageId || !purchaseDate || !classes) {
+    showToast('Completa paquete, fecha y clases', 'error');
+    return;
+  }
+
+  const { data, error } = await sb.from('student_packages').insert({
+    student_id: studentId,
+    package_id: packageId,
+    purchase_date: purchaseDate,
+    expiration_date: expirationDate,
+    classes_total: classes,
+    classes_used: 0,
+    classes_recoverable: 0,
+    is_frozen: false,
+    price_paid: price,
+  }).select().single();
+
+  if (error) { showToast('Error: '+error.message, 'error'); return; }
+
+  showToast('✓ Paquete asignado', 'success');
+  closeModals();
+  // Abrir modal de pago de inmediato
+  setTimeout(() => openPaymentModal(studentId, data.id, price), 200);
+}
+
+function openPaymentModal(studentId, packageId, suggestedAmount) {
+  const student = STATE.students.find(s => s.id === studentId);
+  document.getElementById('pay-student-id').value = studentId;
+  document.getElementById('pay-package-id').value = packageId || '';
+  document.getElementById('payment-context').innerHTML = `Pago de <strong>${escape(student?.first_name||'')} ${escape(student?.last_name||'')}</strong>`;
+  document.getElementById('pay-amount').value = suggestedAmount || '';
+  document.getElementById('pay-method').value = 'yape';
+  document.getElementById('pay-date').value = new Date().toISOString().slice(0,10);
+  document.getElementById('pay-reference').value = '';
+  document.getElementById('pay-notes').value = '';
+  document.getElementById('pay-receipt-url').value = '';
+  document.getElementById('pay-receipt-preview').innerHTML = '';
+  document.getElementById('payment-modal').classList.add('is-open');
+}
+
+async function handleReceiptUpload(evt) {
+  const file = evt.target.files[0];
+  if (!file) return;
+  const preview = document.getElementById('pay-receipt-preview');
+  preview.innerHTML = '<div style="font-size:12px;color:var(--ink-mute);">Comprimiendo...</div>';
+  try {
+    const compressed = await compressImage(file, 1200, 0.8);
+    // Subir a Supabase Storage bucket 'payment-receipts' (crear si no existe en consola)
+    if (isOnline) {
+      const fileName = `receipts/${Date.now()}-${file.name.replace(/[^a-z0-9.\-_]/gi,'_')}`;
+      const { error } = await sb.storage.from('payment-receipts').upload(fileName, compressed, { contentType: 'image/jpeg', upsert: false });
+      if (error) {
+        // Fallback: si el bucket no existe, igual permitimos guardar el pago sin comprobante
+        preview.innerHTML = `<div style="font-size:12px;color:var(--warn);">No se pudo subir (${error.message}). El pago se puede guardar sin comprobante.</div>`;
+        return;
+      }
+      const { data: urlData } = sb.storage.from('payment-receipts').getPublicUrl(fileName);
+      document.getElementById('pay-receipt-url').value = urlData.publicUrl;
+      preview.innerHTML = `<img src="${urlData.publicUrl}" style="max-width:140px; max-height:140px; border-radius:8px;" />`;
+    }
+  } catch (e) {
+    preview.innerHTML = `<div style="font-size:12px;color:var(--danger);">Error: ${escape(e.message)}</div>`;
+  }
+}
+
+async function saveRegisterPayment() {
+  if (!isOnline) { showToast('Conexión requerida', 'error'); return; }
+  const studentId = document.getElementById('pay-student-id').value;
+  const packageId = document.getElementById('pay-package-id').value || null;
+  const amount = parseFloat(document.getElementById('pay-amount').value);
+  const method = document.getElementById('pay-method').value;
+  const payDate = document.getElementById('pay-date').value;
+  const reference = document.getElementById('pay-reference').value.trim() || null;
+  const notes = document.getElementById('pay-notes').value.trim() || null;
+  const receiptUrl = document.getElementById('pay-receipt-url').value || null;
+
+  if (!amount || amount <= 0) { showToast('Ingresa un monto válido', 'error'); return; }
+
+  const { error } = await sb.from('payments').insert({
+    student_id: studentId,
+    student_package_id: packageId,
+    amount: amount,
+    method: method,
+    payment_date: payDate || new Date().toISOString().slice(0,10),
+    reference: reference,
+    notes: notes,
+    receipt_url: receiptUrl,
+    recorded_by: CURRENT_USER?.authUser?.id || null,
+  });
+
+  if (error) { showToast('Error: '+error.message, 'error'); return; }
+  showToast('✓ Pago registrado', 'success');
+  closeModals();
+  // Refrescar el modal del alumno si está abierto
+  const studentModalOpen = document.getElementById('student-modal').classList.contains('is-open');
+  if (studentModalOpen) {
+    const s = STATE.students.find(x => x.id === studentId);
+    renderActivePackageBlock(s);
+    renderPaymentsHistoryBlock(s);
+  }
+}
+
+function openFreezeModal(packageId) {
+  document.getElementById('freeze-pkg-id').value = packageId;
+  document.getElementById('freeze-reason').value = 'injury';
+  document.getElementById('freeze-notes').value = '';
+  document.getElementById('freeze-modal').classList.add('is-open');
+}
+
+async function saveFreezePackage() {
+  if (!isOnline) { showToast('Conexión requerida', 'error'); return; }
+  const pkgId = document.getElementById('freeze-pkg-id').value;
+  const reason = document.getElementById('freeze-reason').value;
+  const notes = document.getElementById('freeze-notes').value.trim() || null;
+  const reasonLabels = { injury: 'Lesión', travel: 'Viaje', medical: 'Tema médico', personal: 'Motivo personal', other: 'Otro' };
+  const fullReason = `${reasonLabels[reason]}${notes ? ': '+notes : ''}`;
+
+  const { error } = await sb.from('student_packages').update({
+    is_frozen: true,
+    freeze_started_at: new Date().toISOString(),
+    freeze_reason: fullReason,
+  }).eq('id', pkgId);
+
+  if (error) { showToast('Error: '+error.message, 'error'); return; }
+  showToast('Paquete congelado', 'success');
+  closeModals();
+  // Refrescar
+  const studentId = document.getElementById('f-student-id').value;
+  if (studentId) {
+    const s = STATE.students.find(x => x.id === studentId);
+    renderActivePackageBlock(s);
+  }
+}
+
+async function reactivatePackage(pkgId) {
+  if (!isOnline) { showToast('Conexión requerida', 'error'); return; }
+  if (!confirm('¿Reactivar el paquete?\n\nEl vencimiento se recalcula a 30 días desde hoy.')) return;
+  const today = new Date();
+  const newExp = new Date(today);
+  newExp.setDate(newExp.getDate() + 30);
+  const { error } = await sb.from('student_packages').update({
+    is_frozen: false,
+    freeze_started_at: null,
+    expiration_date: newExp.toISOString().slice(0,10),
+  }).eq('id', pkgId);
+  if (error) { showToast('Error: '+error.message, 'error'); return; }
+  showToast('Paquete reactivado', 'success');
+  const studentId = document.getElementById('f-student-id').value;
+  if (studentId) {
+    const s = STATE.students.find(x => x.id === studentId);
+    renderActivePackageBlock(s);
+  }
+}
+
+// ============================================
+// PENDING RECOVERY (coordinador)
+// ============================================
+async function loadAndRenderPendingRecovery() {
+  const tbody = document.getElementById('pending-recovery-tbody');
+  if (!tbody) return;
+  if (!isOnline) { tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:40px;color:var(--ink-mute);">Conexión requerida</td></tr>'; return; }
+
+  const { data: recs, error } = await sb.from('attendance')
+    .select('*, class_sessions(date, hour, location_id), students(first_name, last_name, phone)')
+    .eq('status', 'recuperable');
+  if (error) { tbody.innerHTML = `<tr><td colspan="5">Error: ${error.message}</td></tr>`; return; }
+
+  // Para cada uno, calcular vencimiento del paquete activo
+  const studentIds = [...new Set(recs.map(r => r.student_id))];
+  const { data: pkgs } = await sb.from('student_packages').select('*').in('student_id', studentIds).eq('is_frozen', false);
+  const pkgByStudent = {};
+  (pkgs||[]).forEach(p => {
+    if (!pkgByStudent[p.student_id] || new Date(p.expiration_date) > new Date(pkgByStudent[p.student_id].expiration_date)) {
+      pkgByStudent[p.student_id] = p;
+    }
+  });
+
+  const today = new Date();
+  const rows = recs.map(r => {
+    const pkg = pkgByStudent[r.student_id];
+    const expiry = pkg ? new Date(pkg.expiration_date) : null;
+    const daysLeft = expiry ? Math.ceil((expiry - today)/(1000*60*60*24)) : null;
+    return { rec: r, expiry, daysLeft };
+  }).sort((a,b) => (a.daysLeft??999) - (b.daysLeft??999));
+
+  document.getElementById('badge-recovery').textContent = rows.length;
+
+  if (rows.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:40px;color:var(--ink-mute);">No hay clases pendientes de recuperar</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = rows.map(({ rec, expiry, daysLeft }) => {
+    const s = rec.students;
+    const sess = rec.class_sessions;
+    const urgent = daysLeft !== null && daysLeft <= 5;
+    return `
+      <tr onclick="openStudentModal('${rec.student_id}')">
+        <td><strong>${escape(s?.first_name||'')} ${escape(s?.last_name||'')}</strong></td>
+        <td>${sess ? formatDate(sess.date) + ' · ' + formatHour(sess.hour) : '—'}</td>
+        <td>${expiry ? formatDate(expiry.toISOString()) : '—'}</td>
+        <td>${daysLeft !== null ? `<span style="color:${urgent?'var(--danger)':'var(--ink)'}; font-weight:${urgent?'500':'400'};">${daysLeft} días</span>` : '—'}</td>
+        <td>${s?.phone ? `<a href="${whatsappLink(s.phone, recoveryMessage(s.first_name, daysLeft))}" target="_blank" onclick="event.stopPropagation()" style="color: #25D366; font-size: 12px;">WhatsApp</a>` : ''}</td>
+      </tr>
+    `;
+  }).join('');
+}
+
+// ============================================
+// RENEWALS (coordinador)
+// ============================================
+async function loadAndRenderRenewals() {
+  const tbody = document.getElementById('renewals-tbody');
+  if (!tbody) return;
+  if (!isOnline) { tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:40px;color:var(--ink-mute);">Conexión requerida</td></tr>'; return; }
+
+  const { data: pkgs, error } = await sb.from('student_packages')
+    .select('*, students(first_name, last_name, phone), packages(name)')
+    .eq('is_frozen', false)
+    .gte('expiration_date', new Date().toISOString().slice(0,10));
+  if (error) { tbody.innerHTML = `<tr><td colspan="5">Error: ${error.message}</td></tr>`; return; }
+
+  const candidates = (pkgs||[]).filter(p => {
+    const remaining = (p.classes_total||0) - (p.classes_used||0);
+    return remaining <= 1;
+  }).sort((a,b) => new Date(a.expiration_date) - new Date(b.expiration_date));
+
+  document.getElementById('badge-renewals').textContent = candidates.length;
+
+  if (candidates.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:40px;color:var(--ink-mute);">No hay alumnos próximos a renovar</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = candidates.map(p => {
+    const s = p.students;
+    const remaining = (p.classes_total||0) - (p.classes_used||0);
+    return `
+      <tr onclick="openStudentModal('${p.student_id}')">
+        <td><strong>${escape(s?.first_name||'')} ${escape(s?.last_name||'')}</strong></td>
+        <td>${escape(p.packages?.name||'—')}</td>
+        <td>${remaining}</td>
+        <td>${formatDate(p.expiration_date)}</td>
+        <td>${s?.phone ? `<a href="${whatsappLink(s.phone, renewalMessage(s.first_name, remaining))}" target="_blank" onclick="event.stopPropagation()" style="color: #25D366; font-size: 12px;">WhatsApp</a>` : ''}</td>
+      </tr>
+    `;
+  }).join('');
+}
+
+// ============================================
+// WHATSAPP HELPERS
+// ============================================
+function normalizePhone(phone) {
+  if (!phone) return '';
+  let p = phone.replace(/[^\d+]/g, '');
+  if (p.startsWith('+')) p = p.slice(1);
+  if (p.length === 9 && p.startsWith('9')) p = '51' + p;  // peruano sin código país
+  return p;
+}
+
+function whatsappLink(phone, message) {
+  const p = normalizePhone(phone);
+  return `https://wa.me/${p}?text=${encodeURIComponent(message)}`;
+}
+
+function recoveryMessage(name, daysLeft) {
+  return `Hola ${name||''}, te queda${daysLeft!==null?` ${daysLeft} días`:''} para recuperar tu clase pendiente. ¿Cuándo te acomoda venir? — FIT Studio Peru`;
+}
+
+function renewalMessage(name, remaining) {
+  return `Hola ${name||''}, ya solo te queda${remaining===1?' 1 clase':'n 0 clases'} en tu paquete. ¿Te separamos uno nuevo? — FIT Studio Peru`;
+}
+
+// ============================================
+// HOOKS — extender openStudentModal y showView
+// ============================================
+const _originalOpenStudentModal = window.openStudentModal;
+// Wrap: después de abrir el modal del alumno, renderizar bloques de paquete y pagos
+function openStudentModalWithPackages(id) {
+  if (typeof openStudentModal === 'function' && openStudentModal !== openStudentModalWithPackages) {
+    openStudentModal(id);
+  }
+  setTimeout(() => {
+    const sid = document.getElementById('f-student-id').value;
+    const s = sid ? STATE.students.find(x => x.id === sid) : null;
+    renderActivePackageBlock(s);
+    renderPaymentsHistoryBlock(s);
+  }, 50);
+}
+// No reemplazamos openStudentModal global. En su lugar, hookeamos al final usando un patch:
+// Hacemos que cada vez que se abra el modal del alumno, también se rendericen los nuevos bloques.
+(function patchOpenStudentModal() {
+  const orig = window.openStudentModal;
+  if (typeof orig !== 'function') return;
+  window.openStudentModal = function(id) {
+    orig(id);
+    const sid = document.getElementById('f-student-id').value;
+    const s = sid ? STATE.students.find(x => x.id === sid) : null;
+    renderActivePackageBlock(s);
+    renderPaymentsHistoryBlock(s);
+  };
+})();
+
+// Patch showView para disparar renders específicos
+(function patchShowView() {
+  const orig = window.showView;
+  window.showView = function(name, btn) {
+    orig(name, btn);
+    if (name === 'pending-recovery') loadAndRenderPendingRecovery();
+    else if (name === 'renewals') loadAndRenderRenewals();
+    else if (name === 'instructor-day') renderInstructorDay();
+    else if (name === 'student-home') renderStudentHome();
+  };
+})();
+
 // ============================================
 document.addEventListener('DOMContentLoaded', () => {
   setDateDisplay();
@@ -3123,8 +4254,22 @@ document.addEventListener('DOMContentLoaded', () => {
     const saved = localStorage.getItem('classOverrides');
     if (saved) STATE.classOverrides = JSON.parse(saved);
   } catch(e) {}
-  loadAll();
+  // Auth gate primero. Si hay sesión, initForRole() llama a loadAll().
+  checkAuthAndRoute().catch(err => {
+    console.error('Auth error:', err);
+    showLoginScreen('Hubo un error al verificar tu sesión. Intenta de nuevo.');
+  });
 });
+
+// Hook adicional: cuando termine loadAll() y el rol sea coordinator, cargar paneles
+const _origLoadAll = loadAll;
+loadAll = async function() {
+  await _origLoadAll();
+  if (CURRENT_USER && CURRENT_USER.role === 'coordinator') {
+    loadAndRenderPendingRecovery();
+    loadAndRenderRenewals();
+  }
+};
 </script>
 
 </body>
