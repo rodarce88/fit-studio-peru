@@ -522,14 +522,14 @@ async function signConsent(studentId) {
   }).eq('id', studentId);
 
   // Verificar si ya tiene cuenta de auth vinculada
-  const { data: refreshed } = await sb.from('students').select('auth_user_id, email, first_name').eq('id', studentId).single();
+  const { data: refreshed } = await sb.from('students').select('id, auth_user_id, email, first_name').eq('id', studentId).single();
   if (refreshed && refreshed.auth_user_id) {
     showSuccess('¡Listo! Tu consentimiento fue registrado. Ya puedes iniciar sesión cuando quieras.');
     return;
   }
 
-  // Mostrar paso 2: crear cuenta de acceso
-  renderStudentAuthCreation(refreshed || { id: studentId });
+  // Mostrar paso 2: crear cuenta de acceso (siempre forzamos id por defensa)
+  renderStudentAuthCreation({ ...(refreshed || {}), id: studentId });
 }
 
 function renderStudentAuthCreation(student) {
