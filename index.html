@@ -1246,23 +1246,26 @@ async function checkConnection() {
   const textEl = document.getElementById('conn-text');
   const roleEl = document.getElementById('user-role-text');
   if (!supabase) {
-    statusEl.className = 'conn-status conn-offline';
-    textEl.textContent = 'Modo demo';
-    roleEl.textContent = 'Modo demo';
+    if (statusEl) statusEl.className = 'conn-status conn-offline';
+    if (textEl) textEl.textContent = 'Modo demo';
+    if (roleEl) roleEl.textContent = 'Modo demo';
     return false;
   }
   try {
     const { error } = await sb.from('locations').select('id').limit(1);
     if (error) throw error;
-    statusEl.className = 'conn-status conn-online';
-    textEl.textContent = 'Conectado';
-    roleEl.textContent = 'Coordinador · Online';
+    if (statusEl) statusEl.className = 'conn-status conn-online';
+    if (textEl) textEl.textContent = 'Conectado';
+    // Solo sobrescribe el rol cuando es coordinador (instructor/alumno tienen su propio texto)
+    if (roleEl && (!CURRENT_USER || CURRENT_USER.role === 'coordinator')) {
+      roleEl.textContent = 'Coordinador · Online';
+    }
     isOnline = true;
     return true;
   } catch (e) {
     console.error('Supabase error:', e);
-    statusEl.className = 'conn-status conn-error';
-    textEl.textContent = 'Error de conexión';
+    if (statusEl) statusEl.className = 'conn-status conn-error';
+    if (textEl) textEl.textContent = 'Error de conexión';
     return false;
   }
 }
@@ -3512,7 +3515,7 @@ async function initForRole() {
         <div class="user-avatar">CO</div>
         <div class="user-info">
           <div class="user-name">Coordinación</div>
-          <div class="user-role">${escape(CURRENT_USER.authUser.email || '')}</div>
+          <div class="user-role" id="user-role-text">${escape(CURRENT_USER.authUser.email || '')}</div>
         </div>
       `;
     } else if (role === 'instructor') {
@@ -3521,7 +3524,7 @@ async function initForRole() {
         <div class="user-avatar">${escape(i.initials || (i.first_name || '?')[0])}</div>
         <div class="user-info">
           <div class="user-name">${escape(i.handle || i.first_name || '')}</div>
-          <div class="user-role">Profesor</div>
+          <div class="user-role" id="user-role-text">Profesor</div>
         </div>
       `;
     } else if (role === 'student') {
@@ -3531,7 +3534,7 @@ async function initForRole() {
         <div class="user-avatar">${escape(ini)}</div>
         <div class="user-info">
           <div class="user-name">${escape(s.first_name || '')}</div>
-          <div class="user-role">Alumno</div>
+          <div class="user-role" id="user-role-text">Alumno</div>
         </div>
       `;
     }
