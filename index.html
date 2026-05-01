@@ -2458,7 +2458,10 @@ function renderConsentBlock(student) {
       <div style="background: var(--good-soft); border: 1px solid var(--good); border-radius: var(--radius-sm); padding: 14px 16px;">
         <div style="font-size: 14px; color: #04342C; margin-bottom: 4px; font-weight: 500;">✓ Firmado${signedDate ? ' el ' + signedDate : ''}</div>
         <p style="font-size: 12px; color: #0F6E56; margin: 0 0 12px;">Firma electrónica registrada en el historial.</p>
-        <button type="button" onclick="revertStudentConsent('${student.id}')" style="padding: 6px 14px; font-size: 12px; background: transparent; color: var(--ink-soft); border: 1px solid var(--line); border-radius: 999px; cursor: pointer;">Revertir a no firmado</button>
+        <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+          <button type="button" onclick="copyActivationLink('student', '${student.id}')" style="padding: 6px 14px; font-size: 12px; background: white; color: var(--fit-purple); border: 1px solid var(--fit-purple); border-radius: 999px; cursor: pointer;">Copiar link</button>
+          <button type="button" onclick="revertStudentConsent('${student.id}')" style="padding: 6px 14px; font-size: 12px; background: transparent; color: var(--ink-soft); border: 1px solid var(--line); border-radius: 999px; cursor: pointer;">Revertir a no firmado</button>
+        </div>
       </div>
     `;
     return;
@@ -2492,7 +2495,7 @@ function renderConsentBlock(student) {
       <p style="font-size: 12px; color: var(--ink-mute); margin: 6px 0 12px;">${hasEmail ? 'El alumno aún no recibió el consentimiento.' : 'Para enviar por email, primero agrega el email del alumno y guarda los cambios.'}</p>
       <div style="display: flex; gap: 8px; flex-wrap: wrap;">
         ${hasEmail ? `<button type="button" onclick="sendStudentConsentEmail('${student.id}')" style="padding: 8px 14px; font-size: 13px; background: var(--fit-purple); color: white; border: none; border-radius: 999px; cursor: pointer;">Enviar email de consentimiento</button>` : ''}
-        <button type="button" onclick="copyActivationLink('student', '${student.id}')" style="padding: 8px 14px; font-size: 13px; background: white; color: var(--fit-purple); border: 1px solid var(--fit-purple); border-radius: 999px; cursor: pointer;">Generar y copiar link</button>
+        <button type="button" onclick="copyActivationLink('student', '${student.id}')" style="padding: 8px 14px; font-size: 13px; background: white; color: var(--fit-purple); border: 1px solid var(--fit-purple); border-radius: 999px; cursor: pointer;">Copiar link</button>
         <button type="button" onclick="markStudentConsentManual('${student.id}')" style="padding: 8px 14px; font-size: 13px; background: transparent; color: var(--ink); border: 1px solid var(--line); border-radius: 999px; cursor: pointer;">Marcar como firmado manualmente</button>
       </div>
     </div>
