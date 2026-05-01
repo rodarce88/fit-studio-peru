@@ -513,6 +513,7 @@
         <button class="filter-chip" data-filter="fixed" onclick="setFilter(this)">★ Fijo</button>
         <button class="filter-chip" data-filter="flexible" onclick="setFilter(this)">↻ Flexible</button>
         <button class="filter-chip" data-filter="incomplete" onclick="setFilter(this)">⚠ Datos faltantes</button>
+        <button class="filter-chip" data-filter="unsigned" onclick="setFilter(this)">○ Sin firmar</button>
       </div>
       <div style="overflow-x: auto;">
         <table class="data-table">
@@ -656,7 +657,8 @@
             <label><input type="checkbox" id="f-needs-confirmation" checked style="margin-right: 6px;" /> Requiere confirmación previa por WhatsApp</label>
           </div>
           <div class="form-row full">
-            <label><input type="checkbox" id="f-consent-signed" style="margin-right: 6px;" /> Firmó ficha de consentimiento</label>
+            <label>Consentimiento informado</label>
+            <div id="consent-block" style="margin-top: 4px;"></div>
           </div>
         </div>
       </form>
@@ -1470,6 +1472,7 @@ function renderStudents() {
   if (STATE.currentFilter === 'fixed') list = list.filter(s => s.modality === 'fixed');
   else if (STATE.currentFilter === 'flexible') list = list.filter(s => s.modality === 'flexible');
   else if (STATE.currentFilter === 'incomplete') list = list.filter(s => !s.data_complete);
+  else if (STATE.currentFilter === 'unsigned') list = list.filter(s => !s.consent_signed && !s.consent_signed_at);
 
   // Search
   const q = (document.getElementById('student-search').value || '').toLowerCase().trim();
@@ -1514,7 +1517,7 @@ function renderStudents() {
           <div class="student-cell">
             <div class="student-avatar">${initials(s)}</div>
             <div>
-              <div style="font-weight: 500;">${escape(s.first_name)} ${escape(s.last_name || '')}</div>
+              <div style="font-weight: 500;">${escape(s.first_name)} ${escape(s.last_name || '')} <span style="margin-left: 4px; font-size: 11px;">${getConsentBadge(s)}</span></div>
               ${!s.data_complete ? '<div style="font-size: 10px; color: var(--warn); margin-top: 2px;">⚠ Datos incompletos</div>' : ''}
             </div>
           </div>
@@ -1673,7 +1676,7 @@ function openStudentModal(id) {
   f('f-medical').value = s?.medical_notes || '';
   f('f-insurance').value = s?.insurance_provider || '';
   f('f-needs-confirmation').checked = s ? s.needs_confirmation !== false : true;
-  f('f-consent-signed').checked = !!s?.consent_signed_at;
+  renderConsentBlock(s);
 
   document.getElementById('student-modal').classList.add('is-open');
 }
@@ -1718,15 +1721,23 @@ function openInstructorModal(id) {
     const block = document.getElementById('fi-status-block');
     const text = document.getElementById('fi-status-text');
     block.style.display = 'block';
+    let statusHtml = '';
+    let canResend = false;
     if (i.status === 'active' && i.activated_at) {
-      text.innerHTML = `<span style="color: #0F6E56;">● Activa</span> · activada ${formatDate(i.activated_at)}`;
+      statusHtml = `<span style="color: #0F6E56;">● Activa</span> · activada ${formatDate(i.activated_at)}`;
     } else if (i.status === 'pending' && i.activation_sent_at) {
-      text.innerHTML = `<span style="color: #BA7517;">● Pendiente</span> · email enviado ${formatDate(i.activation_sent_at)}`;
+      statusHtml = `<span style="color: #BA7517;">● Pendiente</span> · email enviado ${formatDate(i.activation_sent_at)}`;
+      canResend = true;
     } else if (i.status === 'inactive') {
-      text.innerHTML = `<span style="color: #A32D2D;">● Inactiva</span>`;
+      statusHtml = `<span style="color: #A32D2D;">● Inactiva</span>`;
     } else {
-      text.innerHTML = `<span style="color: #888;">● Sin activar</span>`;
+      statusHtml = `<span style="color: #888;">● Sin activar</span>`;
+      canResend = !!i.email;
     }
+    if (canResend && i.email) {
+      statusHtml += ` <button type="button" onclick="resendInstructorActivation('${i.id}')" style="margin-left: 12px; padding: 5px 12px; font-size: 11px; background: var(--fit-purple); color: white; border: none; border-radius: 999px; cursor: pointer;">Reenviar email</button>`;
+    }
+    text.innerHTML = statusHtml;
   } else {
     document.getElementById('fi-status-block').style.display = 'none';
   }
@@ -1880,7 +1891,6 @@ async function saveStudent() {
     medical_notes: f('f-medical').value.trim() || null,
     insurance_provider: f('f-insurance').value.trim() || null,
     needs_confirmation: f('f-needs-confirmation').checked,
-    consent_signed_at: f('f-consent-signed').checked ? new Date().toISOString() : null,
     data_complete: !!(f('f-email').value.trim() && f('f-doc-num').value.trim()),
     status: 'active',
   };
@@ -2077,6 +2087,219 @@ async function deactivateInstructor() {
   showToast('Profesor desactivado', 'success');
   closeModals();
   renderAll();
+}
+
+// ============================================
+// REENVÍO DE ACTIVACIÓN DE PROFESOR
+// ============================================
+async function resendInstructorActivation(instructorId) {
+  if (!isOnline) { showToast('Necesitas estar online para enviar emails', 'error'); return; }
+  const inst = STATE.instructors.find(i => i.id === instructorId);
+  if (!inst) { showToast('Profesor no encontrado', 'error'); return; }
+  if (!inst.email) { showToast('Este profesor no tiene email', 'error'); return; }
+  if (!confirm(`¿Reenviar email de activación a ${inst.email}?\n\nSe genera un nuevo link y el anterior queda invalidado.`)) return;
+
+  // Generar nuevo token e invalidar el anterior
+  const newToken = generateToken();
+  const { error } = await sb.from('instructors').update({
+    activation_token: newToken,
+    status: 'pending',
+  }).eq('id', instructorId);
+
+  if (error) { showToast('Error: ' + error.message, 'error'); return; }
+
+  inst.activation_token = newToken;
+  inst.status = 'pending';
+
+  try {
+    await sendInstructorActivationEmail(inst);
+    // refrescar la vista del modal con el nuevo estado
+    const idx = STATE.instructors.findIndex(i => i.id === instructorId);
+    if (idx >= 0) {
+      STATE.instructors[idx].activation_sent_at = new Date().toISOString();
+      openInstructorModal(instructorId);
+    }
+  } catch (err) {
+    showToast('Error enviando email: ' + err.message, 'error');
+  }
+}
+
+// ============================================
+// CONSENTIMIENTO DEL ALUMNO
+// ============================================
+function getConsentBadge(s) {
+  const isSigned = s.consent_signed || !!s.consent_signed_at;
+  if (isSigned) return '<span style="color: var(--good);" title="Consentimiento firmado">✓</span>';
+  if (s.consent_sent_at) return '<span style="color: var(--warn);" title="Email enviado, pendiente firma">⏱</span>';
+  return '<span style="color: var(--ink-faint);" title="Consentimiento sin enviar">○</span>';
+}
+
+function renderConsentBlock(student) {
+  const block = document.getElementById('consent-block');
+  if (!block) return;
+
+  // Caso A: alumno nuevo (sin guardar todavía)
+  if (!student) {
+    block.innerHTML = `
+      <div style="background: var(--bg); border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 14px 16px;">
+        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
+          <span style="width: 8px; height: 8px; border-radius: 50%; background: var(--ink-faint); display: inline-block;"></span>
+          <span style="font-size: 13px; color: var(--ink-soft);">Sin enviar</span>
+        </div>
+        <p style="font-size: 12px; color: var(--ink-mute); margin: 0;">Después de guardar al alumno podrás enviarle el consentimiento por email o marcarlo como firmado manualmente.</p>
+      </div>
+    `;
+    return;
+  }
+
+  const isSigned = student.consent_signed || !!student.consent_signed_at;
+
+  // Caso B: firmado
+  if (isSigned) {
+    const signedDate = student.consent_signed_at ? formatDate(student.consent_signed_at) : '';
+    block.innerHTML = `
+      <div style="background: var(--good-soft); border: 1px solid var(--good); border-radius: var(--radius-sm); padding: 14px 16px;">
+        <div style="font-size: 14px; color: #04342C; margin-bottom: 4px; font-weight: 500;">✓ Firmado${signedDate ? ' el ' + signedDate : ''}</div>
+        <p style="font-size: 12px; color: #0F6E56; margin: 0 0 12px;">Firma electrónica registrada en el historial.</p>
+        <button type="button" onclick="revertStudentConsent('${student.id}')" style="padding: 6px 14px; font-size: 12px; background: transparent; color: var(--ink-soft); border: 1px solid var(--line); border-radius: 999px; cursor: pointer;">Revertir a no firmado</button>
+      </div>
+    `;
+    return;
+  }
+
+  // Caso C: email enviado, sin firmar
+  if (student.consent_sent_at) {
+    const sentDate = formatDate(student.consent_sent_at);
+    block.innerHTML = `
+      <div style="background: var(--warn-soft); border: 1px solid var(--warn); border-radius: var(--radius-sm); padding: 14px 16px;">
+        <div style="font-size: 14px; color: #412402; margin-bottom: 4px; font-weight: 500;">⏱ Email enviado el ${sentDate}</div>
+        <p style="font-size: 12px; color: #633806; margin: 0 0 12px;">El alumno todavía no firmó.</p>
+        <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+          <button type="button" onclick="sendStudentConsentEmail('${student.id}')" style="padding: 8px 14px; font-size: 13px; background: var(--fit-purple); color: white; border: none; border-radius: 999px; cursor: pointer;">Reenviar email</button>
+          <button type="button" onclick="markStudentConsentManual('${student.id}')" style="padding: 8px 14px; font-size: 13px; background: transparent; color: var(--ink); border: 1px solid var(--line); border-radius: 999px; cursor: pointer;">Marcar como firmado manualmente</button>
+        </div>
+      </div>
+    `;
+    return;
+  }
+
+  // Caso D: alumno existente, sin enviar todavía
+  const hasEmail = !!student.email;
+  block.innerHTML = `
+    <div style="background: var(--bg); border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 14px 16px;">
+      <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
+        <span style="width: 8px; height: 8px; border-radius: 50%; background: var(--ink-faint); display: inline-block;"></span>
+        <span style="font-size: 13px; color: var(--ink-soft);">Sin enviar</span>
+      </div>
+      <p style="font-size: 12px; color: var(--ink-mute); margin: 6px 0 12px;">${hasEmail ? 'El alumno aún no recibió el consentimiento.' : 'Para enviar por email, primero agrega el email del alumno y guarda los cambios.'}</p>
+      <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+        ${hasEmail ? `<button type="button" onclick="sendStudentConsentEmail('${student.id}')" style="padding: 8px 14px; font-size: 13px; background: var(--fit-purple); color: white; border: none; border-radius: 999px; cursor: pointer;">Enviar email de consentimiento</button>` : ''}
+        <button type="button" onclick="markStudentConsentManual('${student.id}')" style="padding: 8px 14px; font-size: 13px; background: transparent; color: var(--ink); border: 1px solid var(--line); border-radius: 999px; cursor: pointer;">Marcar como firmado manualmente</button>
+      </div>
+    </div>
+  `;
+}
+
+async function sendStudentConsentEmail(studentId) {
+  if (!isOnline) { showToast('Necesitas estar online para enviar emails', 'error'); return; }
+  const student = STATE.students.find(s => s.id === studentId);
+  if (!student) { showToast('Alumno no encontrado', 'error'); return; }
+  if (!student.email) { showToast('Este alumno no tiene email', 'error'); return; }
+
+  // Generar nuevo token (invalida cualquier link anterior)
+  const newToken = generateToken();
+  const sentAt = new Date().toISOString();
+  const { error: updErr } = await sb.from('students').update({
+    consent_token: newToken,
+    consent_sent_at: sentAt,
+  }).eq('id', studentId);
+
+  if (updErr) { showToast('Error: ' + updErr.message, 'error'); return; }
+
+  // Disparar el email
+  try {
+    const baseUrl = window.location.origin;
+    const consentLink = `${baseUrl}/activate.html?token=${newToken}&type=student&id=${studentId}`;
+
+    const response = await fetch('/api/send-activation', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        type: 'consent',
+        to: student.email,
+        firstName: student.first_name,
+        consentLink: consentLink,
+        studentId: studentId,
+      })
+    });
+
+    if (!response.ok) {
+      const err = await response.text();
+      throw new Error('Email API error: ' + err);
+    }
+
+    student.consent_token = newToken;
+    student.consent_sent_at = sentAt;
+
+    showToast(`✓ Email enviado a ${student.email}`, 'success');
+    renderConsentBlock(student);
+    renderStudents();
+  } catch (err) {
+    showToast('Error enviando email: ' + err.message, 'error');
+  }
+}
+
+async function markStudentConsentManual(studentId) {
+  const student = STATE.students.find(s => s.id === studentId);
+  if (!student) { showToast('Alumno no encontrado', 'error'); return; }
+  if (!confirm(`¿Marcar consentimiento de ${student.first_name} como firmado manualmente?\n\nSe registra que el alumno firmó en papel o presencialmente.`)) return;
+
+  const now = new Date().toISOString();
+  if (isOnline) {
+    const { error } = await sb.from('students').update({
+      consent_signed: true,
+      consent_signed_at: now,
+      consent_token: null,
+    }).eq('id', studentId);
+    if (error) { showToast('Error: ' + error.message, 'error'); return; }
+
+    // Bitácora
+    await sb.from('consent_log').insert({
+      student_id: studentId,
+      consent_version: 'v1.0-manual',
+      full_consent_text: 'Marcado como firmado manualmente por la coordinación del estudio.',
+      user_agent: 'manual-coordinator',
+    });
+  }
+
+  student.consent_signed = true;
+  student.consent_signed_at = now;
+  student.consent_token = null;
+
+  showToast('Consentimiento marcado como firmado', 'success');
+  renderConsentBlock(student);
+  renderStudents();
+}
+
+async function revertStudentConsent(studentId) {
+  const student = STATE.students.find(s => s.id === studentId);
+  if (!student) { showToast('Alumno no encontrado', 'error'); return; }
+  if (!confirm(`¿Revertir consentimiento de ${student.first_name} a no firmado?\n\nEl historial en consent_log no se borra.`)) return;
+
+  if (isOnline) {
+    const { error } = await sb.from('students').update({
+      consent_signed: false,
+      consent_signed_at: null,
+    }).eq('id', studentId);
+    if (error) { showToast('Error: ' + error.message, 'error'); return; }
+  }
+
+  student.consent_signed = false;
+  student.consent_signed_at = null;
+
+  showToast('Consentimiento revertido', 'success');
+  renderConsentBlock(student);
+  renderStudents();
 }
 
 // ============================================
