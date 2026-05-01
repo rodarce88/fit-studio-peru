@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Activando cuenta — FIT Studio Peru</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;1,9..144,400&family=Outfit:wght@300;400;500;600&display=swap" rel="stylesheet" />
+<style>
+:root {
+  --fit-purple: #5B2A8F;
+  --fit-purple-deep: #401D6B;
+  --fit-pale: #F4EFFB;
+  --fit-cream: #FAF8F5;
+  --ink-dark: #2C2C2A;
+  --ink-soft: #5F5E5A;
+  --display: 'Fraunces', Georgia, serif;
+  --sans: 'Outfit', -apple-system, BlinkMacSystemFont, sans-serif;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: var(--sans);
+  background: var(--fit-cream);
+  color: var(--ink-dark);
+  line-height: 1.6;
+  min-height: 100vh;
+  padding: 30px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.shell { max-width: 500px; width: 100%; text-align: center; }
+.brand-logo {
+  width: 60px; height: 60px;
+  background: var(--fit-purple);
+  border-radius: 50%;
+  color: white;
+  font-weight: 700;
+  font-size: 18px;
+  letter-spacing: 1px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 20px;
+}
+h1 {
+  font-family: var(--display);
+  font-size: 24px;
+  font-weight: 400;
+  font-style: italic;
+  color: var(--fit-purple-deep);
+  margin-bottom: 14px;
+}
+p { color: var(--ink-soft); margin-bottom: 14px; }
+.spinner {
+  width: 30px;
+  height: 30px;
+  border: 3px solid var(--fit-pale);
+  border-top-color: var(--fit-purple);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  margin: 20px auto;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+.btn {
+  display: inline-block;
+  background: var(--fit-purple);
+  color: white;
+  text-decoration: none;
+  padding: 12px 28px;
+  border-radius: 999px;
+  font-size: 14px;
+  font-weight: 500;
+  margin-top: 16px;
+}
+</style>
+</head>
+<body>
+
+<div class="shell">
+  <div class="brand-logo">FIT</div>
+  <h1>Activando tu cuenta</h1>
+  <p id="status-msg">Procesando tu acceso con Google...</p>
+  <div class="spinner" id="spinner"></div>
+  <div id="result"></div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+const SUPABASE_URL = 'https://jcvizioahuqvmhwfnbop.supabase.co';
+const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Impjdml6aW9haHVxdm1od2ZuYm9wIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc1MjIzODIsImV4cCI6MjA5MzA5ODM4Mn0.0EYHVITqA85IhtBUbGddHEWcVKIU_MeSzSxrdzNyvhI';
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
+
+async function processCallback() {
+  // Esperar a que Supabase procese el callback de OAuth (lee el hash de la URL)
+  await new Promise(resolve => setTimeout(resolve, 800));
+
+  const { data: { session }, error } = await sb.auth.getSession();
+
+  if (error || !session) {
+    return showError('No pudimos completar la autenticación con Google. Intenta de nuevo.');
+  }
+
+  // Recuperar el contexto de activación pendiente
+  const pendingInstructor = localStorage.getItem('pending_activation_instructor');
+  const pendingStudent = localStorage.getItem('pending_activation_student');
+
+  if (pendingInstructor) {
+    await activateInstructor(pendingInstructor, session.user);
+    localStorage.removeItem('pending_activation_instructor');
+  } else if (pendingStudent) {
+    await activateStudentViaGoogle(pendingStudent, session.user);
+    localStorage.removeItem('pending_activation_student');
+  } else {
+    // Ya está logueado pero no hay activación pendiente → ir al sistema
+    showSuccess('Sesión iniciada correctamente.');
+    setTimeout(() => { window.location.href = '/'; }, 1500);
+  }
+}
+
+async function activateInstructor(instructorId, authUser) {
+  const { error } = await sb.from('instructors').update({
+    status: 'active',
+    activated_at: new Date().toISOString(),
+    activation_token: null,
+    auth_user_id: authUser.id,
+    email: authUser.email,
+  }).eq('id', instructorId);
+
+  if (error) {
+    return showError('Error activando tu cuenta: ' + error.message);
+  }
+
+  showSuccess('¡Cuenta activada con Google! Ya puedes empezar a usar el sistema.');
+}
+
+async function activateStudentViaGoogle(studentId, authUser) {
+  const { error } = await sb.from('students').update({
+    auth_user_id: authUser.id,
+    account_status: 'active',
+  }).eq('id', studentId);
+
+  if (error) {
+    return showError('Error vinculando tu cuenta: ' + error.message);
+  }
+
+  showSuccess('¡Cuenta vinculada con Google! Ahora completa la firma del consentimiento.');
+  // Volver a la página de activación con el token original
+  setTimeout(() => {
+    const studentToken = localStorage.getItem('pending_student_token');
+    if (studentToken) {
+      window.location.href = `/activate.html?token=${studentToken}&type=student&id=${studentId}`;
+    } else {
+      window.location.href = '/';
+    }
+  }, 2000);
+}
+
+function showSuccess(msg) {
+  document.getElementById('spinner').style.display = 'none';
+  document.getElementById('status-msg').textContent = '';
+  document.getElementById('result').innerHTML = `
+    <div style="width: 64px; height: 64px; background: #E1F5EE; color: #0F6E56; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 32px; margin: 16px auto;">✓</div>
+    <p style="color: var(--ink-dark); font-size: 15px; font-weight: 500;">${msg}</p>
+  `;
+}
+
+function showError(msg) {
+  document.getElementById('spinner').style.display = 'none';
+  document.getElementById('status-msg').textContent = '';
+  document.getElementById('result').innerHTML = `
+    <div style="background: #FCEBEB; color: #791F1F; padding: 16px; border-radius: 10px; margin: 16px 0;">${msg}</div>
+    <a href="/" class="btn">Volver al inicio</a>
+  `;
+}
+
+processCallback();
+</script>
+
+</body>
+</html>
