@@ -2496,6 +2496,7 @@ function renderConsentBlock(student) {
   const hasEmail = !!student.email;
   console.log('[renderConsentBlock] case D: not sent, hasEmail:', hasEmail);
   block.innerHTML = `
+    <div style="background: yellow !important; color: black !important; padding: 16px !important; border: 4px solid red !important; font-weight: bold; margin-bottom: 8px;">DEBUG case D, hasEmail=${hasEmail}, studentId=${student.id}</div>
     <div style="background: var(--bg); border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 14px 16px;">
       <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
         <span style="width: 8px; height: 8px; border-radius: 50%; background: var(--ink-faint); display: inline-block;"></span>
@@ -2503,12 +2504,16 @@ function renderConsentBlock(student) {
       </div>
       <p style="font-size: 12px; color: var(--ink-mute); margin: 6px 0 12px;">${hasEmail ? 'El alumno aún no recibió el consentimiento.' : 'Para enviar por email, primero agrega el email del alumno y guarda los cambios.'}</p>
       <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-        ${hasEmail ? `<button type="button" onclick="sendStudentConsentEmail('${student.id}')" style="padding: 8px 14px; font-size: 13px; background: var(--fit-purple); color: white; border: none; border-radius: 999px; cursor: pointer;">Enviar email de consentimiento</button>` : ''}
-        <button type="button" onclick="copyActivationLink('student', '${student.id}')" style="padding: 8px 14px; font-size: 13px; background: white; color: var(--fit-purple); border: 1px solid var(--fit-purple); border-radius: 999px; cursor: pointer;">Copiar link</button>
-        <button type="button" onclick="markStudentConsentManual('${student.id}')" style="padding: 8px 14px; font-size: 13px; background: transparent; color: var(--ink); border: 1px solid var(--line); border-radius: 999px; cursor: pointer;">Marcar como firmado manualmente</button>
+        ${hasEmail ? `<button type="button" onclick="sendStudentConsentEmail('${student.id}')" style="padding: 8px 14px; font-size: 13px; background: #5B2A8F; color: white; border: none; border-radius: 999px; cursor: pointer;">Enviar email de consentimiento</button>` : ''}
+        <button type="button" onclick="copyActivationLink('student', '${student.id}')" style="padding: 8px 14px; font-size: 13px; background: white; color: #5B2A8F; border: 1px solid #5B2A8F; border-radius: 999px; cursor: pointer;">Copiar link</button>
+        <button type="button" onclick="markStudentConsentManual('${student.id}')" style="padding: 8px 14px; font-size: 13px; background: transparent; color: #1a1a1a; border: 1px solid #ccc; border-radius: 999px; cursor: pointer;">Marcar como firmado manualmente</button>
       </div>
     </div>
   `;
+  // Force visibility en caso de que algo herede display:none
+  block.style.display = 'block';
+  block.style.visibility = 'visible';
+  block.style.minHeight = '50px';
 
   } catch (err) {
     // Fallback robusto: si algo falló en el render, al menos mostramos el botón de copiar link.
