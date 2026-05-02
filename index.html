@@ -5358,6 +5358,23 @@ async function renderStudentHome() {
   if (active) {
     const cat = STATE.packages.find(p => p.id === active.package_id);
     const remaining = (active.classes_total || 0) - (active.classes_used || 0);
+
+    // Calcular "por re-agendar" en vivo (clases del paquete que no están agendadas)
+    const todayIso = new Date().toISOString().slice(0,10);
+    let upcomingCount = 0;
+    if (isOnline) {
+      const { data: futureBookings } = await sb.from('session_bookings')
+        .select('id, cancelled_at, class_sessions(session_date, is_cancelled)')
+        .eq('student_id', stud.id);
+      upcomingCount = (futureBookings || []).filter(b =>
+        b.class_sessions
+        && !b.class_sessions.is_cancelled
+        && !b.cancelled_at
+        && b.class_sessions.session_date >= todayIso
+      ).length;
+    }
+    const pendingToReschedule = Math.max(0, remaining - upcomingCount);
+
     pkgBlock.innerHTML = `
       <div class="pkg-card">
         <div class="pkg-card-name">${escape(cat?.name || 'Paquete')}</div>
@@ -5365,7 +5382,7 @@ async function renderStudentHome() {
         <div class="pkg-card-stats">
           <div><div class="pkg-stat-num">${remaining}</div><div class="pkg-stat-lbl">Restantes</div></div>
           <div><div class="pkg-stat-num">${active.classes_used || 0}</div><div class="pkg-stat-lbl">Tomadas</div></div>
-          <div><div class="pkg-stat-num">${active.classes_recoverable || 0}</div><div class="pkg-stat-lbl">Recuperables</div></div>
+          <div><div class="pkg-stat-num">${pendingToReschedule}</div><div class="pkg-stat-lbl">Por re-agendar</div></div>
         </div>
       </div>
     `;
@@ -5533,17 +5550,45 @@ async function renderStudentRecoverables(stud) {
     recBlock.innerHTML = '<p style="color: var(--ink-mute); font-size: 13px;">Conexión requerida.</p>';
     return;
   }
-  const { data: recs } = await sb.from('attendance').select('*, class_sessions(session_date, hour, location_id)').eq('student_id', stud.id).eq('status', 'recuperable');
-  if (recs && recs.length > 0) {
-    recBlock.innerHTML = recs.map(r => {
+  const todayIso = new Date().toISOString().slice(0,10);
+
+  // Cargar paquete activo para acotar las recuperables al rango del paquete
+  const { data: pkg } = await sb.from('student_packages')
+    .select('purchase_date, start_date, expiration_date, end_date')
+    .eq('student_id', stud.id)
+    .eq('is_frozen', false)
+    .gte('expiration_date', todayIso)
+    .order('purchase_date', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  const startRange = pkg ? (pkg.purchase_date || pkg.start_date) : null;
+  const endRange = pkg ? (pkg.expiration_date || pkg.end_date) : null;
+
+  // status='recoverable' (en inglés, como lo guarda markAttendance)
+  const { data: recs } = await sb.from('attendance')
+    .select('*, class_sessions(session_date, hour, location_id)')
+    .eq('student_id', stud.id)
+    .eq('status', 'recoverable')
+    .order('marked_at', { ascending: false });
+
+  const inRange = (recs || []).filter(r => {
+    const sd = r.class_sessions?.session_date;
+    if (!sd) return false;
+    return (!startRange || sd >= startRange) && (!endRange || sd <= endRange);
+  });
+
+  if (inRange.length > 0) {
+    recBlock.innerHTML = inRange.map(r => {
       const sess = r.class_sessions;
+      const lc = STATE.locations.find(l => l.id === sess.location_id);
       return `
-        <div style="background: var(--warn-soft); border: 1px solid var(--warn); border-radius: var(--radius-md); padding: 12px 16px;">
-          <div style="font-weight: 500; color: #412402;">⊙ Clase del ${formatDate(sess.session_date)} a las ${formatHour(sess.hour)}</div>
-          <div style="font-size: 12px; color: #633806; margin-top: 2px;">Recuperable hasta el vencimiento del paquete.</div>
+        <div style="background: var(--warn-soft); border: 1px solid var(--warn); border-radius: var(--radius-md); padding: 14px 16px; margin-bottom: 10px;">
+          <div style="font-weight: 500; color: #412402; font-size: 14px;">⊙ ${formatDate(sess.session_date)} · ${formatHour(sess.hour)}</div>
+          <div style="font-size: 12px; color: #633806; margin-top: 4px;">${escape(lc?.name || '')} · falta justificada${endRange ? ` · puedes re-agendar hasta ${formatDate(endRange)}` : ''}</div>
         </div>
       `;
-    }).join('');
+    }).join('') + `<p style="color: var(--ink-mute); font-size: 12px; margin-top: 8px;">Comunícate con el estudio para re-agendar estas clases.</p>`;
   } else {
     recBlock.innerHTML = '<p style="color: var(--ink-mute); font-size: 13px;">No tienes clases pendientes de recuperar.</p>';
   }
@@ -6080,11 +6125,16 @@ async function openStudentDetail(id) {
         .select('*')
         .eq('student_id', id)
         .order('purchase_date', { ascending: false })
-        .then(r => ({ packages: r.data || [] }))
+        .then(r => ({ packages: r.data || [] })),
+      sb.from('attendance')
+        .select('*, class_sessions(id, session_date, hour, location_id, is_cancelled)')
+        .eq('student_id', id)
+        .order('marked_at', { ascending: false })
+        .then(r => ({ attendances: r.data || [] }))
     );
   }
   const results = await Promise.all(tasks);
-  STATE.studentDetailData = Object.assign({ bookings: [], payments: [], packages: [] }, ...results);
+  STATE.studentDetailData = Object.assign({ bookings: [], payments: [], packages: [], attendances: [] }, ...results);
 
   showView('student-detail', null);
   renderStudentDetail();
@@ -6185,13 +6235,36 @@ function renderDetailSummary(stud) {
   const data = STATE.studentDetailData || {};
   const todayIso = new Date().toISOString().slice(0,10);
   const activePkg = (data.packages || []).find(p => !p.is_frozen && p.expiration_date >= todayIso);
-  const upcomingClasses = (data.bookings || []).filter(b => b.class_sessions && !b.class_sessions.is_cancelled && b.class_sessions.session_date >= todayIso && b.status !== 'cancelled');
+
+  // Bookings activos (no cancelados) y futuros
+  const upcomingClasses = (data.bookings || []).filter(b =>
+    b.class_sessions
+    && !b.class_sessions.is_cancelled
+    && !b.cancelled_at
+    && b.class_sessions.session_date >= todayIso
+  );
   upcomingClasses.sort((a,b) => {
     const cmp = a.class_sessions.session_date.localeCompare(b.class_sessions.session_date);
     return cmp !== 0 ? cmp : a.class_sessions.hour - b.class_sessions.hour;
   });
   const nextClass = upcomingClasses[0];
-  const totalAttended = (data.bookings || []).filter(b => b.status === 'asistio' || b.attendance_status === 'asistio').length;
+
+  // Recuperables EN VIVO desde attendance (no depender del cache classes_recoverable)
+  const startRange = activePkg ? (activePkg.purchase_date || activePkg.start_date) : null;
+  const endRange = activePkg ? (activePkg.expiration_date || activePkg.end_date) : null;
+  const recoverableAtts = (data.attendances || []).filter(a => {
+    if (a.status !== 'recoverable') return false;
+    const sd = a.class_sessions?.session_date;
+    if (!sd) return false;
+    return (!startRange || sd >= startRange) && (!endRange || sd <= endRange);
+  });
+  recoverableAtts.sort((a,b) => (b.class_sessions.session_date + String(b.class_sessions.hour).padStart(2,'0'))
+    .localeCompare(a.class_sessions.session_date + String(a.class_sessions.hour).padStart(2,'0')));
+
+  // Pendientes por re-agendar = capacidad - agendadas (incluye recuperables sin reagendar y nunca-agendadas)
+  const max = activePkg ? Math.max(0, (activePkg.classes_total || 0) - (activePkg.classes_used || 0)) : 0;
+  const pendingToReschedule = activePkg ? Math.max(0, max - upcomingClasses.length) : 0;
+
   const totalPayments = (data.payments || []).reduce((sum, p) => sum + parseFloat(p.amount_pen || p.amount || 0), 0);
   const lastPayment = (data.payments || [])[0];
 
@@ -6207,9 +6280,9 @@ function renderDetailSummary(stud) {
       sub: activePkg ? 'Asistidas + perdidas' : '—',
     },
     {
-      label: 'Recuperables',
-      value: activePkg ? (activePkg.classes_recoverable || 0) : 0,
-      sub: 'Clases por recuperar',
+      label: 'Por re-agendar',
+      value: pendingToReschedule,
+      sub: pendingToReschedule > 0 ? (recoverableAtts.length > 0 ? `${recoverableAtts.length} con falta justificada` : 'Sin agendar todavía') : 'Todo agendado ✓',
     },
     {
       label: 'Total pagado',
@@ -6228,6 +6301,30 @@ function renderDetailSummary(stud) {
         </div>
       `).join('')}
     </div>
+
+    ${pendingToReschedule > 0 ? `
+      <div style="background: #FEF7E6; border: 1px solid #F4D58A; border-radius: var(--radius-md); padding: 18px; margin-bottom: 16px;">
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+          <div style="font-size: 11px; color: #8B6F1A; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">Pendientes por re-agendar</div>
+          <button class="btn btn-primary" onclick="openStudentScheduleEditor('${stud.id}')" style="padding: 6px 14px; font-size: 11px;">Re-agendar →</button>
+        </div>
+        ${recoverableAtts.length > 0 ? recoverableAtts.slice(0, 5).map(a => {
+          const sess = a.class_sessions;
+          const lc = STATE.locations.find(l => l.id === sess.location_id);
+          const noteFirstLine = (a.notes || '').split('\n')[0] || '';
+          return `<div style="padding: 10px 0; border-top: 1px solid #F4D58A;">
+            <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px;">
+              <div style="flex: 1;">
+                <div style="font-weight: 500; font-size: 13px;">${formatDate(sess.session_date)} · ${formatHour(sess.hour)} <span style="font-weight: 400; color: var(--ink-mute);">· ${escape(lc?.name || '')}</span></div>
+                <div style="font-size: 11px; color: #8B6F1A; margin-top: 3px; font-style: italic;">${escape(noteFirstLine)}</div>
+              </div>
+              <span style="font-size: 10px; padding: 3px 9px; background: #F4D58A; color: #5C4910; border-radius: 999px; font-weight: 500; flex-shrink: 0;">Falta justificada</span>
+            </div>
+          </div>`;
+        }).join('') : ''}
+        ${pendingToReschedule > recoverableAtts.length ? `<div style="padding: 10px 0; border-top: 1px solid #F4D58A; font-size: 12px; color: #8B6F1A;">+ ${pendingToReschedule - recoverableAtts.length} clase${(pendingToReschedule - recoverableAtts.length) === 1 ? '' : 's'} del paquete sin agendar todavía</div>` : ''}
+      </div>
+    ` : ''}
 
     ${lastPayment ? `
       <div style="background: white; border: 1px solid var(--line); border-radius: var(--radius-md); padding: 18px; margin-bottom: 16px;">
