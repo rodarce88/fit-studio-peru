@@ -2997,14 +2997,15 @@ async function loadScheduleEditorData() {
     const cs = b.class_sessions;
     if (!cs || cs.is_cancelled) return;
     const k = `${cs.session_date}|${cs.hour}`;
-    const isPast = cs.session_date < todayIso;
-    if (isPast) {
-      // Pasada: clasificar por attendance
-      const att = attendanceMap.get(b.id);
-      if (att === 'attended') ed.consumed.add(k);
-      else ed.missed.add(k); // lost, no_show, recoverable, o sin marcar
+    const att = attendanceMap.get(b.id);
+
+    // Si tiene attendance, está consumida o perdida (sin importar si es pasada o futura)
+    if (att === 'attended') {
+      ed.consumed.add(k);
+    } else if (att === 'lost' || att === 'no_show' || att === 'recoverable') {
+      ed.missed.add(k);
     } else {
-      // Futura: si está cancelada (slot liberado), NO la consideramos pre-agendada
+      // Sin attendance: si está cancelada, ignorar; si no, es agendada normal
       if (b.cancelled_at) return;
       ed.original.add(k);
     }
