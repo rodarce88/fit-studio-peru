@@ -5866,7 +5866,7 @@ async function instructorWriteAttendance(studentId, dateIso, hour, locationId, s
     counts_against_package: countsAgainst,
     notes: noteLine,
     marked_at: new Date().toISOString(),
-    marked_by: CURRENT_USER.authUser?.id || null,
+    // marked_by omitido: el FK apunta a users y el profesor no está ahí; la auditoría queda en notes
   };
 
   const { data: existing } = await sb.from('attendance')
@@ -6178,7 +6178,7 @@ async function instructorMarkAttendedDirect(sessionId, studentId, opts) {
     notes: noteParts.join(' · '),
     pending_payment_at: opts?.pendingPayment ? new Date().toISOString() : null,
     marked_at: new Date().toISOString(),
-    marked_by: CURRENT_USER.authUser?.id || null,
+    // marked_by omitido: el FK apunta a users y el profesor no está ahí; la auditoría queda en notes
   };
 
   const { data: existing } = await sb.from('attendance')
