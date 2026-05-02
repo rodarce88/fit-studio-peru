@@ -5531,6 +5531,9 @@ async function renderInstructorDay() {
     `;
   }
 
+  // Auto-marcar clases pasadas como pending_confirmation y vencidas como not_delivered
+  await autoMarkInstructorClassStates(inst.id);
+
   // Cargar stats del mes solo si no están cacheadas o son del mes anterior
   const monthKey = new Date().toISOString().slice(0,7); // YYYY-MM
   if (!STATE.instMonthStats || STATE.instMonthStatsKey !== monthKey) {
@@ -5540,8 +5543,104 @@ async function renderInstructorDay() {
   renderInstructorStatsBlock(STATE.instMonthStats);
   renderInstructorFiltersBlock();
 
+  // Cargar pendientes por marcar (banner arriba)
+  const pending = await loadInstructorPendingClasses(inst.id);
+  renderInstructorPendingBanner(pending);
+
   // Cargar y renderizar clases del día
   const classes = await loadInstructorClassesForDate(inst, STATE.instDayDate);
+  renderInstructorClassesBlock(classes);
+}
+
+// Auto-actualiza class_status:
+// - scheduled + ya pasó la fecha → pending_confirmation (entra ventana de 3 días)
+// - pending_confirmation + ya pasaron 3+ días desde la clase → not_delivered (perdida)
+async function autoMarkInstructorClassStates(instructorId) {
+  if (!isOnline) return;
+  const todayIso = new Date().toISOString().slice(0,10);
+  const threeDaysAgoIso = new Date(Date.now() - 3 * 86400000).toISOString().slice(0,10);
+
+  // 1. Pasar a pending_confirmation las que ya pasaron y están scheduled
+  await sb.from('class_sessions')
+    .update({ class_status: 'pending_confirmation' })
+    .eq('instructor_id', instructorId)
+    .eq('class_status', 'scheduled')
+    .eq('is_cancelled', false)
+    .lt('session_date', todayIso);
+
+  // 2. Pasar a not_delivered las que llevan 3+ días en pending_confirmation
+  await sb.from('class_sessions')
+    .update({ class_status: 'not_delivered' })
+    .eq('instructor_id', instructorId)
+    .eq('class_status', 'pending_confirmation')
+    .eq('is_cancelled', false)
+    .lt('session_date', threeDaysAgoIso);
+}
+
+// Devuelve clases del profesor con class_status = 'pending_confirmation'
+async function loadInstructorPendingClasses(instructorId) {
+  if (!isOnline) return [];
+  const todayIso = new Date().toISOString().slice(0,10);
+  const { data } = await sb.from('class_sessions')
+    .select('id, session_date, hour, location_id, class_status')
+    .eq('instructor_id', instructorId)
+    .eq('class_status', 'pending_confirmation')
+    .eq('is_cancelled', false)
+    .lt('session_date', todayIso)
+    .order('session_date', { ascending: false });
+  return data || [];
+}
+
+function renderInstructorPendingBanner(pending) {
+  // Insertar banner antes del bloque de stats si hay pendientes
+  const shell = document.querySelector('[data-inst-shell]');
+  let banner = document.querySelector('[data-inst-pending]');
+
+  if (!pending || pending.length === 0) {
+    if (banner) banner.remove();
+    return;
+  }
+
+  if (!banner) {
+    banner = document.createElement('div');
+    banner.setAttribute('data-inst-pending', '');
+    banner.style.cssText = 'background: #FAEEDA; border: 1px solid #F4D58A; border-radius: var(--radius-md); padding: 14px 18px; margin-bottom: 14px;';
+    const stats = document.querySelector('[data-inst-stats]');
+    shell.insertBefore(banner, stats);
+  }
+
+  const monthLabels = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+  const items = pending.slice(0, 5).map(p => {
+    const d = new Date(p.session_date + 'T12:00:00');
+    const lc = STATE.locations.find(l => l.id === p.location_id);
+    const daysAgo = Math.floor((Date.now() - new Date(p.session_date + 'T12:00:00').getTime()) / 86400000);
+    const daysLeft = 3 - daysAgo;
+    return `
+      <div style="display: flex; align-items: center; justify-content: space-between; padding: 6px 0; border-top: 1px solid #F4D58A;">
+        <div>
+          <div style="font-size: 12px; font-weight: 500; color: #633806;">${d.getDate()} ${monthLabels[d.getMonth()]} · ${formatHour(p.hour)} · ${escape(lc?.name || '')}</div>
+          <div style="font-size: 10px; color: #854F0B; margin-top: 2px;">Te quedan ${daysLeft} día${daysLeft === 1 ? '' : 's'} para marcar</div>
+        </div>
+        <button onclick="instructorGoToPending('${p.session_date}','${p.location_id}')" style="font-size: 11px; padding: 6px 12px; background: #633806; color: white; border: none; border-radius: 999px; cursor: pointer;">Marcar →</button>
+      </div>
+    `;
+  }).join('');
+
+  banner.innerHTML = `
+    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+      <div style="font-size: 11px; color: #633806; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">⏰ ${pending.length} clase${pending.length === 1 ? '' : 's'} pendiente${pending.length === 1 ? '' : 's'} de marcar</div>
+    </div>
+    <div style="font-size: 11px; color: #854F0B; margin-bottom: 4px;">Tienes 3 días desde la fecha de cada clase para confirmar asistencia. Si no, la clase queda como no dictada.</div>
+    ${items}
+  `;
+}
+
+async function instructorGoToPending(dateIso, locationId) {
+  STATE.instDayFilter = 'other';
+  STATE.instDayDate = dateIso;
+  renderInstructorFiltersBlock();
+  const inst = CURRENT_USER.record;
+  const classes = await loadInstructorClassesForDate(inst, dateIso);
   renderInstructorClassesBlock(classes);
 }
 
@@ -5642,12 +5741,14 @@ async function loadInstructorMonthStats(instructorId) {
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0,10);
   const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().slice(0,10);
 
+  // Clases impartidas = class_status = 'delivered' del mes
   const { data: sessions } = await sb.from('class_sessions')
     .select('id')
     .eq('instructor_id', instructorId)
     .gte('session_date', monthStart)
     .lte('session_date', monthEnd)
-    .eq('is_cancelled', false);
+    .eq('is_cancelled', false)
+    .eq('class_status', 'delivered');
 
   const sessionIds = (sessions || []).map(s => s.id);
   if (sessionIds.length === 0) return { classes: 0, students: 0, attended: 0, recoverable: 0, lost: 0, no_show: 0 };
@@ -5767,15 +5868,31 @@ function renderInstructorClassCard(c) {
   const now = new Date();
   const todayIso = now.toISOString().slice(0,10);
   const isToday = c.dateIso === todayIso;
+  const isPast = c.dateIso < todayIso;
   const currentHour = now.getHours();
   const currentMin = now.getMinutes();
+
+  const classStatus = c.session?.class_status || 'scheduled';
+  const isCancelled = c.session?.is_cancelled === true;
+  const isDelivered = classStatus === 'delivered';
+  const isNotDelivered = classStatus === 'not_delivered' || isCancelled;
+  const isPending = classStatus === 'pending_confirmation';
+
   let status = 'próxima', headerBg = 'var(--bg)', headerColor = 'var(--ink)', statusColor = 'var(--ink-mute)';
-  if (isToday) {
+  if (isCancelled) {
+    status = 'cancelada'; headerBg = '#F5F5F5'; headerColor = '#999'; statusColor = '#999';
+  } else if (isNotDelivered) {
+    status = 'no dictada'; headerBg = '#F5F5F5'; headerColor = '#999'; statusColor = '#999';
+  } else if (isDelivered) {
+    status = 'dictada ✓'; headerBg = '#EAF3DE'; headerColor = '#27500A'; statusColor = '#3B6D11';
+  } else if (isPending) {
+    status = '⏰ pendiente de marcar'; headerBg = '#FAEEDA'; headerColor = '#633806'; statusColor = '#854F0B';
+  } else if (isToday) {
     if (currentHour > c.hour) { status = 'terminada'; }
     else if (currentHour === c.hour || (currentHour === c.hour - 1 && currentMin >= 50)) {
       status = 'en curso'; headerBg = '#EEEDFE'; headerColor = '#3C3489'; statusColor = '#534AB7';
     }
-  } else if (c.dateIso < todayIso) {
+  } else if (isPast) {
     status = 'terminada';
   }
 
@@ -5783,12 +5900,30 @@ function renderInstructorClassCard(c) {
     ? '<div style="padding: 14px 16px; color: var(--ink-mute); font-size: 13px; text-align: center;">Sin alumnos esta clase</div>'
     : c.students.map(item => renderInstructorStudentRow(item, c)).join('');
 
-  // session id para "agregar alumno" (necesitamos session real)
+  // Card con tachón si no se dictó/cancelada
+  const cardStyle = isNotDelivered
+    ? 'background: white; border: 1px solid var(--line); border-radius: var(--radius-lg); overflow: hidden; opacity: 0.6; position: relative;'
+    : 'background: white; border: 1px solid var(--line); border-radius: var(--radius-lg); overflow: hidden;';
+
+  // Botón "Clase dictada sin asistentes" — solo si: no se dictó todavía, no está cancelada, y la clase ya pasó (o es hoy y ya empezó)
+  const canMarkEmpty = !isDelivered && !isCancelled && (isPast || (isToday && currentHour >= c.hour));
   const sessionId = c.session ? c.session.id : '';
 
+  // Acciones del card
+  let actionsHtml = '';
+  if (!isCancelled && !isNotDelivered) {
+    const actions = [];
+    actions.push(`<button onclick="instructorOpenAddStudent('${c.dateIso}', ${c.hour}, '${c.location.id}')" style="flex: 1; padding: 10px; font-size: 12px; border: 1px dashed var(--line); background: transparent; border-radius: var(--radius-sm); color: var(--ink-mute); cursor: pointer;">+ Agregar alumno</button>`);
+    if (canMarkEmpty) {
+      actions.push(`<button onclick="instructorMarkClassDelivered('${c.dateIso}', ${c.hour}, '${c.location.id}')" style="flex: 1; padding: 10px; font-size: 12px; border: 1px solid #639922; background: white; border-radius: var(--radius-sm); color: #27500A; cursor: pointer;">✓ Dictada sin asistentes</button>`);
+    }
+    actionsHtml = `<div style="border-top: 1px solid var(--line); padding: 10px 14px; display: flex; gap: 8px;">${actions.join('')}</div>`;
+  }
+
   return `
-    <div style="background: white; border: 1px solid var(--line); border-radius: var(--radius-lg); overflow: hidden;">
-      <div style="background: ${headerBg}; padding: 12px 18px; display: flex; align-items: center; justify-content: space-between;">
+    <div style="${cardStyle}">
+      ${isNotDelivered ? '<div style="position: absolute; inset: 0; background: repeating-linear-gradient(45deg, transparent, transparent 14px, rgba(150,150,150,0.08) 14px, rgba(150,150,150,0.08) 16px); pointer-events: none; z-index: 1;"></div>' : ''}
+      <div style="background: ${headerBg}; padding: 12px 18px; display: flex; align-items: center; justify-content: space-between; ${isNotDelivered ? 'text-decoration: line-through;' : ''}">
         <div style="display: flex; align-items: baseline; gap: 10px;">
           <div style="font-family: var(--display); font-size: 20px; color: ${headerColor};">${formatHour(c.hour)}</div>
           <div style="font-size: 11px; color: ${statusColor}; font-weight: 500;">${status}</div>
@@ -5796,11 +5931,43 @@ function renderInstructorClassCard(c) {
         <div style="font-size: 11px; color: ${statusColor};">${c.marked}/${c.students.length} marcados · cap. ${c.capacity}</div>
       </div>
       ${studentsHtml}
-      <div style="border-top: 1px solid var(--line); padding: 10px 14px;">
-        <button onclick="instructorOpenAddStudent('${c.dateIso}', ${c.hour}, '${c.location.id}')" style="width: 100%; padding: 10px; font-size: 12px; border: 1px dashed var(--line); background: transparent; border-radius: var(--radius-sm); color: var(--ink-mute); cursor: pointer;">+ Agregar alumno a esta clase</button>
-      </div>
+      ${actionsHtml}
     </div>
   `;
+}
+
+// Marca la clase como dictada aunque no haya alumnos (o no marcó a ninguno)
+async function instructorMarkClassDelivered(dateIso, hour, locationId) {
+  if (!isOnline) { showToast('Necesita conexión', 'error'); return; }
+
+  // Asegurar que existe la session
+  let { data: session } = await sb.from('class_sessions')
+    .select('id')
+    .eq('location_id', locationId)
+    .eq('session_date', dateIso)
+    .eq('hour', hour)
+    .maybeSingle();
+  if (!session) {
+    const { data: created, error } = await sb.from('class_sessions').insert({
+      location_id: locationId, session_date: dateIso, hour: hour,
+      instructor_id: CURRENT_USER.record.id,
+      class_status: 'delivered',
+      status_changed_at: new Date().toISOString(),
+      status_changed_by_instructor: CURRENT_USER.record.id,
+    }).select().single();
+    if (error) { showToast('Error: ' + error.message, 'error'); return; }
+    session = created;
+  } else {
+    await sb.from('class_sessions').update({
+      class_status: 'delivered',
+      status_changed_at: new Date().toISOString(),
+      status_changed_by_instructor: CURRENT_USER.record.id,
+    }).eq('id', session.id);
+  }
+
+  showToast('✓ Clase marcada como dictada', 'success');
+  STATE.instMonthStats = null;
+  renderInstructorDay();
 }
 
 function renderInstructorStudentRow(item, classCtx) {
@@ -6010,6 +6177,15 @@ async function instructorWriteAttendance(studentId, dateIso, hour, locationId, s
   }
 
   await recalcPackageCounters(studentId);
+
+  // Si la marca cuenta como "se dictó" (attended/recoverable/lost/no_show), marcar clase como delivered
+  if (['attended','recoverable','lost','no_show'].includes(status)) {
+    await sb.from('class_sessions').update({
+      class_status: 'delivered',
+      status_changed_at: new Date().toISOString(),
+      status_changed_by_instructor: CURRENT_USER.record.id,
+    }).eq('id', session.id);
+  }
 
   const toastMap = {
     attended: '✓ Asistió',
