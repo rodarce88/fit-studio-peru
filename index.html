@@ -3921,7 +3921,7 @@ async function renderPaymentsHistoryBlock(student) {
       ${payments.slice(0, 10).map(p => `
         <div style="padding: 10px 14px; border-bottom: 1px solid var(--line-soft); display: flex; justify-content: space-between; align-items: center;">
           <div>
-            <div style="font-weight: 500;">S/${p.amount} <span style="color: var(--ink-mute); font-weight: 400; font-size: 12px;">· ${methodLabels[p.method] || p.method}</span></div>
+            <div style="font-weight: 500;">S/${p.amount_pen ?? p.amount ?? 0} <span style="color: var(--ink-mute); font-weight: 400; font-size: 12px;">· ${methodLabels[p.method] || p.method}</span></div>
             <div style="font-size: 11px; color: var(--ink-mute);">${formatDate(p.payment_date)}${p.reference ? ' · '+escape(p.reference) : ''}</div>
           </div>
           ${p.receipt_url ? `<a href="${p.receipt_url}" target="_blank" style="font-size: 11px; color: var(--fit-purple);">Ver comprobante →</a>` : ''}
@@ -4054,10 +4054,14 @@ async function saveRegisterPayment() {
 
   if (!amount || amount <= 0) { showToast('Ingresa un monto válido', 'error'); return; }
 
+  const studentRecord = STATE.students.find(s => s.id === studentId);
+  const paymentLocationId = studentRecord?.location_id || STATE.currentLocationId;
+
   const { error } = await sb.from('payments').insert({
     student_id: studentId,
     student_package_id: packageId,
-    amount: amount,
+    location_id: paymentLocationId,
+    amount_pen: amount,
     method: method,
     payment_date: payDate || new Date().toISOString().slice(0,10),
     reference: reference,
