@@ -6413,7 +6413,7 @@ function renderStudentClassesFiltered(stud) {
 
   // Filtrar y ordenar las puntuales según filtro activo
   let pointClasses = (STATE.studentBookingsCache || [])
-    .filter(b => b.class_sessions && !b.class_sessions.is_cancelled && b.status !== 'cancelled');
+    .filter(b => b.class_sessions && !b.class_sessions.is_cancelled && !b.cancelled_at);
 
   if (filter === 'upcoming') {
     pointClasses = pointClasses.filter(b => b.class_sessions.session_date >= todayIso);
