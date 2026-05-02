@@ -462,7 +462,7 @@
 <main class="main">
 
   <!-- DASHBOARD -->
-  <section class="view is-active" id="view-dashboard">
+  <section class="view" id="view-dashboard">
     <div class="page-header">
       <div>
         <h1 class="page-title">Hoy en <em id="dash-loc-name">Santa Cruz</em></h1>
@@ -5373,8 +5373,9 @@ async function initForRole() {
   } else if (role === 'student') {
     showView('student-home', null);
     renderStudentHome();
+  } else if (role === 'coordinator') {
+    showView('dashboard', null);
   }
-  // coordinator: dashboard ya está activo
 }
 
 // ============================================
@@ -5392,21 +5393,38 @@ async function renderInstructorDay() {
   if (!STATE.instDayFilter) STATE.instDayFilter = 'today';
 
   const container = document.getElementById('instructor-view-container');
-  container.innerHTML = `<div style="padding: 40px; text-align: center; color: var(--ink-mute);">Cargando…</div>`;
+  const isFirstRender = !container.querySelector('[data-inst-shell]');
+  if (isFirstRender) {
+    // Render shell con placeholders, no flash
+    container.innerHTML = `
+      <div data-inst-shell>
+        <div data-inst-stats style="background: white; border: 1px solid var(--line); border-radius: var(--radius-lg); padding: 18px 22px; margin-bottom: 18px; min-height: 130px;"></div>
+        <div data-inst-filters style="margin-bottom: 14px;"></div>
+        <div data-inst-classes style="display: flex; flex-direction: column; gap: 12px; min-height: 100px;"></div>
+      </div>
+    `;
+  }
 
-  // Cargar stats del mes y clases del día en paralelo
-  const [stats, classes] = await Promise.all([
-    loadInstructorMonthStats(inst.id),
-    loadInstructorClassesForDate(inst, STATE.instDayDate),
-  ]);
+  // Cargar stats del mes solo si no están cacheadas o son del mes anterior
+  const monthKey = new Date().toISOString().slice(0,7); // YYYY-MM
+  if (!STATE.instMonthStats || STATE.instMonthStatsKey !== monthKey) {
+    STATE.instMonthStats = await loadInstructorMonthStats(inst.id);
+    STATE.instMonthStatsKey = monthKey;
+  }
+  renderInstructorStatsBlock(STATE.instMonthStats);
+  renderInstructorFiltersBlock();
 
-  const dateObj = new Date(STATE.instDayDate + 'T12:00:00');
-  const dayLabels = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
+  // Cargar y renderizar clases del día
+  const classes = await loadInstructorClassesForDate(inst, STATE.instDayDate);
+  renderInstructorClassesBlock(classes);
+}
+
+function renderInstructorStatsBlock(stats) {
+  const block = document.querySelector('[data-inst-stats]');
+  if (!block) return;
   const monthLabels = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
-  const dateLabel = `${dayLabels[dateObj.getDay()]} ${dateObj.getDate()} ${monthLabels[dateObj.getMonth()]}`;
-  const monthLabel = monthLabels[new Date().getMonth()];
-
-  // Calcular % asistencia y segmentos de la barra
+  const now = new Date();
+  const monthLabel = monthLabels[now.getMonth()];
   const totalMarked = stats.attended + stats.recoverable + stats.lost + stats.no_show;
   const totalExpected = Math.max(stats.students, totalMarked);
   const pctAttended = totalExpected > 0 ? Math.round((stats.attended / totalExpected) * 100) : 0;
@@ -5415,70 +5433,81 @@ async function renderInstructorDay() {
   const segLost = totalExpected > 0 ? (stats.lost / totalExpected) * 100 : 0;
   const segNoShow = totalExpected > 0 ? (stats.no_show / totalExpected) * 100 : 0;
 
+  block.innerHTML = `
+    <div style="display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 14px;">
+      <div style="font-size: 11px; color: var(--ink-mute); text-transform: uppercase; letter-spacing: 0.5px;">Tu ${monthLabel}</div>
+      <div style="font-size: 11px; color: var(--ink-mute);">al ${now.getDate()} ${monthLabel.slice(0,3)}.</div>
+    </div>
+    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 18px;">
+      <div style="text-align: center;">
+        <div style="font-family: var(--display); font-size: 30px; color: var(--fit-purple); line-height: 1;">${stats.classes}</div>
+        <div style="font-size: 11px; color: var(--ink-mute); margin-top: 4px;">clases</div>
+      </div>
+      <div style="text-align: center; border-left: 1px solid var(--line); border-right: 1px solid var(--line);">
+        <div style="font-family: var(--display); font-size: 30px; color: var(--fit-purple); line-height: 1;">${totalExpected}</div>
+        <div style="font-size: 11px; color: var(--ink-mute); margin-top: 4px;">alumnos</div>
+      </div>
+      <div style="text-align: center;">
+        <div style="font-family: var(--display); font-size: 30px; color: #27500A; line-height: 1;">${stats.attended}</div>
+        <div style="font-size: 11px; color: var(--ink-mute); margin-top: 4px;">asistieron</div>
+      </div>
+    </div>
+    ${totalExpected > 0 ? `
+      <div>
+        <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px;">
+          <div style="font-size: 12px; color: var(--ink-mute);">tasa de asistencia</div>
+          <div style="font-size: 14px; font-weight: 500; color: #27500A;">${pctAttended}%</div>
+        </div>
+        <div style="height: 8px; background: var(--bg); border-radius: 999px; overflow: hidden; display: flex;">
+          <div style="width: ${segAttended}%; background: #639922;"></div>
+          <div style="width: ${segRecoverable}%; background: #EF9F27;"></div>
+          <div style="width: ${segLost}%; background: #D85A30;"></div>
+          <div style="width: ${segNoShow}%; background: #E24B4A;"></div>
+        </div>
+        <div style="display: flex; gap: 14px; flex-wrap: wrap; margin-top: 8px; font-size: 11px; color: var(--ink-mute);">
+          <div style="display: flex; align-items: center; gap: 5px;"><span style="width: 7px; height: 7px; border-radius: 50%; background: #EF9F27; display: inline-block;"></span>${stats.recoverable} justific.</div>
+          <div style="display: flex; align-items: center; gap: 5px;"><span style="width: 7px; height: 7px; border-radius: 50%; background: #D85A30; display: inline-block;"></span>${stats.lost} cancel. tardía</div>
+          <div style="display: flex; align-items: center; gap: 5px;"><span style="width: 7px; height: 7px; border-radius: 50%; background: #E24B4A; display: inline-block;"></span>${stats.no_show} no avisó</div>
+        </div>
+      </div>
+    ` : ''}
+  `;
+}
+
+function renderInstructorFiltersBlock() {
+  const block = document.querySelector('[data-inst-filters]');
+  if (!block) return;
   const todayIso = new Date().toISOString().slice(0,10);
   const tomorrowIso = new Date(Date.now() + 86400000).toISOString().slice(0,10);
+  const dateObj = new Date(STATE.instDayDate + 'T12:00:00');
+  const dayLabels = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
+  const monthLabels = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+  const dateLabel = `${dayLabels[dateObj.getDay()]} ${dateObj.getDate()} ${monthLabels[dateObj.getMonth()]}`;
 
-  container.innerHTML = `
-    <!-- Stats del mes -->
-    <div style="background: white; border: 1px solid var(--line); border-radius: var(--radius-lg); padding: 18px 22px; margin-bottom: 18px;">
-      <div style="display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 14px;">
-        <div style="font-size: 11px; color: var(--ink-mute); text-transform: uppercase; letter-spacing: 0.5px;">Tu ${monthLabel}</div>
-        <div style="font-size: 11px; color: var(--ink-mute);">al ${dateObj.getDate()} ${monthLabels[dateObj.getMonth()].slice(0,3)}.</div>
-      </div>
-      <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 18px;">
-        <div style="text-align: center;">
-          <div style="font-family: var(--display); font-size: 30px; color: var(--fit-purple); line-height: 1;">${stats.classes}</div>
-          <div style="font-size: 11px; color: var(--ink-mute); margin-top: 4px;">clases</div>
-        </div>
-        <div style="text-align: center; border-left: 1px solid var(--line); border-right: 1px solid var(--line);">
-          <div style="font-family: var(--display); font-size: 30px; color: var(--fit-purple); line-height: 1;">${totalExpected}</div>
-          <div style="font-size: 11px; color: var(--ink-mute); margin-top: 4px;">alumnos</div>
-        </div>
-        <div style="text-align: center;">
-          <div style="font-family: var(--display); font-size: 30px; color: #27500A; line-height: 1;">${stats.attended}</div>
-          <div style="font-size: 11px; color: var(--ink-mute); margin-top: 4px;">asistieron</div>
-        </div>
-      </div>
-      ${totalExpected > 0 ? `
-        <div>
-          <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px;">
-            <div style="font-size: 12px; color: var(--ink-mute);">tasa de asistencia</div>
-            <div style="font-size: 14px; font-weight: 500; color: #27500A;">${pctAttended}%</div>
-          </div>
-          <div style="height: 8px; background: var(--bg); border-radius: 999px; overflow: hidden; display: flex;">
-            <div style="width: ${segAttended}%; background: #639922;"></div>
-            <div style="width: ${segRecoverable}%; background: #EF9F27;"></div>
-            <div style="width: ${segLost}%; background: #D85A30;"></div>
-            <div style="width: ${segNoShow}%; background: #E24B4A;"></div>
-          </div>
-          <div style="display: flex; gap: 14px; flex-wrap: wrap; margin-top: 8px; font-size: 11px; color: var(--ink-mute);">
-            <div style="display: flex; align-items: center; gap: 5px;"><span style="width: 7px; height: 7px; border-radius: 50%; background: #EF9F27; display: inline-block;"></span>${stats.recoverable} justific.</div>
-            <div style="display: flex; align-items: center; gap: 5px;"><span style="width: 7px; height: 7px; border-radius: 50%; background: #D85A30; display: inline-block;"></span>${stats.lost} cancel. tardía</div>
-            <div style="display: flex; align-items: center; gap: 5px;"><span style="width: 7px; height: 7px; border-radius: 50%; background: #E24B4A; display: inline-block;"></span>${stats.no_show} no avisó</div>
-          </div>
-        </div>
-      ` : ''}
-    </div>
-
-    <!-- Filtros de fecha -->
-    <div style="display: flex; gap: 6px; margin-bottom: 14px; align-items: center; flex-wrap: wrap;">
+  block.innerHTML = `
+    <div style="display: flex; gap: 6px; align-items: center; flex-wrap: wrap;">
       <button onclick="instructorSetDate('today')" class="inst-pill ${STATE.instDayFilter === 'today' ? 'is-active' : ''}">Hoy</button>
       <button onclick="instructorSetDate('tomorrow')" class="inst-pill ${STATE.instDayFilter === 'tomorrow' ? 'is-active' : ''}">Mañana</button>
       <button onclick="instructorOpenDatePicker()" class="inst-pill ${STATE.instDayFilter === 'other' ? 'is-active' : ''}">Otra fecha</button>
       <input type="date" id="inst-date-picker" onchange="instructorSetCustomDate(this.value)" value="${STATE.instDayDate}" style="${STATE.instDayFilter === 'other' ? '' : 'display: none;'} padding: 7px 10px; font-size: 12px; border: 1px solid var(--line); border-radius: 999px;" />
       <div style="flex: 1; text-align: right; font-size: 12px; color: var(--ink-mute);">${dateLabel}${STATE.instDayDate === todayIso ? ' · hoy' : (STATE.instDayDate === tomorrowIso ? ' · mañana' : '')}</div>
     </div>
-
-    <!-- Lista de clases -->
-    <div id="instructor-classes-list" style="display: flex; flex-direction: column; gap: 12px;">
-      ${classes.length === 0 ? `
-        <div style="background: white; border: 1px solid var(--line); border-radius: var(--radius-lg); padding: 40px 20px; text-align: center; color: var(--ink-mute);">
-          <div style="font-family: var(--display); font-size: 18px; font-style: italic; margin-bottom: 6px;">Sin clases este día</div>
-          <div style="font-size: 13px;">No tienes turnos asignados.</div>
-        </div>
-      ` : classes.map(c => renderInstructorClassCard(c)).join('')}
-    </div>
   `;
+}
+
+function renderInstructorClassesBlock(classes) {
+  const block = document.querySelector('[data-inst-classes]');
+  if (!block) return;
+  if (classes.length === 0) {
+    block.innerHTML = `
+      <div style="background: white; border: 1px solid var(--line); border-radius: var(--radius-lg); padding: 40px 20px; text-align: center; color: var(--ink-mute);">
+        <div style="font-family: var(--display); font-size: 18px; font-style: italic; margin-bottom: 6px;">Sin clases este día</div>
+        <div style="font-size: 13px;">No tienes turnos asignados.</div>
+      </div>
+    `;
+  } else {
+    block.innerHTML = classes.map(c => renderInstructorClassCard(c)).join('');
+  }
 }
 
 async function loadInstructorMonthStats(instructorId) {
@@ -5707,40 +5736,52 @@ function renderInstructorStudentRow(item, classCtx) {
   `;
 }
 
-function instructorSetDate(filter) {
+async function instructorSetDate(filter) {
   STATE.instDayFilter = filter;
   const today = new Date().toISOString().slice(0,10);
   if (filter === 'today') STATE.instDayDate = today;
   else if (filter === 'tomorrow') STATE.instDayDate = new Date(Date.now() + 86400000).toISOString().slice(0,10);
   STATE.instAbsenceMenuOpen = null;
-  renderInstructorDay();
+  // Solo re-render filtros + clases, no stats (no cambian con la fecha)
+  renderInstructorFiltersBlock();
+  const inst = CURRENT_USER.record;
+  const classes = await loadInstructorClassesForDate(inst, STATE.instDayDate);
+  renderInstructorClassesBlock(classes);
 }
 
 function instructorOpenDatePicker() {
   STATE.instDayFilter = 'other';
-  renderInstructorDay();
+  renderInstructorFiltersBlock();
   setTimeout(() => {
     const picker = document.getElementById('inst-date-picker');
     if (picker) picker.showPicker?.();
   }, 50);
 }
 
-function instructorSetCustomDate(dateIso) {
+async function instructorSetCustomDate(dateIso) {
   if (!dateIso) return;
   STATE.instDayFilter = 'other';
   STATE.instDayDate = dateIso;
   STATE.instAbsenceMenuOpen = null;
-  renderInstructorDay();
+  renderInstructorFiltersBlock();
+  const inst = CURRENT_USER.record;
+  const classes = await loadInstructorClassesForDate(inst, STATE.instDayDate);
+  renderInstructorClassesBlock(classes);
 }
 
-function instructorOpenAbsenceMenu(studentId, hour) {
+async function instructorOpenAbsenceMenu(studentId, hour) {
   STATE.instAbsenceMenuOpen = studentId + '|' + hour;
-  renderInstructorDay();
+  // Re-render solo clases del día actual
+  const inst = CURRENT_USER.record;
+  const classes = await loadInstructorClassesForDate(inst, STATE.instDayDate);
+  renderInstructorClassesBlock(classes);
 }
 
-function instructorCloseAbsenceMenu() {
+async function instructorCloseAbsenceMenu() {
   STATE.instAbsenceMenuOpen = null;
-  renderInstructorDay();
+  const inst = CURRENT_USER.record;
+  const classes = await loadInstructorClassesForDate(inst, STATE.instDayDate);
+  renderInstructorClassesBlock(classes);
 }
 
 async function instructorMarkAttended(studentId, dateIso, hour, locationId) {
@@ -5775,36 +5816,49 @@ async function instructorWriteAttendance(studentId, dateIso, hour, locationId, s
     session = created;
   }
 
-  // Si es asistencia/perdida/no_show → cancelar booking del alumno (libera slot)
-  // Si es recoverable → cancelar booking (libera slot, queda pendiente recuperar)
-  // Si es pending (reset) → re-activar booking si estaba cancelado
-  const cancelBooking = ['recoverable','lost','no_show'].includes(status);
-  const reactivateBooking = (status === 'pending');
+  // Asegurar booking (re-activar si está cancelled)
+  let { data: booking } = await sb.from('session_bookings')
+    .select('id, cancelled_at')
+    .eq('session_id', session.id)
+    .eq('student_id', studentId)
+    .maybeSingle();
 
-  if (cancelBooking || reactivateBooking) {
-    if (cancelBooking) {
-      const stamp = new Date().toLocaleString('es-PE', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
-      const reasonMap = { recoverable: 'falta justificada', lost: 'cancelación tardía', no_show: 'no vino sin avisar' };
-      await sb.from('session_bookings').update({
-        cancelled_at: new Date().toISOString(),
-        cancelled_reason: `[${stamp}] ${reasonMap[status]} · marcado por profesor (${CURRENT_USER.record.first_name || ''})`,
-      }).eq('session_id', session.id).eq('student_id', studentId).is('cancelled_at', null);
-    } else {
-      await sb.from('session_bookings').update({
-        cancelled_at: null, cancelled_reason: null,
-      }).eq('session_id', session.id).eq('student_id', studentId);
-    }
+  if (!booking) {
+    const stud = STATE.students.find(s => s.id === studentId);
+    const source = stud?.modality === 'flexible' ? 'flexible' : 'fixed';
+    const { data: newB, error } = await sb.from('session_bookings').insert({
+      session_id: session.id, student_id: studentId, source,
+    }).select().single();
+    if (error) { showToast('Error: ' + error.message, 'error'); return; }
+    booking = newB;
   }
 
-  // Upsert attendance
+  // Liberar/re-activar slot según status
+  const releaseSlot = ['recoverable','lost','no_show'].includes(status);
+  const reactivateBooking = (status === 'attended' || status === 'pending');
   const stamp = new Date().toLocaleString('es-PE', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
   const actor = `profesor (${CURRENT_USER.record.first_name || ''})`;
+  const reasonMap = { recoverable: 'falta justificada', lost: 'cancelación tardía', no_show: 'no vino sin avisar' };
+
+  if (releaseSlot && !booking.cancelled_at) {
+    await sb.from('session_bookings').update({
+      cancelled_at: new Date().toISOString(),
+      cancelled_reason: `[${stamp}] ${reasonMap[status]} · marcado por ${actor}`,
+    }).eq('id', booking.id);
+  } else if (reactivateBooking && booking.cancelled_at) {
+    await sb.from('session_bookings').update({
+      cancelled_at: null, cancelled_reason: null,
+    }).eq('id', booking.id);
+  }
+
+  // SELECT + UPDATE/INSERT en attendance (no upsert porque puede no existir constraint)
   const labelMap = { attended: 'asistió', recoverable: 'falta justificada (recuperable)', lost: 'cancelación tardía', no_show: 'no vino sin avisar', pending: 'pendiente' };
   const noteLine = `[${stamp}] ${labelMap[status] || status} · marcado por ${actor}`;
   const isRecoverable = (status === 'recoverable');
   const countsAgainst = ['attended','lost','no_show'].includes(status);
 
-  await sb.from('attendance').upsert({
+  const payload = {
+    booking_id: booking.id,
     session_id: session.id,
     student_id: studentId,
     status,
@@ -5813,7 +5867,21 @@ async function instructorWriteAttendance(studentId, dateIso, hour, locationId, s
     notes: noteLine,
     marked_at: new Date().toISOString(),
     marked_by: CURRENT_USER.authUser?.id || null,
-  }, { onConflict: 'session_id,student_id' });
+  };
+
+  const { data: existing } = await sb.from('attendance')
+    .select('id')
+    .eq('session_id', session.id)
+    .eq('student_id', studentId)
+    .maybeSingle();
+
+  if (existing) {
+    const { error } = await sb.from('attendance').update(payload).eq('id', existing.id);
+    if (error) { showToast('Error: ' + error.message, 'error'); console.error(error); return; }
+  } else {
+    const { error } = await sb.from('attendance').insert(payload);
+    if (error) { showToast('Error: ' + error.message, 'error'); console.error(error); return; }
+  }
 
   await recalcPackageCounters(studentId);
 
@@ -5825,6 +5893,7 @@ async function instructorWriteAttendance(studentId, dateIso, hour, locationId, s
     pending: '○ Asistencia revertida',
   };
   showToast(toastMap[status] || 'Marcado', 'success');
+  STATE.instMonthStats = null; // invalidar cache para refrescar stats
   renderInstructorDay();
 }
 
@@ -6092,17 +6161,39 @@ async function instructorMarkAttendedDirect(sessionId, studentId, opts) {
   if (opts?.walkIn) noteParts.push('agregada manualmente por profesor');
   if (opts?.pendingPayment) noteParts.push('pendiente de pago');
 
-  await sb.from('attendance').upsert({
+  // Buscar booking_id si existe
+  const { data: bk } = await sb.from('session_bookings')
+    .select('id')
+    .eq('session_id', sessionId)
+    .eq('student_id', studentId)
+    .maybeSingle();
+
+  const payload = {
+    booking_id: bk?.id || null,
     session_id: sessionId,
     student_id: studentId,
     status: 'attended',
     is_recoverable: false,
-    counts_against_package: !opts?.pendingPayment, // si está pendiente de pago, no descuenta de ningún paquete
+    counts_against_package: !opts?.pendingPayment,
     notes: noteParts.join(' · '),
     pending_payment_at: opts?.pendingPayment ? new Date().toISOString() : null,
     marked_at: new Date().toISOString(),
     marked_by: CURRENT_USER.authUser?.id || null,
-  }, { onConflict: 'session_id,student_id' });
+  };
+
+  const { data: existing } = await sb.from('attendance')
+    .select('id')
+    .eq('session_id', sessionId)
+    .eq('student_id', studentId)
+    .maybeSingle();
+
+  if (existing) {
+    const { error } = await sb.from('attendance').update(payload).eq('id', existing.id);
+    if (error) throw error;
+  } else {
+    const { error } = await sb.from('attendance').insert(payload);
+    if (error) throw error;
+  }
 }
 
 async function instructorConfirmAddCaseA(studentId) {
@@ -6117,6 +6208,7 @@ async function instructorConfirmAddCaseA(studentId) {
     await recalcPackageCounters(studentId);
     showToast(`✓ ${stud.first_name} agregada y marcada asistida`, 'success');
     closeModals();
+    STATE.instMonthStats = null;
     renderInstructorDay();
   } catch (e) {
     console.error(e);
@@ -6147,6 +6239,7 @@ async function instructorConfirmSwap(studentId, oldBookingId, oldSessionId) {
 
     showToast(`✓ Clase movida y ${stud.first_name} marcada asistida`, 'success');
     closeModals();
+    STATE.instMonthStats = null;
     renderInstructorDay();
   } catch (e) {
     console.error(e);
@@ -6164,6 +6257,7 @@ async function instructorConfirmAddCaseC(studentId) {
     await instructorMarkAttendedDirect(session.id, studentId, { pendingPayment: true });
     showToast(`✓ ${stud.first_name} registrada · pendiente de cobro en recepción`, 'success');
     closeModals();
+    STATE.instMonthStats = null;
     renderInstructorDay();
   } catch (e) {
     console.error(e);
@@ -6205,6 +6299,7 @@ async function instructorConfirmInvite() {
 
     showToast(`✓ ${first_name} registrada como invitada`, 'success');
     closeModals();
+    STATE.instMonthStats = null;
     renderInstructorDay();
   } catch (e) {
     console.error(e);
