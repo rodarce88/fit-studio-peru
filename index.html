@@ -323,11 +323,10 @@
   body.no-sidebar .main { margin-left: 0; padding: 32px 24px 80px; max-width: 980px; }
   body.no-sidebar .topbar-logo { width: auto; }
 
-  /* Class card para vista profesor */
-  .inst-class-card { background: white; border: 1px solid var(--line); border-radius: var(--radius-lg); padding: 18px 20px; }
-  .inst-class-card-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
-  .inst-class-time { font-family: var(--display); font-size: 22px; font-weight: 500; color: var(--fit-purple); font-style: italic; }
-  .inst-class-loc { font-size: 12px; color: var(--ink-mute); text-transform: uppercase; letter-spacing: 0.1em; }
+  /* Vista profesor — pills de filtro de fecha */
+  .inst-pill { padding: 7px 14px; font-size: 12px; font-weight: 500; border: 1px solid var(--line); background: white; color: var(--ink); border-radius: 999px; cursor: pointer; transition: all 0.15s; }
+  .inst-pill:hover { border-color: var(--fit-purple); }
+  .inst-pill.is-active { background: var(--fit-purple); color: white; border-color: var(--fit-purple); }
 
   /* Active package card */
   .pkg-card { background: linear-gradient(135deg, var(--fit-purple) 0%, var(--fit-purple-deep) 100%); color: white; border-radius: var(--radius-lg); padding: 24px; }
@@ -580,6 +579,14 @@
 
         <div class="panel">
           <div class="panel-header">
+            <div class="panel-title">Por <em>cobrar</em></div>
+            <span class="panel-count warn" id="topay-count">—</span>
+          </div>
+          <div class="panel-body" id="topay-list"></div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-header">
             <div class="panel-title">Datos <em>incompletos</em></div>
             <span class="panel-count warn" id="incomplete-count">—</span>
           </div>
@@ -673,16 +680,7 @@
 
   <!-- INSTRUCTOR DAY VIEW (vista profesor) -->
   <section class="view" id="view-instructor-day">
-    <div class="page-header">
-      <div>
-        <h1 class="page-title">Mis <em>clases</em> de hoy</h1>
-        <div class="page-sub" id="inst-day-sub">—</div>
-      </div>
-      <div class="page-actions">
-        <button class="btn btn-primary" id="confirm-shift-btn" onclick="confirmMyShift()" style="display:none;">Confirmar mi turno</button>
-      </div>
-    </div>
-    <div id="instructor-classes-list" style="display:flex; flex-direction:column; gap:14px;"></div>
+    <div id="instructor-view-container"></div>
   </section>
 
   <!-- STUDENT DAY VIEW (vista alumno) -->
@@ -778,6 +776,20 @@
       <button class="modal-close" onclick="closeModals()">✕</button>
     </div>
     <div id="cell-modal-body" style="padding-top: 8px;"></div>
+  </div>
+</div>
+
+<!-- INSTRUCTOR ADD STUDENT MODAL -->
+<div class="modal-backdrop" id="instructor-add-modal" onclick="if(event.target===this) closeModals()">
+  <div class="modal-card" style="width: 480px; max-height: 85vh; overflow-y: auto;">
+    <div class="modal-header">
+      <div>
+        <div class="modal-title">Agregar <em>alumno</em></div>
+        <div id="inst-add-sub" style="font-size: 12px; color: var(--ink-mute); margin-top: 4px;">—</div>
+      </div>
+      <button class="modal-close" onclick="closeModals()">✕</button>
+    </div>
+    <div id="inst-add-body" style="padding-top: 8px;"></div>
   </div>
 </div>
 
@@ -1166,6 +1178,7 @@
       <div style="background: var(--info-soft); border-left: 3px solid var(--info); padding: 12px 14px; border-radius: var(--radius-sm); font-size: 12px; color: var(--info); margin-top: 12px;">
         💡 Al guardar, podrás registrar el pago en el siguiente paso.
       </div>
+      <div id="assign-pkg-pending-block" style="margin-top: 14px;"></div>
     </div>
     <div class="modal-footer">
       <button class="btn btn-ghost" onclick="closeModals()">Cancelar</button>
@@ -1576,8 +1589,9 @@ function renderDashboard() {
 
   renderTimeline();
 
-  // Cargar widget "Por re-agendar" en background (no bloquea la UI)
+  // Cargar widgets en background (no bloquea la UI)
   loadRescheduleList();
+  loadToPayList();
 }
 
 // Carga alumnos con clases pendientes por re-agendar (paquete activo, capacidad disponible).
@@ -1673,6 +1687,84 @@ async function loadRescheduleList() {
   }).join('') + (pendingItems.length > 6
     ? `<div style="padding: 12px; text-align: center; font-size: 12px; color: var(--ink-mute);">+${pendingItems.length - 6} más</div>`
     : '');
+}
+
+// Carga alumnos con clases pendientes de cobro (asistencias con pending_payment_at no nulo).
+// Incluye alumnas existentes sin paquete + invitadas (student_status=trial).
+async function loadToPayList() {
+  const listEl = document.getElementById('topay-list');
+  const countEl = document.getElementById('topay-count');
+  if (!listEl || !countEl) return;
+
+  if (!isOnline) {
+    listEl.innerHTML = '<div style="padding: 12px; color: var(--ink-mute); font-size: 12px;">Sin conexión</div>';
+    countEl.textContent = '—';
+    return;
+  }
+
+  // Cargar attendance con pending_payment_at no nulo
+  const { data: pending } = await sb.from('attendance')
+    .select('id, student_id, status, pending_payment_at, class_sessions(session_date, hour, location_id)')
+    .not('pending_payment_at', 'is', null)
+    .order('pending_payment_at', { ascending: false });
+
+  if (!pending || pending.length === 0) {
+    listEl.innerHTML = '<div style="padding: 12px; color: var(--ink-mute); font-size: 12px;">Sin pendientes de cobro 🎉</div>';
+    countEl.textContent = '0';
+    return;
+  }
+
+  // Agrupar por alumno
+  const byStudent = new Map();
+  for (const p of pending) {
+    if (!byStudent.has(p.student_id)) byStudent.set(p.student_id, []);
+    byStudent.get(p.student_id).push(p);
+  }
+
+  countEl.textContent = byStudent.size;
+
+  const items = [];
+  for (const [studentId, atts] of byStudent.entries()) {
+    const stud = STATE.students.find(s => s.id === studentId);
+    if (!stud) continue;
+    items.push({ stud, atts, count: atts.length });
+  }
+
+  if (items.length === 0) {
+    listEl.innerHTML = '<div style="padding: 12px; color: var(--ink-mute); font-size: 12px;">Sin pendientes de cobro 🎉</div>';
+    return;
+  }
+
+  listEl.innerHTML = items.slice(0, 6).map(item => {
+    const s = item.stud;
+    const isTrial = s.student_status === 'trial';
+    const badge = isTrial
+      ? '<span style="font-size: 9px; padding: 2px 6px; background: #EEEDFE; color: #3C3489; border-radius: 999px; margin-left: 4px;">invitada</span>'
+      : '<span style="font-size: 9px; padding: 2px 6px; background: var(--bg); color: var(--ink-mute); border-radius: 999px; margin-left: 4px;">alumna</span>';
+    return `<div class="alert-row" onclick="openAssignPackageWithPending('${s.id}')">
+      <div class="alert-icon warn">
+        <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+      </div>
+      <div class="alert-content">
+        <div class="alert-name">${escape(s.first_name)} ${escape(s.last_name || '')}${badge}</div>
+        <div class="alert-desc">${item.count} clase${item.count === 1 ? '' : 's'} pendiente${item.count === 1 ? '' : 's'} · ${escape(s.phone || s.email || 'sin contacto')}</div>
+      </div>
+      <span class="alert-action">Cobrar</span>
+    </div>`;
+  }).join('') + (items.length > 6
+    ? `<div style="padding: 12px; text-align: center; font-size: 12px; color: var(--ink-mute);">+${items.length - 6} más</div>`
+    : '');
+}
+
+// Abre el modal de asignar paquete con la opción "imputar pendientes" pre-marcada
+async function openAssignPackageWithPending(studentId) {
+  STATE.assignPackagePendingStudentId = studentId;
+  // Llamamos al modal existente de asignar paquete del modal de alumno
+  await openStudentDetail(studentId);
+  setTimeout(() => {
+    const btn = document.querySelector('[onclick*="openAssignPackageModal"]');
+    if (btn) btn.click();
+  }, 200);
 }
 
 // ============================================
@@ -5268,134 +5360,836 @@ async function initForRole() {
 // ============================================
 // INSTRUCTOR DAY VIEW
 // ============================================
+// ============================================
+// INSTRUCTOR DAY — vista profesor con stats, filtros y agregar alumno
+// ============================================
 async function renderInstructorDay() {
   if (!CURRENT_USER || CURRENT_USER.role !== 'instructor') return;
   const inst = CURRENT_USER.record;
-  const today = new Date();
-  const todayIso = today.toISOString().slice(0,10);
-  const dow = today.getDay();
-  const dayLabels = ['domingo','lunes','martes','miércoles','jueves','viernes','sábado'];
 
-  document.getElementById('inst-day-sub').textContent = `${dayLabels[dow]} ${today.getDate()} · ${inst.full_name || inst.first_name + ' ' + (inst.last_name || '')}`;
+  // Estado por defecto
+  if (!STATE.instDayDate) STATE.instDayDate = new Date().toISOString().slice(0,10);
+  if (!STATE.instDayFilter) STATE.instDayFilter = 'today';
 
-  // Buscar sus turnos del día (instructor_schedules con dow + locations)
-  const schedules = STATE.schedules.filter(s => s.instructor_id === inst.id && s.day_of_week === dow);
+  const container = document.getElementById('instructor-view-container');
+  container.innerHTML = `<div style="padding: 40px; text-align: center; color: var(--ink-mute);">Cargando…</div>`;
 
-  // Aplicar overrides por fecha (cambios puntuales)
-  // Nota: STATE.classOverrides puede tener cambios puntuales de profesor
+  // Cargar stats del mes y clases del día en paralelo
+  const [stats, classes] = await Promise.all([
+    loadInstructorMonthStats(inst.id),
+    loadInstructorClassesForDate(inst, STATE.instDayDate),
+  ]);
 
-  if (schedules.length === 0) {
-    document.getElementById('instructor-classes-list').innerHTML = '<div class="empty-state"><h3>No tienes <em>clases</em> hoy</h3><p>Disfruta tu día libre.</p></div>';
-    document.getElementById('confirm-shift-btn').style.display = 'none';
-    return;
-  }
+  const dateObj = new Date(STATE.instDayDate + 'T12:00:00');
+  const dayLabels = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
+  const monthLabels = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+  const dateLabel = `${dayLabels[dateObj.getDay()]} ${dateObj.getDate()} ${monthLabels[dateObj.getMonth()]}`;
+  const monthLabel = monthLabels[new Date().getMonth()];
 
-  // Para cada turno, contar alumnos confirmados
-  const list = document.getElementById('instructor-classes-list');
-  let html = '';
-  for (const sched of schedules.sort((a,b) => a.hour - b.hour)) {
-    const loc = STATE.locations.find(l => l.id === sched.location_id);
-    const fixed = STATE.fixedBookings.filter(b => b.location_id === sched.location_id && b.day_of_week === dow && b.hour === sched.hour);
-    // Buscar session_id si existe
-    let session = null;
-    let bookings = [];
-    let attendanceRecs = [];
-    if (isOnline) {
-      const { data: sess } = await sb.from('class_sessions').select('*').eq('location_id', sched.location_id).eq('session_date', todayIso).eq('hour', sched.hour).maybeSingle();
-      if (sess) {
-        session = sess;
-        const { data: bs } = await sb.from('session_bookings').select('*').eq('session_id', sess.id);
-        bookings = bs || [];
-        const { data: at } = await sb.from('attendance').select('*').eq('session_id', sess.id);
-        attendanceRecs = at || [];
-      }
-    }
-    const presentStudentIds = new Set([
-      ...fixed.map(f => f.student_id),
-      ...bookings.map(b => b.student_id),
-    ]);
-    const studentsInClass = [...presentStudentIds].map(sid => STATE.students.find(s => s.id === sid)).filter(Boolean);
+  // Calcular % asistencia y segmentos de la barra
+  const totalMarked = stats.attended + stats.recoverable + stats.lost + stats.no_show;
+  const totalExpected = Math.max(stats.students, totalMarked);
+  const pctAttended = totalExpected > 0 ? Math.round((stats.attended / totalExpected) * 100) : 0;
+  const segAttended = totalExpected > 0 ? (stats.attended / totalExpected) * 100 : 0;
+  const segRecoverable = totalExpected > 0 ? (stats.recoverable / totalExpected) * 100 : 0;
+  const segLost = totalExpected > 0 ? (stats.lost / totalExpected) * 100 : 0;
+  const segNoShow = totalExpected > 0 ? (stats.no_show / totalExpected) * 100 : 0;
 
-    html += `
-      <div class="inst-class-card">
-        <div class="inst-class-card-head">
-          <div>
-            <div class="inst-class-time">${formatHour(sched.hour)}</div>
-            <div class="inst-class-loc">Sede ${escape(loc ? loc.name : '—')} · ${studentsInClass.length} ${studentsInClass.length === 1 ? 'alumno' : 'alumnos'}</div>
-          </div>
+  const todayIso = new Date().toISOString().slice(0,10);
+  const tomorrowIso = new Date(Date.now() + 86400000).toISOString().slice(0,10);
+
+  container.innerHTML = `
+    <!-- Stats del mes -->
+    <div style="background: white; border: 1px solid var(--line); border-radius: var(--radius-lg); padding: 18px 22px; margin-bottom: 18px;">
+      <div style="display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 14px;">
+        <div style="font-size: 11px; color: var(--ink-mute); text-transform: uppercase; letter-spacing: 0.5px;">Tu ${monthLabel}</div>
+        <div style="font-size: 11px; color: var(--ink-mute);">al ${dateObj.getDate()} ${monthLabels[dateObj.getMonth()].slice(0,3)}.</div>
+      </div>
+      <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 18px;">
+        <div style="text-align: center;">
+          <div style="font-family: var(--display); font-size: 30px; color: var(--fit-purple); line-height: 1;">${stats.classes}</div>
+          <div style="font-size: 11px; color: var(--ink-mute); margin-top: 4px;">clases</div>
         </div>
-        <div style="display: flex; flex-direction: column; gap: 8px;">
-          ${studentsInClass.length === 0 ? '<div style="color: var(--ink-mute); font-size: 13px; padding: 8px 0;">Sin alumnos reservados.</div>' : studentsInClass.map(s => {
-            const att = attendanceRecs.find(a => a.student_id === s.id);
-            const status = att ? att.status : 'pendiente';
-            const statusBadge = renderAttendanceBadge(status);
-            return `
-              <div style="display: flex; align-items: center; justify-content: space-between; padding: 10px 12px; background: var(--bg); border-radius: var(--radius-sm);">
-                <div style="display: flex; align-items: center; gap: 10px;">
-                  <div class="student-avatar" style="width:32px;height:32px;font-size:11px;">${initials(s)}</div>
-                  <span style="font-size: 14px;">${escape(s.first_name)} ${escape(s.last_name||'')}</span>
-                </div>
-                <div style="display: flex; align-items: center; gap: 8px;">
-                  ${statusBadge}
-                  <button onclick="instructorMarkAttendance('${s.id}', ${sched.hour}, '${sched.location_id}', '${todayIso}', this)" style="padding: 5px 12px; font-size: 11px; background: var(--fit-purple); color: white; border: none; border-radius: 999px; cursor: pointer;">Marcar</button>
-                </div>
-              </div>
-            `;
-          }).join('')}
+        <div style="text-align: center; border-left: 1px solid var(--line); border-right: 1px solid var(--line);">
+          <div style="font-family: var(--display); font-size: 30px; color: var(--fit-purple); line-height: 1;">${totalExpected}</div>
+          <div style="font-size: 11px; color: var(--ink-mute); margin-top: 4px;">alumnos</div>
+        </div>
+        <div style="text-align: center;">
+          <div style="font-family: var(--display); font-size: 30px; color: #27500A; line-height: 1;">${stats.attended}</div>
+          <div style="font-size: 11px; color: var(--ink-mute); margin-top: 4px;">asistieron</div>
         </div>
       </div>
+      ${totalExpected > 0 ? `
+        <div>
+          <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px;">
+            <div style="font-size: 12px; color: var(--ink-mute);">tasa de asistencia</div>
+            <div style="font-size: 14px; font-weight: 500; color: #27500A;">${pctAttended}%</div>
+          </div>
+          <div style="height: 8px; background: var(--bg); border-radius: 999px; overflow: hidden; display: flex;">
+            <div style="width: ${segAttended}%; background: #639922;"></div>
+            <div style="width: ${segRecoverable}%; background: #EF9F27;"></div>
+            <div style="width: ${segLost}%; background: #D85A30;"></div>
+            <div style="width: ${segNoShow}%; background: #E24B4A;"></div>
+          </div>
+          <div style="display: flex; gap: 14px; flex-wrap: wrap; margin-top: 8px; font-size: 11px; color: var(--ink-mute);">
+            <div style="display: flex; align-items: center; gap: 5px;"><span style="width: 7px; height: 7px; border-radius: 50%; background: #EF9F27; display: inline-block;"></span>${stats.recoverable} justific.</div>
+            <div style="display: flex; align-items: center; gap: 5px;"><span style="width: 7px; height: 7px; border-radius: 50%; background: #D85A30; display: inline-block;"></span>${stats.lost} cancel. tardía</div>
+            <div style="display: flex; align-items: center; gap: 5px;"><span style="width: 7px; height: 7px; border-radius: 50%; background: #E24B4A; display: inline-block;"></span>${stats.no_show} no avisó</div>
+          </div>
+        </div>
+      ` : ''}
+    </div>
+
+    <!-- Filtros de fecha -->
+    <div style="display: flex; gap: 6px; margin-bottom: 14px; align-items: center; flex-wrap: wrap;">
+      <button onclick="instructorSetDate('today')" class="inst-pill ${STATE.instDayFilter === 'today' ? 'is-active' : ''}">Hoy</button>
+      <button onclick="instructorSetDate('tomorrow')" class="inst-pill ${STATE.instDayFilter === 'tomorrow' ? 'is-active' : ''}">Mañana</button>
+      <button onclick="instructorOpenDatePicker()" class="inst-pill ${STATE.instDayFilter === 'other' ? 'is-active' : ''}">Otra fecha</button>
+      <input type="date" id="inst-date-picker" onchange="instructorSetCustomDate(this.value)" value="${STATE.instDayDate}" style="${STATE.instDayFilter === 'other' ? '' : 'display: none;'} padding: 7px 10px; font-size: 12px; border: 1px solid var(--line); border-radius: 999px;" />
+      <div style="flex: 1; text-align: right; font-size: 12px; color: var(--ink-mute);">${dateLabel}${STATE.instDayDate === todayIso ? ' · hoy' : (STATE.instDayDate === tomorrowIso ? ' · mañana' : '')}</div>
+    </div>
+
+    <!-- Lista de clases -->
+    <div id="instructor-classes-list" style="display: flex; flex-direction: column; gap: 12px;">
+      ${classes.length === 0 ? `
+        <div style="background: white; border: 1px solid var(--line); border-radius: var(--radius-lg); padding: 40px 20px; text-align: center; color: var(--ink-mute);">
+          <div style="font-family: var(--display); font-size: 18px; font-style: italic; margin-bottom: 6px;">Sin clases este día</div>
+          <div style="font-size: 13px;">No tienes turnos asignados.</div>
+        </div>
+      ` : classes.map(c => renderInstructorClassCard(c)).join('')}
+    </div>
+  `;
+}
+
+async function loadInstructorMonthStats(instructorId) {
+  if (!isOnline) return { classes: 0, students: 0, attended: 0, recoverable: 0, lost: 0, no_show: 0 };
+  const now = new Date();
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0,10);
+  const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().slice(0,10);
+
+  const { data: sessions } = await sb.from('class_sessions')
+    .select('id')
+    .eq('instructor_id', instructorId)
+    .gte('session_date', monthStart)
+    .lte('session_date', monthEnd)
+    .eq('is_cancelled', false);
+
+  const sessionIds = (sessions || []).map(s => s.id);
+  if (sessionIds.length === 0) return { classes: 0, students: 0, attended: 0, recoverable: 0, lost: 0, no_show: 0 };
+
+  const [bookingsRes, attsRes] = await Promise.all([
+    sb.from('session_bookings').select('id').in('session_id', sessionIds).is('cancelled_at', null),
+    sb.from('attendance').select('status').in('session_id', sessionIds),
+  ]);
+
+  const counts = { attended: 0, recoverable: 0, lost: 0, no_show: 0 };
+  (attsRes.data || []).forEach(a => {
+    if (counts[a.status] !== undefined) counts[a.status]++;
+  });
+
+  return {
+    classes: sessionIds.length,
+    students: (bookingsRes.data || []).length,
+    ...counts,
+  };
+}
+
+async function loadInstructorClassesForDate(inst, dateIso) {
+  if (!isOnline) return [];
+  const dateObj = new Date(dateIso + 'T12:00:00');
+  const dow = dateObj.getDay();
+
+  // Turnos del profesor por dow (si tienes tabla schedules) — uso fallback al horario fijo
+  const schedules = (STATE.schedules || []).filter(s => s.instructor_id === inst.id && s.day_of_week === dow);
+
+  // Sesiones reales asignadas al profesor en esa fecha (overrides puntuales)
+  const { data: sessionsAssigned } = await sb.from('class_sessions')
+    .select('*')
+    .eq('instructor_id', inst.id)
+    .eq('session_date', dateIso);
+
+  // Combinar: por cada turno fijo + cada sesión asignada
+  const slotMap = new Map(); // key: locationId|hour
+  for (const s of schedules) {
+    slotMap.set(`${s.location_id}|${s.hour}`, { location_id: s.location_id, hour: s.hour, session: null });
+  }
+  for (const sess of (sessionsAssigned || [])) {
+    const key = `${sess.location_id}|${sess.hour}`;
+    if (slotMap.has(key)) slotMap.get(key).session = sess;
+    else slotMap.set(key, { location_id: sess.location_id, hour: sess.hour, session: sess });
+  }
+
+  const slots = [...slotMap.values()].sort((a,b) => a.hour - b.hour);
+
+  // Para cada slot, cargar bookings + attendances
+  const result = [];
+  for (const slot of slots) {
+    const loc = STATE.locations.find(l => l.id === slot.location_id);
+    let session = slot.session;
+    if (!session) {
+      const { data: sess } = await sb.from('class_sessions')
+        .select('*')
+        .eq('location_id', slot.location_id)
+        .eq('session_date', dateIso)
+        .eq('hour', slot.hour)
+        .maybeSingle();
+      session = sess;
+    }
+
+    let bookings = [];
+    let attendances = [];
+    if (session) {
+      const [bRes, aRes] = await Promise.all([
+        sb.from('session_bookings').select('*').eq('session_id', session.id).is('cancelled_at', null),
+        sb.from('attendance').select('*').eq('session_id', session.id),
+      ]);
+      bookings = bRes.data || [];
+      attendances = aRes.data || [];
+    }
+
+    // Alumnos fijos: aparecen automáticamente si no hay session_booking explícito
+    const fixed = (STATE.fixedBookings || []).filter(b => b.is_active && b.location_id === slot.location_id && b.day_of_week === dow && b.hour === slot.hour);
+    const bookedIds = new Set(bookings.map(b => b.student_id));
+
+    // Lista de alumnos en la clase
+    const studentsInClass = [];
+    for (const b of bookings) {
+      const stud = STATE.students.find(s => s.id === b.student_id);
+      if (stud) {
+        const att = attendances.find(a => a.student_id === b.student_id);
+        studentsInClass.push({ student: stud, source: b.source || 'fixed', attendance: att, bookingId: b.id });
+      }
+    }
+    for (const f of fixed) {
+      if (bookedIds.has(f.student_id)) continue;
+      const stud = STATE.students.find(s => s.id === f.student_id);
+      if (stud) {
+        const att = attendances.find(a => a.student_id === f.student_id);
+        studentsInClass.push({ student: stud, source: 'fixed', attendance: att, bookingId: null });
+      }
+    }
+
+    // También alumnos que tienen attendance pero no están en bookings (ej: invitada agregada por profesor)
+    for (const a of attendances) {
+      if (studentsInClass.find(x => x.student.id === a.student_id)) continue;
+      const stud = STATE.students.find(s => s.id === a.student_id);
+      if (stud) studentsInClass.push({ student: stud, source: 'walk_in', attendance: a, bookingId: null });
+    }
+
+    const cap = loc?.capacity || 9;
+    const marked = studentsInClass.filter(s => s.attendance && s.attendance.status !== 'pending').length;
+
+    result.push({
+      slot, location: loc, session, dateIso, hour: slot.hour, capacity: cap,
+      students: studentsInClass, marked,
+    });
+  }
+
+  return result;
+}
+
+function renderInstructorClassCard(c) {
+  const now = new Date();
+  const todayIso = now.toISOString().slice(0,10);
+  const isToday = c.dateIso === todayIso;
+  const currentHour = now.getHours();
+  const currentMin = now.getMinutes();
+  let status = 'próxima', headerBg = 'var(--bg)', headerColor = 'var(--ink)', statusColor = 'var(--ink-mute)';
+  if (isToday) {
+    if (currentHour > c.hour) { status = 'terminada'; }
+    else if (currentHour === c.hour || (currentHour === c.hour - 1 && currentMin >= 50)) {
+      status = 'en curso'; headerBg = '#EEEDFE'; headerColor = '#3C3489'; statusColor = '#534AB7';
+    }
+  } else if (c.dateIso < todayIso) {
+    status = 'terminada';
+  }
+
+  const studentsHtml = c.students.length === 0
+    ? '<div style="padding: 14px 16px; color: var(--ink-mute); font-size: 13px; text-align: center;">Sin alumnos esta clase</div>'
+    : c.students.map(item => renderInstructorStudentRow(item, c)).join('');
+
+  // session id para "agregar alumno" (necesitamos session real)
+  const sessionId = c.session ? c.session.id : '';
+
+  return `
+    <div style="background: white; border: 1px solid var(--line); border-radius: var(--radius-lg); overflow: hidden;">
+      <div style="background: ${headerBg}; padding: 12px 18px; display: flex; align-items: center; justify-content: space-between;">
+        <div style="display: flex; align-items: baseline; gap: 10px;">
+          <div style="font-family: var(--display); font-size: 20px; color: ${headerColor};">${formatHour(c.hour)}</div>
+          <div style="font-size: 11px; color: ${statusColor}; font-weight: 500;">${status}</div>
+        </div>
+        <div style="font-size: 11px; color: ${statusColor};">${c.marked}/${c.students.length} marcados · cap. ${c.capacity}</div>
+      </div>
+      ${studentsHtml}
+      <div style="border-top: 1px solid var(--line); padding: 10px 14px;">
+        <button onclick="instructorOpenAddStudent('${c.dateIso}', ${c.hour}, '${c.location.id}')" style="width: 100%; padding: 10px; font-size: 12px; border: 1px dashed var(--line); background: transparent; border-radius: var(--radius-sm); color: var(--ink-mute); cursor: pointer;">+ Agregar alumno a esta clase</button>
+      </div>
+    </div>
+  `;
+}
+
+function renderInstructorStudentRow(item, classCtx) {
+  const s = item.student;
+  const att = item.attendance;
+  const status = att ? att.status : null;
+  const STATES = {
+    attended:    { label: 'Asistió',            bg: '#EAF3DE', fg: '#27500A' },
+    recoverable: { label: 'Falta justificada',  bg: '#FAEEDA', fg: '#633806' },
+    lost:        { label: 'Cancelación tardía', bg: '#FAECE7', fg: '#712B13' },
+    no_show:     { label: 'No vino sin avisar', bg: '#FCEBEB', fg: '#791F1F' },
+  };
+  const st = (status && STATES[status]) ? STATES[status] : null;
+  const bg = st ? st.bg : 'transparent';
+  const isPending = att?.pending_payment_at;
+  const isTrial = s.student_status === 'trial';
+
+  const menuOpen = STATE.instAbsenceMenuOpen === s.id + '|' + classCtx.hour;
+
+  return `
+    <div style="border-top: 1px solid var(--line); background: ${bg};">
+      <div style="display: flex; align-items: center; gap: 10px; padding: 11px 16px;">
+        <div class="student-avatar" style="width: 32px; height: 32px; font-size: 11px;">${initials(s)}</div>
+        <div style="flex: 1; min-width: 0;">
+          <div style="font-size: 13px; font-weight: 500; color: ${st ? st.fg : 'var(--ink)'};">
+            ${escape(s.first_name)} ${escape(s.last_name || '')}
+            ${isTrial ? '<span style="font-size: 9px; padding: 2px 6px; background: #EEEDFE; color: #3C3489; border-radius: 999px; margin-left: 4px;">invitada</span>' : ''}
+            ${isPending ? '<span style="font-size: 9px; padding: 2px 6px; background: #FAEEDA; color: #633806; border-radius: 999px; margin-left: 4px;">pendiente pago</span>' : ''}
+          </div>
+          ${st ? `<div style="font-size: 10px; color: ${st.fg}; margin-top: 1px;">● ${st.label}</div>` : ''}
+        </div>
+        ${st
+          ? `<button onclick="instructorResetAttendance('${s.id}', '${classCtx.dateIso}', ${classCtx.hour}, '${classCtx.location.id}')" style="font-size: 11px; padding: 4px 10px; background: transparent; border: 1px solid ${st.fg}40; color: ${st.fg}; border-radius: 999px; cursor: pointer;">Cambiar</button>`
+          : `<div style="display: flex; gap: 6px;">
+              <button onclick="instructorMarkAttended('${s.id}', '${classCtx.dateIso}', ${classCtx.hour}, '${classCtx.location.id}')" title="Asistió" style="width: 36px; height: 36px; border: 1px solid var(--line); background: white; border-radius: 50%; font-size: 16px; color: #639922; cursor: pointer;">✓</button>
+              <button onclick="instructorOpenAbsenceMenu('${s.id}', ${classCtx.hour})" title="Falta" style="width: 36px; height: 36px; border: 1px solid var(--line); background: white; border-radius: 50%; font-size: 16px; color: #E24B4A; cursor: pointer;">✕</button>
+            </div>`
+        }
+      </div>
+      ${menuOpen ? `
+        <div style="padding: 0 16px 12px 58px; display: flex; flex-direction: column; gap: 6px;">
+          <div style="font-size: 10px; color: var(--ink-mute); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 2px;">¿Por qué faltó?</div>
+          <button onclick="instructorMarkAbsence('${s.id}', '${classCtx.dateIso}', ${classCtx.hour}, '${classCtx.location.id}', 'recoverable')" style="text-align: left; padding: 9px 12px; border: 1px solid #EF9F2740; background: #FAEEDA; color: #633806; border-radius: var(--radius-sm); font-size: 12px; cursor: pointer;">
+            <div style="font-weight: 500;">⊙ Falta justificada</div>
+            <div style="font-size: 10px; color: #854F0B; margin-top: 1px;">No descuenta del paquete · puede recuperar</div>
+          </button>
+          <button onclick="instructorMarkAbsence('${s.id}', '${classCtx.dateIso}', ${classCtx.hour}, '${classCtx.location.id}', 'lost')" style="text-align: left; padding: 9px 12px; border: 1px solid #D85A3040; background: #FAECE7; color: #712B13; border-radius: var(--radius-sm); font-size: 12px; cursor: pointer;">
+            <div style="font-weight: 500;">⚠ Cancelación tardía</div>
+            <div style="font-size: 10px; color: #993C1D; margin-top: 1px;">Descuenta del paquete</div>
+          </button>
+          <button onclick="instructorMarkAbsence('${s.id}', '${classCtx.dateIso}', ${classCtx.hour}, '${classCtx.location.id}', 'no_show')" style="text-align: left; padding: 9px 12px; border: 1px solid #E24B4A40; background: #FCEBEB; color: #791F1F; border-radius: var(--radius-sm); font-size: 12px; cursor: pointer;">
+            <div style="font-weight: 500;">✕ No vino sin avisar</div>
+            <div style="font-size: 10px; color: #A32D2D; margin-top: 1px;">Descuenta del paquete</div>
+          </button>
+          <button onclick="instructorCloseAbsenceMenu()" style="margin-top: 2px; padding: 6px; font-size: 11px; background: transparent; border: none; color: var(--ink-mute); cursor: pointer;">cancelar</button>
+        </div>
+      ` : ''}
+    </div>
+  `;
+}
+
+function instructorSetDate(filter) {
+  STATE.instDayFilter = filter;
+  const today = new Date().toISOString().slice(0,10);
+  if (filter === 'today') STATE.instDayDate = today;
+  else if (filter === 'tomorrow') STATE.instDayDate = new Date(Date.now() + 86400000).toISOString().slice(0,10);
+  STATE.instAbsenceMenuOpen = null;
+  renderInstructorDay();
+}
+
+function instructorOpenDatePicker() {
+  STATE.instDayFilter = 'other';
+  renderInstructorDay();
+  setTimeout(() => {
+    const picker = document.getElementById('inst-date-picker');
+    if (picker) picker.showPicker?.();
+  }, 50);
+}
+
+function instructorSetCustomDate(dateIso) {
+  if (!dateIso) return;
+  STATE.instDayFilter = 'other';
+  STATE.instDayDate = dateIso;
+  STATE.instAbsenceMenuOpen = null;
+  renderInstructorDay();
+}
+
+function instructorOpenAbsenceMenu(studentId, hour) {
+  STATE.instAbsenceMenuOpen = studentId + '|' + hour;
+  renderInstructorDay();
+}
+
+function instructorCloseAbsenceMenu() {
+  STATE.instAbsenceMenuOpen = null;
+  renderInstructorDay();
+}
+
+async function instructorMarkAttended(studentId, dateIso, hour, locationId) {
+  await instructorWriteAttendance(studentId, dateIso, hour, locationId, 'attended');
+}
+
+async function instructorMarkAbsence(studentId, dateIso, hour, locationId, status) {
+  STATE.instAbsenceMenuOpen = null;
+  await instructorWriteAttendance(studentId, dateIso, hour, locationId, status);
+}
+
+async function instructorResetAttendance(studentId, dateIso, hour, locationId) {
+  await instructorWriteAttendance(studentId, dateIso, hour, locationId, 'pending');
+}
+
+async function instructorWriteAttendance(studentId, dateIso, hour, locationId, status) {
+  if (!isOnline) { showToast('Necesitas conexión', 'error'); return; }
+
+  // Asegurar session
+  let { data: session } = await sb.from('class_sessions')
+    .select('*')
+    .eq('location_id', locationId)
+    .eq('session_date', dateIso)
+    .eq('hour', hour)
+    .maybeSingle();
+  if (!session) {
+    const { data: created, error } = await sb.from('class_sessions').insert({
+      location_id: locationId, session_date: dateIso, hour: hour,
+      instructor_id: CURRENT_USER.record.id,
+    }).select().single();
+    if (error) { showToast('Error: ' + error.message, 'error'); return; }
+    session = created;
+  }
+
+  // Si es asistencia/perdida/no_show → cancelar booking del alumno (libera slot)
+  // Si es recoverable → cancelar booking (libera slot, queda pendiente recuperar)
+  // Si es pending (reset) → re-activar booking si estaba cancelado
+  const cancelBooking = ['recoverable','lost','no_show'].includes(status);
+  const reactivateBooking = (status === 'pending');
+
+  if (cancelBooking || reactivateBooking) {
+    if (cancelBooking) {
+      const stamp = new Date().toLocaleString('es-PE', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+      const reasonMap = { recoverable: 'falta justificada', lost: 'cancelación tardía', no_show: 'no vino sin avisar' };
+      await sb.from('session_bookings').update({
+        cancelled_at: new Date().toISOString(),
+        cancelled_reason: `[${stamp}] ${reasonMap[status]} · marcado por profesor (${CURRENT_USER.record.first_name || ''})`,
+      }).eq('session_id', session.id).eq('student_id', studentId).is('cancelled_at', null);
+    } else {
+      await sb.from('session_bookings').update({
+        cancelled_at: null, cancelled_reason: null,
+      }).eq('session_id', session.id).eq('student_id', studentId);
+    }
+  }
+
+  // Upsert attendance
+  const stamp = new Date().toLocaleString('es-PE', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+  const actor = `profesor (${CURRENT_USER.record.first_name || ''})`;
+  const labelMap = { attended: 'asistió', recoverable: 'falta justificada (recuperable)', lost: 'cancelación tardía', no_show: 'no vino sin avisar', pending: 'pendiente' };
+  const noteLine = `[${stamp}] ${labelMap[status] || status} · marcado por ${actor}`;
+  const isRecoverable = (status === 'recoverable');
+  const countsAgainst = ['attended','lost','no_show'].includes(status);
+
+  await sb.from('attendance').upsert({
+    session_id: session.id,
+    student_id: studentId,
+    status,
+    is_recoverable: isRecoverable,
+    counts_against_package: countsAgainst,
+    notes: noteLine,
+    marked_at: new Date().toISOString(),
+    marked_by: CURRENT_USER.authUser?.id || null,
+  }, { onConflict: 'session_id,student_id' });
+
+  await recalcPackageCounters(studentId);
+
+  const toastMap = {
+    attended: '✓ Asistió',
+    recoverable: '⊙ Falta justificada · cupo liberado',
+    lost: '⚠ Cancelación tardía · cupo liberado',
+    no_show: '✕ No vino · cupo liberado',
+    pending: '○ Asistencia revertida',
+  };
+  showToast(toastMap[status] || 'Marcado', 'success');
+  renderInstructorDay();
+}
+
+// ============================================
+// INSTRUCTOR ADD STUDENT — modal de búsqueda + 4 casos + invitada nueva
+// ============================================
+async function instructorOpenAddStudent(dateIso, hour, locationId) {
+  if (!isOnline) { showToast('Necesitas conexión', 'error'); return; }
+
+  const loc = STATE.locations.find(l => l.id === locationId);
+  const cap = loc?.capacity || 9;
+
+  STATE.instAddCtx = { dateIso, hour, locationId, locationName: loc?.name || '', capacity: cap };
+  STATE.instAddPick = null;
+
+  const dateObj = new Date(dateIso + 'T12:00:00');
+  const dayLabels = ['dom','lun','mar','mié','jue','vie','sáb'];
+  document.getElementById('inst-add-sub').textContent = `${dayLabels[dateObj.getDay()]} ${dateObj.getDate()} · ${formatHour(hour)} · ${loc?.name || ''}`;
+
+  document.getElementById('instructor-add-modal').classList.add('is-open');
+  instructorRenderAddSearch('');
+  setTimeout(() => {
+    const input = document.getElementById('inst-add-search');
+    if (input) input.focus();
+  }, 50);
+}
+
+function instructorRenderAddSearch(query) {
+  const body = document.getElementById('inst-add-body');
+  body.innerHTML = `
+    <input id="inst-add-search" placeholder="Buscar nombre o teléfono..." value="${escape(query)}"
+      style="width: 100%; padding: 10px 14px; font-size: 14px; border: 1px solid var(--line); border-radius: var(--radius-sm); margin-bottom: 12px; box-sizing: border-box;" />
+    <div id="inst-add-results"></div>
+  `;
+  const input = document.getElementById('inst-add-search');
+  input.addEventListener('input', (e) => instructorRenderResults(e.target.value));
+  instructorRenderResults(query);
+}
+
+function instructorRenderResults(query) {
+  const results = document.getElementById('inst-add-results');
+  if (!results) return;
+  const q = (query || '').toLowerCase().trim();
+
+  let matches = STATE.students || [];
+  if (q) {
+    matches = matches.filter(s => {
+      const name = ((s.first_name || '') + ' ' + (s.last_name || '')).toLowerCase();
+      const phone = (s.phone || '').replace(/\s/g, '');
+      const doc = (s.document_number || '').toLowerCase();
+      return name.includes(q) || phone.includes(q) || doc.includes(q);
+    });
+  }
+  matches = matches.slice(0, 8);
+
+  let html = matches.map(s => {
+    const isTrial = s.student_status === 'trial';
+    return `
+      <div onclick="instructorPickStudent('${s.id}')" style="display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--radius-sm); margin-bottom: 6px; cursor: pointer; background: white;">
+        <div class="student-avatar" style="width: 32px; height: 32px; font-size: 11px;">${initials(s)}</div>
+        <div style="flex: 1; min-width: 0;">
+          <div style="font-size: 13px; font-weight: 500;">${escape(s.first_name)} ${escape(s.last_name || '')} ${isTrial ? '<span style="font-size: 9px; padding: 2px 6px; background: #EEEDFE; color: #3C3489; border-radius: 999px; margin-left: 4px;">invitada</span>' : ''}</div>
+          <div style="font-size: 10px; color: var(--ink-mute);">${escape(s.phone || s.email || '')}</div>
+        </div>
+        <div style="font-size: 14px; color: var(--ink-mute);">›</div>
+      </div>
+    `;
+  }).join('');
+
+  if (q && matches.length === 0) {
+    html = `<div style="padding: 14px; text-align: center; color: var(--ink-mute); font-size: 12px; margin-bottom: 8px;">Sin resultados para "${escape(q)}"</div>`;
+  }
+
+  html += `
+    <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line);">
+      <button onclick="instructorRenderInviteForm()" style="width: 100%; padding: 12px 14px; font-size: 13px; background: white; border: 1px dashed var(--fit-purple); color: var(--fit-purple-deep); border-radius: var(--radius-sm); text-align: left; cursor: pointer;">
+        <div style="font-weight: 500;">+ Registrar invitada nueva</div>
+        <div style="font-size: 10px; color: var(--fit-purple); margin-top: 2px;">Para alguien que no está en el sistema. Aparecerá en "Por cobrar" del coordinador.</div>
+      </button>
+    </div>
+  `;
+
+  results.innerHTML = html;
+}
+
+async function instructorPickStudent(studentId) {
+  const stud = STATE.students.find(s => s.id === studentId);
+  if (!stud) return;
+
+  const ctx = STATE.instAddCtx;
+  if (!ctx) return;
+
+  STATE.instAddPick = studentId;
+
+  // Detectar caso: D (frozen), C (sin paquete), B (en límite), A (tiene cupo)
+  const todayIso = new Date().toISOString().slice(0,10);
+  const { data: anyPkg } = await sb.from('student_packages')
+    .select('id, classes_total, classes_used, classes_recoverable, expiration_date, end_date, purchase_date, start_date, is_frozen')
+    .eq('student_id', studentId)
+    .order('purchase_date', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  let caseType;
+  if (anyPkg && anyPkg.is_frozen && anyPkg.expiration_date >= todayIso) {
+    caseType = 'D'; // frozen
+  } else {
+    const cap = await getStudentBookingCapacity(studentId);
+    if (!cap.hasPackage) caseType = 'C';
+    else if (cap.remaining > 0) caseType = 'A';
+    else caseType = 'B';
+  }
+
+  instructorRenderCase(caseType, stud, anyPkg);
+}
+
+async function instructorRenderCase(caseType, stud, pkg) {
+  const ctx = STATE.instAddCtx;
+  const body = document.getElementById('inst-add-body');
+  const backBtn = `<button onclick="instructorRenderAddSearch('')" style="background: transparent; border: none; font-size: 12px; color: var(--ink-mute); padding: 0 0 12px; cursor: pointer;">← volver a búsqueda</button>`;
+
+  const studHeader = `
+    <div style="display: flex; align-items: center; gap: 10px; padding: 10px 12px; background: var(--bg); border-radius: var(--radius-sm); margin-bottom: 14px;">
+      <div class="student-avatar" style="width: 36px; height: 36px; font-size: 12px;">${initials(stud)}</div>
+      <div style="flex: 1;">
+        <div style="font-size: 14px; font-weight: 500;">${escape(stud.first_name)} ${escape(stud.last_name || '')}</div>
+        <div style="font-size: 11px; color: var(--ink-mute);">${escape(stud.phone || stud.email || '')}</div>
+      </div>
+    </div>
+  `;
+
+  if (caseType === 'A') {
+    const cap = await getStudentBookingCapacity(stud.id);
+    body.innerHTML = `
+      ${backBtn}
+      ${studHeader}
+      <div style="padding: 14px; background: #EAF3DE; border-radius: var(--radius-sm); margin-bottom: 14px;">
+        <div style="font-size: 12px; font-weight: 500; color: #27500A; margin-bottom: 4px;">✓ Tiene cupo en su paquete</div>
+        <div style="font-size: 11px; color: #3B6D11;">Tiene ${cap.remaining} ${cap.remaining === 1 ? 'clase disponible' : 'clases disponibles'} (usa ${cap.pkg.classes_used || 0}/${cap.pkg.classes_total} · vence ${formatDate(cap.pkg.expiration_date)})</div>
+      </div>
+      <button onclick="instructorConfirmAddCaseA('${stud.id}')" style="width: 100%; padding: 12px; font-size: 14px; background: var(--fit-purple); color: white; border: none; border-radius: var(--radius-sm); font-weight: 500; cursor: pointer;">Agregar y marcar asistida</button>
+    `;
+  } else if (caseType === 'B') {
+    // Cargar bookings futuros para swap
+    const todayIso = new Date().toISOString().slice(0,10);
+    const { data: futureBookings } = await sb.from('session_bookings')
+      .select('id, session_id, class_sessions(id, session_date, hour, location_id, is_cancelled)')
+      .eq('student_id', stud.id)
+      .is('cancelled_at', null);
+
+    const candidates = (futureBookings || [])
+      .filter(b => b.class_sessions && !b.class_sessions.is_cancelled && b.class_sessions.session_date >= todayIso)
+      .filter(b => !(b.class_sessions.session_date === ctx.dateIso && b.class_sessions.hour === ctx.hour && b.class_sessions.location_id === ctx.locationId))
+      .sort((a, b) => {
+        const cmp = a.class_sessions.session_date.localeCompare(b.class_sessions.session_date);
+        return cmp !== 0 ? cmp : a.class_sessions.hour - b.class_sessions.hour;
+      });
+
+    body.innerHTML = `
+      ${backBtn}
+      ${studHeader}
+      <div style="padding: 14px; background: #FAEEDA; border-radius: var(--radius-sm); margin-bottom: 14px;">
+        <div style="font-size: 12px; font-weight: 500; color: #633806; margin-bottom: 4px;">⊙ Ya tiene ${pkg.classes_total} de ${pkg.classes_total} agendadas</div>
+        <div style="font-size: 11px; color: #854F0B;">No se puede agregar sin cancelar otra. ¿Cuál movemos a esta clase?</div>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 6px; max-height: 300px; overflow-y: auto;">
+        ${candidates.length === 0 ? '<div style="padding: 12px; text-align: center; color: var(--ink-mute); font-size: 12px;">No hay otras clases agendadas para mover.</div>' : candidates.map(b => {
+          const sess = b.class_sessions;
+          const lc = STATE.locations.find(l => l.id === sess.location_id);
+          return `
+            <button onclick="instructorConfirmSwap('${stud.id}', '${b.id}', '${sess.id}')" style="text-align: left; padding: 11px 13px; font-size: 12px; background: white; border: 1px solid var(--line); border-radius: var(--radius-sm); cursor: pointer;">
+              <div style="font-weight: 500;">Cancelar ${formatDate(sess.session_date)} · ${formatHour(sess.hour)}</div>
+              <div style="font-size: 10px; color: var(--ink-mute); margin-top: 2px;">${escape(lc?.name || '')} · se libera y se mueve a esta clase</div>
+            </button>
+          `;
+        }).join('')}
+      </div>
+    `;
+  } else if (caseType === 'C') {
+    body.innerHTML = `
+      ${backBtn}
+      ${studHeader}
+      <div style="padding: 14px; background: #FAECE7; border-radius: var(--radius-sm); margin-bottom: 14px;">
+        <div style="font-size: 12px; font-weight: 500; color: #712B13; margin-bottom: 4px;">⚠ Sin paquete activo</div>
+        <div style="font-size: 11px; color: #993C1D;">${pkg ? (pkg.expiration_date < new Date().toISOString().slice(0,10) ? `Paquete vencido el ${formatDate(pkg.expiration_date)}` : 'Sin clases disponibles') : 'No tiene ningún paquete asignado'}</div>
+      </div>
+      <div style="padding: 12px 14px; background: var(--bg); border-radius: var(--radius-sm); margin-bottom: 14px; font-size: 11px; color: var(--ink-mute); line-height: 1.5;">
+        Puedes registrarla igual. Aparecerá en el dashboard del coordinador como pendiente de cobro. Cuando le venda paquete, esta clase se imputa al nuevo.
+      </div>
+      <button onclick="instructorConfirmAddCaseC('${stud.id}')" style="width: 100%; padding: 12px; font-size: 14px; background: var(--fit-purple); color: white; border: none; border-radius: var(--radius-sm); font-weight: 500; cursor: pointer;">Registrar como pendiente de pago</button>
+    `;
+  } else if (caseType === 'D') {
+    body.innerHTML = `
+      ${backBtn}
+      ${studHeader}
+      <div style="padding: 14px; background: #FCEBEB; border-radius: var(--radius-sm); margin-bottom: 14px;">
+        <div style="font-size: 12px; font-weight: 500; color: #791F1F; margin-bottom: 4px;">✕ Paquete congelado</div>
+        <div style="font-size: 11px; color: #A32D2D;">Solo el coordinador puede reactivarlo.</div>
+      </div>
+      <button disabled style="width: 100%; padding: 12px; font-size: 13px; background: var(--bg); color: var(--ink-mute); border: 1px solid var(--line); border-radius: var(--radius-sm);">Avísale que vaya a recepción</button>
     `;
   }
-  list.innerHTML = html;
-
-  // Botón confirmar turno (si todavía no confirmó hoy)
-  const confirmedKey = `shift_confirmed_${inst.id}_${todayIso}`;
-  const alreadyConfirmed = localStorage.getItem(confirmedKey) === '1';
-  const btn = document.getElementById('confirm-shift-btn');
-  btn.style.display = 'inline-flex';
-  if (alreadyConfirmed) {
-    btn.textContent = '✓ Turno confirmado';
-    btn.disabled = true;
-    btn.style.opacity = '0.6';
-  } else {
-    btn.textContent = 'Confirmar mi turno';
-    btn.disabled = false;
-    btn.style.opacity = '1';
-  }
 }
 
-function renderAttendanceBadge(status) {
-  const map = {
-    asistio: { c: '#0F6E56', bg: '#E1F5EE', t: '✓ Asistió' },
-    recuperable: { c: '#BA7517', bg: '#FAEEDA', t: '⊙ Recuperable' },
-    perdida: { c: '#A32D2D', bg: '#FCEBEB', t: '✗ Perdida' },
-    no_show: { c: '#A32D2D', bg: '#FCEBEB', t: '✗ No vino' },
-    pendiente: { c: '#888', bg: '#F1EFE8', t: '○ Pendiente' },
-  };
-  const x = map[status] || map.pendiente;
-  return `<span style="font-size: 11px; padding: 3px 8px; background: ${x.bg}; color: ${x.c}; border-radius: 999px; font-weight: 500;">${x.t}</span>`;
+function instructorRenderInviteForm() {
+  const body = document.getElementById('inst-add-body');
+  body.innerHTML = `
+    <button onclick="instructorRenderAddSearch('')" style="background: transparent; border: none; font-size: 12px; color: var(--ink-mute); padding: 0 0 12px; cursor: pointer;">← volver a búsqueda</button>
+    <div style="padding: 14px; background: #EEEDFE; border-radius: var(--radius-sm); margin-bottom: 14px;">
+      <div style="font-size: 12px; font-weight: 500; color: #3C3489; margin-bottom: 4px;">Nueva invitada · clase de prueba</div>
+      <div style="font-size: 11px; color: #534AB7;">Aparecerá en el dashboard del coordinador como pendiente de cobro.</div>
+    </div>
+    <input id="invite-name" placeholder="Nombre completo" autocomplete="off"
+      style="width: 100%; padding: 10px 14px; font-size: 14px; border: 1px solid var(--line); border-radius: var(--radius-sm); margin-bottom: 8px; box-sizing: border-box;" />
+    <input id="invite-phone" placeholder="Teléfono (WhatsApp)" autocomplete="off" inputmode="tel"
+      style="width: 100%; padding: 10px 14px; font-size: 14px; border: 1px solid var(--line); border-radius: var(--radius-sm); margin-bottom: 14px; box-sizing: border-box;" />
+    <button onclick="instructorConfirmInvite()" style="width: 100%; padding: 12px; font-size: 14px; background: var(--fit-purple); color: white; border: none; border-radius: var(--radius-sm); font-weight: 500; cursor: pointer;">Registrar y marcar asistida</button>
+  `;
+  setTimeout(() => document.getElementById('invite-name')?.focus(), 50);
 }
 
-async function instructorMarkAttendance(studentId, hour, locationId, dateIso, btn) {
-  if (!isOnline) { showToast('Necesitas conexión', 'error'); return; }
-  // Reusar markAttendance del coordinador, adaptándola
-  // Crear/asegurar session
-  const { data: existing } = await sb.from('class_sessions').select('*').eq('location_id', locationId).eq('session_date', dateIso).eq('hour', hour).maybeSingle();
-  let sessionId = existing?.id;
-  if (!sessionId) {
+async function instructorEnsureSession(ctx) {
+  let { data: session } = await sb.from('class_sessions')
+    .select('*')
+    .eq('location_id', ctx.locationId)
+    .eq('session_date', ctx.dateIso)
+    .eq('hour', ctx.hour)
+    .maybeSingle();
+  if (!session) {
     const { data: created, error } = await sb.from('class_sessions').insert({
-      location_id: locationId, session_date: dateIso, hour: hour, instructor_id: CURRENT_USER.record.id
+      location_id: ctx.locationId, session_date: ctx.dateIso, hour: ctx.hour,
+      instructor_id: CURRENT_USER.record.id,
     }).select().single();
-    if (error) { showToast('Error: '+error.message, 'error'); return; }
-    sessionId = created.id;
+    if (error) throw error;
+    session = created;
   }
-  // Toggle simple: pendiente → asistio. Para más estados, usar un menú.
-  const status = 'asistio';
+  return session;
+}
+
+async function instructorUpsertActiveBooking(sessionId, studentId, source) {
+  const { data: existing } = await sb.from('session_bookings')
+    .select('id, cancelled_at')
+    .eq('session_id', sessionId)
+    .eq('student_id', studentId)
+    .maybeSingle();
+
+  if (existing) {
+    if (existing.cancelled_at) {
+      await sb.from('session_bookings').update({ cancelled_at: null, cancelled_reason: null }).eq('id', existing.id);
+    }
+    return existing.id;
+  } else {
+    const { data: created, error } = await sb.from('session_bookings').insert({
+      session_id: sessionId, student_id: studentId, source,
+    }).select().single();
+    if (error) throw error;
+    return created.id;
+  }
+}
+
+async function instructorMarkAttendedDirect(sessionId, studentId, opts) {
+  const stamp = new Date().toLocaleString('es-PE', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+  const actor = `profesor (${CURRENT_USER.record.first_name || ''})`;
+  const noteParts = [`[${stamp}] asistió · marcado por ${actor}`];
+  if (opts?.walkIn) noteParts.push('agregada manualmente por profesor');
+  if (opts?.pendingPayment) noteParts.push('pendiente de pago');
+
   await sb.from('attendance').upsert({
-    session_id: sessionId, student_id: studentId, status: status, marked_by: CURRENT_USER.authUser.id, marked_at: new Date().toISOString()
+    session_id: sessionId,
+    student_id: studentId,
+    status: 'attended',
+    is_recoverable: false,
+    counts_against_package: !opts?.pendingPayment, // si está pendiente de pago, no descuenta de ningún paquete
+    notes: noteParts.join(' · '),
+    pending_payment_at: opts?.pendingPayment ? new Date().toISOString() : null,
+    marked_at: new Date().toISOString(),
+    marked_by: CURRENT_USER.authUser?.id || null,
   }, { onConflict: 'session_id,student_id' });
-  showToast('✓ Asistencia marcada', 'success');
-  renderInstructorDay();
+}
+
+async function instructorConfirmAddCaseA(studentId) {
+  if (!isOnline) { showToast('Sin conexión', 'error'); return; }
+  try {
+    const ctx = STATE.instAddCtx;
+    const stud = STATE.students.find(s => s.id === studentId);
+    const session = await instructorEnsureSession(ctx);
+    const source = stud.modality === 'flexible' ? 'flexible' : 'fixed';
+    await instructorUpsertActiveBooking(session.id, studentId, source);
+    await instructorMarkAttendedDirect(session.id, studentId);
+    await recalcPackageCounters(studentId);
+    showToast(`✓ ${stud.first_name} agregada y marcada asistida`, 'success');
+    closeModals();
+    renderInstructorDay();
+  } catch (e) {
+    console.error(e);
+    showToast('Error: ' + (e.message || 'desconocido'), 'error');
+  }
+}
+
+async function instructorConfirmSwap(studentId, oldBookingId, oldSessionId) {
+  if (!isOnline) { showToast('Sin conexión', 'error'); return; }
+  try {
+    const ctx = STATE.instAddCtx;
+    const stud = STATE.students.find(s => s.id === studentId);
+    const stamp = new Date().toLocaleString('es-PE', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+    const actor = `profesor (${CURRENT_USER.record.first_name || ''})`;
+
+    // Cancelar booking viejo
+    await sb.from('session_bookings').update({
+      cancelled_at: new Date().toISOString(),
+      cancelled_reason: `[${stamp}] Movida a ${ctx.dateIso} ${formatHour(ctx.hour)} por ${actor}`,
+    }).eq('id', oldBookingId);
+
+    // Crear booking nuevo + marcar asistida
+    const session = await instructorEnsureSession(ctx);
+    const source = stud.modality === 'flexible' ? 'flexible' : 'fixed';
+    await instructorUpsertActiveBooking(session.id, studentId, source);
+    await instructorMarkAttendedDirect(session.id, studentId);
+    await recalcPackageCounters(studentId);
+
+    showToast(`✓ Clase movida y ${stud.first_name} marcada asistida`, 'success');
+    closeModals();
+    renderInstructorDay();
+  } catch (e) {
+    console.error(e);
+    showToast('Error: ' + (e.message || 'desconocido'), 'error');
+  }
+}
+
+async function instructorConfirmAddCaseC(studentId) {
+  if (!isOnline) { showToast('Sin conexión', 'error'); return; }
+  try {
+    const ctx = STATE.instAddCtx;
+    const stud = STATE.students.find(s => s.id === studentId);
+    const session = await instructorEnsureSession(ctx);
+    await instructorUpsertActiveBooking(session.id, studentId, 'flexible');
+    await instructorMarkAttendedDirect(session.id, studentId, { pendingPayment: true });
+    showToast(`✓ ${stud.first_name} registrada · pendiente de cobro en recepción`, 'success');
+    closeModals();
+    renderInstructorDay();
+  } catch (e) {
+    console.error(e);
+    showToast('Error: ' + (e.message || 'desconocido'), 'error');
+  }
+}
+
+async function instructorConfirmInvite() {
+  if (!isOnline) { showToast('Sin conexión', 'error'); return; }
+  const name = document.getElementById('invite-name').value.trim();
+  const phone = document.getElementById('invite-phone').value.trim();
+  if (!name) { showToast('Falta el nombre', 'error'); return; }
+  if (!phone) { showToast('Falta el teléfono', 'error'); return; }
+
+  try {
+    const ctx = STATE.instAddCtx;
+    const parts = name.split(/\s+/);
+    const first_name = parts[0];
+    const last_name = parts.slice(1).join(' ') || null;
+
+    // Crear student como trial
+    const { data: stud, error: stErr } = await sb.from('students').insert({
+      first_name,
+      last_name,
+      phone,
+      location_id: ctx.locationId,
+      modality: 'flexible',
+      student_status: 'trial',
+    }).select().single();
+    if (stErr) throw stErr;
+
+    // Cache local
+    STATE.students.push(stud);
+
+    // Crear booking + asistencia con pending_payment
+    const session = await instructorEnsureSession(ctx);
+    await instructorUpsertActiveBooking(session.id, stud.id, 'flexible');
+    await instructorMarkAttendedDirect(session.id, stud.id, { pendingPayment: true, walkIn: true });
+
+    showToast(`✓ ${first_name} registrada como invitada`, 'success');
+    closeModals();
+    renderInstructorDay();
+  } catch (e) {
+    console.error(e);
+    showToast('Error: ' + (e.message || 'desconocido'), 'error');
+  }
 }
 
 async function confirmMyShift() {
@@ -5768,7 +6562,7 @@ async function renderPaymentsHistoryBlock(student) {
   `;
 }
 
-function openAssignPackageModal(studentId) {
+async function openAssignPackageModal(studentId) {
   const student = STATE.students.find(s => s.id === studentId);
   if (!student) return;
   document.getElementById('assign-pkg-student-id').value = studentId;
@@ -5783,6 +6577,39 @@ function openAssignPackageModal(studentId) {
   document.getElementById('assign-pkg-price').value = '';
   document.getElementById('assign-pkg-classes').value = '';
   document.getElementById('assign-pkg-expiration').value = '';
+
+  // Cargar attendance pendientes de pago
+  const pendingBlock = document.getElementById('assign-pkg-pending-block');
+  pendingBlock.innerHTML = '';
+  STATE.assignPkgPendingAtts = [];
+  if (isOnline) {
+    const { data: pending } = await sb.from('attendance')
+      .select('id, status, pending_payment_at, class_sessions(session_date, hour, location_id)')
+      .eq('student_id', studentId)
+      .not('pending_payment_at', 'is', null)
+      .order('pending_payment_at', { ascending: false });
+    if (pending && pending.length > 0) {
+      STATE.assignPkgPendingAtts = pending;
+      const itemsHtml = pending.map(p => {
+        const sess = p.class_sessions;
+        const lc = STATE.locations.find(l => l.id === sess?.location_id);
+        return `<div style="font-size: 11px; color: #633806; padding: 4px 0;">• ${formatDate(sess?.session_date)} · ${formatHour(sess?.hour)} · ${escape(lc?.name || '')}</div>`;
+      }).join('');
+      pendingBlock.innerHTML = `
+        <div style="background: #FAEEDA; border: 1px solid #F4D58A; border-radius: var(--radius-sm); padding: 14px;">
+          <label style="display: flex; align-items: flex-start; gap: 10px; cursor: pointer;">
+            <input type="checkbox" id="assign-pkg-impute" checked style="margin-top: 2px;" />
+            <div style="flex: 1;">
+              <div style="font-size: 13px; font-weight: 500; color: #633806;">Imputar ${pending.length} clase${pending.length === 1 ? '' : 's'} pendiente${pending.length === 1 ? '' : 's'} a este paquete</div>
+              <div style="font-size: 11px; color: #854F0B; margin-top: 4px;">Si lo dejas marcado, el paquete arrancará con ${pending.length} clase${pending.length === 1 ? '' : 's'} ya consumida${pending.length === 1 ? '' : 's'}.</div>
+              <div style="margin-top: 8px;">${itemsHtml}</div>
+            </div>
+          </label>
+        </div>
+      `;
+    }
+  }
+
   document.getElementById('assign-package-modal').classList.add('is-open');
 }
 
@@ -5815,6 +6642,12 @@ async function saveAssignPackage() {
     return;
   }
 
+  // Detectar si hay imputación de pendientes
+  const imputeCheckbox = document.getElementById('assign-pkg-impute');
+  const pendingAtts = STATE.assignPkgPendingAtts || [];
+  const shouldImpute = imputeCheckbox && imputeCheckbox.checked && pendingAtts.length > 0;
+  const initialUsed = shouldImpute ? Math.min(pendingAtts.length, classes) : 0;
+
   const { data, error } = await sb.from('student_packages').insert({
     student_id: studentId,
     package_id: packageId,
@@ -5824,7 +6657,7 @@ async function saveAssignPackage() {
     end_date: expirationDate,
     classes_total: classes,
     sessions_total: classes,
-    classes_used: 0,
+    classes_used: initialUsed,
     classes_recoverable: 0,
     is_frozen: false,
     price_paid: price,
@@ -5832,9 +6665,31 @@ async function saveAssignPackage() {
 
   if (error) { showToast('Error: '+error.message, 'error'); return; }
 
-  showToast('✓ Paquete asignado', 'success');
+  // Imputar attendance pendientes: limpiar pending_payment_at en las primeras N
+  if (shouldImpute) {
+    const idsToImpute = pendingAtts.slice(0, initialUsed).map(a => a.id);
+    await sb.from('attendance').update({
+      pending_payment_at: null,
+      counts_against_package: true,
+    }).in('id', idsToImpute);
+  }
+
+  // Si la alumna era trial, promoverla a active (ahora tiene paquete)
+  const student = STATE.students.find(s => s.id === studentId);
+  if (student && student.student_status === 'trial') {
+    await sb.from('students').update({ student_status: 'active' }).eq('id', studentId);
+    student.student_status = 'active';
+  }
+
+  const msg = shouldImpute
+    ? `✓ Paquete asignado · ${initialUsed} clase${initialUsed === 1 ? '' : 's'} imputada${initialUsed === 1 ? '' : 's'}`
+    : '✓ Paquete asignado';
+  showToast(msg, 'success');
+
+  // Refrescar widget Por cobrar
+  if (typeof loadToPayList === 'function') loadToPayList();
+
   closeModals();
-  // Abrir modal de pago de inmediato
   setTimeout(() => openPaymentModal(studentId, data.id, price), 200);
 }
 
