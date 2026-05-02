@@ -2625,8 +2625,18 @@ async function openStudentScheduleEditor(studentId, locationId) {
 
   document.getElementById('schedule-editor-modal').classList.add('is-open');
   renderScheduleEditorLoading();
-  await loadScheduleEditorData();
-  renderScheduleEditor();
+  try {
+    await loadScheduleEditorData();
+    renderScheduleEditor();
+  } catch (err) {
+    console.error('Error cargando editor:', err);
+    document.getElementById('schedule-editor-body').innerHTML = `
+      <div style="padding: 40px 24px; text-align: center;">
+        <div style="font-size: 14px; color: #991b1b; margin-bottom: 10px;">Error al cargar el calendario</div>
+        <div style="font-size: 12px; color: var(--ink-mute); font-family: monospace; background: #fef2f2; padding: 10px; border-radius: 6px; text-align: left; max-height: 200px; overflow: auto;">${escape(String(err.message || err))}</div>
+        <button class="btn btn-ghost" onclick="closeModals()" style="margin-top: 14px;">Cerrar</button>
+      </div>`;
+  }
 }
 
 function renderScheduleEditorLoading() {
@@ -2640,8 +2650,8 @@ async function loadScheduleEditorData() {
   const ed = STATE.scheduleEditor;
   const todayIso = new Date().toISOString().slice(0, 10);
 
-  // 1. Paquete activo del alumno
-  const { data: pkg } = await sb.from('student_packages')
+  console.log('[schedEditor] step 1: load package');
+  const pkgResp = await sb.from('student_packages')
     .select('id, expiration_date, end_date, classes_total, classes_used, classes_recoverable, purchase_date, start_date')
     .eq('student_id', ed.studentId)
     .eq('is_frozen', false)
@@ -2649,27 +2659,33 @@ async function loadScheduleEditorData() {
     .order('purchase_date', { ascending: false })
     .limit(1)
     .maybeSingle();
-  ed.package = pkg || null;
+  if (pkgResp.error) throw new Error('Paquete: ' + pkgResp.error.message);
+  ed.package = pkgResp.data || null;
+  console.log('[schedEditor] package:', ed.package);
 
-  // 2. Bookings del alumno + sesiones (todo el rango visible)
-  const { data: bookings } = await sb.from('session_bookings')
+  console.log('[schedEditor] step 2: load bookings');
+  const bookingsResp = await sb.from('session_bookings')
     .select('id, student_id, status, class_sessions(id, session_date, hour, location_id, is_cancelled)')
     .eq('student_id', ed.studentId);
+  if (bookingsResp.error) throw new Error('Bookings: ' + bookingsResp.error.message);
+  const bookings = bookingsResp.data || [];
+  console.log('[schedEditor] bookings count:', bookings.length);
 
-  // 3. Asistencias para distinguir consumidas vs perdidas
-  const bookingIds = (bookings || []).map(b => b.id);
+  console.log('[schedEditor] step 3: load attendances');
+  const bookingIds = bookings.map(b => b.id);
   let attendanceMap = new Map();
   if (bookingIds.length > 0) {
-    const { data: attendances } = await sb.from('attendance')
+    const attResp = await sb.from('attendance')
       .select('booking_id, status')
       .in('booking_id', bookingIds);
-    (attendances || []).forEach(a => attendanceMap.set(a.booking_id, a.status));
+    if (attResp.error) throw new Error('Attendance: ' + attResp.error.message);
+    (attResp.data || []).forEach(a => attendanceMap.set(a.booking_id, a.status));
   }
 
   ed.original = new Set();
   ed.consumed = new Set();
   ed.missed = new Set();
-  (bookings || []).forEach(b => {
+  bookings.forEach(b => {
     const cs = b.class_sessions;
     if (!cs || cs.is_cancelled || b.status === 'cancelled') return;
     const k = `${cs.session_date}|${cs.hour}`;
@@ -2684,8 +2700,9 @@ async function loadScheduleEditorData() {
   });
   ed.selected = new Set(ed.original);
 
-  // 4. Ocupación de toda la sede en el rango del mes visible (+/- 1 mes)
+  console.log('[schedEditor] step 4: load occupancy');
   await loadScheduleEditorOccupancy();
+  console.log('[schedEditor] occupancy ready, slots:', ed.occupancyByKey.size);
 
   ed.loading = false;
 }
@@ -2695,48 +2712,53 @@ async function loadScheduleEditorOccupancy() {
   const m = ed.monthDate;
   const monthStart = new Date(m.getFullYear(), m.getMonth(), 1);
   const monthEnd = new Date(m.getFullYear(), m.getMonth() + 1, 0);
-  // Extender a la semana antes y después para cubrir filas que se traslapan con otros meses
   const startIso = new Date(monthStart.getTime() - 7 * 86400000).toISOString().slice(0, 10);
   const endIso = new Date(monthEnd.getTime() + 7 * 86400000).toISOString().slice(0, 10);
 
-  const { data: sessions } = await sb.from('class_sessions')
+  console.log('[schedEditor] occupancy range:', startIso, '→', endIso, 'loc:', ed.locationId);
+
+  const sessResp = await sb.from('class_sessions')
     .select('id, session_date, hour, is_cancelled')
     .eq('location_id', ed.locationId)
     .gte('session_date', startIso)
     .lte('session_date', endIso);
+  if (sessResp.error) throw new Error('Sessions: ' + sessResp.error.message);
+  const sessions = sessResp.data || [];
+  console.log('[schedEditor] sessions found:', sessions.length);
 
-  const sessionIds = (sessions || []).filter(s => !s.is_cancelled).map(s => s.id);
+  const sessionIds = sessions.filter(s => !s.is_cancelled).map(s => s.id);
   let bookingsBySession = new Map();
   if (sessionIds.length > 0) {
-    const { data: allBookings } = await sb.from('session_bookings')
+    const bResp = await sb.from('session_bookings')
       .select('session_id, status')
       .in('session_id', sessionIds);
-    (allBookings || []).forEach(b => {
+    if (bResp.error) throw new Error('Bookings (occupancy): ' + bResp.error.message);
+    (bResp.data || []).forEach(b => {
       if (b.status === 'cancelled') return;
       bookingsBySession.set(b.session_id, (bookingsBySession.get(b.session_id) || 0) + 1);
     });
   }
 
-  // También fixed_bookings (alumnos fijos del horario)
-  const { data: fixedBookings } = await sb.from('fixed_bookings')
+  const fbResp = await sb.from('fixed_bookings')
     .select('day_of_week, hour, location_id, student_id, is_active')
     .eq('location_id', ed.locationId)
     .eq('is_active', true);
+  if (fbResp.error) throw new Error('Fixed bookings: ' + fbResp.error.message);
+  const fixedBookings = fbResp.data || [];
+  console.log('[schedEditor] fixed bookings:', fixedBookings.length);
 
-  // Indexar fixed por DOW + hour
   const fixedByDowHour = new Map();
-  (fixedBookings || []).forEach(fb => {
+  fixedBookings.forEach(fb => {
     const k = `${fb.day_of_week}|${fb.hour}`;
     if (!fixedByDowHour.has(k)) fixedByDowHour.set(k, new Set());
     fixedByDowHour.get(k).add(fb.student_id);
   });
 
   ed.occupancyByKey = new Map();
-  (sessions || []).forEach(s => {
+  sessions.forEach(s => {
     if (s.is_cancelled) return;
     const k = `${s.session_date}|${s.hour}`;
     let count = bookingsBySession.get(s.id) || 0;
-    // Sumar fixed bookings que apliquen a ese DOW (sin doble contar si ya hay session_booking)
     const dt = new Date(s.session_date + 'T12:00:00');
     const dow = dt.getDay();
     const fixedSet = fixedByDowHour.get(`${dow}|${s.hour}`) || new Set();
@@ -2744,7 +2766,6 @@ async function loadScheduleEditorOccupancy() {
     ed.occupancyByKey.set(k, count);
   });
 
-  // Para slots sin session creada todavía: solo fixed
   fixedByDowHour.forEach((studSet, fk) => {
     const [dow, hour] = fk.split('|').map(Number);
     const startD = new Date(startIso + 'T12:00:00');
