@@ -3813,6 +3813,9 @@ async function renderStudentHome() {
 
   // Render con el filtro activo
   renderStudentClassesFiltered(stud);
+
+  // Recuperables (sección separada)
+  await renderStudentRecoverables(stud);
 }
 
 function renderStudentClassesFiltered(stud) {
@@ -3942,26 +3945,28 @@ function setStudentClassFilter(filter) {
   if (CURRENT_USER && CURRENT_USER.role === 'student') {
     renderStudentClassesFiltered(CURRENT_USER.record);
   }
+}
 
-  // Recuperables: ver attendance del alumno con status='recuperable' no consumidas
+async function renderStudentRecoverables(stud) {
   const recBlock = document.getElementById('student-recoverables');
-  if (isOnline) {
-    const { data: recs } = await sb.from('attendance').select('*, class_sessions(session_date, hour, location_id)').eq('student_id', stud.id).eq('status', 'recuperable');
-    if (recs && recs.length > 0) {
-      recBlock.innerHTML = recs.map(r => {
-        const sess = r.class_sessions;
-        return `
-          <div style="background: var(--warn-soft); border: 1px solid var(--warn); border-radius: var(--radius-md); padding: 12px 16px;">
-            <div style="font-weight: 500; color: #412402;">⊙ Clase del ${formatDate(sess.session_date)} a las ${formatHour(sess.hour)}</div>
-            <div style="font-size: 12px; color: #633806; margin-top: 2px;">Recuperable hasta el vencimiento del paquete.</div>
-          </div>
-        `;
-      }).join('');
-    } else {
-      recBlock.innerHTML = '<p style="color: var(--ink-mute); font-size: 13px;">No tienes clases pendientes de recuperar.</p>';
-    }
-  } else {
+  if (!recBlock) return;
+  if (!isOnline) {
     recBlock.innerHTML = '<p style="color: var(--ink-mute); font-size: 13px;">Conexión requerida.</p>';
+    return;
+  }
+  const { data: recs } = await sb.from('attendance').select('*, class_sessions(session_date, hour, location_id)').eq('student_id', stud.id).eq('status', 'recuperable');
+  if (recs && recs.length > 0) {
+    recBlock.innerHTML = recs.map(r => {
+      const sess = r.class_sessions;
+      return `
+        <div style="background: var(--warn-soft); border: 1px solid var(--warn); border-radius: var(--radius-md); padding: 12px 16px;">
+          <div style="font-weight: 500; color: #412402;">⊙ Clase del ${formatDate(sess.session_date)} a las ${formatHour(sess.hour)}</div>
+          <div style="font-size: 12px; color: #633806; margin-top: 2px;">Recuperable hasta el vencimiento del paquete.</div>
+        </div>
+      `;
+    }).join('');
+  } else {
+    recBlock.innerHTML = '<p style="color: var(--ink-mute); font-size: 13px;">No tienes clases pendientes de recuperar.</p>';
   }
 }
 
