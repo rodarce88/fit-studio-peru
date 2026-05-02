@@ -721,6 +721,11 @@
     </div>
   </section>
 
+  <!-- STUDENT DETAIL VIEW (coordinador) -->
+  <section class="view" id="view-student-detail">
+    <div id="student-detail-content"></div>
+  </section>
+
 </main>
 
 <!-- LOCATION MODAL -->
@@ -1236,6 +1241,11 @@ const STATE = {
   attendances: [],        // registros de asistencia del día actual
   currentDate: new Date(),
   currentFilter: 'all',
+  studentBookingsCache: [],     // session_bookings + class_sessions del alumno logueado
+  studentClassFilter: 'upcoming', // upcoming | week | month | past
+  studentDetailId: null,         // alumno actualmente viendo en detalle (coordinador)
+  studentDetailTab: 'summary',   // summary | classes | payments | data
+  studentDetailData: null,       // cache de datos del alumno en vista detalle
 };
 
 // ============================================
@@ -1822,7 +1832,10 @@ function renderStudents() {
         <td style="font-size: 12px; color: var(--ink-soft);">${s.document_type ? `${s.document_type} ${escape(s.document_number || '')}` : '—'}</td>
         <td>${modPill}</td>
         <td style="font-size: 12px; color: var(--ink-soft);">${slotsLabel}</td>
-        <td><button class="btn btn-ghost" style="padding: 6px 12px; font-size: 11px;" onclick='event.stopPropagation(); openStudentModal(${JSON.stringify(s.id).replace(/'/g, "&#39;")})'>Editar</button></td>
+        <td style="white-space: nowrap;">
+          <button class="btn btn-ghost" style="padding: 6px 12px; font-size: 11px;" onclick='event.stopPropagation(); openStudentDetail(${JSON.stringify(s.id).replace(/'/g, "&#39;")})'>Ver</button>
+          <button class="btn btn-ghost" style="padding: 6px 12px; font-size: 11px;" onclick='event.stopPropagation(); openStudentModal(${JSON.stringify(s.id).replace(/'/g, "&#39;")})'>Editar</button>
+        </td>
       </tr>
     `;
   }).join('') + (list.length > 200 ? `<tr><td colspan="6" style="text-align: center; padding: 16px; color: var(--ink-mute); font-size: 12px;">Mostrando 200 de ${list.length}. Refina la búsqueda para ver más.</td></tr>` : '');
@@ -3788,41 +3801,109 @@ async function renderStudentHome() {
 
   // Próximas clases: combinar puntuales (session_bookings con fecha exacta) + fijas (recurrencias)
   const upBlock = document.getElementById('student-upcoming-classes');
-  const dayLabels = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
-  const todayIso = new Date().toISOString().slice(0,10);
 
-  // 1. Cargar clases puntuales asignadas (flexibles, recuperaciones, reagendados)
-  let pointClasses = [];
+  // Cargar todas las puntuales del alumno (sin filtro de fecha) y guardar en cache
   if (isOnline) {
     const { data: bookings } = await sb
       .from('session_bookings')
       .select('*, class_sessions(id, session_date, hour, location_id, is_cancelled)')
       .eq('student_id', stud.id);
-    if (bookings) {
-      pointClasses = bookings
-        .filter(b => b.class_sessions
-          && !b.class_sessions.is_cancelled
-          && b.class_sessions.session_date >= todayIso
-          && b.status !== 'cancelled')
-        .sort((a, b) => {
-          const cmp = a.class_sessions.session_date.localeCompare(b.class_sessions.session_date);
-          return cmp !== 0 ? cmp : a.class_sessions.hour - b.class_sessions.hour;
-        });
-    }
+    STATE.studentBookingsCache = bookings || [];
   }
 
-  // 2. Clases fijas semanales del alumno
+  // Render con el filtro activo
+  renderStudentClassesFiltered(stud);
+}
+
+function renderStudentClassesFiltered(stud) {
+  const upBlock = document.getElementById('student-upcoming-classes');
+  if (!upBlock) return;
+  const dayLabels = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
+  const todayIso = new Date().toISOString().slice(0,10);
+  const filter = STATE.studentClassFilter || 'upcoming';
+
+  // Calcular rangos de fecha
+  const now = new Date();
+  const startOfWeek = new Date(now);
+  const dow = startOfWeek.getDay(); // 0=dom
+  const daysFromMonday = dow === 0 ? 6 : dow - 1; // semana lun-dom
+  startOfWeek.setDate(startOfWeek.getDate() - daysFromMonday);
+  const endOfWeek = new Date(startOfWeek);
+  endOfWeek.setDate(endOfWeek.getDate() + 6);
+  const startOfWeekIso = startOfWeek.toISOString().slice(0,10);
+  const endOfWeekIso = endOfWeek.toISOString().slice(0,10);
+  const startOfMonthIso = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0,10);
+  const endOfMonthIso = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().slice(0,10);
+
+  // Filtrar y ordenar las puntuales según filtro activo
+  let pointClasses = (STATE.studentBookingsCache || [])
+    .filter(b => b.class_sessions && !b.class_sessions.is_cancelled && b.status !== 'cancelled');
+
+  if (filter === 'upcoming') {
+    pointClasses = pointClasses.filter(b => b.class_sessions.session_date >= todayIso);
+    pointClasses.sort((a, b) => {
+      const cmp = a.class_sessions.session_date.localeCompare(b.class_sessions.session_date);
+      return cmp !== 0 ? cmp : a.class_sessions.hour - b.class_sessions.hour;
+    });
+  } else if (filter === 'week') {
+    pointClasses = pointClasses.filter(b => b.class_sessions.session_date >= startOfWeekIso && b.class_sessions.session_date <= endOfWeekIso);
+    pointClasses.sort((a, b) => {
+      const cmp = a.class_sessions.session_date.localeCompare(b.class_sessions.session_date);
+      return cmp !== 0 ? cmp : a.class_sessions.hour - b.class_sessions.hour;
+    });
+  } else if (filter === 'month') {
+    pointClasses = pointClasses.filter(b => b.class_sessions.session_date >= startOfMonthIso && b.class_sessions.session_date <= endOfMonthIso);
+    pointClasses.sort((a, b) => {
+      const cmp = a.class_sessions.session_date.localeCompare(b.class_sessions.session_date);
+      return cmp !== 0 ? cmp : a.class_sessions.hour - b.class_sessions.hour;
+    });
+  } else if (filter === 'past') {
+    pointClasses = pointClasses.filter(b => b.class_sessions.session_date < todayIso);
+    pointClasses.sort((a, b) => {
+      const cmp = b.class_sessions.session_date.localeCompare(a.class_sessions.session_date); // DESC
+      return cmp !== 0 ? cmp : b.class_sessions.hour - a.class_sessions.hour;
+    });
+  }
+
+  // Clases fijas semanales del alumno (no se filtran, son recurrentes)
   const fixedUpcoming = STATE.fixedBookings.filter(b => b.student_id === stud.id);
 
-  // 3. Render
-  let html = '';
+  // UI de píldoras de filtro
+  const filters = [
+    { id: 'upcoming', label: 'Próximas' },
+    { id: 'week', label: 'Esta semana' },
+    { id: 'month', label: 'Este mes' },
+    { id: 'past', label: 'Pasadas' },
+  ];
+  const pillsHTML = `
+    <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px;">
+      ${filters.map(f => `
+        <button onclick="setStudentClassFilter('${f.id}')" style="
+          padding: 6px 14px;
+          font-size: 12px;
+          font-weight: 500;
+          border-radius: 999px;
+          border: 1px solid ${filter === f.id ? 'var(--fit-purple)' : 'var(--line)'};
+          background: ${filter === f.id ? 'var(--fit-purple)' : 'white'};
+          color: ${filter === f.id ? 'white' : 'var(--ink)'};
+          cursor: pointer;
+          transition: all 0.15s;
+        ">${f.label}</button>
+      `).join('')}
+    </div>
+  `;
+
+  // Render
+  let html = pillsHTML;
+
   if (pointClasses.length > 0) {
-    html += pointClasses.slice(0, 8).map(b => {
+    html += pointClasses.slice(0, 20).map(b => {
       const sess = b.class_sessions;
       const loc = STATE.locations.find(l => l.id === sess.location_id);
       const sourceLabel = b.source === 'flexible' ? 'Clase flexible' : (b.source === 'makeup' ? 'Recuperación' : 'Clase asignada');
+      const isPast = sess.session_date < todayIso;
       return `
-        <div style="background: white; border: 1px solid var(--line); border-radius: var(--radius-md); padding: 14px 18px; margin-bottom: 8px; display: flex; align-items: center; justify-content: space-between;">
+        <div style="background: white; border: 1px solid var(--line); border-radius: var(--radius-md); padding: 14px 18px; margin-bottom: 8px; display: flex; align-items: center; justify-content: space-between; ${isPast ? 'opacity: 0.7;' : ''}">
           <div>
             <div style="font-weight: 500;">${formatDate(sess.session_date)} · ${formatHour(sess.hour)}</div>
             <div style="font-size: 12px; color: var(--ink-mute); margin-top: 2px;">${escape(loc?.name || '')} · ${sourceLabel}</div>
@@ -3830,11 +3911,20 @@ async function renderStudentHome() {
         </div>
       `;
     }).join('');
+  } else {
+    const emptyLabels = {
+      upcoming: 'No tienes clases próximas.',
+      week: 'No tienes clases esta semana.',
+      month: 'No tienes clases este mes.',
+      past: 'Aún no tienes historial de clases.',
+    };
+    html += `<p style="color: var(--ink-mute); font-size: 13px;">${emptyLabels[filter]}</p>`;
   }
 
-  if (fixedUpcoming.length > 0) {
+  // Sección de horario fijo solo se muestra cuando hay alguno (no aplica filtro)
+  if (fixedUpcoming.length > 0 && filter !== 'past') {
     html += `
-      <div style="font-size: 11px; font-weight: 500; color: var(--ink-mute); text-transform: uppercase; letter-spacing: 0.5px; margin: ${pointClasses.length > 0 ? '16px' : '0'} 0 8px;">Horario fijo semanal</div>
+      <div style="font-size: 11px; font-weight: 500; color: var(--ink-mute); text-transform: uppercase; letter-spacing: 0.5px; margin: 24px 0 8px;">Horario fijo semanal</div>
       ${fixedUpcoming.slice(0, 6).map(b => `
         <div style="background: white; border: 1px solid var(--line); border-radius: var(--radius-md); padding: 14px 18px; margin-bottom: 8px;">
           <div style="font-weight: 500;">${dayLabels[b.day_of_week]} · ${formatHour(b.hour)}</div>
@@ -3844,10 +3934,13 @@ async function renderStudentHome() {
     `;
   }
 
-  if (!html) {
-    upBlock.innerHTML = '<p style="color: var(--ink-mute); font-size: 13px;">No tienes clases reservadas.</p>';
-  } else {
-    upBlock.innerHTML = html;
+  upBlock.innerHTML = html;
+}
+
+function setStudentClassFilter(filter) {
+  STATE.studentClassFilter = filter;
+  if (CURRENT_USER && CURRENT_USER.role === 'student') {
+    renderStudentClassesFiltered(CURRENT_USER.record);
   }
 
   // Recuperables: ver attendance del alumno con status='recuperable' no consumidas
@@ -4127,6 +4220,10 @@ async function saveRegisterPayment() {
     renderActivePackageBlock(s);
     renderPaymentsHistoryBlock(s);
   }
+  // Refrescar la vista detalle si es del mismo alumno
+  if (STATE.studentDetailId === studentId && document.getElementById('view-student-detail')?.classList.contains('is-active')) {
+    openStudentDetail(studentId);
+  }
 }
 
 function openFreezeModal(packageId) {
@@ -4370,6 +4467,386 @@ async function copyToClipboard(text) {
     document.execCommand('copy');
     document.body.removeChild(ta);
   }
+}
+
+// ============================================
+// STUDENT DETAIL VIEW (coordinador) — pantalla completa con tabs
+// ============================================
+async function openStudentDetail(id) {
+  const stud = STATE.students.find(s => s.id === id);
+  if (!stud) { showToast('Alumno no encontrado', 'error'); return; }
+
+  STATE.studentDetailId = id;
+  STATE.studentDetailTab = 'summary';
+
+  // Cargar datos en paralelo
+  const tasks = [];
+  if (isOnline) {
+    tasks.push(
+      sb.from('session_bookings')
+        .select('*, class_sessions(id, session_date, hour, location_id, is_cancelled, instructor_id)')
+        .eq('student_id', id)
+        .then(r => ({ bookings: r.data || [] })),
+      sb.from('payments')
+        .select('*')
+        .eq('student_id', id)
+        .order('payment_date', { ascending: false })
+        .then(r => ({ payments: r.data || [] })),
+      sb.from('student_packages')
+        .select('*')
+        .eq('student_id', id)
+        .order('purchase_date', { ascending: false })
+        .then(r => ({ packages: r.data || [] }))
+    );
+  }
+  const results = await Promise.all(tasks);
+  STATE.studentDetailData = Object.assign({ bookings: [], payments: [], packages: [] }, ...results);
+
+  showView('student-detail', null);
+  renderStudentDetail();
+}
+
+function renderStudentDetail() {
+  const stud = STATE.students.find(s => s.id === STATE.studentDetailId);
+  if (!stud) return;
+  const container = document.getElementById('student-detail-content');
+  if (!container) return;
+
+  const loc = STATE.locations.find(l => l.id === stud.location_id);
+  const modPill = stud.modality === 'fixed'
+    ? '<span class="modality-pill modality-fixed">★ Fijo</span>'
+    : (stud.modality === 'flexible'
+      ? '<span class="modality-pill modality-flexible">↻ Flexible</span>'
+      : '<span class="modality-pill modality-trial">✦ Prueba</span>');
+
+  const tabs = [
+    { id: 'summary', label: 'Resumen' },
+    { id: 'classes', label: 'Clases' },
+    { id: 'payments', label: 'Pagos' },
+    { id: 'data', label: 'Datos' },
+  ];
+
+  const tabsHTML = tabs.map(t => `
+    <button onclick="setStudentDetailTab('${t.id}')" style="
+      padding: 10px 18px;
+      font-size: 13px;
+      font-weight: 500;
+      background: transparent;
+      border: none;
+      border-bottom: 2px solid ${STATE.studentDetailTab === t.id ? 'var(--fit-purple)' : 'transparent'};
+      color: ${STATE.studentDetailTab === t.id ? 'var(--fit-purple)' : 'var(--ink-soft)'};
+      cursor: pointer;
+      transition: all 0.15s;
+    ">${t.label}</button>
+  `).join('');
+
+  let bodyHTML = '';
+  if (STATE.studentDetailTab === 'summary') bodyHTML = renderDetailSummary(stud);
+  else if (STATE.studentDetailTab === 'classes') bodyHTML = renderDetailClasses(stud);
+  else if (STATE.studentDetailTab === 'payments') bodyHTML = renderDetailPayments(stud);
+  else if (STATE.studentDetailTab === 'data') bodyHTML = renderDetailData(stud);
+
+  container.innerHTML = `
+    <div style="margin-bottom: 16px;">
+      <button onclick="showView('students', document.querySelector('[data-view=students]'))" style="background: transparent; border: none; color: var(--ink-soft); font-size: 13px; cursor: pointer; padding: 4px 0;">← Volver a Alumnos</button>
+    </div>
+
+    <div style="background: white; border: 1px solid var(--line); border-radius: var(--radius-lg); padding: 24px; margin-bottom: 16px;">
+      <div style="display: flex; gap: 18px; align-items: flex-start;">
+        <div class="student-avatar" style="width: 64px; height: 64px; font-size: 22px;">${initials(stud)}</div>
+        <div style="flex: 1;">
+          <h1 style="font-family: var(--display); font-size: 28px; margin: 0 0 6px; font-weight: 400;">${escape(stud.first_name)} <em>${escape(stud.last_name || '')}</em></h1>
+          <div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-bottom: 6px;">
+            ${modPill}
+            ${getConsentBadge(stud)}
+            ${!stud.data_complete ? '<span style="font-size: 11px; padding: 3px 8px; background: var(--warn-soft); color: #412402; border-radius: 999px;">⚠ Datos incompletos</span>' : ''}
+          </div>
+          <div style="font-size: 13px; color: var(--ink-mute);">
+            ${escape(loc?.name || 'Sin sede')} · ${escape(stud.email || 'Sin email')} ${stud.phone ? '· ' + escape(stud.phone) : ''}
+          </div>
+        </div>
+        <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+          <button class="btn btn-ghost" onclick="openStudentModal('${stud.id}')" style="padding: 8px 14px; font-size: 12px;">Editar perfil</button>
+          <button class="btn btn-primary" onclick="openAssignPackageFromDetail('${stud.id}')" style="padding: 8px 14px; font-size: 12px;">Asignar paquete</button>
+        </div>
+      </div>
+    </div>
+
+    <div style="display: flex; gap: 4px; border-bottom: 1px solid var(--line); margin-bottom: 20px;">
+      ${tabsHTML}
+    </div>
+
+    <div id="student-detail-tab-body">
+      ${bodyHTML}
+    </div>
+  `;
+}
+
+function setStudentDetailTab(tab) {
+  STATE.studentDetailTab = tab;
+  renderStudentDetail();
+}
+
+function openAssignPackageFromDetail(studentId) {
+  if (typeof openAssignPackageModal === 'function') {
+    openAssignPackageModal(studentId);
+  } else {
+    // fallback: abrir modal del alumno (incluye sección de paquetes)
+    openStudentModal(studentId);
+  }
+}
+
+function renderDetailSummary(stud) {
+  const data = STATE.studentDetailData || {};
+  const todayIso = new Date().toISOString().slice(0,10);
+  const activePkg = (data.packages || []).find(p => !p.is_frozen && p.expiration_date >= todayIso);
+  const upcomingClasses = (data.bookings || []).filter(b => b.class_sessions && !b.class_sessions.is_cancelled && b.class_sessions.session_date >= todayIso && b.status !== 'cancelled');
+  upcomingClasses.sort((a,b) => {
+    const cmp = a.class_sessions.session_date.localeCompare(b.class_sessions.session_date);
+    return cmp !== 0 ? cmp : a.class_sessions.hour - b.class_sessions.hour;
+  });
+  const nextClass = upcomingClasses[0];
+  const totalAttended = (data.bookings || []).filter(b => b.status === 'asistio' || b.attendance_status === 'asistio').length;
+  const totalPayments = (data.payments || []).reduce((sum, p) => sum + parseFloat(p.amount_pen || p.amount || 0), 0);
+  const lastPayment = (data.payments || [])[0];
+
+  const cards = [
+    {
+      label: 'Paquete activo',
+      value: activePkg ? `${(activePkg.classes_total || 0) - (activePkg.classes_used || 0)} de ${activePkg.classes_total || 0}` : 'Sin paquete',
+      sub: activePkg ? `Vence ${formatDate(activePkg.expiration_date)}` : 'Asignar uno nuevo',
+    },
+    {
+      label: 'Próxima clase',
+      value: nextClass ? formatDate(nextClass.class_sessions.session_date) : '—',
+      sub: nextClass ? formatHour(nextClass.class_sessions.hour) : 'Sin clases programadas',
+    },
+    {
+      label: 'Total pagado',
+      value: `S/ ${totalPayments.toFixed(2)}`,
+      sub: `${(data.payments || []).length} pago${(data.payments || []).length === 1 ? '' : 's'}`,
+    },
+    {
+      label: 'Recuperables',
+      value: activePkg ? (activePkg.classes_recoverable || 0) : 0,
+      sub: 'Clases por recuperar',
+    },
+  ];
+
+  return `
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; margin-bottom: 24px;">
+      ${cards.map(c => `
+        <div style="background: white; border: 1px solid var(--line); border-radius: var(--radius-md); padding: 18px;">
+          <div style="font-size: 11px; color: var(--ink-mute); text-transform: uppercase; letter-spacing: 0.5px; font-weight: 500;">${c.label}</div>
+          <div style="font-family: var(--display); font-size: 26px; margin-top: 6px; color: var(--fit-purple);">${c.value}</div>
+          <div style="font-size: 12px; color: var(--ink-soft); margin-top: 4px;">${c.sub}</div>
+        </div>
+      `).join('')}
+    </div>
+
+    ${lastPayment ? `
+      <div style="background: white; border: 1px solid var(--line); border-radius: var(--radius-md); padding: 18px; margin-bottom: 16px;">
+        <div style="font-size: 11px; color: var(--ink-mute); text-transform: uppercase; letter-spacing: 0.5px; font-weight: 500; margin-bottom: 8px;">Último pago</div>
+        <div style="display: flex; align-items: center; justify-content: space-between;">
+          <div>
+            <div style="font-weight: 500;">S/ ${lastPayment.amount_pen || lastPayment.amount} · ${escape(lastPayment.method || '')}</div>
+            <div style="font-size: 12px; color: var(--ink-mute); margin-top: 2px;">${formatDate(lastPayment.payment_date)} ${lastPayment.reference ? '· Ref. ' + escape(lastPayment.reference) : ''}</div>
+          </div>
+          <button class="btn btn-ghost" onclick="setStudentDetailTab('payments')" style="padding: 6px 12px; font-size: 11px;">Ver historial →</button>
+        </div>
+      </div>
+    ` : ''}
+
+    ${nextClass ? `
+      <div style="background: white; border: 1px solid var(--line); border-radius: var(--radius-md); padding: 18px;">
+        <div style="font-size: 11px; color: var(--ink-mute); text-transform: uppercase; letter-spacing: 0.5px; font-weight: 500; margin-bottom: 8px;">Próximas clases</div>
+        ${upcomingClasses.slice(0, 3).map(b => {
+          const sess = b.class_sessions;
+          const lc = STATE.locations.find(l => l.id === sess.location_id);
+          return `
+            <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--line);">
+              <div>
+                <div style="font-weight: 500; font-size: 14px;">${formatDate(sess.session_date)} · ${formatHour(sess.hour)}</div>
+                <div style="font-size: 11px; color: var(--ink-mute);">${escape(lc?.name || '')}</div>
+              </div>
+              <span style="font-size: 11px; color: var(--ink-mute);">${b.source === 'flexible' ? 'Flexible' : (b.source === 'makeup' ? 'Recuperación' : 'Asignada')}</span>
+            </div>
+          `;
+        }).join('')}
+        ${upcomingClasses.length > 3 ? `<div style="padding-top: 10px;"><button class="btn btn-ghost" onclick="setStudentDetailTab('classes')" style="padding: 6px 12px; font-size: 11px;">Ver todas (${upcomingClasses.length}) →</button></div>` : ''}
+      </div>
+    ` : ''}
+  `;
+}
+
+function renderDetailClasses(stud) {
+  const data = STATE.studentDetailData || {};
+  const todayIso = new Date().toISOString().slice(0,10);
+  const filter = STATE.studentDetailClassFilter || 'upcoming';
+
+  // Calcular rangos
+  const now = new Date();
+  const startOfWeek = new Date(now);
+  const dow = startOfWeek.getDay();
+  const daysFromMonday = dow === 0 ? 6 : dow - 1;
+  startOfWeek.setDate(startOfWeek.getDate() - daysFromMonday);
+  const endOfWeek = new Date(startOfWeek);
+  endOfWeek.setDate(endOfWeek.getDate() + 6);
+  const startOfWeekIso = startOfWeek.toISOString().slice(0,10);
+  const endOfWeekIso = endOfWeek.toISOString().slice(0,10);
+  const startOfMonthIso = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0,10);
+  const endOfMonthIso = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().slice(0,10);
+
+  let classes = (data.bookings || []).filter(b => b.class_sessions && !b.class_sessions.is_cancelled);
+
+  if (filter === 'upcoming') {
+    classes = classes.filter(b => b.class_sessions.session_date >= todayIso && b.status !== 'cancelled');
+    classes.sort((a,b) => a.class_sessions.session_date.localeCompare(b.class_sessions.session_date) || a.class_sessions.hour - b.class_sessions.hour);
+  } else if (filter === 'week') {
+    classes = classes.filter(b => b.class_sessions.session_date >= startOfWeekIso && b.class_sessions.session_date <= endOfWeekIso);
+    classes.sort((a,b) => a.class_sessions.session_date.localeCompare(b.class_sessions.session_date) || a.class_sessions.hour - b.class_sessions.hour);
+  } else if (filter === 'month') {
+    classes = classes.filter(b => b.class_sessions.session_date >= startOfMonthIso && b.class_sessions.session_date <= endOfMonthIso);
+    classes.sort((a,b) => a.class_sessions.session_date.localeCompare(b.class_sessions.session_date) || a.class_sessions.hour - b.class_sessions.hour);
+  } else if (filter === 'past') {
+    classes = classes.filter(b => b.class_sessions.session_date < todayIso);
+    classes.sort((a,b) => b.class_sessions.session_date.localeCompare(a.class_sessions.session_date) || b.class_sessions.hour - a.class_sessions.hour);
+  }
+
+  const filterPills = [
+    { id: 'upcoming', label: 'Próximas' },
+    { id: 'week', label: 'Esta semana' },
+    { id: 'month', label: 'Este mes' },
+    { id: 'past', label: 'Pasadas' },
+  ];
+
+  const pillsHTML = `
+    <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px;">
+      ${filterPills.map(f => `
+        <button onclick="setStudentDetailClassFilter('${f.id}')" style="
+          padding: 6px 14px; font-size: 12px; font-weight: 500; border-radius: 999px;
+          border: 1px solid ${filter === f.id ? 'var(--fit-purple)' : 'var(--line)'};
+          background: ${filter === f.id ? 'var(--fit-purple)' : 'white'};
+          color: ${filter === f.id ? 'white' : 'var(--ink)'};
+          cursor: pointer;
+        ">${f.label}</button>
+      `).join('')}
+    </div>
+  `;
+
+  let listHTML = '';
+  if (classes.length === 0) {
+    const emptyLabels = {
+      upcoming: 'No hay clases próximas.',
+      week: 'No hay clases esta semana.',
+      month: 'No hay clases este mes.',
+      past: 'Sin historial de clases.',
+    };
+    listHTML = `<p style="color: var(--ink-mute); font-size: 13px; padding: 20px 0;">${emptyLabels[filter]}</p>`;
+  } else {
+    listHTML = classes.map(b => {
+      const sess = b.class_sessions;
+      const lc = STATE.locations.find(l => l.id === sess.location_id);
+      const inst = STATE.instructors.find(i => i.id === sess.instructor_id);
+      const isPast = sess.session_date < todayIso;
+      const statusBadge = b.status === 'cancelled'
+        ? '<span style="font-size: 11px; padding: 2px 8px; background: #fee; color: #b00; border-radius: 999px;">Cancelada</span>'
+        : (b.status === 'asistio' ? '<span style="font-size: 11px; padding: 2px 8px; background: #d4f4d4; color: #1a5e1a; border-radius: 999px;">✓ Asistió</span>'
+        : (b.status === 'recoverable' ? '<span style="font-size: 11px; padding: 2px 8px; background: var(--warn-soft); color: #412402; border-radius: 999px;">Recuperable</span>'
+        : (b.status === 'no_show' ? '<span style="font-size: 11px; padding: 2px 8px; background: #fee; color: #b00; border-radius: 999px;">No asistió</span>' : '')));
+      return `
+        <div style="background: white; border: 1px solid var(--line); border-radius: var(--radius-md); padding: 14px 18px; margin-bottom: 8px; display: flex; align-items: center; justify-content: space-between; ${isPast && b.status !== 'asistio' ? 'opacity: 0.85;' : ''}">
+          <div>
+            <div style="font-weight: 500;">${formatDate(sess.session_date)} · ${formatHour(sess.hour)}</div>
+            <div style="font-size: 12px; color: var(--ink-mute); margin-top: 2px;">${escape(lc?.name || '')}${inst ? ' · Prof. ' + escape(inst.first_name) : ''} · ${b.source === 'flexible' ? 'Flexible' : (b.source === 'makeup' ? 'Recuperación' : 'Asignada')}</div>
+          </div>
+          ${statusBadge}
+        </div>
+      `;
+    }).join('');
+  }
+
+  return pillsHTML + listHTML;
+}
+
+function setStudentDetailClassFilter(filter) {
+  STATE.studentDetailClassFilter = filter;
+  renderStudentDetail();
+}
+
+function renderDetailPayments(stud) {
+  const data = STATE.studentDetailData || {};
+  const payments = data.payments || [];
+
+  if (payments.length === 0) {
+    return `
+      <div style="text-align: center; padding: 40px 20px; color: var(--ink-mute);">
+        <p style="font-size: 14px; margin-bottom: 12px;">Sin pagos registrados.</p>
+        <button class="btn btn-primary" onclick="openPaymentModal('${stud.id}', null, 0)" style="padding: 8px 16px; font-size: 12px;">Registrar primer pago</button>
+      </div>
+    `;
+  }
+
+  const totalPagado = payments.reduce((sum, p) => sum + parseFloat(p.amount_pen || p.amount || 0), 0);
+  const methodLabels = { yape: 'Yape', plin: 'Plin', cash: 'Efectivo', card: 'Tarjeta', transfer: 'Transferencia' };
+
+  return `
+    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px;">
+      <div>
+        <div style="font-size: 11px; color: var(--ink-mute); text-transform: uppercase; letter-spacing: 0.5px;">Total acumulado</div>
+        <div style="font-family: var(--display); font-size: 26px; color: var(--fit-purple);">S/ ${totalPagado.toFixed(2)}</div>
+      </div>
+      <button class="btn btn-primary" onclick="openPaymentModal('${stud.id}', null, 0)" style="padding: 8px 16px; font-size: 12px;">+ Registrar pago</button>
+    </div>
+
+    <div style="background: white; border: 1px solid var(--line); border-radius: var(--radius-md); overflow: hidden;">
+      ${payments.map(p => `
+        <div style="display: flex; align-items: center; justify-content: space-between; padding: 14px 18px; border-bottom: 1px solid var(--line);">
+          <div style="flex: 1;">
+            <div style="font-weight: 500;">S/ ${parseFloat(p.amount_pen || p.amount || 0).toFixed(2)} <span style="font-weight: 400; color: var(--ink-mute); font-size: 12px;">· ${escape(methodLabels[p.method] || p.method || '')}</span></div>
+            <div style="font-size: 12px; color: var(--ink-mute); margin-top: 2px;">
+              ${formatDate(p.payment_date)}
+              ${p.reference ? ' · Ref. ' + escape(p.reference) : ''}
+              ${p.notes ? ' · ' + escape(p.notes) : ''}
+            </div>
+          </div>
+          ${p.receipt_url ? `<a href="${escape(p.receipt_url)}" target="_blank" style="font-size: 12px; color: var(--fit-purple); text-decoration: none; padding: 6px 12px; border: 1px solid var(--line); border-radius: 999px;">Ver comprobante →</a>` : ''}
+        </div>
+      `).join('')}
+    </div>
+  `;
+}
+
+function renderDetailData(stud) {
+  const loc = STATE.locations.find(l => l.id === stud.location_id);
+  const fields = [
+    ['Nombres', stud.first_name],
+    ['Apellidos', stud.last_name],
+    ['Email', stud.email],
+    ['Teléfono', stud.phone],
+    ['Documento', stud.document_type ? `${stud.document_type} ${stud.document_number || ''}` : ''],
+    ['Fecha de nacimiento', stud.birth_date ? formatDate(stud.birth_date) : ''],
+    ['Sede', loc?.name],
+    ['Modalidad', stud.modality === 'fixed' ? 'Fijo' : (stud.modality === 'flexible' ? 'Flexible' : 'Prueba')],
+    ['Estado de cuenta', stud.account_status || 'pendiente'],
+    ['Consentimiento', stud.consent_signed ? `Firmado el ${formatDate(stud.consent_signed_at)}` : 'No firmado'],
+    ['Notas', stud.notes],
+  ];
+
+  return `
+    <div style="background: white; border: 1px solid var(--line); border-radius: var(--radius-md); padding: 6px 0;">
+      ${fields.map(([label, value]) => `
+        <div style="display: grid; grid-template-columns: 200px 1fr; gap: 16px; padding: 12px 18px; border-bottom: 1px solid var(--line); align-items: center;">
+          <div style="font-size: 12px; color: var(--ink-mute); text-transform: uppercase; letter-spacing: 0.5px; font-weight: 500;">${label}</div>
+          <div style="font-size: 14px;">${value ? escape(String(value)) : '<span style="color: var(--ink-mute);">—</span>'}</div>
+        </div>
+      `).join('')}
+    </div>
+
+    <div style="margin-top: 16px; display: flex; gap: 8px;">
+      <button class="btn btn-ghost" onclick="openStudentModal('${stud.id}')" style="padding: 8px 14px; font-size: 12px;">Editar perfil</button>
+    </div>
+  `;
 }
 
 // ============================================
