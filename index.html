@@ -3911,7 +3911,7 @@ function openInstructorScheduleModal(instructorId) {
   document.getElementById('sched-to').value = '';
 
   loadScheduleEditorMarks();
-  renderScheduleEditor();
+  renderInstructorScheduleEditor();
   document.getElementById('schedule-delete-all').style.display = 'inline-flex';
   document.getElementById('instructor-schedule-modal').classList.add('is-open');
 }
@@ -3926,10 +3926,10 @@ function loadScheduleEditorMarks() {
     .filter(s => !s.effective_from || s.effective_from <= dateRef)
     .filter(s => !s.effective_to || s.effective_to >= dateRef)
     .forEach(s => SCHEDULE_CTX.marks.add(`${s.day_of_week}-${s.hour}`));
-  renderScheduleEditor();
+  renderInstructorScheduleEditor();
 }
 
-function renderScheduleEditor() {
+function renderInstructorScheduleEditor() {
   const grid = document.getElementById('schedule-grid-editor');
   const days = [1,2,3,4,5,6,0];
   const dayLabels = ['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'];
@@ -3957,7 +3957,7 @@ function toggleScheduleSlot(dow, hour) {
   const key = `${dow}-${hour}`;
   if (SCHEDULE_CTX.marks.has(key)) SCHEDULE_CTX.marks.delete(key);
   else SCHEDULE_CTX.marks.add(key);
-  renderScheduleEditor();
+  renderInstructorScheduleEditor();
 }
 
 function schedulePreset(preset) {
