@@ -2779,6 +2779,22 @@ async function loadScheduleEditorOccupancy() {
 }
 
 function renderScheduleEditor() {
+  console.log('[schedEditor] render START');
+  try {
+    _renderScheduleEditorImpl();
+    console.log('[schedEditor] render OK');
+  } catch (err) {
+    console.error('[schedEditor] RENDER ERROR:', err);
+    document.getElementById('schedule-editor-body').innerHTML = `
+      <div style="padding: 40px 24px; text-align: center;">
+        <div style="font-size: 14px; color: #991b1b; margin-bottom: 10px;">Error renderizando el calendario</div>
+        <div style="font-size: 12px; color: var(--ink-mute); font-family: monospace; background: #fef2f2; padding: 10px; border-radius: 6px; text-align: left; max-height: 300px; overflow: auto; white-space: pre-wrap;">${(err && err.message) || String(err)}\n${(err && err.stack) || ''}</div>
+        <button class="btn btn-ghost" onclick="closeModals()" style="margin-top: 14px;">Cerrar</button>
+      </div>`;
+  }
+}
+
+function _renderScheduleEditorImpl() {
   const ed = STATE.scheduleEditor;
   if (!ed) return;
   const stud = ed.student;
