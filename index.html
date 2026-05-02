@@ -437,7 +437,7 @@
     </button>
     <button class="nav-item" data-view="schedule" onclick="showView('schedule', this)">
       <span class="nav-icon"><svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg></span>
-      Horarios
+      Calendario
     </button>
     <button class="nav-item" data-view="pending-recovery" onclick="showView('pending-recovery', this)">
       <span class="nav-icon"><svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M12 8v4l3 2"/><circle cx="12" cy="12" r="10"/></svg></span>
@@ -620,8 +620,14 @@
   <section class="view" id="view-schedule">
     <div class="page-header">
       <div>
-        <h1 class="page-title">Horario <em>semanal</em></h1>
-        <div class="page-sub" id="schedule-sub">Vista por hora y día</div>
+        <h1 class="page-title"><em>Calendario</em></h1>
+        <div class="page-sub" id="schedule-sub">Vista por hora y día · click en celda para ver detalle</div>
+      </div>
+      <div style="display: flex; gap: 8px; align-items: center;">
+        <button class="btn btn-ghost" onclick="changeScheduleWeek(-1)" style="padding: 8px 12px;">←</button>
+        <div id="schedule-week-label" style="font-family: var(--display); font-size: 16px; min-width: 200px; text-align: center; color: var(--fit-purple);"></div>
+        <button class="btn btn-ghost" onclick="changeScheduleWeek(1)" style="padding: 8px 12px;">→</button>
+        <button class="btn btn-ghost" onclick="goToScheduleThisWeek()" style="padding: 8px 14px; font-size: 12px;">Hoy</button>
       </div>
     </div>
     <div class="table-card" style="overflow-x: auto;">
@@ -736,6 +742,28 @@
       <button class="modal-close" onclick="closeModals()">✕</button>
     </div>
     <div id="location-options" style="padding: 8px 0 16px;"></div>
+  </div>
+</div>
+
+<!-- SCHEDULE CELL DETAIL MODAL -->
+<div class="modal-backdrop" id="schedule-cell-modal" onclick="if(event.target===this) closeModals()">
+  <div class="modal-card" style="width: 560px;">
+    <div class="modal-header">
+      <div class="modal-title" id="cell-modal-title">Detalle <em>de clase</em></div>
+      <button class="modal-close" onclick="closeModals()">✕</button>
+    </div>
+    <div id="cell-modal-body" style="padding-top: 8px;"></div>
+  </div>
+</div>
+
+<!-- ASSIGN STUDENT TO CELL MODAL (multi-step) -->
+<div class="modal-backdrop" id="assign-student-modal" onclick="if(event.target===this) closeModals()">
+  <div class="modal-card" style="width: 600px;">
+    <div class="modal-header">
+      <div class="modal-title" id="assign-modal-title">Asignar <em>alumno</em></div>
+      <button class="modal-close" onclick="closeModals()">✕</button>
+    </div>
+    <div id="assign-modal-body" style="padding-top: 8px;"></div>
   </div>
 </div>
 
@@ -1246,6 +1274,11 @@ const STATE = {
   studentDetailId: null,         // alumno actualmente viendo en detalle (coordinador)
   studentDetailTab: 'summary',   // summary | classes | payments | data
   studentDetailData: null,       // cache de datos del alumno en vista detalle
+  scheduleWeekStart: null,       // Lunes de la semana visible en calendario (Date)
+  scheduleWeekSessions: [],      // class_sessions de la semana visible
+  scheduleWeekBookings: [],      // session_bookings de la semana visible (con joins)
+  cellModalCtx: null,            // {locationId, date (Date), hour}
+  assignCtx: null,               // contexto del wizard de asignar alumno
 };
 
 // ============================================
@@ -1922,32 +1955,195 @@ function renderPackages() {
   }).join('');
 }
 
+// ============================================
+// CALENDARIO SEMANAL — coordinador (reemplaza horario semanal)
+// ============================================
+function getWeekStart(date) {
+  const d = new Date(date);
+  const dow = d.getDay();
+  const diff = dow === 0 ? -6 : 1 - dow; // semana lun-dom
+  d.setDate(d.getDate() + diff);
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
+async function changeScheduleWeek(delta) {
+  if (!STATE.scheduleWeekStart) STATE.scheduleWeekStart = getWeekStart(new Date());
+  const next = new Date(STATE.scheduleWeekStart);
+  next.setDate(next.getDate() + delta * 7);
+  STATE.scheduleWeekStart = next;
+  await loadScheduleWeekData();
+  renderSchedule();
+}
+
+async function goToScheduleThisWeek() {
+  STATE.scheduleWeekStart = getWeekStart(new Date());
+  await loadScheduleWeekData();
+  renderSchedule();
+}
+
+async function loadScheduleWeekData() {
+  if (!isOnline) {
+    STATE.scheduleWeekSessions = [];
+    STATE.scheduleWeekBookings = [];
+    return;
+  }
+  if (!STATE.scheduleWeekStart) STATE.scheduleWeekStart = getWeekStart(new Date());
+  const start = STATE.scheduleWeekStart;
+  const end = new Date(start);
+  end.setDate(end.getDate() + 6);
+  const startIso = start.toISOString().slice(0, 10);
+  const endIso = end.toISOString().slice(0, 10);
+
+  const { data: sessions } = await sb.from('class_sessions')
+    .select('id, session_date, hour, location_id, is_cancelled, instructor_id')
+    .gte('session_date', startIso)
+    .lte('session_date', endIso);
+
+  STATE.scheduleWeekSessions = sessions || [];
+
+  const sessionIds = (sessions || []).map(s => s.id);
+  if (sessionIds.length > 0) {
+    const { data: bookings } = await sb.from('session_bookings')
+      .select('*')
+      .in('session_id', sessionIds);
+    STATE.scheduleWeekBookings = bookings || [];
+  } else {
+    STATE.scheduleWeekBookings = [];
+  }
+}
+
+// Cuenta DISTINCT alumnos agendados en la celda (combina fixed + session_bookings)
+function countCellOccupancy(locationId, date, hour) {
+  const dow = date.getDay();
+  const dateIso = date.toISOString().slice(0, 10);
+
+  // Verificar si la sesión existe y está cancelada
+  const session = (STATE.scheduleWeekSessions || []).find(s =>
+    s.location_id === locationId && s.session_date === dateIso && s.hour === hour
+  );
+  if (session && session.is_cancelled) return { count: 0, cancelled: true };
+
+  const studentIds = new Set();
+
+  // Fixed bookings
+  (STATE.fixedBookings || []).filter(b =>
+    b.location_id === locationId && b.day_of_week === dow && b.hour === hour
+  ).forEach(b => studentIds.add(b.student_id));
+
+  // Session bookings puntuales
+  if (session) {
+    (STATE.scheduleWeekBookings || []).filter(b =>
+      b.session_id === session.id && b.status !== 'cancelled'
+    ).forEach(b => studentIds.add(b.student_id));
+  }
+
+  return { count: studentIds.size, cancelled: false };
+}
+
+function getCellStudents(locationId, date, hour) {
+  const dow = date.getDay();
+  const dateIso = date.toISOString().slice(0, 10);
+  const session = (STATE.scheduleWeekSessions || []).find(s =>
+    s.location_id === locationId && s.session_date === dateIso && s.hour === hour
+  );
+
+  const studentMap = new Map(); // studentId -> { student, type, label, bookingId }
+
+  // Fixed bookings de esta celda
+  (STATE.fixedBookings || []).filter(b =>
+    b.location_id === locationId && b.day_of_week === dow && b.hour === hour
+  ).forEach(b => {
+    const student = STATE.students.find(s => s.id === b.student_id);
+    if (student) studentMap.set(b.student_id, { student, type: 'fixed', label: 'Fija', bookingId: null });
+  });
+
+  // Session bookings puntuales (sobreescriben fixed si tienen un source distinto)
+  if (session) {
+    (STATE.scheduleWeekBookings || []).filter(b =>
+      b.session_id === session.id && b.status !== 'cancelled'
+    ).forEach(b => {
+      const student = STATE.students.find(s => s.id === b.student_id);
+      if (!student) return;
+      const labels = { flexible: 'Flexible', makeup: 'Recuperación', fixed: 'Fija', rescheduled: 'Reagendada' };
+      const label = labels[b.source] || 'Asignada';
+      const existing = studentMap.get(b.student_id);
+      // Si ya estaba como fija y el booking concreto la confirma, mantener "Fija" como label.
+      // Si vino como flexible/makeup, esa label gana.
+      if (!existing || (b.source && b.source !== 'fixed')) {
+        studentMap.set(b.student_id, { student, type: b.source || 'session', label, bookingId: b.id });
+      }
+    });
+  }
+
+  return Array.from(studentMap.values());
+}
+
 function renderSchedule() {
   const loc = getCurrentLocation();
   if (!loc) return;
   const table = document.getElementById('schedule-table');
-  document.getElementById('schedule-sub').textContent = `Sede ${loc.name} · capacidad ${loc.capacity} alumnos por clase`;
+  if (!STATE.scheduleWeekStart) STATE.scheduleWeekStart = getWeekStart(new Date());
+  const start = STATE.scheduleWeekStart;
+  const end = new Date(start);
+  end.setDate(end.getDate() + 6);
 
-  const days = [1, 2, 3, 4, 5, 6, 0];  // Lun-Sab-Dom
+  document.getElementById('schedule-sub').textContent = `Sede ${loc.name} · capacidad ${loc.capacity} alumnos por clase · click en una celda para ver detalle o asignar`;
+  const monthLabels = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+  document.getElementById('schedule-week-label').innerHTML = `${start.getDate()} ${monthLabels[start.getMonth()]} – ${end.getDate()} ${monthLabels[end.getMonth()]} ${end.getFullYear()}`;
+
+  const dates = [];
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(start);
+    d.setDate(d.getDate() + i);
+    dates.push(d);
+  }
   const dayLabels = ['LUN', 'MAR', 'MIÉ', 'JUE', 'VIE', 'SÁB', 'DOM'];
   const hours = [6, 7, 8, 9, 10, 11, 16, 17, 18, 19, 20];
+  const todayIso = new Date().toISOString().slice(0, 10);
 
-  let html = '<thead><tr><th style="width: 80px;"></th>';
-  dayLabels.forEach(d => html += `<th style="text-align: center;">${d}</th>`);
+  let html = '<thead><tr><th style="width: 70px;"></th>';
+  dates.forEach((d, i) => {
+    const isToday = d.toISOString().slice(0, 10) === todayIso;
+    html += `<th style="text-align: center; ${isToday ? 'background: var(--fit-lavender-pale);' : ''}">
+      <div style="font-size: 11px; color: var(--ink-mute);">${dayLabels[i]}</div>
+      <div style="font-family: var(--display); font-size: 16px; color: ${isToday ? 'var(--fit-purple)' : 'var(--ink)'}; margin-top: 2px;">${d.getDate()}</div>
+    </th>`;
+  });
   html += '</tr></thead><tbody>';
 
   hours.forEach(h => {
-    html += `<tr><td style="font-family: var(--display); font-size: 14px; color: var(--fit-purple); text-align: right; vertical-align: top;">${formatHour(h)}</td>`;
-    days.forEach(dow => {
-      const bookings = STATE.fixedBookings.filter(b => b.location_id === loc.id && b.day_of_week === dow && b.hour === h);
-      const count = bookings.length;
+    html += `<tr><td style="font-family: var(--display); font-size: 14px; color: var(--fit-purple); text-align: right; vertical-align: top; padding-top: 14px;">${formatHour(h)}</td>`;
+    dates.forEach(d => {
+      const occ = countCellOccupancy(loc.id, d, h);
       const cap = loc.capacity;
+      const count = occ.count;
       const pct = Math.min(100, (count / cap) * 100);
-      const cellColor = count === 0 ? '#FBFAFC' : `linear-gradient(90deg, ${pct >= 100 ? '#15803D' : (pct >= 50 ? '#5B2A8F' : '#A78BFA')} ${pct}%, var(--line-soft) ${pct}%)`;
-      html += `<td style="text-align: center; padding: 8px; vertical-align: top;">
-        <div style="background: ${count === 0 ? 'var(--fit-cream)' : 'var(--fit-lavender-pale)'}; border-radius: 8px; padding: 8px; min-height: 40px;">
-          <div style="font-family: var(--display); font-size: 16px; color: ${count === 0 ? 'var(--ink-faint)' : 'var(--fit-purple)'};">${count}<span style="font-size: 10px; color: var(--ink-mute);">/${cap}</span></div>
-          <div style="height: 3px; background: var(--line); border-radius: 2px; margin-top: 4px; overflow: hidden;"><div style="height: 100%; width: ${pct}%; background: ${pct >= 100 ? '#15803D' : 'var(--fit-purple)'};"></div></div>
+      const isPast = d.toISOString().slice(0, 10) < todayIso;
+      const isFull = count >= cap;
+      const dateIso = d.toISOString().slice(0, 10);
+
+      let bgColor = 'var(--fit-cream)';
+      let countColor = 'var(--ink-faint)';
+      let dotColor = 'var(--line)';
+      if (occ.cancelled) {
+        bgColor = '#fef2f2';
+        countColor = '#b00';
+      } else if (count > 0) {
+        bgColor = isFull ? '#dcfce7' : 'var(--fit-lavender-pale)';
+        countColor = isFull ? '#15803d' : 'var(--fit-purple)';
+        dotColor = isFull ? '#15803d' : 'var(--fit-purple)';
+      }
+
+      const cellOpacity = isPast ? '0.5' : '1';
+      const cursorStyle = 'cursor: pointer;';
+
+      html += `<td style="text-align: center; padding: 6px;">
+        <div onclick="openScheduleCellModal('${loc.id}', '${dateIso}', ${h})" style="background: ${bgColor}; border-radius: 8px; padding: 10px 8px; min-height: 52px; ${cursorStyle} opacity: ${cellOpacity}; transition: transform 0.1s;" onmouseover="this.style.transform='scale(1.03)'" onmouseout="this.style.transform=''">
+          ${occ.cancelled
+            ? `<div style="font-size: 11px; color: #b00; font-weight: 500;">Cancelada</div>`
+            : `<div style="font-family: var(--display); font-size: 18px; color: ${countColor};">${count}<span style="font-size: 11px; color: var(--ink-mute);">/${cap}</span></div>
+               <div style="height: 3px; background: var(--line); border-radius: 2px; margin-top: 6px; overflow: hidden;"><div style="height: 100%; width: ${pct}%; background: ${dotColor};"></div></div>`}
         </div>
       </td>`;
     });
@@ -1955,6 +2151,366 @@ function renderSchedule() {
   });
   html += '</tbody>';
   table.innerHTML = html;
+}
+
+// Cell detail modal: lista alumnos agendados + botón "Asignar"
+function openScheduleCellModal(locationId, dateIso, hour) {
+  const date = new Date(dateIso + 'T00:00:00');
+  STATE.cellModalCtx = { locationId, date, hour };
+  const loc = STATE.locations.find(l => l.id === locationId);
+  const students = getCellStudents(locationId, date, hour);
+  const cap = loc?.capacity || 9;
+  const isPast = dateIso < new Date().toISOString().slice(0, 10);
+
+  const session = (STATE.scheduleWeekSessions || []).find(s =>
+    s.location_id === locationId && s.session_date === dateIso && s.hour === hour
+  );
+  const isCancelled = session?.is_cancelled;
+  const monthLabels = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+  const dayLabels = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
+
+  document.getElementById('cell-modal-title').innerHTML = `${dayLabels[date.getDay()]} ${date.getDate()} ${monthLabels[date.getMonth()]} · <em>${formatHour(hour)}</em>`;
+
+  let body = `
+    <div style="background: var(--fit-cream); border-radius: 10px; padding: 14px 18px; margin-bottom: 16px; display: flex; align-items: center; justify-content: space-between;">
+      <div>
+        <div style="font-size: 11px; color: var(--ink-mute); text-transform: uppercase; letter-spacing: 0.5px;">${escape(loc?.name || '')}</div>
+        <div style="font-family: var(--display); font-size: 22px; color: var(--fit-purple); margin-top: 2px;">${students.length} <span style="font-size: 13px; color: var(--ink-mute);">de ${cap} alumnas</span></div>
+      </div>
+      ${isCancelled ? '<span style="font-size: 11px; padding: 4px 10px; background: #fee; color: #b00; border-radius: 999px;">Clase cancelada</span>' : ''}
+    </div>
+  `;
+
+  if (students.length === 0) {
+    body += `<p style="color: var(--ink-mute); font-size: 13px; padding: 12px 4px;">Aún no hay alumnos agendados en esta clase.</p>`;
+  } else {
+    body += `<div style="display: flex; flex-direction: column; gap: 6px; margin-bottom: 16px;">${students.map(({ student, label, type, bookingId }) => {
+      const labelColor = type === 'makeup' ? 'background: #dbeafe; color: #1e40af;'
+        : (type === 'flexible' ? 'background: #fef3c7; color: #92400e;'
+        : (type === 'fixed' ? 'background: var(--fit-lavender-pale); color: var(--fit-purple);'
+        : 'background: var(--line); color: var(--ink-soft);'));
+      return `
+        <div style="display: flex; align-items: center; gap: 12px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px;">
+          <div class="student-avatar" style="width: 32px; height: 32px; font-size: 12px;">${initials(student)}</div>
+          <div style="flex: 1;">
+            <div style="font-weight: 500; font-size: 14px;">${escape(student.first_name)} ${escape(student.last_name || '')}</div>
+            <div style="font-size: 11px; color: var(--ink-mute); margin-top: 1px;">${escape(student.email || '—')}</div>
+          </div>
+          <span style="font-size: 11px; padding: 3px 10px; border-radius: 999px; ${labelColor}">${label}</span>
+          ${bookingId && !isPast ? `<button onclick="removeBookingFromCell('${bookingId}')" title="Quitar de la clase" style="padding: 4px 8px; background: transparent; border: 1px solid var(--line); border-radius: 6px; cursor: pointer; font-size: 11px; color: var(--ink-mute);">✕</button>` : ''}
+        </div>
+      `;
+    }).join('')}</div>`;
+  }
+
+  if (!isCancelled && !isPast && students.length < cap) {
+    body += `<button class="btn btn-primary" style="width: 100%; padding: 10px; font-size: 13px;" onclick="openAssignStudentModal()">+ Asignar alumno a esta clase</button>`;
+  } else if (isPast) {
+    body += `<p style="font-size: 12px; color: var(--ink-mute); text-align: center; padding: 6px 0;">Esta clase ya pasó.</p>`;
+  } else if (students.length >= cap) {
+    body += `<p style="font-size: 12px; color: var(--ink-mute); text-align: center; padding: 6px 0;">Clase llena.</p>`;
+  }
+
+  document.getElementById('cell-modal-body').innerHTML = body;
+  document.getElementById('schedule-cell-modal').classList.add('is-open');
+}
+
+async function removeBookingFromCell(bookingId) {
+  if (!confirm('¿Quitar a este alumno de la clase?')) return;
+  if (!isOnline) { showToast('Conexión requerida', 'error'); return; }
+  const { error } = await sb.from('session_bookings').delete().eq('id', bookingId);
+  if (error) { showToast('Error: ' + error.message, 'error'); return; }
+  STATE.scheduleWeekBookings = STATE.scheduleWeekBookings.filter(b => b.id !== bookingId);
+  showToast('Alumno quitado de la clase', 'success');
+  // Re-render del modal y de la grilla
+  const ctx = STATE.cellModalCtx;
+  if (ctx) {
+    openScheduleCellModal(ctx.locationId, ctx.date.toISOString().slice(0, 10), ctx.hour);
+  }
+  renderSchedule();
+}
+
+// ============================================
+// ASIGNAR ALUMNO A CLASE — wizard multi-step
+// ============================================
+function openAssignStudentModal() {
+  const ctx = STATE.cellModalCtx;
+  if (!ctx) return;
+  STATE.assignCtx = {
+    locationId: ctx.locationId,
+    primaryDate: new Date(ctx.date), // primera fecha (de la celda clickeada)
+    hour: ctx.hour,
+    selectedStudent: null,
+    additionalDates: [], // fechas extra elegidas en el mini calendario
+    miniCalendarMonth: new Date(ctx.date), // mes mostrado en el mini calendario
+  };
+  document.getElementById('schedule-cell-modal').classList.remove('is-open');
+  document.getElementById('assign-student-modal').classList.add('is-open');
+  renderAssignStudentModal();
+}
+
+function renderAssignStudentModal() {
+  const ctx = STATE.assignCtx;
+  if (!ctx) return;
+  const body = document.getElementById('assign-modal-body');
+
+  if (!ctx.selectedStudent) {
+    renderAssignStep1Search();
+  } else {
+    renderAssignStep2Repeat();
+  }
+}
+
+function renderAssignStep1Search() {
+  const ctx = STATE.assignCtx;
+  document.getElementById('assign-modal-title').innerHTML = 'Asignar <em>alumno</em>';
+
+  // Calcular qué alumnos tienen recuperables o son flexibles activos para mostrar pills
+  // Usamos los datos en memoria; los recuperables exactos los recalculamos al asignar.
+  const monthLabels = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+  const dayLabels = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
+  const d = ctx.primaryDate;
+
+  document.getElementById('assign-modal-body').innerHTML = `
+    <div style="background: var(--fit-cream); border-radius: 10px; padding: 12px 16px; margin-bottom: 14px; font-size: 13px;">
+      Asignando para: <strong>${dayLabels[d.getDay()]} ${d.getDate()} ${monthLabels[d.getMonth()]} · ${formatHour(ctx.hour)}</strong>
+    </div>
+    <input type="text" id="assign-search" placeholder="Buscar por nombre, email o documento..." oninput="renderAssignStudentList()" style="width: 100%; padding: 10px 14px; border: 1px solid var(--line); border-radius: 999px; font-size: 13px; margin-bottom: 12px;" autofocus />
+    <div id="assign-student-list" style="max-height: 380px; overflow-y: auto;"></div>
+  `;
+
+  renderAssignStudentList();
+}
+
+function renderAssignStudentList() {
+  const ctx = STATE.assignCtx;
+  const loc = STATE.locations.find(l => l.id === ctx.locationId);
+  const q = (document.getElementById('assign-search')?.value || '').toLowerCase().trim();
+  // Filtrar alumnos: por sede del coordinador o todos (decisión: por sede)
+  let list = (STATE.students || []).filter(s => s.location_id === ctx.locationId);
+  if (q) {
+    list = list.filter(s => {
+      const fullname = `${s.first_name || ''} ${s.last_name || ''}`.toLowerCase();
+      return fullname.includes(q) || (s.email || '').toLowerCase().includes(q) || (s.document_number || '').includes(q);
+    });
+  }
+  // Ordenar: primero los que tienen modalidad flexible o trial, luego fixed
+  list.sort((a, b) => {
+    const order = { flexible: 0, trial: 1, fixed: 2 };
+    return (order[a.modality] ?? 3) - (order[b.modality] ?? 3) || (a.first_name || '').localeCompare(b.first_name || '');
+  });
+
+  const container = document.getElementById('assign-student-list');
+  if (!container) return;
+  if (list.length === 0) {
+    container.innerHTML = '<p style="color: var(--ink-mute); font-size: 13px; padding: 16px; text-align: center;">Sin resultados.</p>';
+    return;
+  }
+  container.innerHTML = list.slice(0, 100).map(s => {
+    const modPill = s.modality === 'fixed' ? '<span style="font-size: 10px; padding: 2px 8px; background: var(--fit-lavender-pale); color: var(--fit-purple); border-radius: 999px;">★ Fijo</span>'
+      : (s.modality === 'flexible' ? '<span style="font-size: 10px; padding: 2px 8px; background: #fef3c7; color: #92400e; border-radius: 999px;">↻ Flex</span>'
+      : '<span style="font-size: 10px; padding: 2px 8px; background: #e0e7ff; color: #3730a3; border-radius: 999px;">✦ Prueba</span>');
+    return `
+      <div onclick="selectStudentForAssign('${s.id}')" style="display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 8px; cursor: pointer; transition: background 0.15s;" onmouseover="this.style.background='var(--fit-cream)'" onmouseout="this.style.background=''">
+        <div class="student-avatar" style="width: 32px; height: 32px; font-size: 12px;">${initials(s)}</div>
+        <div style="flex: 1;">
+          <div style="font-weight: 500; font-size: 13px;">${escape(s.first_name)} ${escape(s.last_name || '')}</div>
+          <div style="font-size: 11px; color: var(--ink-mute);">${escape(s.email || '—')}</div>
+        </div>
+        ${modPill}
+      </div>
+    `;
+  }).join('');
+}
+
+async function selectStudentForAssign(studentId) {
+  const student = STATE.students.find(s => s.id === studentId);
+  if (!student) return;
+  STATE.assignCtx.selectedStudent = student;
+  // Cargar paquete activo del alumno para conocer expiration_date (límite del mini calendario)
+  if (isOnline) {
+    const todayIso = new Date().toISOString().slice(0, 10);
+    const { data: pkg } = await sb.from('student_packages')
+      .select('id, expiration_date, end_date, classes_total, classes_used, classes_recoverable')
+      .eq('student_id', studentId)
+      .eq('is_frozen', false)
+      .gte('expiration_date', todayIso)
+      .order('purchase_date', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    STATE.assignCtx.studentActivePackage = pkg || null;
+  }
+  renderAssignStudentModal();
+}
+
+function renderAssignStep2Repeat() {
+  const ctx = STATE.assignCtx;
+  const stud = ctx.selectedStudent;
+  const pkg = ctx.studentActivePackage;
+  document.getElementById('assign-modal-title').innerHTML = `Confirmar <em>asignación</em>`;
+
+  const monthLabels = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+  const dayLabels = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
+  const d = ctx.primaryDate;
+
+  const pkgRemaining = pkg ? (pkg.classes_total || 0) - (pkg.classes_used || 0) : null;
+  const totalSelected = 1 + ctx.additionalDates.length;
+  const willExceed = pkg && totalSelected > pkgRemaining;
+
+  document.getElementById('assign-modal-body').innerHTML = `
+    <div style="background: var(--fit-cream); border-radius: 10px; padding: 12px 16px; margin-bottom: 14px; display: flex; align-items: center; gap: 12px;">
+      <div class="student-avatar" style="width: 36px; height: 36px; font-size: 13px;">${initials(stud)}</div>
+      <div style="flex: 1;">
+        <div style="font-weight: 500; font-size: 14px;">${escape(stud.first_name)} ${escape(stud.last_name || '')}</div>
+        <div style="font-size: 11px; color: var(--ink-mute);">${pkg ? `Paquete: ${pkgRemaining} restantes${pkg.expiration_date ? ' · vence ' + formatDate(pkg.expiration_date) : ''}` : 'Sin paquete activo'}</div>
+      </div>
+      <button onclick="STATE.assignCtx.selectedStudent = null; renderAssignStudentModal();" style="padding: 4px 10px; background: transparent; border: 1px solid var(--line); border-radius: 999px; font-size: 11px; cursor: pointer;">Cambiar</button>
+    </div>
+
+    <div style="margin-bottom: 14px;">
+      <div style="font-size: 11px; color: var(--ink-mute); text-transform: uppercase; letter-spacing: 0.5px; font-weight: 500; margin-bottom: 8px;">Clase principal</div>
+      <div style="background: var(--fit-lavender-pale); border-radius: 8px; padding: 10px 14px; font-size: 13px;">
+        <strong>${dayLabels[d.getDay()]} ${d.getDate()} ${monthLabels[d.getMonth()]}</strong> · ${formatHour(ctx.hour)}
+      </div>
+    </div>
+
+    <div style="margin-bottom: 14px;">
+      <div style="font-size: 11px; color: var(--ink-mute); text-transform: uppercase; letter-spacing: 0.5px; font-weight: 500; margin-bottom: 8px;">Repetir en otras fechas <span style="text-transform: none; letter-spacing: 0; font-weight: 400;">(opcional)</span></div>
+      <div id="mini-calendar"></div>
+      ${ctx.additionalDates.length > 0 ? `
+        <div style="margin-top: 10px; font-size: 12px; color: var(--ink-soft);">
+          ${ctx.additionalDates.length} fecha${ctx.additionalDates.length === 1 ? '' : 's'} adicional${ctx.additionalDates.length === 1 ? '' : 'es'} seleccionada${ctx.additionalDates.length === 1 ? '' : 's'}
+        </div>
+      ` : ''}
+    </div>
+
+    ${willExceed ? `
+      <div style="background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; padding: 10px 14px; margin-bottom: 12px; font-size: 12px; color: #991b1b;">
+        ⚠ Se asignarían ${totalSelected} clases pero el paquete solo tiene ${pkgRemaining} restantes. Igual puedes confirmar (las extra quedarán como cortesía o fuera del paquete).
+      </div>
+    ` : ''}
+
+    <div style="display: flex; justify-content: space-between; gap: 10px; margin-top: 8px;">
+      <button class="btn btn-ghost" onclick="closeModals()" style="padding: 10px 18px;">Cancelar</button>
+      <button class="btn btn-primary" onclick="confirmAssignStudentToCell()" style="padding: 10px 18px;">
+        Asignar ${totalSelected} clase${totalSelected === 1 ? '' : 's'}
+      </button>
+    </div>
+  `;
+
+  renderMiniCalendar();
+}
+
+function renderMiniCalendar() {
+  const ctx = STATE.assignCtx;
+  const cal = document.getElementById('mini-calendar');
+  if (!cal) return;
+  const todayIso = new Date().toISOString().slice(0, 10);
+  const dow = ctx.primaryDate.getDay();
+  const targetDow = dow; // solo fechas del mismo día de la semana son válidas (mismo horario)
+  const month = ctx.miniCalendarMonth;
+  const year = month.getFullYear();
+  const monthIdx = month.getMonth();
+  const monthLabels = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+  const pkg = ctx.studentActivePackage;
+  const maxDateIso = pkg ? (pkg.expiration_date || pkg.end_date) : null;
+  const primaryIso = ctx.primaryDate.toISOString().slice(0, 10);
+
+  // Días del mes
+  const firstDay = new Date(year, monthIdx, 1);
+  const startDow = firstDay.getDay() === 0 ? 6 : firstDay.getDay() - 1; // lun=0
+  const daysInMonth = new Date(year, monthIdx + 1, 0).getDate();
+
+  let html = `
+    <div style="border: 1px solid var(--line); border-radius: 10px; padding: 12px;">
+      <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;">
+        <button onclick="navMiniCalendar(-1)" style="background: transparent; border: 1px solid var(--line); border-radius: 6px; padding: 4px 8px; cursor: pointer; font-size: 12px;">←</button>
+        <div style="font-family: var(--display); font-size: 14px; color: var(--fit-purple);">${monthLabels[monthIdx]} ${year}</div>
+        <button onclick="navMiniCalendar(1)" style="background: transparent; border: 1px solid var(--line); border-radius: 6px; padding: 4px 8px; cursor: pointer; font-size: 12px;">→</button>
+      </div>
+      <div style="display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; font-size: 10px; color: var(--ink-mute); text-align: center; margin-bottom: 6px;">
+        <div>L</div><div>M</div><div>M</div><div>J</div><div>V</div><div>S</div><div>D</div>
+      </div>
+      <div style="display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px;">
+  `;
+
+  for (let i = 0; i < startDow; i++) html += `<div></div>`;
+  for (let day = 1; day <= daysInMonth; day++) {
+    const cellDate = new Date(year, monthIdx, day);
+    const cellIso = cellDate.toISOString().slice(0, 10);
+    const cellDow = cellDate.getDay();
+    const isPrimary = cellIso === primaryIso;
+    const isPast = cellIso < todayIso;
+    const isOutOfPackage = maxDateIso && cellIso > maxDateIso;
+    const wrongDayOfWeek = cellDow !== targetDow;
+    const isSelected = ctx.additionalDates.some(d => d.toISOString().slice(0, 10) === cellIso);
+    const isDisabled = isPrimary || isPast || isOutOfPackage || wrongDayOfWeek;
+
+    let bg = 'transparent', color = 'var(--ink)', cursor = 'pointer';
+    if (isPrimary) { bg = 'var(--fit-purple)'; color = 'white'; cursor = 'not-allowed'; }
+    else if (isSelected) { bg = 'var(--fit-lavender-pale)'; color = 'var(--fit-purple)'; }
+    else if (isDisabled) { color = 'var(--ink-faint)'; cursor = 'not-allowed'; }
+
+    html += `<div onclick="${isDisabled ? '' : `toggleMiniCalendarDate('${cellIso}')`}" style="aspect-ratio: 1; display: flex; align-items: center; justify-content: center; border-radius: 6px; font-size: 12px; background: ${bg}; color: ${color}; cursor: ${cursor}; ${isSelected ? 'font-weight: 600;' : ''}">${day}</div>`;
+  }
+  html += '</div></div>';
+  html += `<div style="font-size: 11px; color: var(--ink-mute); margin-top: 8px;">Solo se muestran activos los ${['domingos','lunes','martes','miércoles','jueves','viernes','sábados'][targetDow]} (mismo día que la clase principal). ${maxDateIso ? `Disponible hasta ${formatDate(maxDateIso)}.` : ''}</div>`;
+  cal.innerHTML = html;
+}
+
+function navMiniCalendar(delta) {
+  const m = STATE.assignCtx.miniCalendarMonth;
+  m.setMonth(m.getMonth() + delta);
+  renderMiniCalendar();
+}
+
+function toggleMiniCalendarDate(iso) {
+  const ctx = STATE.assignCtx;
+  const idx = ctx.additionalDates.findIndex(d => d.toISOString().slice(0, 10) === iso);
+  if (idx >= 0) ctx.additionalDates.splice(idx, 1);
+  else ctx.additionalDates.push(new Date(iso + 'T00:00:00'));
+  renderAssignStep2Repeat();
+}
+
+async function confirmAssignStudentToCell() {
+  const ctx = STATE.assignCtx;
+  if (!ctx || !ctx.selectedStudent) return;
+  if (!isOnline) { showToast('Conexión requerida', 'error'); return; }
+
+  const allDates = [ctx.primaryDate, ...ctx.additionalDates];
+  const stud = ctx.selectedStudent;
+  const source = (stud.modality === 'flexible' ? 'flexible' : (stud.modality === 'trial' ? 'flexible' : 'fixed'));
+
+  let successCount = 0;
+  let failCount = 0;
+
+  for (const date of allDates) {
+    const sessionId = await getOrCreateSession(ctx.locationId, date, ctx.hour);
+    if (!sessionId) { failCount++; continue; }
+
+    // Verificar duplicado
+    const existing = STATE.scheduleWeekBookings.find(b => b.session_id === sessionId && b.student_id === stud.id);
+    if (existing) { failCount++; continue; }
+
+    const { error } = await sb.from('session_bookings').insert({
+      session_id: sessionId,
+      student_id: stud.id,
+      source,
+    });
+    if (error) { failCount++; console.error('Error inserting booking:', error); }
+    else successCount++;
+  }
+
+  if (successCount > 0) {
+    showToast(`✓ ${successCount} clase${successCount === 1 ? '' : 's'} asignada${successCount === 1 ? '' : 's'} a ${stud.first_name}`, 'success');
+  }
+  if (failCount > 0) {
+    showToast(`${failCount} no se pudo${failCount === 1 ? '' : 'n'} asignar (ya existía o error)`, 'error');
+  }
+
+  closeModals();
+  await loadScheduleWeekData();
+  renderSchedule();
 }
 
 // ============================================
@@ -4962,6 +5518,10 @@ function openStudentModalWithPackages(id) {
     else if (name === 'renewals') loadAndRenderRenewals();
     else if (name === 'instructor-day') renderInstructorDay();
     else if (name === 'student-home') renderStudentHome();
+    else if (name === 'schedule') {
+      if (!STATE.scheduleWeekStart) STATE.scheduleWeekStart = getWeekStart(new Date());
+      loadScheduleWeekData().then(() => renderSchedule());
+    }
   };
 })();
 
