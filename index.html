@@ -2665,7 +2665,7 @@ async function loadScheduleEditorData() {
 
   console.log('[schedEditor] step 2: load bookings');
   const bookingsResp = await sb.from('session_bookings')
-    .select('id, student_id, status, class_sessions(id, session_date, hour, location_id, is_cancelled)')
+    .select('id, student_id, class_sessions(id, session_date, hour, location_id, is_cancelled)')
     .eq('student_id', ed.studentId);
   if (bookingsResp.error) throw new Error('Bookings: ' + bookingsResp.error.message);
   const bookings = bookingsResp.data || [];
@@ -2687,7 +2687,7 @@ async function loadScheduleEditorData() {
   ed.missed = new Set();
   bookings.forEach(b => {
     const cs = b.class_sessions;
-    if (!cs || cs.is_cancelled || b.status === 'cancelled') return;
+    if (!cs || cs.is_cancelled) return;
     const k = `${cs.session_date}|${cs.hour}`;
     const isPast = cs.session_date < todayIso;
     if (isPast) {
@@ -2730,11 +2730,10 @@ async function loadScheduleEditorOccupancy() {
   let bookingsBySession = new Map();
   if (sessionIds.length > 0) {
     const bResp = await sb.from('session_bookings')
-      .select('session_id, status')
+      .select('session_id')
       .in('session_id', sessionIds);
     if (bResp.error) throw new Error('Bookings (occupancy): ' + bResp.error.message);
     (bResp.data || []).forEach(b => {
-      if (b.status === 'cancelled') return;
       bookingsBySession.set(b.session_id, (bookingsBySession.get(b.session_id) || 0) + 1);
     });
   }
