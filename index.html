@@ -572,6 +572,14 @@
 
         <div class="panel">
           <div class="panel-header">
+            <div class="panel-title">Por <em>re-agendar</em></div>
+            <span class="panel-count warn" id="reschedule-count">—</span>
+          </div>
+          <div class="panel-body" id="reschedule-list"></div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-header">
             <div class="panel-title">Datos <em>incompletos</em></div>
             <span class="panel-count warn" id="incomplete-count">—</span>
           </div>
@@ -1567,6 +1575,104 @@ function renderDashboard() {
   }
 
   renderTimeline();
+
+  // Cargar widget "Por re-agendar" en background (no bloquea la UI)
+  loadRescheduleList();
+}
+
+// Carga alumnos con clases pendientes por re-agendar (paquete activo, capacidad disponible).
+// Esto incluye tanto recuperables marcadas como clases que nunca se agendaron.
+async function loadRescheduleList() {
+  const listEl = document.getElementById('reschedule-list');
+  const countEl = document.getElementById('reschedule-count');
+  if (!listEl || !countEl) return;
+
+  if (!isOnline) {
+    countEl.textContent = '—';
+    listEl.innerHTML = '<div style="padding: 20px; text-align: center; color: var(--ink-mute); font-size: 12px;">Sin conexión</div>';
+    return;
+  }
+
+  listEl.innerHTML = '<div style="padding: 20px; text-align: center; color: var(--ink-mute); font-size: 12px;">Calculando...</div>';
+
+  const todayIso = new Date().toISOString().slice(0, 10);
+  const locId = STATE.currentLocationId;
+
+  // 1. Paquetes activos
+  const { data: pkgs } = await sb.from('student_packages')
+    .select('id, student_id, classes_total, classes_used, classes_recoverable, expiration_date')
+    .eq('is_frozen', false)
+    .gte('expiration_date', todayIso);
+
+  if (!pkgs || pkgs.length === 0) {
+    countEl.textContent = '0';
+    listEl.innerHTML = '<div style="padding: 24px 20px; text-align: center; color: var(--ink-mute); font-size: 12px;">Sin pendientes ✓</div>';
+    return;
+  }
+
+  // Filtrar a alumnos de la sede actual
+  const studentsInLoc = new Set(
+    (STATE.students || []).filter(s => s.location_id === locId).map(s => s.id)
+  );
+  const localPkgs = pkgs.filter(p => studentsInLoc.has(p.student_id));
+
+  if (localPkgs.length === 0) {
+    countEl.textContent = '0';
+    listEl.innerHTML = '<div style="padding: 24px 20px; text-align: center; color: var(--ink-mute); font-size: 12px;">Sin pendientes en esta sede ✓</div>';
+    return;
+  }
+
+  // 2. Bookings futuros no cancelados de esos alumnos
+  const studentIds = localPkgs.map(p => p.student_id);
+  const { data: bookings } = await sb.from('session_bookings')
+    .select('student_id, cancelled_at, class_sessions(session_date, is_cancelled)')
+    .in('student_id', studentIds);
+
+  const futureCountByStudent = new Map();
+  (bookings || []).forEach(b => {
+    if (b.cancelled_at) return;
+    if (!b.class_sessions || b.class_sessions.is_cancelled) return;
+    if (b.class_sessions.session_date < todayIso) return;
+    futureCountByStudent.set(b.student_id, (futureCountByStudent.get(b.student_id) || 0) + 1);
+  });
+
+  // 3. Calcular pendientes y armar lista
+  const pendingItems = localPkgs.map(p => {
+    const max = Math.max(0, (p.classes_total || 0) - (p.classes_used || 0));
+    const current = futureCountByStudent.get(p.student_id) || 0;
+    const pending = max - current;
+    const stud = STATE.students.find(s => s.id === p.student_id);
+    return { stud, pending, max, current, recoverable: p.classes_recoverable || 0, expiration: p.expiration_date };
+  }).filter(item => item.stud && item.pending > 0)
+    .sort((a, b) => {
+      if (a.recoverable !== b.recoverable) return b.recoverable - a.recoverable;
+      return b.pending - a.pending;
+    });
+
+  countEl.textContent = pendingItems.length;
+  if (pendingItems.length === 0) {
+    listEl.innerHTML = '<div style="padding: 24px 20px; text-align: center; color: var(--ink-mute); font-size: 12px;">Sin pendientes ✓</div>';
+    return;
+  }
+
+  listEl.innerHTML = pendingItems.slice(0, 6).map(item => {
+    const s = item.stud;
+    const recoverHint = item.recoverable > 0
+      ? `${item.recoverable} recuperable${item.recoverable === 1 ? '' : 's'}`
+      : 'Sin agendar todavía';
+    return `<div class="alert-row" onclick="openStudentScheduleEditor('${s.id}')">
+      <div class="alert-icon warn">
+        <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+      </div>
+      <div class="alert-content">
+        <div class="alert-name">${escape(s.first_name)} ${escape(s.last_name || '')}</div>
+        <div class="alert-desc">${item.pending} clase${item.pending === 1 ? '' : 's'} · ${recoverHint}</div>
+      </div>
+      <span class="alert-action">Agendar</span>
+    </div>`;
+  }).join('') + (pendingItems.length > 6
+    ? `<div style="padding: 12px; text-align: center; font-size: 12px; color: var(--ink-mute);">+${pendingItems.length - 6} más</div>`
+    : '');
 }
 
 // ============================================
@@ -2066,7 +2172,7 @@ function countCellOccupancy(locationId, date, hour) {
   // Session bookings puntuales
   if (session) {
     (STATE.scheduleWeekBookings || []).filter(b =>
-      b.session_id === session.id && b.status !== 'cancelled'
+      b.session_id === session.id && !b.cancelled_at
     ).forEach(b => studentIds.add(b.student_id));
   }
 
@@ -2093,7 +2199,7 @@ function getCellStudents(locationId, date, hour) {
   // Session bookings puntuales (sobreescriben fixed si tienen un source distinto)
   if (session) {
     (STATE.scheduleWeekBookings || []).filter(b =>
-      b.session_id === session.id && b.status !== 'cancelled'
+      b.session_id === session.id && !b.cancelled_at
     ).forEach(b => {
       const student = STATE.students.find(s => s.id === b.student_id);
       if (!student) return;
@@ -2405,7 +2511,7 @@ function renderAssignStep2Repeat() {
 
   const remaining = pkg ? Math.max(0, (pkg.classes_total || 0) - (pkg.classes_used || 0)) : 0;
   const recoverable = pkg ? (pkg.classes_recoverable || 0) : 0;
-  const maxSelectable = remaining + recoverable;
+  const maxSelectable = remaining; // las recuperables NO suman crédito extra
   const totalSelected = 1 + ctx.additionalDates.length;
   const willExceed = pkg && totalSelected > maxSelectable;
 
@@ -2461,10 +2567,10 @@ function renderMiniCalendar() {
   const maxDateIso = pkg ? (pkg.expiration_date || pkg.end_date) : null;
   const primaryIso = ctx.primaryDate.toISOString().slice(0, 10);
 
-  // Total que el alumno puede asignar = restantes del paquete + recuperables
+  // Total que el alumno puede asignar = restantes del paquete (las recuperables NO suman extra)
   const remaining = pkg ? Math.max(0, (pkg.classes_total || 0) - (pkg.classes_used || 0)) : 0;
   const recoverable = pkg ? (pkg.classes_recoverable || 0) : 0;
-  const maxSelectable = remaining + recoverable;
+  const maxSelectable = remaining;
   const currentSelected = 1 + ctx.additionalDates.length; // primaria + adicionales
 
   // Fechas ya agendadas del alumno: bloquear si es a la MISMA hora del wizard,
@@ -2626,15 +2732,30 @@ async function confirmAssignStudentToCell() {
 // ============================================
 const SCHED_HOURS = [6, 7, 8, 9, 10, 11, 16, 17, 18, 19, 20];
 
+// Devuelve un texto humano para identificar quién está realizando la acción (para logs)
+function getCurrentActorLabel() {
+  if (typeof CURRENT_USER === 'undefined' || !CURRENT_USER) return 'sistema';
+  const role = CURRENT_USER.role;
+  if (role === 'instructor') {
+    const name = CURRENT_USER.record?.full_name || 'Profesor';
+    return `profesor ${name}`;
+  }
+  if (role === 'coordinator') {
+    const email = CURRENT_USER.authUser?.email || '';
+    return email ? `coordinador (${email})` : 'coordinador';
+  }
+  return CURRENT_USER.authUser?.email || 'usuario';
+}
+
 // Calcula cuántas clases más puede agendar un alumno (paquete activo - bookings futuros).
-// Retorna { hasPackage, max, current, remaining, pkg }.
-// Si no tiene paquete activo: hasPackage=false, max=0, remaining=0 (no puede agendar nada por sistema).
+// Modelo: max = classes_total - classes_used (las recuperables NO suman crédito extra,
+// son contador histórico). pendingToReschedule = max - agendadas futuras.
 async function getStudentBookingCapacity(studentId) {
-  if (!isOnline) return { hasPackage: false, max: 0, current: 0, remaining: 0 };
+  if (!isOnline) return { hasPackage: false, max: 0, current: 0, remaining: 0, pendingToReschedule: 0 };
   const todayIso = new Date().toISOString().slice(0, 10);
 
   const { data: pkg } = await sb.from('student_packages')
-    .select('id, classes_total, classes_used, classes_recoverable, expiration_date, end_date')
+    .select('id, classes_total, classes_used, classes_recoverable, expiration_date, end_date, purchase_date, start_date')
     .eq('student_id', studentId)
     .eq('is_frozen', false)
     .gte('expiration_date', todayIso)
@@ -2642,27 +2763,31 @@ async function getStudentBookingCapacity(studentId) {
     .limit(1)
     .maybeSingle();
 
-  if (!pkg) return { hasPackage: false, max: 0, current: 0, remaining: 0, pkg: null };
+  if (!pkg) return { hasPackage: false, max: 0, current: 0, remaining: 0, pendingToReschedule: 0, pkg: null };
 
-  const remainingPkg = Math.max(0, (pkg.classes_total || 0) - (pkg.classes_used || 0));
-  const recoverable = pkg.classes_recoverable || 0;
-  const max = remainingPkg + recoverable;
+  // Capacidad real = lo que pagó menos lo ya consumido (asistidas + perdidas + no_show)
+  const max = Math.max(0, (pkg.classes_total || 0) - (pkg.classes_used || 0));
 
   const { data: bookings } = await sb.from('session_bookings')
-    .select('id, class_sessions(session_date, is_cancelled)')
+    .select('id, cancelled_at, class_sessions(session_date, is_cancelled)')
     .eq('student_id', studentId);
 
   const current = (bookings || []).filter(b =>
     b.class_sessions
     && !b.class_sessions.is_cancelled
+    && !b.cancelled_at
     && b.class_sessions.session_date >= todayIso
   ).length;
+
+  const remaining = Math.max(0, max - current);
 
   return {
     hasPackage: true,
     max,
     current,
-    remaining: Math.max(0, max - current),
+    remaining,
+    pendingToReschedule: remaining, // sinónimo más explícito para UI
+    recoverableCounter: pkg.classes_recoverable || 0, // informativo histórico
     pkg,
   };
 }
@@ -2736,7 +2861,7 @@ async function loadScheduleEditorData() {
 
   console.log('[schedEditor] step 2: load bookings');
   const bookingsResp = await sb.from('session_bookings')
-    .select('id, student_id, class_sessions(id, session_date, hour, location_id, is_cancelled)')
+    .select('id, student_id, cancelled_at, class_sessions(id, session_date, hour, location_id, is_cancelled)')
     .eq('student_id', ed.studentId);
   if (bookingsResp.error) throw new Error('Bookings: ' + bookingsResp.error.message);
   const bookings = bookingsResp.data || [];
@@ -2762,10 +2887,13 @@ async function loadScheduleEditorData() {
     const k = `${cs.session_date}|${cs.hour}`;
     const isPast = cs.session_date < todayIso;
     if (isPast) {
+      // Pasada: clasificar por attendance
       const att = attendanceMap.get(b.id);
       if (att === 'attended') ed.consumed.add(k);
       else ed.missed.add(k); // lost, no_show, recoverable, o sin marcar
     } else {
+      // Futura: si está cancelada (slot liberado), NO la consideramos pre-agendada
+      if (b.cancelled_at) return;
       ed.original.add(k);
     }
   });
@@ -2801,10 +2929,11 @@ async function loadScheduleEditorOccupancy() {
   let bookingsBySession = new Map();
   if (sessionIds.length > 0) {
     const bResp = await sb.from('session_bookings')
-      .select('session_id')
+      .select('session_id, cancelled_at')
       .in('session_id', sessionIds);
     if (bResp.error) throw new Error('Bookings (occupancy): ' + bResp.error.message);
     (bResp.data || []).forEach(b => {
+      if (b.cancelled_at) return; // slot liberado, no cuenta como ocupado
       bookingsBySession.set(b.session_id, (bookingsBySession.get(b.session_id) || 0) + 1);
     });
   }
@@ -2870,8 +2999,10 @@ function _renderScheduleEditorImpl() {
   if (!ed) return;
   const stud = ed.student;
   const pkg = ed.package;
-  const max = pkg ? (Math.max(0, (pkg.classes_total || 0) - (pkg.classes_used || 0)) + (pkg.classes_recoverable || 0)) : 0;
-  const remaining = pkg ? Math.max(0, (pkg.classes_total || 0) - (pkg.classes_used || 0)) : 0;
+  // Modelo: max = classes_total - classes_used (recuperables NO suman crédito extra,
+  // son contador histórico informativo)
+  const max = pkg ? Math.max(0, (pkg.classes_total || 0) - (pkg.classes_used || 0)) : 0;
+  const remaining = max;
   const recoverable = pkg ? (pkg.classes_recoverable || 0) : 0;
 
   // Diff
@@ -3048,7 +3179,7 @@ function renderScheduleEditorWeekDetail(week) {
   const ed = STATE.scheduleEditor;
   const todayIso = new Date().toISOString().slice(0, 10);
   const expirationIso = ed.package ? (ed.package.expiration_date || ed.package.end_date) : null;
-  const max = ed.package ? (Math.max(0, (ed.package.classes_total || 0) - (ed.package.classes_used || 0)) + (ed.package.classes_recoverable || 0)) : 0;
+  const max = ed.package ? Math.max(0, (ed.package.classes_total || 0) - (ed.package.classes_used || 0)) : 0;
   const dayLabels = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
   const monthLabels = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
 
@@ -3124,7 +3255,7 @@ function toggleScheduleEditorWeek(idx) {
 
 function toggleScheduleEditorSlot(key) {
   const ed = STATE.scheduleEditor;
-  const max = ed.package ? (Math.max(0, (ed.package.classes_total || 0) - (ed.package.classes_used || 0)) + (ed.package.classes_recoverable || 0)) : 0;
+  const max = ed.package ? Math.max(0, (ed.package.classes_total || 0) - (ed.package.classes_used || 0)) : 0;
   if (ed.selected.has(key)) {
     ed.selected.delete(key);
   } else if (ed.selected.size < max) {
@@ -3228,6 +3359,7 @@ async function confirmScheduleEditorChanges() {
     await loadStudentDetail(ed.studentId);
     renderStudentDetail();
   }
+  if (typeof loadRescheduleList === 'function') loadRescheduleList();
 }
 
 // ============================================
@@ -4241,15 +4373,32 @@ async function markAttendance(studentId, hour, status, notes) {
   // 3. Lógica de cada estado
   const isRecoverable = (status === 'recoverable');
   const countsAgainst = (status === 'attended' || status === 'lost' || status === 'no_show');
+  // El slot debe liberarse cuando el alumno NO asistirá (cualquier tipo de falta).
+  // Esto permite que otro alumno (flexible) pueda tomar el cupo.
+  const releaseSlot = (status === 'recoverable' || status === 'lost' || status === 'no_show');
 
-  // 4. Upsert attendance
+  // 4. Construir nota con log de auditoría
+  const statusLabel = {
+    attended: 'asistió',
+    recoverable: 'falta justificada (recuperable)',
+    lost: 'cancelación tardía (perdida)',
+    no_show: 'no vino sin avisar',
+    pending: 'pendiente',
+    rescheduled: 'reprogramada',
+  }[status] || status;
+  const actor = getCurrentActorLabel();
+  const stamp = new Date().toLocaleString('es-PE', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+  const auditLine = `[${stamp}] ${statusLabel} · marcado por ${actor}`;
+  const finalNotes = notes ? `${auditLine}\n${notes}` : auditLine;
+
+  // 5. Upsert attendance
   const existing = STATE.attendances.find(a => a.booking_id === booking.id);
   const payload = {
     booking_id: booking.id,
     student_id: studentId,
     session_id: sessionId,
     status,
-    notes: notes || null,
+    notes: finalNotes,
     is_recoverable: isRecoverable,
     counts_against_package: countsAgainst,
     marked_at: new Date().toISOString(),
@@ -4275,17 +4424,43 @@ async function markAttendance(studentId, hour, status, notes) {
     STATE.attendances.push(data);
   }
 
+  // 6. Liberar el slot (o re-activar si vuelve a attended/pending)
+  if (releaseSlot && !booking.cancelled_at) {
+    const reasonShort = `Marcado como ${statusLabel} por ${actor}`;
+    const { error: cancelErr } = await sb.from('session_bookings').update({
+      cancelled_at: new Date().toISOString(),
+      cancelled_reason: reasonShort,
+    }).eq('id', booking.id);
+    if (!cancelErr) {
+      booking.cancelled_at = new Date().toISOString();
+      booking.cancelled_reason = reasonShort;
+    }
+  } else if (!releaseSlot && booking.cancelled_at) {
+    // Re-activar el slot (el alumno cambió de estado a attended/pending)
+    const { error: uncancelErr } = await sb.from('session_bookings').update({
+      cancelled_at: null,
+      cancelled_reason: null,
+    }).eq('id', booking.id);
+    if (!uncancelErr) {
+      booking.cancelled_at = null;
+      booking.cancelled_reason = null;
+    }
+  }
+
   const labels = {
     attended: '✓ Asistencia registrada',
-    recoverable: '⊙ Falta justificada · clase recuperable',
-    lost: '⚠ Cancelación tardía · clase perdida',
-    no_show: '✗ No vino sin avisar',
+    recoverable: '⊙ Falta justificada · cupo liberado',
+    lost: '⚠ Cancelación tardía · cupo liberado',
+    no_show: '✗ No vino · cupo liberado',
     pending: '? Marcado como pendiente',
     rescheduled: '↔ Marcado como reprogramada',
   };
 
-  // 5. Recalcular contadores del paquete activo del alumno
+  // 7. Recalcular contadores del paquete activo del alumno
   await recalcPackageCounters(studentId);
+
+  // 8. Refrescar widget "Por re-agendar" del dashboard si está visible
+  if (typeof loadRescheduleList === 'function') loadRescheduleList();
 
   showToast(labels[status] || 'Asistencia actualizada', 'success');
   closeAbsenceMenu();
