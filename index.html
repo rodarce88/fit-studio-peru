@@ -767,6 +767,17 @@
   </div>
 </div>
 
+<!-- STUDENT SCHEDULE EDITOR MODAL (calendar full view) -->
+<div class="modal-backdrop" id="schedule-editor-modal" onclick="if(event.target===this) closeModals()">
+  <div class="modal-card" style="width: 90vw; max-width: 880px; max-height: 92vh; overflow: hidden; display: flex; flex-direction: column;">
+    <div class="modal-header">
+      <div class="modal-title">Agendar <em>clases</em></div>
+      <button class="modal-close" onclick="closeModals()">✕</button>
+    </div>
+    <div id="schedule-editor-body" style="padding-top: 0; overflow-y: auto; flex: 1;"></div>
+  </div>
+</div>
+
 <!-- STUDENT MODAL -->
 <div class="modal-backdrop" id="student-modal" onclick="if(event.target===this) closeModals()">
   <div class="modal-card">
@@ -2578,6 +2589,524 @@ async function confirmAssignStudentToCell() {
   closeModals();
   await loadScheduleWeekData();
   renderSchedule();
+}
+
+// ============================================
+// STUDENT SCHEDULE EDITOR (calendar full view)
+// ============================================
+const SCHED_HOURS = [6, 7, 8, 9, 10, 11, 16, 17, 18, 19, 20];
+
+async function openStudentScheduleEditor(studentId, locationId) {
+  const stud = STATE.students.find(s => s.id === studentId);
+  if (!stud) { showToast('Alumno no encontrado', 'error'); return; }
+  if (!isOnline) { showToast('Conexión requerida', 'error'); return; }
+
+  const locId = locationId || stud.location_id || (STATE.locations[0] && STATE.locations[0].id);
+  const loc = STATE.locations.find(l => l.id === locId);
+  if (!loc) { showToast('Sede no encontrada', 'error'); return; }
+
+  // Mes inicial: hoy o el mes del inicio del paquete activo si está
+  const today = new Date();
+  STATE.scheduleEditor = {
+    studentId,
+    student: stud,
+    locationId: locId,
+    capacity: loc.capacity || 9,
+    monthDate: new Date(today.getFullYear(), today.getMonth(), 1),
+    expandedWeek: -1,
+    original: new Set(),
+    selected: new Set(),
+    consumed: new Set(),  // clases pasadas con asistencia
+    missed: new Set(),    // clases pasadas sin asistencia
+    occupancyByKey: new Map(), // "iso|hour" -> count
+    package: null,
+    loading: true,
+  };
+
+  document.getElementById('schedule-editor-modal').classList.add('is-open');
+  renderScheduleEditorLoading();
+  await loadScheduleEditorData();
+  renderScheduleEditor();
+}
+
+function renderScheduleEditorLoading() {
+  document.getElementById('schedule-editor-body').innerHTML = `
+    <div style="padding: 60px 20px; text-align: center; color: var(--ink-mute); font-size: 13px;">
+      Cargando calendario...
+    </div>`;
+}
+
+async function loadScheduleEditorData() {
+  const ed = STATE.scheduleEditor;
+  const todayIso = new Date().toISOString().slice(0, 10);
+
+  // 1. Paquete activo del alumno
+  const { data: pkg } = await sb.from('student_packages')
+    .select('id, expiration_date, end_date, classes_total, classes_used, classes_recoverable, purchase_date, start_date')
+    .eq('student_id', ed.studentId)
+    .eq('is_frozen', false)
+    .gte('expiration_date', todayIso)
+    .order('purchase_date', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  ed.package = pkg || null;
+
+  // 2. Bookings del alumno + sesiones (todo el rango visible)
+  const { data: bookings } = await sb.from('session_bookings')
+    .select('id, student_id, status, class_sessions(id, session_date, hour, location_id, is_cancelled)')
+    .eq('student_id', ed.studentId);
+
+  // 3. Asistencias para distinguir consumidas vs perdidas
+  const bookingIds = (bookings || []).map(b => b.id);
+  let attendanceMap = new Map();
+  if (bookingIds.length > 0) {
+    const { data: attendances } = await sb.from('attendance')
+      .select('booking_id, status')
+      .in('booking_id', bookingIds);
+    (attendances || []).forEach(a => attendanceMap.set(a.booking_id, a.status));
+  }
+
+  ed.original = new Set();
+  ed.consumed = new Set();
+  ed.missed = new Set();
+  (bookings || []).forEach(b => {
+    const cs = b.class_sessions;
+    if (!cs || cs.is_cancelled || b.status === 'cancelled') return;
+    const k = `${cs.session_date}|${cs.hour}`;
+    const isPast = cs.session_date < todayIso;
+    if (isPast) {
+      const att = attendanceMap.get(b.id);
+      if (att === 'attended') ed.consumed.add(k);
+      else ed.missed.add(k); // lost, no_show, recoverable, o sin marcar
+    } else {
+      ed.original.add(k);
+    }
+  });
+  ed.selected = new Set(ed.original);
+
+  // 4. Ocupación de toda la sede en el rango del mes visible (+/- 1 mes)
+  await loadScheduleEditorOccupancy();
+
+  ed.loading = false;
+}
+
+async function loadScheduleEditorOccupancy() {
+  const ed = STATE.scheduleEditor;
+  const m = ed.monthDate;
+  const monthStart = new Date(m.getFullYear(), m.getMonth(), 1);
+  const monthEnd = new Date(m.getFullYear(), m.getMonth() + 1, 0);
+  // Extender a la semana antes y después para cubrir filas que se traslapan con otros meses
+  const startIso = new Date(monthStart.getTime() - 7 * 86400000).toISOString().slice(0, 10);
+  const endIso = new Date(monthEnd.getTime() + 7 * 86400000).toISOString().slice(0, 10);
+
+  const { data: sessions } = await sb.from('class_sessions')
+    .select('id, session_date, hour, is_cancelled')
+    .eq('location_id', ed.locationId)
+    .gte('session_date', startIso)
+    .lte('session_date', endIso);
+
+  const sessionIds = (sessions || []).filter(s => !s.is_cancelled).map(s => s.id);
+  let bookingsBySession = new Map();
+  if (sessionIds.length > 0) {
+    const { data: allBookings } = await sb.from('session_bookings')
+      .select('session_id, status')
+      .in('session_id', sessionIds);
+    (allBookings || []).forEach(b => {
+      if (b.status === 'cancelled') return;
+      bookingsBySession.set(b.session_id, (bookingsBySession.get(b.session_id) || 0) + 1);
+    });
+  }
+
+  // También fixed_bookings (alumnos fijos del horario)
+  const { data: fixedBookings } = await sb.from('fixed_bookings')
+    .select('day_of_week, hour, location_id, student_id, is_active')
+    .eq('location_id', ed.locationId)
+    .eq('is_active', true);
+
+  // Indexar fixed por DOW + hour
+  const fixedByDowHour = new Map();
+  (fixedBookings || []).forEach(fb => {
+    const k = `${fb.day_of_week}|${fb.hour}`;
+    if (!fixedByDowHour.has(k)) fixedByDowHour.set(k, new Set());
+    fixedByDowHour.get(k).add(fb.student_id);
+  });
+
+  ed.occupancyByKey = new Map();
+  (sessions || []).forEach(s => {
+    if (s.is_cancelled) return;
+    const k = `${s.session_date}|${s.hour}`;
+    let count = bookingsBySession.get(s.id) || 0;
+    // Sumar fixed bookings que apliquen a ese DOW (sin doble contar si ya hay session_booking)
+    const dt = new Date(s.session_date + 'T12:00:00');
+    const dow = dt.getDay();
+    const fixedSet = fixedByDowHour.get(`${dow}|${s.hour}`) || new Set();
+    count = Math.max(count, fixedSet.size);
+    ed.occupancyByKey.set(k, count);
+  });
+
+  // Para slots sin session creada todavía: solo fixed
+  fixedByDowHour.forEach((studSet, fk) => {
+    const [dow, hour] = fk.split('|').map(Number);
+    const startD = new Date(startIso + 'T12:00:00');
+    const endD = new Date(endIso + 'T12:00:00');
+    for (let d = new Date(startD); d <= endD; d.setDate(d.getDate() + 1)) {
+      if (d.getDay() !== dow) continue;
+      const iso = d.toISOString().slice(0, 10);
+      const k = `${iso}|${hour}`;
+      if (!ed.occupancyByKey.has(k)) ed.occupancyByKey.set(k, studSet.size);
+    }
+  });
+}
+
+function renderScheduleEditor() {
+  const ed = STATE.scheduleEditor;
+  if (!ed) return;
+  const stud = ed.student;
+  const pkg = ed.package;
+  const max = pkg ? (Math.max(0, (pkg.classes_total || 0) - (pkg.classes_used || 0)) + (pkg.classes_recoverable || 0)) : 0;
+  const remaining = pkg ? Math.max(0, (pkg.classes_total || 0) - (pkg.classes_used || 0)) : 0;
+  const recoverable = pkg ? (pkg.classes_recoverable || 0) : 0;
+
+  // Diff
+  const toAdd = [], toCancel = [];
+  ed.selected.forEach(k => { if (!ed.original.has(k)) toAdd.push(k); });
+  ed.original.forEach(k => { if (!ed.selected.has(k)) toCancel.push(k); });
+  const hasChanges = toAdd.length > 0 || toCancel.length > 0;
+
+  const pending = max - ed.selected.size;
+  const monthLabels = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+  const monthLabel = `${monthLabels[ed.monthDate.getMonth()]} ${ed.monthDate.getFullYear()}`;
+  const loc = STATE.locations.find(l => l.id === ed.locationId);
+
+  document.getElementById('schedule-editor-body').innerHTML = `
+    <div style="padding: 4px 24px 14px; border-bottom: 1px solid var(--line); display: flex; align-items: flex-start; justify-content: space-between; gap: 16px;">
+      <div style="flex: 1;">
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <div class="student-avatar" style="width: 30px; height: 30px; font-size: 11px;">${initials(stud)}</div>
+          <div>
+            <div style="font-size: 14px; font-weight: 500;">${escape(stud.first_name)} ${escape(stud.last_name || '')}</div>
+            <div style="font-size: 11px; color: var(--ink-mute); margin-top: 1px;">${pkg ? `Paquete ${pkg.classes_total} · ${remaining} restantes${recoverable > 0 ? ` + ${recoverable} recuperable${recoverable === 1 ? '' : 's'}` : ''} · vence ${formatDate(pkg.expiration_date)}` : 'Sin paquete activo'}</div>
+          </div>
+        </div>
+      </div>
+      <div style="text-align: right;">
+        <div style="padding: 4px 14px; background: var(--fit-cream); border-radius: 10px; min-width: 90px;">
+          <div style="font-size: 22px; font-weight: 500; color: var(--fit-purple); line-height: 1.1;">${ed.selected.size}<span style="color: var(--ink-faint); font-size: 16px;">/${max}</span></div>
+          <div style="font-size: 9px; color: var(--ink-mute); text-transform: uppercase; letter-spacing: 0.5px; margin-top: 2px;">agendadas</div>
+        </div>
+        ${pending > 0 ? `<div style="margin-top: 6px; font-size: 10px; color: #8B6F1A; padding: 3px 8px; background: #FCEBA8; border-radius: 999px; display: inline-block;">${pending} sin agendar</div>` : ''}
+      </div>
+    </div>
+
+    ${hasChanges ? `
+      <div style="padding: 8px 24px; background: var(--fit-lavender-pale); font-size: 11px; color: var(--fit-purple); border-bottom: 1px solid var(--line);">
+        Cambios sin guardar: ${toAdd.length > 0 ? `<strong>+${toAdd.length}</strong> nueva${toAdd.length === 1 ? '' : 's'}` : ''}${(toAdd.length > 0 && toCancel.length > 0) ? ' · ' : ''}${toCancel.length > 0 ? `<strong>−${toCancel.length}</strong> cancelada${toCancel.length === 1 ? '' : 's'}` : ''}
+      </div>
+    ` : ''}
+
+    <div style="padding: 12px 24px; display: flex; align-items: center; justify-content: space-between; background: var(--fit-cream);">
+      <div style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.6px; color: var(--ink-mute); font-weight: 500;">Sede ${escape(loc.name)}</div>
+      <div style="display: flex; align-items: center; gap: 10px;">
+        <button onclick="navScheduleEditorMonth(-1)" style="background: transparent; border: 1px solid var(--line); border-radius: 5px; padding: 3px 10px; cursor: pointer; font-size: 11px;">←</button>
+        <div style="font-family: var(--display); font-size: 14px; color: var(--fit-purple);">${monthLabel}</div>
+        <button onclick="navScheduleEditorMonth(1)" style="background: transparent; border: 1px solid var(--line); border-radius: 5px; padding: 3px 10px; cursor: pointer; font-size: 11px;">→</button>
+      </div>
+    </div>
+
+    <div style="padding: 14px 24px 18px;" id="schedule-editor-month-grid">
+      ${renderScheduleEditorMonthGrid()}
+    </div>
+
+    <div style="padding: 12px 24px; border-top: 1px solid var(--line); background: var(--fit-cream); display: flex; flex-wrap: wrap; gap: 12px; font-size: 10px; color: var(--ink-soft);">
+      <span style="display: flex; align-items: center; gap: 4px;"><span style="display: inline-block; width: 11px; height: 11px; border-radius: 3px; background: var(--fit-purple);"></span>Agendada</span>
+      <span style="display: flex; align-items: center; gap: 4px;"><span style="display: inline-block; width: 11px; height: 11px; border-radius: 3px; background: #4F7A4D;"></span>Ya tomada</span>
+      <span style="display: flex; align-items: center; gap: 4px;"><span style="display: inline-block; width: 11px; height: 11px; border-radius: 3px; background: #B8A88A;"></span>No asistió</span>
+      <span style="display: flex; align-items: center; gap: 4px;"><span style="display: inline-block; width: 11px; height: 11px; border-radius: 3px; background: #DDF3DC;"></span>Buena disp.</span>
+      <span style="display: flex; align-items: center; gap: 4px;"><span style="display: inline-block; width: 11px; height: 11px; border-radius: 3px; background: #F5E9CC;"></span>Casi lleno</span>
+      <span style="display: flex; align-items: center; gap: 4px;"><span style="display: inline-block; width: 11px; height: 11px; border-radius: 3px; background: #F8D9D9;"></span>Lleno</span>
+    </div>
+
+    <div style="padding: 14px 24px 16px; display: flex; justify-content: space-between; gap: 10px; border-top: 1px solid var(--line);">
+      <button class="btn btn-ghost" onclick="closeModals()" style="padding: 8px 18px;">Cerrar</button>
+      <button class="btn btn-primary" onclick="confirmScheduleEditorChanges()" ${!hasChanges ? 'disabled style="opacity: 0.5; cursor: not-allowed; padding: 8px 22px;"' : 'style="padding: 8px 22px;"'}>
+        Guardar cambios
+      </button>
+    </div>
+  `;
+}
+
+function renderScheduleEditorMonthGrid() {
+  const ed = STATE.scheduleEditor;
+  const m = ed.monthDate;
+  const year = m.getFullYear();
+  const monthIdx = m.getMonth();
+
+  // Empezar en el lunes anterior al primer día del mes
+  const firstDay = new Date(year, monthIdx, 1);
+  const firstDow = firstDay.getDay() === 0 ? 6 : firstDay.getDay() - 1;
+  const startDate = new Date(firstDay);
+  startDate.setDate(startDate.getDate() - firstDow);
+
+  // Generar 6 semanas
+  const weeks = [];
+  for (let w = 0; w < 6; w++) {
+    const days = [];
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(startDate);
+      d.setDate(d.getDate() + w * 7 + i);
+      days.push({
+        year: d.getFullYear(),
+        month: d.getMonth() + 1,
+        day: d.getDate(),
+        inMonth: d.getMonth() === monthIdx,
+        iso: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`,
+      });
+    }
+    weeks.push(days);
+  }
+
+  let html = `<div style="display: grid; grid-template-columns: 22px repeat(7, 1fr); gap: 4px; margin-bottom: 6px; font-size: 10px; color: var(--ink-mute); text-align: center; text-transform: uppercase; letter-spacing: 0.5px;">
+    <div></div><div>L</div><div>M</div><div>M</div><div>J</div><div>V</div><div>S</div><div>D</div>
+  </div>`;
+
+  weeks.forEach((week, wIdx) => {
+    const isExp = ed.expandedWeek === wIdx;
+    html += `<div style="display: grid; grid-template-columns: 22px repeat(7, 1fr); gap: 4px; margin-bottom: 4px;">`;
+    html += `<div onclick="toggleScheduleEditorWeek(${wIdx})" style="display: flex; align-items: center; justify-content: center; cursor: pointer; color: var(--fit-purple); font-size: 10px; transform: ${isExp ? 'rotate(90deg)' : 'rotate(0deg)'}; transition: transform 0.15s;">▶</div>`;
+
+    week.forEach(d => {
+      html += renderScheduleEditorDayCell(d);
+    });
+    html += `</div>`;
+
+    if (isExp) {
+      html += renderScheduleEditorWeekDetail(week);
+    }
+  });
+
+  return html;
+}
+
+function renderScheduleEditorDayCell(d) {
+  const ed = STATE.scheduleEditor;
+  const todayIso = new Date().toISOString().slice(0, 10);
+  const expirationIso = ed.package ? (ed.package.expiration_date || ed.package.end_date) : null;
+  const past = d.iso < todayIso;
+  const expired = expirationIso && d.iso > expirationIso;
+  const oob = !d.inMonth;
+
+  let bg = '#F5F0E5';
+  if (d.inMonth && !past && !expired) {
+    let avail = 0;
+    SCHED_HOURS.forEach(h => {
+      const occ = ed.occupancyByKey.get(`${d.iso}|${h}`) || 0;
+      if (occ < ed.capacity) avail++;
+    });
+    if (avail >= 8) bg = '#DDF3DC';
+    else if (avail >= 4) bg = '#F5F0E5';
+    else if (avail >= 1) bg = '#F5E9CC';
+    else bg = '#F8D9D9';
+  } else if (past || expired) {
+    bg = '#EFEBE0';
+  }
+
+  const op = oob || past || expired ? 0.5 : 1;
+  const hasSel = d.inMonth && Array.from(ed.selected).some(k => k.startsWith(d.iso + '|'));
+  const hasConsumed = d.inMonth && Array.from(ed.consumed).some(k => k.startsWith(d.iso + '|'));
+
+  let dispLabel = '';
+  if (d.inMonth && !past && !expired) {
+    let avail = 0;
+    SCHED_HOURS.forEach(h => {
+      const occ = ed.occupancyByKey.get(`${d.iso}|${h}`) || 0;
+      if (occ < ed.capacity) avail++;
+    });
+    dispLabel = avail > 0 ? `${avail} libre` : 'lleno';
+  }
+
+  const dot = hasSel
+    ? '<span style="width: 5px; height: 5px; border-radius: 50%; background: var(--fit-purple);"></span>'
+    : (hasConsumed ? '<span style="width: 5px; height: 5px; border-radius: 50%; background: #4F7A4D;"></span>' : '');
+
+  return `<div style="background: ${bg}; opacity: ${op}; padding: 6px 8px; border-radius: 6px; font-size: 12px; min-height: 38px; ${hasSel ? 'box-shadow: inset 0 0 0 1.5px var(--fit-purple);' : ''} display: flex; flex-direction: column; justify-content: space-between;">
+    <div style="display: flex; align-items: center; justify-content: space-between;">
+      <span style="font-weight: ${hasSel ? '600' : '400'}; color: ${hasSel ? 'var(--fit-purple)' : 'inherit'};">${d.day}</span>
+      ${dot}
+    </div>
+    ${dispLabel ? `<div style="font-size: 9px; color: var(--ink-mute); margin-top: 2px;">${dispLabel}</div>` : ''}
+  </div>`;
+}
+
+function renderScheduleEditorWeekDetail(week) {
+  const ed = STATE.scheduleEditor;
+  const todayIso = new Date().toISOString().slice(0, 10);
+  const expirationIso = ed.package ? (ed.package.expiration_date || ed.package.end_date) : null;
+  const max = ed.package ? (Math.max(0, (ed.package.classes_total || 0) - (ed.package.classes_used || 0)) + (ed.package.classes_recoverable || 0)) : 0;
+  const dayLabels = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
+  const monthLabels = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+
+  const formatHourLocal = h => h < 12 ? `${h}am` : (h === 12 ? '12pm' : `${h - 12}pm`);
+
+  let h = `<div style="margin: 4px 0 10px; padding: 12px; background: var(--fit-cream); border-radius: 8px;">
+    <div style="display: grid; grid-template-columns: 40px repeat(7, 1fr); gap: 3px; margin-bottom: 6px; font-size: 9px; color: var(--ink-mute); text-align: center;">
+      <div></div>`;
+  week.forEach((d, i) => {
+    h += `<div style="font-weight: 500; color: ${d.inMonth ? 'var(--fit-purple)' : 'var(--ink-faint)'};">${dayLabels[i]} ${d.day}<span style="color: var(--ink-faint); font-weight: 400;"> ${monthLabels[d.month - 1]}</span></div>`;
+  });
+  h += `</div>`;
+
+  SCHED_HOURS.forEach(hour => {
+    h += `<div style="display: grid; grid-template-columns: 40px repeat(7, 1fr); gap: 3px; margin-bottom: 3px;">
+      <div style="display: flex; align-items: center; justify-content: flex-end; padding-right: 4px; font-size: 10px; color: var(--ink-mute);">${formatHourLocal(hour)}</div>`;
+
+    week.forEach(d => {
+      const past = d.iso < todayIso;
+      const expired = expirationIso && d.iso > expirationIso;
+      const oob = !d.inMonth || expired;
+      const k = `${d.iso}|${hour}`;
+      const isSel = ed.selected.has(k);
+      const wasOriginal = ed.original.has(k);
+      const isConsumed = ed.consumed.has(k);
+      const isMissed = ed.missed.has(k);
+      const occCount = ed.occupancyByKey.get(k) || 0;
+      const isFull = occCount >= ed.capacity;
+      const cantSelect = !isSel && ed.selected.size >= max && max > 0;
+
+      let bg = '#fff', col = 'var(--ink)', txt = '', cursor = 'pointer', extra = '', mark = '';
+
+      if (oob) {
+        bg = '#EFEBE0'; col = 'var(--ink-faint)'; txt = '—'; cursor = 'not-allowed';
+      } else if (isConsumed) {
+        bg = '#4F7A4D'; col = 'white'; txt = `${occCount}/${ed.capacity}`; cursor = 'not-allowed'; extra = 'font-weight: 600; font-size: 9px;';
+        mark = `<span style="position: absolute; top: 1px; right: 3px; font-size: 9px; color: white;">✓</span>`;
+      } else if (isMissed) {
+        bg = '#B8A88A'; col = 'white'; txt = `${occCount}/${ed.capacity}`; cursor = 'not-allowed'; extra = 'font-weight: 500; font-size: 9px;';
+        mark = `<span style="position: absolute; top: 1px; right: 3px; font-size: 9px; color: white;">!</span>`;
+      } else if (past) {
+        bg = '#EFEBE0'; col = 'var(--ink-faint)'; txt = '—'; cursor = 'not-allowed';
+      } else if (isSel) {
+        bg = 'var(--fit-purple)'; col = 'white'; txt = `${occCount}/${ed.capacity}`; cursor = 'pointer'; extra = 'font-weight: 600;';
+        mark = `<span style="position: absolute; top: 1px; right: 3px; font-size: 9px; color: white;">✓</span>`;
+      } else if (wasOriginal && !isSel) {
+        bg = '#F8D9D9'; col = '#8A2A2A'; txt = `${occCount}/${ed.capacity}`; cursor = 'pointer'; extra = 'font-weight: 500; text-decoration: line-through;';
+        mark = `<span style="position: absolute; top: 1px; right: 3px; font-size: 9px; color: #8A2A2A;">✗</span>`;
+      } else if (isFull) {
+        bg = '#F8D9D9'; col = '#8A2A2A'; txt = 'lleno'; cursor = 'not-allowed'; extra = 'font-weight: 500; font-size: 9px;';
+      } else {
+        if (occCount <= 2) bg = '#DDF3DC';
+        else if (occCount <= 5) bg = '#F0EAD8';
+        else bg = '#F5E9CC';
+        txt = `${occCount}/${ed.capacity}`;
+        if (cantSelect) { col = 'var(--ink-faint)'; cursor = 'not-allowed'; }
+      }
+
+      const onclick = (oob || past || isConsumed || isMissed || isFull || cantSelect) ? '' : `toggleScheduleEditorSlot('${k}')`;
+      h += `<div onclick="${onclick}" style="position: relative; background: ${bg}; color: ${col}; padding: 5px 4px; border-radius: 4px; text-align: center; font-size: 10px; cursor: ${cursor}; ${extra}">${txt}${mark}</div>`;
+    });
+    h += `</div>`;
+  });
+  h += `</div>`;
+  return h;
+}
+
+function toggleScheduleEditorWeek(idx) {
+  const ed = STATE.scheduleEditor;
+  ed.expandedWeek = ed.expandedWeek === idx ? -1 : idx;
+  renderScheduleEditor();
+}
+
+function toggleScheduleEditorSlot(key) {
+  const ed = STATE.scheduleEditor;
+  const max = ed.package ? (Math.max(0, (ed.package.classes_total || 0) - (ed.package.classes_used || 0)) + (ed.package.classes_recoverable || 0)) : 0;
+  if (ed.selected.has(key)) {
+    ed.selected.delete(key);
+  } else if (ed.selected.size < max) {
+    ed.selected.add(key);
+  } else {
+    showToast(`Has alcanzado el límite de ${max} clases`, 'error');
+    return;
+  }
+  renderScheduleEditor();
+}
+
+async function navScheduleEditorMonth(delta) {
+  const ed = STATE.scheduleEditor;
+  ed.monthDate = new Date(ed.monthDate.getFullYear(), ed.monthDate.getMonth() + delta, 1);
+  ed.expandedWeek = -1;
+  renderScheduleEditorLoading();
+  await loadScheduleEditorOccupancy();
+  renderScheduleEditor();
+}
+
+async function confirmScheduleEditorChanges() {
+  const ed = STATE.scheduleEditor;
+  if (!ed) return;
+  if (!isOnline) { showToast('Conexión requerida', 'error'); return; }
+
+  const toAdd = [], toCancel = [];
+  ed.selected.forEach(k => { if (!ed.original.has(k)) toAdd.push(k); });
+  ed.original.forEach(k => { if (!ed.selected.has(k)) toCancel.push(k); });
+
+  if (toAdd.length === 0 && toCancel.length === 0) {
+    showToast('Sin cambios para guardar');
+    return;
+  }
+
+  const confirmMsg = `${toAdd.length > 0 ? `Agregar ${toAdd.length} clase${toAdd.length === 1 ? '' : 's'}` : ''}${toAdd.length > 0 && toCancel.length > 0 ? ' y ' : ''}${toCancel.length > 0 ? `cancelar ${toCancel.length}` : ''}?`;
+  if (!confirm(confirmMsg)) return;
+
+  const stud = ed.student;
+  const source = (stud.modality === 'flexible' || stud.modality === 'trial') ? 'flexible' : 'fixed';
+  let added = 0, cancelled = 0, errors = 0;
+
+  // Cancelar primero (más rápido si hay conflicto de capacidad)
+  for (const k of toCancel) {
+    const [iso, hourStr] = k.split('|');
+    const hour = parseInt(hourStr);
+    const dateLocal = new Date(iso + 'T12:00:00');
+    const sessionId = await getOrCreateSession(ed.locationId, dateLocal, hour);
+    if (!sessionId) { errors++; continue; }
+    const { error } = await sb.from('session_bookings')
+      .delete()
+      .eq('session_id', sessionId)
+      .eq('student_id', ed.studentId);
+    if (error) { errors++; console.error(error); } else cancelled++;
+  }
+
+  // Agregar
+  for (const k of toAdd) {
+    const [iso, hourStr] = k.split('|');
+    const hour = parseInt(hourStr);
+    const dateLocal = new Date(iso + 'T12:00:00');
+    const sessionId = await getOrCreateSession(ed.locationId, dateLocal, hour);
+    if (!sessionId) { errors++; continue; }
+    const { error } = await sb.from('session_bookings').insert({
+      session_id: sessionId,
+      student_id: ed.studentId,
+      source,
+    });
+    if (error) { errors++; console.error(error); } else added++;
+  }
+
+  if (added > 0 || cancelled > 0) {
+    const parts = [];
+    if (added > 0) parts.push(`+${added}`);
+    if (cancelled > 0) parts.push(`−${cancelled}`);
+    showToast(`✓ Cambios guardados (${parts.join(', ')})`, 'success');
+  }
+  if (errors > 0) showToast(`${errors} error${errors === 1 ? '' : 'es'} al guardar`, 'error');
+
+  // Recargar y actualizar UI relacionada
+  await loadScheduleEditorData();
+  renderScheduleEditor();
+  if (STATE.currentView === 'schedule') {
+    await loadScheduleWeekData();
+    renderSchedule();
+  }
+  if (STATE.studentDetailId === ed.studentId) {
+    await loadStudentDetail(ed.studentId);
+    renderStudentDetail();
+  }
 }
 
 // ============================================
@@ -5266,6 +5795,7 @@ function renderStudentDetail() {
         </div>
         <div style="display: flex; gap: 8px; flex-wrap: wrap;">
           <button class="btn btn-ghost" onclick="openStudentModal('${stud.id}')" style="padding: 8px 14px; font-size: 12px;">Editar perfil</button>
+          <button class="btn btn-ghost" onclick="openStudentScheduleEditor('${stud.id}')" style="padding: 8px 14px; font-size: 12px;">Agendar clases</button>
           <button class="btn btn-primary" onclick="openAssignPackageFromDetail('${stud.id}')" style="padding: 8px 14px; font-size: 12px;">Asignar paquete</button>
         </div>
       </div>
