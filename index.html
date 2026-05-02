@@ -630,8 +630,8 @@
         <button class="btn btn-ghost" onclick="goToScheduleThisWeek()" style="padding: 8px 14px; font-size: 12px;">Hoy</button>
       </div>
     </div>
-    <div class="table-card" style="overflow-x: auto;">
-      <table class="data-table" id="schedule-table"></table>
+    <div class="table-card" style="overflow-x: auto; padding: 16px;">
+      <div id="schedule-grid"></div>
     </div>
   </section>
 
@@ -2082,7 +2082,8 @@ function getCellStudents(locationId, date, hour) {
 function renderSchedule() {
   const loc = getCurrentLocation();
   if (!loc) return;
-  const table = document.getElementById('schedule-table');
+  const grid = document.getElementById('schedule-grid');
+  if (!grid) return;
   if (!STATE.scheduleWeekStart) STATE.scheduleWeekStart = getWeekStart(new Date());
   const start = STATE.scheduleWeekStart;
   const end = new Date(start);
@@ -2102,18 +2103,20 @@ function renderSchedule() {
   const hours = [6, 7, 8, 9, 10, 11, 16, 17, 18, 19, 20];
   const todayIso = new Date().toISOString().slice(0, 10);
 
-  let html = '<thead><tr><th style="width: 70px;"></th>';
+  // Header row
+  let html = `<div style="display: grid; grid-template-columns: 70px repeat(7, 1fr); gap: 6px;">`;
+  html += `<div></div>`; // esquina vacía
   dates.forEach((d, i) => {
     const isToday = d.toISOString().slice(0, 10) === todayIso;
-    html += `<th style="text-align: center; ${isToday ? 'background: var(--fit-lavender-pale);' : ''}">
-      <div style="font-size: 11px; color: var(--ink-mute);">${dayLabels[i]}</div>
+    html += `<div style="text-align: center; padding: 8px 4px; ${isToday ? 'background: var(--fit-lavender-pale); border-radius: 8px;' : ''}">
+      <div style="font-size: 11px; color: var(--ink-mute); letter-spacing: 0.5px;">${dayLabels[i]}</div>
       <div style="font-family: var(--display); font-size: 16px; color: ${isToday ? 'var(--fit-purple)' : 'var(--ink)'}; margin-top: 2px;">${d.getDate()}</div>
-    </th>`;
+    </div>`;
   });
-  html += '</tr></thead><tbody>';
 
+  // Body rows: por cada hora
   hours.forEach(h => {
-    html += `<tr><td style="font-family: var(--display); font-size: 14px; color: var(--fit-purple); text-align: right; vertical-align: top; padding-top: 14px;">${formatHour(h)}</td>`;
+    html += `<div style="font-family: var(--display); font-size: 14px; color: var(--fit-purple); text-align: right; padding-right: 8px; padding-top: 14px; padding-bottom: 14px;">${formatHour(h)}</div>`;
     dates.forEach(d => {
       const occ = countCellOccupancy(loc.id, d, h);
       const cap = loc.capacity;
@@ -2126,31 +2129,34 @@ function renderSchedule() {
       let bgColor = 'var(--fit-cream)';
       let countColor = 'var(--ink-faint)';
       let dotColor = 'var(--line)';
+      let hoverBg = '#f5e9d8';
       if (occ.cancelled) {
         bgColor = '#fef2f2';
         countColor = '#b00';
+        hoverBg = '#fee2e2';
       } else if (count > 0) {
         bgColor = isFull ? '#dcfce7' : 'var(--fit-lavender-pale)';
         countColor = isFull ? '#15803d' : 'var(--fit-purple)';
         dotColor = isFull ? '#15803d' : 'var(--fit-purple)';
+        hoverBg = isFull ? '#bbf7d0' : '#e9def8';
       }
 
-      const cellOpacity = isPast ? '0.5' : '1';
-      const cursorStyle = 'cursor: pointer;';
+      const cellOpacity = isPast ? '0.55' : '1';
 
-      html += `<td style="text-align: center; padding: 6px;">
-        <div onclick="openScheduleCellModal('${loc.id}', '${dateIso}', ${h})" style="background: ${bgColor}; border-radius: 8px; padding: 10px 8px; min-height: 52px; ${cursorStyle} opacity: ${cellOpacity}; transition: transform 0.1s;" onmouseover="this.style.transform='scale(1.03)'" onmouseout="this.style.transform=''">
-          ${occ.cancelled
-            ? `<div style="font-size: 11px; color: #b00; font-weight: 500;">Cancelada</div>`
-            : `<div style="font-family: var(--display); font-size: 18px; color: ${countColor};">${count}<span style="font-size: 11px; color: var(--ink-mute);">/${cap}</span></div>
-               <div style="height: 3px; background: var(--line); border-radius: 2px; margin-top: 6px; overflow: hidden;"><div style="height: 100%; width: ${pct}%; background: ${dotColor};"></div></div>`}
-        </div>
-      </td>`;
+      html += `<div onclick="openScheduleCellModal('${loc.id}', '${dateIso}', ${h})"
+        style="background: ${bgColor}; border-radius: 8px; padding: 10px 8px; min-height: 56px; cursor: pointer; opacity: ${cellOpacity}; transition: background 0.15s, transform 0.1s; text-align: center;"
+        onmouseover="this.style.background='${hoverBg}'; this.style.transform='scale(1.04)'"
+        onmouseout="this.style.background='${bgColor}'; this.style.transform=''">
+        ${occ.cancelled
+          ? `<div style="font-size: 11px; color: #b00; font-weight: 500; padding: 8px 0;">Cancelada</div>`
+          : `<div style="font-family: var(--display); font-size: 18px; color: ${countColor};">${count}<span style="font-size: 11px; color: var(--ink-mute);">/${cap}</span></div>
+             <div style="height: 3px; background: rgba(0,0,0,0.05); border-radius: 2px; margin-top: 6px; overflow: hidden;"><div style="height: 100%; width: ${pct}%; background: ${dotColor};"></div></div>`}
+      </div>`;
     });
-    html += '</tr>';
   });
-  html += '</tbody>';
-  table.innerHTML = html;
+
+  html += `</div>`;
+  grid.innerHTML = html;
 }
 
 // Cell detail modal: lista alumnos agendados + botón "Asignar"
