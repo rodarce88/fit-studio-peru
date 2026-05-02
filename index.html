@@ -2952,9 +2952,68 @@ async function markAttendance(studentId, hour, status, notes) {
     pending: '? Marcado como pendiente',
     rescheduled: '↔ Marcado como reprogramada',
   };
+
+  // 5. Recalcular contadores del paquete activo del alumno
+  await recalcPackageCounters(studentId);
+
   showToast(labels[status] || 'Asistencia actualizada', 'success');
   closeAbsenceMenu();
   renderTimeline();
+}
+
+// Recalcula classes_used y classes_recoverable del paquete activo del alumno.
+// Idempotente: lee todos los attendance del alumno cuyas sesiones caen dentro
+// del rango de fechas del paquete activo y cuenta. Llamar después de cualquier
+// cambio en attendance (mark/clear/update).
+async function recalcPackageCounters(studentId) {
+  if (!isOnline) return;
+  const todayIso = new Date().toISOString().slice(0,10);
+
+  // Buscar paquete activo (no congelado, no vencido)
+  const { data: pkg } = await sb.from('student_packages')
+    .select('id, classes_total, purchase_date, expiration_date, start_date, end_date')
+    .eq('student_id', studentId)
+    .eq('is_frozen', false)
+    .gte('expiration_date', todayIso)
+    .order('purchase_date', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (!pkg) return; // sin paquete activo, no hay qué recalcular
+
+  const startRange = pkg.purchase_date || pkg.start_date;
+  const endRange = pkg.expiration_date || pkg.end_date;
+
+  // Cargar todos los attendance del alumno con la fecha de la sesión
+  const { data: allAtt } = await sb.from('attendance')
+    .select('counts_against_package, is_recoverable, class_sessions(session_date)')
+    .eq('student_id', studentId);
+
+  const inRange = (allAtt || []).filter(a => {
+    const date = a.class_sessions?.session_date;
+    return date && date >= startRange && date <= endRange;
+  });
+
+  const used = inRange.filter(a => a.counts_against_package).length;
+  const recoverable = inRange.filter(a => a.is_recoverable).length;
+
+  await sb.from('student_packages').update({
+    classes_used: used,
+    classes_recoverable: recoverable,
+  }).eq('id', pkg.id);
+
+  // Refrescar la vista detalle si está abierta para este alumno
+  if (STATE.studentDetailId === studentId && document.getElementById('view-student-detail')?.classList.contains('is-active')) {
+    // Actualizar el cache local sin re-fetchear todo
+    if (STATE.studentDetailData?.packages) {
+      const cached = STATE.studentDetailData.packages.find(p => p.id === pkg.id);
+      if (cached) {
+        cached.classes_used = used;
+        cached.classes_recoverable = recoverable;
+      }
+    }
+    renderStudentDetail();
+  }
 }
 
 // ============================================
@@ -3044,6 +3103,10 @@ async function clearAttendance(studentId, hour) {
   if (error) { showToast('Error: ' + error.message, 'error'); return; }
 
   STATE.attendances = STATE.attendances.filter(a => a.id !== att.id);
+
+  // Recalcular contadores del paquete tras eliminar la marca
+  await recalcPackageCounters(studentId);
+
   showToast('Marca eliminada', 'success');
   closeAbsenceMenu();
   renderTimeline();
@@ -4617,24 +4680,24 @@ function renderDetailSummary(stud) {
 
   const cards = [
     {
-      label: 'Paquete activo',
-      value: activePkg ? `${(activePkg.classes_total || 0) - (activePkg.classes_used || 0)} de ${activePkg.classes_total || 0}` : 'Sin paquete',
-      sub: activePkg ? `Vence ${formatDate(activePkg.expiration_date)}` : 'Asignar uno nuevo',
+      label: 'Clases restantes',
+      value: activePkg ? `${(activePkg.classes_total || 0) - (activePkg.classes_used || 0)}` : '—',
+      sub: activePkg ? `de ${activePkg.classes_total || 0} · vence ${formatDate(activePkg.expiration_date)}` : 'Sin paquete activo',
     },
     {
-      label: 'Próxima clase',
-      value: nextClass ? formatDate(nextClass.class_sessions.session_date) : '—',
-      sub: nextClass ? formatHour(nextClass.class_sessions.hour) : 'Sin clases programadas',
-    },
-    {
-      label: 'Total pagado',
-      value: `S/ ${totalPayments.toFixed(2)}`,
-      sub: `${(data.payments || []).length} pago${(data.payments || []).length === 1 ? '' : 's'}`,
+      label: 'Tomadas',
+      value: activePkg ? `${activePkg.classes_used || 0}` : '—',
+      sub: activePkg ? 'Asistidas + perdidas' : '—',
     },
     {
       label: 'Recuperables',
       value: activePkg ? (activePkg.classes_recoverable || 0) : 0,
       sub: 'Clases por recuperar',
+    },
+    {
+      label: 'Total pagado',
+      value: `S/ ${totalPayments.toFixed(2)}`,
+      sub: `${(data.payments || []).length} pago${(data.payments || []).length === 1 ? '' : 's'}`,
     },
   ];
 
