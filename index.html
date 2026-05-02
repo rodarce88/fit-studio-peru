@@ -1658,15 +1658,19 @@ function renderTimeline() {
 
   const dow = STATE.currentDate.getDay();
   const days = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+  const monthsShort = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
 
   // Update title
   const today = new Date(); today.setHours(0,0,0,0);
   const cd = new Date(STATE.currentDate); cd.setHours(0,0,0,0);
   const diffDays = Math.round((cd - today) / 86400000);
-  let titleText = days[dow];
-  if (diffDays === 0) titleText = 'hoy';
-  else if (diffDays === 1) titleText = 'mañana';
-  else if (diffDays === -1) titleText = 'ayer';
+  const dayLabel = days[dow];
+  const dateLabel = `${cd.getDate()} ${monthsShort[cd.getMonth()]}`;
+  let titleText;
+  if (diffDays === 0) titleText = `hoy · ${dayLabel} ${dateLabel}`;
+  else if (diffDays === 1) titleText = `mañana · ${dayLabel} ${dateLabel}`;
+  else if (diffDays === -1) titleText = `ayer · ${dayLabel} ${dateLabel}`;
+  else titleText = `${dayLabel} ${dateLabel}`;
   document.getElementById('timeline-day-title').textContent = titleText;
 
   // Determine hours based on day of week
@@ -2576,6 +2580,15 @@ async function confirmAssignStudentToCell() {
   const stud = ctx.selectedStudent;
   const source = (stud.modality === 'flexible' ? 'flexible' : (stud.modality === 'trial' ? 'flexible' : 'fixed'));
 
+  // Validar capacidad
+  const cap = await getStudentBookingCapacity(stud.id);
+  if (!cap.hasPackage) {
+    if (!confirm(`${stud.first_name} no tiene paquete activo. ¿Asignar igual ${allDates.length} clase${allDates.length === 1 ? '' : 's'} como cortesía?`)) return;
+  } else if (allDates.length > cap.remaining) {
+    showToast(`${stud.first_name} solo tiene ${cap.remaining} clase${cap.remaining === 1 ? '' : 's'} disponible${cap.remaining === 1 ? '' : 's'} en su paquete (${cap.current}/${cap.max} usadas). Reduce las fechas o renueva primero.`, 'error');
+    return;
+  }
+
   let successCount = 0;
   let failCount = 0;
 
@@ -2612,6 +2625,47 @@ async function confirmAssignStudentToCell() {
 // STUDENT SCHEDULE EDITOR (calendar full view)
 // ============================================
 const SCHED_HOURS = [6, 7, 8, 9, 10, 11, 16, 17, 18, 19, 20];
+
+// Calcula cuántas clases más puede agendar un alumno (paquete activo - bookings futuros).
+// Retorna { hasPackage, max, current, remaining, pkg }.
+// Si no tiene paquete activo: hasPackage=false, max=0, remaining=0 (no puede agendar nada por sistema).
+async function getStudentBookingCapacity(studentId) {
+  if (!isOnline) return { hasPackage: false, max: 0, current: 0, remaining: 0 };
+  const todayIso = new Date().toISOString().slice(0, 10);
+
+  const { data: pkg } = await sb.from('student_packages')
+    .select('id, classes_total, classes_used, classes_recoverable, expiration_date, end_date')
+    .eq('student_id', studentId)
+    .eq('is_frozen', false)
+    .gte('expiration_date', todayIso)
+    .order('purchase_date', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (!pkg) return { hasPackage: false, max: 0, current: 0, remaining: 0, pkg: null };
+
+  const remainingPkg = Math.max(0, (pkg.classes_total || 0) - (pkg.classes_used || 0));
+  const recoverable = pkg.classes_recoverable || 0;
+  const max = remainingPkg + recoverable;
+
+  const { data: bookings } = await sb.from('session_bookings')
+    .select('id, class_sessions(session_date, is_cancelled)')
+    .eq('student_id', studentId);
+
+  const current = (bookings || []).filter(b =>
+    b.class_sessions
+    && !b.class_sessions.is_cancelled
+    && b.class_sessions.session_date >= todayIso
+  ).length;
+
+  return {
+    hasPackage: true,
+    max,
+    current,
+    remaining: Math.max(0, max - current),
+    pkg,
+  };
+}
 
 async function openStudentScheduleEditor(studentId, locationId) {
   const stud = STATE.students.find(s => s.id === studentId);
@@ -3103,6 +3157,20 @@ async function confirmScheduleEditorChanges() {
   if (toAdd.length === 0 && toCancel.length === 0) {
     showToast('Sin cambios para guardar');
     return;
+  }
+
+  // Validación server-side: refrescar capacidad con datos en vivo
+  // (cancelaciones primero liberan cupo, así que restamos toCancel del current)
+  if (toAdd.length > 0) {
+    const cap = await getStudentBookingCapacity(ed.studentId);
+    if (cap.hasPackage) {
+      const effectiveCurrent = cap.current - toCancel.length;
+      const effectiveRemaining = cap.max - effectiveCurrent;
+      if (toAdd.length > effectiveRemaining) {
+        showToast(`No se puede guardar: solo hay ${effectiveRemaining} cupo${effectiveRemaining === 1 ? '' : 's'} disponible${effectiveRemaining === 1 ? '' : 's'} (${cap.current - toCancel.length}/${cap.max} usadas tras cancelar). Quita ${toAdd.length - effectiveRemaining} fecha${(toAdd.length - effectiveRemaining) === 1 ? '' : 's'}.`, 'error');
+        return;
+      }
+    }
   }
 
   const confirmMsg = `${toAdd.length > 0 ? `Agregar ${toAdd.length} clase${toAdd.length === 1 ? '' : 's'}` : ''}${toAdd.length > 0 && toCancel.length > 0 ? ' y ' : ''}${toCancel.length > 0 ? `cancelar ${toCancel.length}` : ''}?`;
@@ -4569,6 +4637,16 @@ async function addStudentToClass(studentId) {
   }
 
   const student = STATE.students.find(s => s.id === studentId);
+
+  // Validar capacidad del paquete del alumno
+  const cap = await getStudentBookingCapacity(studentId);
+  if (!cap.hasPackage) {
+    if (!confirm(`${student.first_name} no tiene paquete activo. ¿Asignar igual como cortesía?`)) return;
+  } else if (cap.remaining <= 0) {
+    showToast(`${student.first_name} ya alcanzó su límite (${cap.current}/${cap.max}). Debe renovar o liberar otra clase antes.`, 'error');
+    return;
+  }
+
   const source = student && student.modality === 'flexible' ? 'flexible' : 'fixed';
 
   const { data, error } = await sb.from('session_bookings').insert({
