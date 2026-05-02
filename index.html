@@ -4211,7 +4211,8 @@ function updateChangeScope() {
   // visual feedback opcional
 }
 
-function applyInstructorChange() {
+async function applyInstructorChange() {
+  if (!isOnline) { showToast('Conexión requerida', 'error'); return; }
   const scope = document.getElementById('change-scope').value;
   const newInstId = document.getElementById('change-new-instructor').value;
   const reason = document.getElementById('change-reason').value.trim();
@@ -4225,13 +4226,31 @@ function applyInstructorChange() {
   else if (scope === 'afternoon') hours = [16,17,18,19,20];
   else if (scope === 'all-day') hours = [6,7,8,9,10,11,16,17,18,19,20];
 
-  // Aplicar override en memoria (TODO: persistir en class_sessions cuando agreguemos asistencia)
-  hours.forEach(h => {
+  // Persistir en BD (class_sessions.instructor_id) Y en memoria/localStorage para retro-compat
+  for (const h of hours) {
+    // Buscar o crear class_session
+    const { data: existing } = await sb.from('class_sessions')
+      .select('id')
+      .eq('location_id', loc.id)
+      .eq('session_date', dateKey)
+      .eq('hour', h)
+      .maybeSingle();
+
+    if (existing) {
+      await sb.from('class_sessions').update({ instructor_id: newInstId }).eq('id', existing.id);
+    } else {
+      await sb.from('class_sessions').insert({
+        location_id: loc.id,
+        session_date: dateKey,
+        hour: h,
+        instructor_id: newInstId,
+      });
+    }
+
     const key = `${dateKey}-${loc.id}-${h}`;
     STATE.classOverrides[key] = newInstId;
-  });
+  }
 
-  // Guardar en localStorage para que persista entre recargas hasta que tengamos class_sessions
   try {
     localStorage.setItem('classOverrides', JSON.stringify(STATE.classOverrides));
   } catch(e) {}
@@ -4239,6 +4258,7 @@ function applyInstructorChange() {
   const inst = STATE.instructors.find(i => i.id === newInstId);
   showToast(`✓ ${inst.full_name} asignada/o a ${hours.length} clase${hours.length>1?'s':''}`, 'success');
   closeModals();
+  await loadDayData();
   renderTimeline();
 }
 
@@ -7528,8 +7548,57 @@ loadAll = async function() {
   if (CURRENT_USER && CURRENT_USER.role === 'coordinator') {
     loadAndRenderPendingRecovery();
     loadAndRenderRenewals();
+    syncLocalOverridesToBD(); // persistir REEMPLAZOS legacy en BD
   }
 };
+
+// Sincroniza los overrides que están en localStorage del coordinador hacia la BD.
+// Solo corre una vez por instalación (flag en localStorage). Esto migra los REEMPLAZOS
+// históricos para que los profesores los puedan ver en su login.
+async function syncLocalOverridesToBD() {
+  if (!isOnline) return;
+  if (localStorage.getItem('overridesSyncedToBD_v1') === '1') return;
+
+  const overrides = STATE.classOverrides || {};
+  const keys = Object.keys(overrides);
+  if (keys.length === 0) {
+    localStorage.setItem('overridesSyncedToBD_v1', '1');
+    return;
+  }
+
+  let synced = 0;
+  for (const key of keys) {
+    const instId = overrides[key];
+    if (!instId || instId === '__none__') continue;
+    // key format: YYYY-MM-DD-locId-hour
+    const m = key.match(/^(\d{4}-\d{2}-\d{2})-(.+)-(\d+)$/);
+    if (!m) continue;
+    const [_, dateIso, locId, hourStr] = m;
+    const hour = parseInt(hourStr);
+
+    const { data: existing } = await sb.from('class_sessions')
+      .select('id, instructor_id')
+      .eq('location_id', locId)
+      .eq('session_date', dateIso)
+      .eq('hour', hour)
+      .maybeSingle();
+
+    if (existing) {
+      if (existing.instructor_id !== instId) {
+        await sb.from('class_sessions').update({ instructor_id: instId }).eq('id', existing.id);
+        synced++;
+      }
+    } else {
+      await sb.from('class_sessions').insert({
+        location_id: locId, session_date: dateIso, hour, instructor_id: instId,
+      });
+      synced++;
+    }
+  }
+
+  localStorage.setItem('overridesSyncedToBD_v1', '1');
+  if (synced > 0) console.log(`[sync] ${synced} overrides persistidos en BD`);
+}
 </script>
 
 </body>
