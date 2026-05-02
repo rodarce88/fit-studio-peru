@@ -1706,32 +1706,74 @@ async function loadToPayList() {
     return;
   }
 
-  // Cargar attendance con pending_payment_at no nulo
+  // Cargar attendance con pending_payment_at no nulo (caso 1: invitadas/sin paquete que asistieron)
   const { data: pending } = await sb.from('attendance')
     .select('id, student_id, status, pending_payment_at, class_sessions(session_date, hour, location_id)')
     .not('pending_payment_at', 'is', null)
     .order('pending_payment_at', { ascending: false });
 
-  if (!pending || pending.length === 0) {
+  // Cargar paquetes con saldo pendiente (caso 2: alumnas con paquete sin pagar completo)
+  const { data: allPkgs } = await sb.from('student_packages')
+    .select('id, student_id, price_paid, classes_total, expiration_date, end_date, is_frozen');
+
+  const todayIso = new Date().toISOString().slice(0,10);
+
+  // Para cada paquete activo no congelado, sumar pagos y comparar con price_paid
+  const pkgsWithBalance = [];
+  for (const pkg of (allPkgs || [])) {
+    if (pkg.is_frozen === true) continue;
+    const endRange = pkg.expiration_date || pkg.end_date;
+    if (endRange && endRange < todayIso) continue; // vencido
+    const price = parseFloat(pkg.price_paid || 0);
+    if (price <= 0) continue; // sin precio definido, asumir gratis o no aplica
+
+    const { data: pays } = await sb.from('payments')
+      .select('amount_pen, amount')
+      .eq('student_package_id', pkg.id);
+    const totalPaid = (pays || []).reduce((s, p) => s + parseFloat(p.amount_pen || p.amount || 0), 0);
+
+    if (totalPaid < price) {
+      pkgsWithBalance.push({
+        student_id: pkg.student_id,
+        package_id: pkg.id,
+        owed: price - totalPaid,
+        price,
+        paid: totalPaid,
+      });
+    }
+  }
+
+  // Combinar ambos casos por alumno
+  const byStudent = new Map();
+  for (const p of (pending || [])) {
+    if (!byStudent.has(p.student_id)) byStudent.set(p.student_id, { atts: [], pkgs: [] });
+    byStudent.get(p.student_id).atts.push(p);
+  }
+  for (const pkg of pkgsWithBalance) {
+    if (!byStudent.has(pkg.student_id)) byStudent.set(pkg.student_id, { atts: [], pkgs: [] });
+    byStudent.get(pkg.student_id).pkgs.push(pkg);
+  }
+
+  if (byStudent.size === 0) {
     listEl.innerHTML = '<div style="padding: 12px; color: var(--ink-mute); font-size: 12px;">Sin pendientes de cobro 🎉</div>';
     countEl.textContent = '0';
     return;
   }
 
-  // Agrupar por alumno
-  const byStudent = new Map();
-  for (const p of pending) {
-    if (!byStudent.has(p.student_id)) byStudent.set(p.student_id, []);
-    byStudent.get(p.student_id).push(p);
-  }
-
   countEl.textContent = byStudent.size;
 
   const items = [];
-  for (const [studentId, atts] of byStudent.entries()) {
+  for (const [studentId, info] of byStudent.entries()) {
     const stud = STATE.students.find(s => s.id === studentId);
     if (!stud) continue;
-    items.push({ stud, atts, count: atts.length });
+    const totalOwed = info.pkgs.reduce((s, p) => s + p.owed, 0);
+    items.push({
+      stud,
+      atts: info.atts,
+      pkgs: info.pkgs,
+      attCount: info.atts.length,
+      totalOwed,
+    });
   }
 
   if (items.length === 0) {
@@ -1745,13 +1787,25 @@ async function loadToPayList() {
     const badge = isTrial
       ? '<span style="font-size: 9px; padding: 2px 6px; background: #EEEDFE; color: #3C3489; border-radius: 999px; margin-left: 4px;">invitada</span>'
       : '<span style="font-size: 9px; padding: 2px 6px; background: var(--bg); color: var(--ink-mute); border-radius: 999px; margin-left: 4px;">alumna</span>';
-    return `<div class="alert-row" onclick="openAssignPackageWithPending('${s.id}')">
+
+    // Texto: combinar clases sueltas pendientes + saldo de paquete
+    const parts = [];
+    if (item.attCount > 0) parts.push(`${item.attCount} clase${item.attCount === 1 ? '' : 's'} pendiente${item.attCount === 1 ? '' : 's'}`);
+    if (item.totalOwed > 0) parts.push(`saldo S/ ${item.totalOwed.toFixed(0)}`);
+    const desc = parts.join(' · ');
+
+    // Click: si tiene paquete pendiente, abrir modal de pago. Si no, abrir asignar paquete (flujo viejo).
+    const clickHandler = item.pkgs.length > 0
+      ? `openPaymentModal('${s.id}', '${item.pkgs[0].package_id}', ${item.pkgs[0].owed})`
+      : `openAssignPackageWithPending('${s.id}')`;
+
+    return `<div class="alert-row" onclick="${clickHandler}">
       <div class="alert-icon warn">
         <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
       </div>
       <div class="alert-content">
         <div class="alert-name">${escape(s.first_name)} ${escape(s.last_name || '')}${badge}</div>
-        <div class="alert-desc">${item.count} clase${item.count === 1 ? '' : 's'} pendiente${item.count === 1 ? '' : 's'} · ${escape(s.phone || s.email || 'sin contacto')}</div>
+        <div class="alert-desc">${desc} · ${escape(s.phone || s.email || 'sin contacto')}</div>
       </div>
       <span class="alert-action">Cobrar</span>
     </div>`;
@@ -7122,6 +7176,11 @@ async function saveAssignPackage() {
   // Refrescar widget Por cobrar
   if (typeof loadToPayList === 'function') loadToPayList();
 
+  // Refrescar la vista detalle si está abierta para este alumno
+  if (STATE.studentDetailId === studentId && document.getElementById('view-student-detail')?.classList.contains('is-active')) {
+    await openStudentDetail(studentId);
+  }
+
   closeModals();
   setTimeout(() => openPaymentModal(studentId, data.id, price), 200);
 }
@@ -7478,7 +7537,7 @@ async function openStudentDetail(id) {
         .order('payment_date', { ascending: false })
         .then(r => ({ payments: r.data || [] })),
       sb.from('student_packages')
-        .select('*')
+        .select('*, packages(name, price_pen)')
         .eq('student_id', id)
         .order('purchase_date', { ascending: false })
         .then(r => ({ packages: r.data || [] })),
@@ -7624,6 +7683,18 @@ function renderDetailSummary(stud) {
   const totalPayments = (data.payments || []).reduce((sum, p) => sum + parseFloat(p.amount_pen || p.amount || 0), 0);
   const lastPayment = (data.payments || [])[0];
 
+  // Saldo pendiente del paquete activo
+  let activePkgPaid = 0;
+  let activePkgPrice = 0;
+  let activePkgOwed = 0;
+  if (activePkg) {
+    activePkgPrice = parseFloat(activePkg.price_paid || activePkg.packages?.price_pen || 0);
+    activePkgPaid = (data.payments || [])
+      .filter(p => p.student_package_id === activePkg.id)
+      .reduce((sum, p) => sum + parseFloat(p.amount_pen || p.amount || 0), 0);
+    activePkgOwed = Math.max(0, activePkgPrice - activePkgPaid);
+  }
+
   const cards = [
     {
       label: 'Clases restantes',
@@ -7647,7 +7718,40 @@ function renderDetailSummary(stud) {
     },
   ];
 
+  // Bloque del paquete activo
+  const activePkgBlock = activePkg ? `
+    <div style="background: white; border: 1px solid var(--line); border-radius: var(--radius-md); padding: 18px 20px; margin-bottom: 16px; display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap;">
+      <div style="flex: 1; min-width: 240px;">
+        <div style="font-size: 11px; color: var(--ink-mute); text-transform: uppercase; letter-spacing: 0.5px; font-weight: 500; margin-bottom: 4px;">Paquete activo</div>
+        <div style="font-family: var(--display); font-size: 18px; color: var(--fit-purple); font-style: italic;">${escape(activePkg.packages?.name || `Paquete ${activePkg.classes_total || ''} clases`)}</div>
+        <div style="font-size: 12px; color: var(--ink-mute); margin-top: 3px;">Compra ${formatDate(activePkg.purchase_date)} · vence ${formatDate(activePkg.expiration_date)}</div>
+      </div>
+      ${activePkgOwed > 0 ? `
+        <div style="background: #FEF7E6; border: 1px solid #F4D58A; border-radius: var(--radius-sm); padding: 10px 14px;">
+          <div style="font-size: 10px; color: #8B6F1A; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">Saldo pendiente</div>
+          <div style="font-family: var(--display); font-size: 20px; color: #633806; margin-top: 2px;">S/ ${activePkgOwed.toFixed(2)}</div>
+          <div style="font-size: 10px; color: #854F0B; margin-top: 2px;">de S/ ${activePkgPrice.toFixed(2)} · pagado S/ ${activePkgPaid.toFixed(2)}</div>
+        </div>
+        <button class="btn btn-primary" onclick='openPaymentModal(${JSON.stringify(stud.id).replace(/'/g, "&#39;")}, ${JSON.stringify(activePkg.id).replace(/'/g, "&#39;")}, ${activePkgOwed})' style="padding: 8px 16px; font-size: 12px; flex-shrink: 0;">Registrar pago</button>
+      ` : `
+        <div style="background: #EAF3DE; border: 1px solid #C5DCB0; border-radius: var(--radius-sm); padding: 10px 14px;">
+          <div style="font-size: 10px; color: #3B6D11; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">Pagado ✓</div>
+          <div style="font-family: var(--display); font-size: 20px; color: #27500A; margin-top: 2px;">S/ ${activePkgPaid.toFixed(2)}</div>
+        </div>
+      `}
+    </div>
+  ` : `
+    <div style="background: #FEF7E6; border: 1px solid #F4D58A; border-radius: var(--radius-md); padding: 16px 20px; margin-bottom: 16px; display: flex; align-items: center; justify-content: space-between; gap: 12px;">
+      <div>
+        <div style="font-family: var(--display); font-size: 15px; color: #633806; font-style: italic;">Sin paquete activo</div>
+        <div style="font-size: 11px; color: #854F0B; margin-top: 2px;">Asigna un paquete para que pueda agendar clases</div>
+      </div>
+      <button class="btn btn-primary" onclick="openAssignPackageModal('${stud.id}')" style="padding: 8px 16px; font-size: 12px;">Asignar paquete</button>
+    </div>
+  `;
+
   return `
+    ${activePkgBlock}
     <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; margin-bottom: 24px;">
       ${cards.map(c => `
         <div style="background: white; border: 1px solid var(--line); border-radius: var(--radius-md); padding: 18px;">
