@@ -2702,17 +2702,37 @@ async function confirmAssignStudentToCell() {
     const sessionId = await getOrCreateSession(ctx.locationId, date, ctx.hour);
     if (!sessionId) { failCount++; continue; }
 
-    // Verificar duplicado
-    const existing = STATE.scheduleWeekBookings.find(b => b.session_id === sessionId && b.student_id === stud.id);
-    if (existing) { failCount++; continue; }
+    // Si ya existe un booking activo, contar como fail (duplicado real)
+    const localExisting = STATE.scheduleWeekBookings.find(b => b.session_id === sessionId && b.student_id === stud.id && !b.cancelled_at);
+    if (localExisting) { failCount++; continue; }
 
-    const { error } = await sb.from('session_bookings').insert({
-      session_id: sessionId,
-      student_id: stud.id,
-      source,
-    });
-    if (error) { failCount++; console.error('Error inserting booking:', error); }
-    else successCount++;
+    // Verificar si existe uno cancelled (podría re-activarse)
+    const { data: dbExisting } = await sb.from('session_bookings')
+      .select('id, cancelled_at')
+      .eq('session_id', sessionId)
+      .eq('student_id', stud.id)
+      .maybeSingle();
+
+    if (dbExisting && dbExisting.cancelled_at) {
+      // Re-activar booking previamente cancelado
+      const { error } = await sb.from('session_bookings').update({
+        cancelled_at: null,
+        cancelled_reason: null,
+      }).eq('id', dbExisting.id);
+      if (error) { failCount++; console.error('Error reactivating booking:', error); }
+      else successCount++;
+    } else if (dbExisting) {
+      // Existe activo (race condition con cache local), saltar
+      failCount++;
+    } else {
+      const { error } = await sb.from('session_bookings').insert({
+        session_id: sessionId,
+        student_id: stud.id,
+        source,
+      });
+      if (error) { failCount++; console.error('Error inserting booking:', error); }
+      else successCount++;
+    }
   }
 
   if (successCount > 0) {
@@ -3309,35 +3329,59 @@ async function confirmScheduleEditorChanges() {
 
   const stud = ed.student;
   const source = (stud.modality === 'flexible' || stud.modality === 'trial') ? 'flexible' : 'fixed';
+  const actor = getCurrentActorLabel();
+  const stamp = new Date().toLocaleString('es-PE', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
   let added = 0, cancelled = 0, errors = 0;
 
-  // Cancelar primero (más rápido si hay conflicto de capacidad)
+  // Cancelar primero (soft delete: marcar cancelled_at, preserva historial)
   for (const k of toCancel) {
     const [iso, hourStr] = k.split('|');
     const hour = parseInt(hourStr);
     const dateLocal = new Date(iso + 'T12:00:00');
     const sessionId = await getOrCreateSession(ed.locationId, dateLocal, hour);
     if (!sessionId) { errors++; continue; }
-    const { error } = await sb.from('session_bookings')
-      .delete()
-      .eq('session_id', sessionId)
-      .eq('student_id', ed.studentId);
+    const { error } = await sb.from('session_bookings').update({
+      cancelled_at: new Date().toISOString(),
+      cancelled_reason: `[${stamp}] Desagendada por ${actor}`,
+    }).eq('session_id', sessionId).eq('student_id', ed.studentId).is('cancelled_at', null);
     if (error) { errors++; console.error(error); } else cancelled++;
   }
 
-  // Agregar
+  // Agregar: si ya existe un booking (cancelled), re-activarlo. Si no, INSERT.
   for (const k of toAdd) {
     const [iso, hourStr] = k.split('|');
     const hour = parseInt(hourStr);
     const dateLocal = new Date(iso + 'T12:00:00');
     const sessionId = await getOrCreateSession(ed.locationId, dateLocal, hour);
     if (!sessionId) { errors++; continue; }
-    const { error } = await sb.from('session_bookings').insert({
-      session_id: sessionId,
-      student_id: ed.studentId,
-      source,
-    });
-    if (error) { errors++; console.error(error); } else added++;
+
+    // ¿Ya existe un booking para este alumno+sesión?
+    const { data: existing } = await sb.from('session_bookings')
+      .select('id, cancelled_at')
+      .eq('session_id', sessionId)
+      .eq('student_id', ed.studentId)
+      .maybeSingle();
+
+    if (existing) {
+      if (existing.cancelled_at) {
+        // Estaba cancelado: re-activar
+        const { error } = await sb.from('session_bookings').update({
+          cancelled_at: null,
+          cancelled_reason: null,
+        }).eq('id', existing.id);
+        if (error) { errors++; console.error(error); } else added++;
+      } else {
+        // Ya estaba agendado, no hay nada que hacer (no es error)
+        added++;
+      }
+    } else {
+      const { error } = await sb.from('session_bookings').insert({
+        session_id: sessionId,
+        student_id: ed.studentId,
+        source,
+      });
+      if (error) { errors++; console.error(error); } else added++;
+    }
   }
 
   if (added > 0 || cancelled > 0) {
@@ -3356,8 +3400,7 @@ async function confirmScheduleEditorChanges() {
     renderSchedule();
   }
   if (STATE.studentDetailId === ed.studentId) {
-    await loadStudentDetail(ed.studentId);
-    renderStudentDetail();
+    await openStudentDetail(ed.studentId);
   }
   if (typeof loadRescheduleList === 'function') loadRescheduleList();
 }
@@ -4824,15 +4867,40 @@ async function addStudentToClass(studentId) {
 
   const source = student && student.modality === 'flexible' ? 'flexible' : 'fixed';
 
-  const { data, error } = await sb.from('session_bookings').insert({
-    session_id: sessionId,
-    student_id: studentId,
-    source,
-  }).select().single();
+  // Verificar si existe un booking previo (puede estar cancelled — re-activar)
+  const { data: dbExisting } = await sb.from('session_bookings')
+    .select('id, cancelled_at')
+    .eq('session_id', sessionId)
+    .eq('student_id', studentId)
+    .maybeSingle();
+
+  let data, error;
+  if (dbExisting && dbExisting.cancelled_at) {
+    // Re-activar
+    const r = await sb.from('session_bookings').update({
+      cancelled_at: null,
+      cancelled_reason: null,
+    }).eq('id', dbExisting.id).select().single();
+    data = r.data; error = r.error;
+  } else if (dbExisting) {
+    showToast('El alumno ya está en esta clase', 'error');
+    return;
+  } else {
+    const r = await sb.from('session_bookings').insert({
+      session_id: sessionId,
+      student_id: studentId,
+      source,
+    }).select().single();
+    data = r.data; error = r.error;
+  }
 
   if (error) { showToast('Error: ' + error.message, 'error'); return; }
 
-  STATE.sessionBookings.push(data);
+  // Actualizar cache local
+  const localIdx = STATE.sessionBookings.findIndex(b => b.id === data.id);
+  if (localIdx >= 0) STATE.sessionBookings[localIdx] = data;
+  else STATE.sessionBookings.push(data);
+
   showToast(`✓ ${student.first_name} agregado/a a la clase de ${formatHour(ADD_FLEX_CTX.hour)}`, 'success');
   closeModals();
   renderTimeline();
