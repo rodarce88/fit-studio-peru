@@ -645,6 +645,10 @@
         <button class="btn btn-primary" onclick="openInstructorModal()">+ Agregar profesor</button>
       </div>
     </div>
+
+    <!-- Grilla semanal de horarios -->
+    <div id="instructors-schedule-grid" style="margin-bottom: 28px;"></div>
+
     <div id="instructors-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 18px;"></div>
   </section>
 
@@ -2104,7 +2108,128 @@ function renderStudents() {
   }).join('') + (list.length > 200 ? `<tr><td colspan="6" style="text-align: center; padding: 16px; color: var(--ink-mute); font-size: 12px;">Mostrando 200 de ${list.length}. Refina la búsqueda para ver más.</td></tr>` : '');
 }
 
+// ============================================
+// INSTRUCTORS SCHEDULE GRID — vista general semanal de todos los profes
+// ============================================
+function renderInstructorsScheduleGrid() {
+  const container = document.getElementById('instructors-schedule-grid');
+  if (!container) return;
+
+  const loc = getCurrentLocation();
+  if (!loc) { container.innerHTML = ''; return; }
+
+  const HOURS = [6,7,8,9,10,11,16,17,18,19,20];
+  const DAYS = [
+    { idx: 1, label: 'Lun' },
+    { idx: 2, label: 'Mar' },
+    { idx: 3, label: 'Mié' },
+    { idx: 4, label: 'Jue' },
+    { idx: 5, label: 'Vie' },
+    { idx: 6, label: 'Sáb' },
+    { idx: 0, label: 'Dom' },
+  ];
+  const today = new Date().toISOString().slice(0,10);
+
+  // Filtrar schedules vigentes hoy en la sede activa
+  const activeSchedules = STATE.schedules.filter(s =>
+    s.location_id === loc.id &&
+    s.is_active !== false &&
+    (!s.effective_from || s.effective_from <= today) &&
+    (!s.effective_to || s.effective_to >= today)
+  );
+
+  // Mapa por celda (dow, hour) → lista de instructorIds
+  const cellMap = new Map();
+  activeSchedules.forEach(s => {
+    const key = `${s.day_of_week}-${s.hour}`;
+    if (!cellMap.has(key)) cellMap.set(key, new Set());
+    cellMap.get(key).add(s.instructor_id);
+  });
+
+  // Profes presentes en esta sede (para leyenda + colores)
+  const presentInstructorIds = new Set();
+  activeSchedules.forEach(s => presentInstructorIds.add(s.instructor_id));
+  const presentInstructors = STATE.instructors
+    .filter(i => presentInstructorIds.has(i.id))
+    .sort((a, b) => (a.handle || a.first_name || '').localeCompare(b.handle || b.first_name || ''));
+
+  // Stats
+  const totalSlots = activeSchedules.length;
+
+  let html = `
+    <div style="background: white; border: 1px solid var(--line); border-radius: var(--radius-lg); padding: 22px 24px;">
+      <div style="display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 4px; flex-wrap: wrap; gap: 12px;">
+        <div>
+          <div style="font-family: var(--display); font-size: 18px; color: var(--fit-purple); font-style: italic;">Grilla semanal · ${escape(loc.name)}</div>
+          <div style="font-size: 12px; color: var(--ink-mute); margin-top: 2px;">Click en una celda para editar los horarios de ese profesor</div>
+        </div>
+        <div style="font-size: 12px; color: var(--ink-mute);">${presentInstructors.length} profesor${presentInstructors.length === 1 ? '' : 'es'} · ${totalSlots} turno${totalSlots === 1 ? '' : 's'} semanales</div>
+      </div>
+  `;
+
+  if (presentInstructors.length === 0) {
+    html += `
+      <div style="padding: 40px 20px; text-align: center; color: var(--ink-mute); background: var(--bg); border-radius: var(--radius-md); margin-top: 16px;">
+        <div style="font-family: var(--display); font-size: 16px; font-style: italic; margin-bottom: 4px;">Sin horarios asignados en ${escape(loc.name)}</div>
+        <div style="font-size: 12px;">Asigna horarios a tus profesores haciendo click en "Horarios" en cada card.</div>
+      </div>
+    </div>`;
+    container.innerHTML = html;
+    return;
+  }
+
+  // Grid header
+  html += `
+    <div style="margin-top: 16px; border: 1px solid var(--line); border-radius: var(--radius-md); overflow: hidden;">
+      <div style="display: grid; grid-template-columns: 56px repeat(7, 1fr); background: var(--bg); border-bottom: 1px solid var(--line); font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--ink-mute);">
+        <div style="padding: 10px 6px;"></div>
+        ${DAYS.map(d => `<div style="padding: 10px 6px; text-align: center;">${d.label}</div>`).join('')}
+      </div>
+  `;
+
+  HOURS.forEach((h, hi) => {
+    html += `<div style="display: grid; grid-template-columns: 56px repeat(7, 1fr); ${hi < HOURS.length - 1 ? 'border-bottom: 1px solid var(--line-soft);' : ''}">`;
+    html += `<div style="padding: 8px 6px; font-size: 11px; color: var(--ink-mute); background: var(--bg); display: flex; align-items: center; justify-content: center; border-right: 1px solid var(--line);">${formatHour(h)}</div>`;
+    DAYS.forEach((d, di) => {
+      const ids = cellMap.get(`${d.idx}-${h}`);
+      const isLastCol = di === DAYS.length - 1;
+      const cellBorder = isLastCol ? '' : 'border-right: 1px solid var(--line-soft);';
+      if (!ids || ids.size === 0) {
+        html += `<div style="padding: 6px 4px; min-height: 38px; ${cellBorder}"></div>`;
+      } else {
+        html += `<div style="padding: 4px; min-height: 38px; display: flex; flex-direction: column; gap: 3px; ${cellBorder}">`;
+        Array.from(ids).forEach(instId => {
+          const inst = STATE.instructors.find(i => i.id === instId);
+          if (!inst) return;
+          const color = getInstructorColor(inst);
+          const name = inst.handle || inst.first_name || inst.full_name || '?';
+          html += `<button onclick='openInstructorScheduleModal(${JSON.stringify(instId).replace(/'/g, "&#39;")})' title="${escape(name)} · ${formatHour(h)} ${d.label}" style="background: ${color}; color: white; padding: 3px 5px; border-radius: 4px; font-size: 10px; font-weight: 500; text-align: center; border: none; cursor: pointer; line-height: 1.2; min-height: 18px;">${escape(name)}</button>`;
+        });
+        html += `</div>`;
+      }
+    });
+    html += `</div>`;
+  });
+
+  html += `</div>`; // close grid
+
+  // Leyenda con horas totales por profesor en esta sede
+  html += `<div style="display: flex; flex-wrap: wrap; gap: 14px; margin-top: 14px; font-size: 11px;">`;
+  presentInstructors.forEach(i => {
+    const color = getInstructorColor(i);
+    const hrs = activeSchedules.filter(s => s.instructor_id === i.id).length;
+    const name = i.handle || i.first_name || i.full_name || '?';
+    html += `<div style="display: flex; align-items: center; gap: 6px;"><span style="width: 12px; height: 12px; background: ${color}; border-radius: 3px;"></span><span style="color: var(--ink);">${escape(name)}</span><span style="color: var(--ink-mute);">${hrs}h</span></div>`;
+  });
+  html += `</div>`;
+
+  html += `</div>`;
+  container.innerHTML = html;
+}
+
+
 function renderInstructors() {
+  renderInstructorsScheduleGrid();
   const grid = document.getElementById('instructors-grid');
   if (STATE.instructors.length === 0) {
     grid.innerHTML = '<div class="empty-state"><h3>No hay <em>profesores</em> registrados</h3><p>Click en "Agregar profesor" para crear el primero.</p></div>';
