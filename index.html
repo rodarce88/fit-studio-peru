@@ -4794,6 +4794,14 @@ async function markAttendance(studentId, hour, status, notes) {
   // 7. Recalcular contadores del paquete activo del alumno
   await recalcPackageCounters(studentId);
 
+  // 7b. Si la marca cuenta como "se dictó" (attended/recoverable/lost/no_show), marcar clase como delivered
+  if (['attended','recoverable','lost','no_show'].includes(status)) {
+    await sb.from('class_sessions').update({
+      class_status: 'delivered',
+      status_changed_at: new Date().toISOString(),
+    }).eq('id', sessionId);
+  }
+
   // 8. Refrescar widget "Por re-agendar" del dashboard si está visible
   if (typeof loadRescheduleList === 'function') loadRescheduleList();
 
