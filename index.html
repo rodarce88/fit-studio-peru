@@ -2345,6 +2345,18 @@ async function selectStudentForAssign(studentId) {
       .limit(1)
       .maybeSingle();
     STATE.assignCtx.studentActivePackage = pkg || null;
+
+    // Cargar fechas ya agendadas del alumno (futuras, no canceladas)
+    const { data: existingBookings } = await sb.from('session_bookings')
+      .select('*, class_sessions(session_date, hour, location_id, is_cancelled)')
+      .eq('student_id', studentId);
+    const existing = (existingBookings || [])
+      .filter(b => b.class_sessions
+        && !b.class_sessions.is_cancelled
+        && b.status !== 'cancelled'
+        && b.class_sessions.session_date >= todayIso)
+      .map(b => ({ date: b.class_sessions.session_date, hour: b.class_sessions.hour }));
+    STATE.assignCtx.existingBookings = existing;
   }
   renderAssignStudentModal();
 }
@@ -2359,16 +2371,18 @@ function renderAssignStep2Repeat() {
   const dayLabels = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
   const d = ctx.primaryDate;
 
-  const pkgRemaining = pkg ? (pkg.classes_total || 0) - (pkg.classes_used || 0) : null;
+  const remaining = pkg ? Math.max(0, (pkg.classes_total || 0) - (pkg.classes_used || 0)) : 0;
+  const recoverable = pkg ? (pkg.classes_recoverable || 0) : 0;
+  const maxSelectable = remaining + recoverable;
   const totalSelected = 1 + ctx.additionalDates.length;
-  const willExceed = pkg && totalSelected > pkgRemaining;
+  const willExceed = pkg && totalSelected > maxSelectable;
 
   document.getElementById('assign-modal-body').innerHTML = `
     <div style="background: var(--fit-cream); border-radius: 10px; padding: 12px 16px; margin-bottom: 14px; display: flex; align-items: center; gap: 12px;">
       <div class="student-avatar" style="width: 36px; height: 36px; font-size: 13px;">${initials(stud)}</div>
       <div style="flex: 1;">
         <div style="font-weight: 500; font-size: 14px;">${escape(stud.first_name)} ${escape(stud.last_name || '')}</div>
-        <div style="font-size: 11px; color: var(--ink-mute);">${pkg ? `Paquete: ${pkgRemaining} restantes${pkg.expiration_date ? ' · vence ' + formatDate(pkg.expiration_date) : ''}` : 'Sin paquete activo'}</div>
+        <div style="font-size: 11px; color: var(--ink-mute);">${pkg ? `Paquete: ${remaining} restantes${recoverable > 0 ? ` + ${recoverable} recuperable${recoverable === 1 ? '' : 's'}` : ''}${pkg.expiration_date ? ' · vence ' + formatDate(pkg.expiration_date) : ''}` : 'Sin paquete activo'}</div>
       </div>
       <button onclick="STATE.assignCtx.selectedStudent = null; renderAssignStudentModal();" style="padding: 4px 10px; background: transparent; border: 1px solid var(--line); border-radius: 999px; font-size: 11px; cursor: pointer;">Cambiar</button>
     </div>
@@ -2381,18 +2395,13 @@ function renderAssignStep2Repeat() {
     </div>
 
     <div style="margin-bottom: 14px;">
-      <div style="font-size: 11px; color: var(--ink-mute); text-transform: uppercase; letter-spacing: 0.5px; font-weight: 500; margin-bottom: 8px;">Repetir en otras fechas <span style="text-transform: none; letter-spacing: 0; font-weight: 400;">(opcional)</span></div>
+      <div style="font-size: 11px; color: var(--ink-mute); text-transform: uppercase; letter-spacing: 0.5px; font-weight: 500; margin-bottom: 8px;">Selecciona más fechas <span style="text-transform: none; letter-spacing: 0; font-weight: 400;">(opcional · misma hora)</span></div>
       <div id="mini-calendar"></div>
-      ${ctx.additionalDates.length > 0 ? `
-        <div style="margin-top: 10px; font-size: 12px; color: var(--ink-soft);">
-          ${ctx.additionalDates.length} fecha${ctx.additionalDates.length === 1 ? '' : 's'} adicional${ctx.additionalDates.length === 1 ? '' : 'es'} seleccionada${ctx.additionalDates.length === 1 ? '' : 's'}
-        </div>
-      ` : ''}
     </div>
 
     ${willExceed ? `
       <div style="background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; padding: 10px 14px; margin-bottom: 12px; font-size: 12px; color: #991b1b;">
-        ⚠ Se asignarían ${totalSelected} clases pero el paquete solo tiene ${pkgRemaining} restantes. Igual puedes confirmar (las extra quedarán como cortesía o fuera del paquete).
+        ⚠ Se asignarían ${totalSelected} clases pero el alumno solo tiene ${maxSelectable} disponibles. Igual puedes confirmar (las extra quedarán como cortesía).
       </div>
     ` : ''}
 
@@ -2412,8 +2421,6 @@ function renderMiniCalendar() {
   const cal = document.getElementById('mini-calendar');
   if (!cal) return;
   const todayIso = new Date().toISOString().slice(0, 10);
-  const dow = ctx.primaryDate.getDay();
-  const targetDow = dow; // solo fechas del mismo día de la semana son válidas (mismo horario)
   const month = ctx.miniCalendarMonth;
   const year = month.getFullYear();
   const monthIdx = month.getMonth();
@@ -2421,6 +2428,21 @@ function renderMiniCalendar() {
   const pkg = ctx.studentActivePackage;
   const maxDateIso = pkg ? (pkg.expiration_date || pkg.end_date) : null;
   const primaryIso = ctx.primaryDate.toISOString().slice(0, 10);
+
+  // Total que el alumno puede asignar = restantes del paquete + recuperables
+  const remaining = pkg ? Math.max(0, (pkg.classes_total || 0) - (pkg.classes_used || 0)) : 0;
+  const recoverable = pkg ? (pkg.classes_recoverable || 0) : 0;
+  const maxSelectable = remaining + recoverable;
+  const currentSelected = 1 + ctx.additionalDates.length; // primaria + adicionales
+
+  // Fechas ya agendadas del alumno: bloquear si es a la MISMA hora del wizard,
+  // marcar como informativa si es a OTRA hora
+  const existingSameHour = new Set();
+  const existingOtherHour = new Set();
+  (ctx.existingBookings || []).forEach(b => {
+    if (b.hour === ctx.hour) existingSameHour.add(b.date);
+    else existingOtherHour.add(b.date);
+  });
 
   // Días del mes
   const firstDay = new Date(year, monthIdx, 1);
@@ -2444,23 +2466,62 @@ function renderMiniCalendar() {
   for (let day = 1; day <= daysInMonth; day++) {
     const cellDate = new Date(year, monthIdx, day);
     const cellIso = cellDate.toISOString().slice(0, 10);
-    const cellDow = cellDate.getDay();
     const isPrimary = cellIso === primaryIso;
     const isPast = cellIso < todayIso;
     const isOutOfPackage = maxDateIso && cellIso > maxDateIso;
-    const wrongDayOfWeek = cellDow !== targetDow;
+    const hasSameHour = existingSameHour.has(cellIso) && !isPrimary;
+    const hasOtherHour = existingOtherHour.has(cellIso) && !hasSameHour && !isPrimary;
     const isSelected = ctx.additionalDates.some(d => d.toISOString().slice(0, 10) === cellIso);
-    const isDisabled = isPrimary || isPast || isOutOfPackage || wrongDayOfWeek;
+    const isAtLimit = !isSelected && !isPrimary && currentSelected >= maxSelectable && maxSelectable > 0;
+    const isDisabled = isPrimary || isPast || isOutOfPackage || hasSameHour || isAtLimit;
 
-    let bg = 'transparent', color = 'var(--ink)', cursor = 'pointer';
-    if (isPrimary) { bg = 'var(--fit-purple)'; color = 'white'; cursor = 'not-allowed'; }
-    else if (isSelected) { bg = 'var(--fit-lavender-pale)'; color = 'var(--fit-purple)'; }
-    else if (isDisabled) { color = 'var(--ink-faint)'; cursor = 'not-allowed'; }
+    let bg = 'transparent', color = 'var(--ink)', cursor = 'pointer', extra = '';
+    let dot = '';
 
-    html += `<div onclick="${isDisabled ? '' : `toggleMiniCalendarDate('${cellIso}')`}" style="aspect-ratio: 1; display: flex; align-items: center; justify-content: center; border-radius: 6px; font-size: 12px; background: ${bg}; color: ${color}; cursor: ${cursor}; ${isSelected ? 'font-weight: 600;' : ''}">${day}</div>`;
+    if (isPrimary) {
+      bg = 'var(--fit-purple)'; color = 'white'; cursor = 'not-allowed';
+      extra = 'font-weight: 600;';
+    } else if (hasSameHour) {
+      bg = '#fef3c7'; color = '#92400e'; cursor = 'not-allowed';
+      extra = 'font-weight: 600;';
+    } else if (isSelected) {
+      bg = 'var(--fit-lavender-pale)'; color = 'var(--fit-purple)';
+      extra = 'font-weight: 600; border: 1.5px solid var(--fit-purple);';
+    } else if (isPast || isOutOfPackage || isAtLimit) {
+      color = 'var(--ink-faint)'; cursor = 'not-allowed';
+    }
+
+    // Indicador (dot) si tiene clase a otra hora ese día
+    if (hasOtherHour && !isSelected) {
+      dot = `<span style="position: absolute; bottom: 2px; left: 50%; transform: translateX(-50%); width: 4px; height: 4px; border-radius: 50%; background: #d97706;"></span>`;
+    }
+
+    const clickHandler = isDisabled ? '' : `toggleMiniCalendarDate('${cellIso}')`;
+    const tooltip = hasSameHour
+      ? 'title="Ya tiene clase a esta hora"'
+      : (hasOtherHour ? 'title="Tiene otra clase ese día (a distinta hora)"' : '');
+
+    html += `<div onclick="${clickHandler}" ${tooltip} style="position: relative; aspect-ratio: 1; display: flex; align-items: center; justify-content: center; border-radius: 6px; font-size: 12px; background: ${bg}; color: ${color}; cursor: ${cursor}; ${extra}">${day}${dot}</div>`;
   }
   html += '</div></div>';
-  html += `<div style="font-size: 11px; color: var(--ink-mute); margin-top: 8px;">Solo se muestran activos los ${['domingos','lunes','martes','miércoles','jueves','viernes','sábados'][targetDow]} (mismo día que la clase principal). ${maxDateIso ? `Disponible hasta ${formatDate(maxDateIso)}.` : ''}</div>`;
+
+  // Mensaje contextual
+  let contextMsg = '';
+  if (pkg) {
+    contextMsg = `Has seleccionado <strong>${currentSelected}</strong> de <strong>${maxSelectable}</strong> clases disponibles (${remaining} del paquete${recoverable > 0 ? ` + ${recoverable} recuperable${recoverable === 1 ? '' : 's'}` : ''}). ${maxDateIso ? `Vigente hasta ${formatDate(maxDateIso)}.` : ''}`;
+  } else {
+    contextMsg = 'El alumno no tiene paquete activo. Igual puedes asignar (queda como cortesía).';
+  }
+  html += `<div style="font-size: 11px; color: var(--ink-mute); margin-top: 10px; line-height: 1.5;">${contextMsg}</div>`;
+
+  // Leyenda
+  html += `<div style="display: flex; gap: 14px; margin-top: 8px; font-size: 10px; flex-wrap: wrap; color: var(--ink-soft);">
+    <div style="display: flex; align-items: center; gap: 4px;"><span style="width: 12px; height: 12px; border-radius: 3px; background: var(--fit-purple); display: inline-block;"></span>Esta clase</div>
+    <div style="display: flex; align-items: center; gap: 4px;"><span style="width: 12px; height: 12px; border-radius: 3px; background: var(--fit-lavender-pale); border: 1.5px solid var(--fit-purple); display: inline-block;"></span>Seleccionadas</div>
+    <div style="display: flex; align-items: center; gap: 4px;"><span style="width: 12px; height: 12px; border-radius: 3px; background: #fef3c7; display: inline-block;"></span>Ya tiene a esa hora</div>
+    <div style="display: flex; align-items: center; gap: 4px;"><span style="position: relative; width: 12px; height: 12px; display: inline-block;"><span style="position: absolute; bottom: 1px; left: 50%; transform: translateX(-50%); width: 4px; height: 4px; border-radius: 50%; background: #d97706;"></span></span>Tiene otra clase ese día</div>
+  </div>`;
+
   cal.innerHTML = html;
 }
 
