@@ -7679,10 +7679,23 @@ function renderStudentDetail() {
 
   // Detectar si el paquete activo está completado (todas las clases consumidas)
   // → en ese caso, deshabilitar el botón "Agendar clases"
+  // Calculamos en vivo desde attendances (no confiar en el cache classes_used que puede desincronizarse)
   const _data = STATE.studentDetailData || {};
   const _todayIso = new Date().toISOString().slice(0, 10);
   const _activePkg = (_data.packages || []).find(p => !p.is_frozen && p.expiration_date >= _todayIso);
-  const _isPkgComplete = _activePkg && ((_activePkg.classes_used || 0) >= (_activePkg.classes_total || 0));
+  let _liveUsed = 0;
+  if (_activePkg) {
+    const _start = _activePkg.purchase_date || _activePkg.start_date;
+    const _end = _activePkg.expiration_date || _activePkg.end_date;
+    (_data.attendances || []).forEach(a => {
+      const sd = a.class_sessions?.session_date;
+      if (!sd) return;
+      if (_start && sd < _start) return;
+      if (_end && sd > _end) return;
+      if (a.counts_against_package) _liveUsed++;
+    });
+  }
+  const _isPkgComplete = _activePkg && (_liveUsed >= (_activePkg.classes_total || 0));
   const _hasNoActivePkg = !_activePkg;
   const _agendarDisabled = _isPkgComplete || _hasNoActivePkg;
   const _agendarTooltip = _isPkgComplete
@@ -7772,8 +7785,37 @@ function renderDetailSummary(stud) {
   const todayIso = new Date().toISOString().slice(0,10);
   const activePkg = (data.packages || []).find(p => !p.is_frozen && p.expiration_date >= todayIso);
 
+  // ⚠️ IMPORTANTE: calcular classes_used EN VIVO desde attendances (no confiar en el cache del paquete)
+  // El campo `classes_used` es un denormalizado que puede desincronizarse si recalcPackageCounters falla.
+  // La fuente de verdad son las attendances con counts_against_package=true en el rango del paquete.
+  let liveUsed = 0;
+  let liveRecoverable = 0;
+  if (activePkg) {
+    const startRange = activePkg.purchase_date || activePkg.start_date;
+    const endRange = activePkg.expiration_date || activePkg.end_date;
+    (data.attendances || []).forEach(a => {
+      const sd = a.class_sessions?.session_date;
+      if (!sd) return;
+      if (startRange && sd < startRange) return;
+      if (endRange && sd > endRange) return;
+      if (a.counts_against_package) liveUsed++;
+      if (a.is_recoverable) liveRecoverable++;
+    });
+    // Si el cache está desincronizado, lo arreglamos en BD silenciosamente
+    if ((activePkg.classes_used || 0) !== liveUsed || (activePkg.classes_recoverable || 0) !== liveRecoverable) {
+      sb.from('student_packages').update({
+        classes_used: liveUsed,
+        classes_recoverable: liveRecoverable,
+      }).eq('id', activePkg.id).then(() => {
+        // Actualizar también el state local para que el próximo render no vuelva a disparar el update
+        activePkg.classes_used = liveUsed;
+        activePkg.classes_recoverable = liveRecoverable;
+      });
+    }
+  }
+
   // ¿El paquete está completado? (todas las clases ya consumidas)
-  const isPackageComplete = activePkg && ((activePkg.classes_used || 0) >= (activePkg.classes_total || 0));
+  const isPackageComplete = activePkg && (liveUsed >= (activePkg.classes_total || 0));
 
   // Bookings activos (no cancelados) y futuros
   const upcomingClasses = (data.bookings || []).filter(b =>
@@ -7801,7 +7843,7 @@ function renderDetailSummary(stud) {
     .localeCompare(a.class_sessions.session_date + String(a.class_sessions.hour).padStart(2,'0')));
 
   // Pendientes por re-agendar = capacidad - agendadas (incluye recuperables sin reagendar y nunca-agendadas)
-  const max = activePkg ? Math.max(0, (activePkg.classes_total || 0) - (activePkg.classes_used || 0)) : 0;
+  const max = activePkg ? Math.max(0, (activePkg.classes_total || 0) - liveUsed) : 0;
   const pendingToReschedule = activePkg ? Math.max(0, max - upcomingClasses.length) : 0;
 
   const totalPayments = (data.payments || []).reduce((sum, p) => sum + parseFloat(p.amount_pen || p.amount || 0), 0);
@@ -7822,12 +7864,12 @@ function renderDetailSummary(stud) {
   const cards = [
     {
       label: 'Clases restantes',
-      value: activePkg ? `${(activePkg.classes_total || 0) - (activePkg.classes_used || 0)}` : '—',
+      value: activePkg ? `${(activePkg.classes_total || 0) - liveUsed}` : '—',
       sub: activePkg ? `de ${activePkg.classes_total || 0} · vence ${formatDate(activePkg.expiration_date)}` : 'Sin paquete activo',
     },
     {
       label: 'Tomadas',
-      value: activePkg ? `${activePkg.classes_used || 0}` : '—',
+      value: activePkg ? `${liveUsed}` : '—',
       sub: activePkg ? 'Asistidas + perdidas' : '—',
     },
     {
@@ -7854,7 +7896,7 @@ function renderDetailSummary(stud) {
       ${isPackageComplete ? `
         <div style="background: #EAF3DE; border: 1px solid #C5DCB0; border-radius: var(--radius-sm); padding: 10px 14px;">
           <div style="font-size: 10px; color: #3B6D11; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">Completado 🏁</div>
-          <div style="font-family: var(--display); font-size: 20px; color: #27500A; margin-top: 2px;">${activePkg.classes_used}/${activePkg.classes_total}</div>
+          <div style="font-family: var(--display); font-size: 20px; color: #27500A; margin-top: 2px;">${liveUsed}/${activePkg.classes_total}</div>
         </div>
         <button class="btn btn-primary" onclick="openAssignPackageModal('${stud.id}')" style="padding: 8px 16px; font-size: 12px; flex-shrink: 0;">Renovar paquete</button>
       ` : (activePkgOwed > 0 ? `
