@@ -3350,6 +3350,7 @@ function _renderScheduleEditorImpl() {
     <div style="padding: 12px 24px; border-top: 1px solid var(--line); background: var(--fit-cream); display: flex; flex-wrap: wrap; gap: 12px; font-size: 10px; color: var(--ink-soft);">
       <span style="display: flex; align-items: center; gap: 4px;"><span style="display: inline-block; width: 11px; height: 11px; border-radius: 3px; background: var(--fit-purple);"></span>Agendada</span>
       <span style="display: flex; align-items: center; gap: 4px;"><span style="display: inline-block; width: 11px; height: 11px; border-radius: 3px; background: #4F7A4D;"></span>Ya tomada</span>
+      <span style="display: flex; align-items: center; gap: 4px;"><span style="display: inline-block; width: 11px; height: 11px; border-radius: 3px; background: #90B58D;"></span>Pasada (atendió ⏱)</span>
       <span style="display: flex; align-items: center; gap: 4px;"><span style="display: inline-block; width: 11px; height: 11px; border-radius: 3px; background: #B8A88A;"></span>No asistió</span>
       <span style="display: flex; align-items: center; gap: 4px;"><span style="display: inline-block; width: 11px; height: 11px; border-radius: 3px; background: #DDF3DC;"></span>Buena disp.</span>
       <span style="display: flex; align-items: center; gap: 4px;"><span style="display: inline-block; width: 11px; height: 11px; border-radius: 3px; background: #F5E9CC;"></span>Casi lleno</span>
@@ -3426,26 +3427,31 @@ function renderScheduleEditorDayCell(d) {
   const oob = !d.inMonth;
 
   let bg = '#F5F0E5';
-  if (d.inMonth && !past && !expired) {
+  if (d.inMonth && !expired) {
     let avail = 0;
     SCHED_HOURS.forEach(h => {
       const occ = ed.occupancyByKey.get(`${d.iso}|${h}`) || 0;
       if (occ < ed.capacity) avail++;
     });
-    if (avail >= 8) bg = '#DDF3DC';
-    else if (avail >= 4) bg = '#F5F0E5';
-    else if (avail >= 1) bg = '#F5E9CC';
-    else bg = '#F8D9D9';
-  } else if (past || expired) {
+    if (past) {
+      // Pasado pero agendable: tono crema más cálido para distinguirlo
+      bg = avail > 0 ? '#F0E8D5' : '#EFEBE0';
+    } else {
+      if (avail >= 8) bg = '#DDF3DC';
+      else if (avail >= 4) bg = '#F5F0E5';
+      else if (avail >= 1) bg = '#F5E9CC';
+      else bg = '#F8D9D9';
+    }
+  } else if (expired) {
     bg = '#EFEBE0';
   }
 
-  const op = oob || past || expired ? 0.5 : 1;
+  const op = oob || expired ? 0.5 : (past ? 0.75 : 1);
   const hasSel = d.inMonth && Array.from(ed.selected).some(k => k.startsWith(d.iso + '|'));
   const hasConsumed = d.inMonth && Array.from(ed.consumed).some(k => k.startsWith(d.iso + '|'));
 
   let dispLabel = '';
-  if (d.inMonth && !past && !expired) {
+  if (d.inMonth && !expired) {
     let avail = 0;
     SCHED_HOURS.forEach(h => {
       const occ = ed.occupancyByKey.get(`${d.iso}|${h}`) || 0;
@@ -3512,8 +3518,17 @@ function renderScheduleEditorWeekDetail(week) {
       } else if (isMissed) {
         bg = '#B8A88A'; col = 'white'; txt = `${occCount}/${ed.capacity}`; cursor = 'not-allowed'; extra = 'font-weight: 500; font-size: 9px;';
         mark = `<span style="position: absolute; top: 1px; right: 3px; font-size: 9px; color: white;">!</span>`;
+      } else if (past && isSel) {
+        // Pasado seleccionado: verde más claro indica "se marcará como atendida al guardar"
+        bg = '#90B58D'; col = 'white'; txt = `${occCount}/${ed.capacity}`; cursor = 'pointer'; extra = 'font-weight: 600; font-size: 9px;';
+        mark = `<span style="position: absolute; top: 1px; right: 3px; font-size: 9px; color: white;" title="Se marcará como atendida">⏱</span>`;
       } else if (past) {
-        bg = '#EFEBE0'; col = 'var(--ink-faint)'; txt = '—'; cursor = 'not-allowed';
+        // Pasado disponible para agendar retroactivamente
+        bg = isFull ? '#EFEBE0' : '#FAF1D6'; col = isFull ? 'var(--ink-faint)' : 'var(--ink-mute)';
+        txt = isFull ? 'lleno' : `${occCount}/${ed.capacity}`;
+        cursor = (isFull || cantSelect) ? 'not-allowed' : 'pointer';
+        extra = 'font-weight: 500; font-size: 9px;';
+        if (cantSelect && !isFull) col = 'var(--ink-faint)';
       } else if (isSel) {
         bg = 'var(--fit-purple)'; col = 'white'; txt = `${occCount}/${ed.capacity}`; cursor = 'pointer'; extra = 'font-weight: 600;';
         mark = `<span style="position: absolute; top: 1px; right: 3px; font-size: 9px; color: white;">✓</span>`;
@@ -3530,7 +3545,7 @@ function renderScheduleEditorWeekDetail(week) {
         if (cantSelect) { col = 'var(--ink-faint)'; cursor = 'not-allowed'; }
       }
 
-      const onclick = (oob || past || isConsumed || isMissed || isFull || cantSelect) ? '' : `toggleScheduleEditorSlot('${k}')`;
+      const onclick = (oob || isConsumed || isMissed || isFull || cantSelect) ? '' : `toggleScheduleEditorSlot('${k}')`;
       h += `<div onclick="${onclick}" style="position: relative; background: ${bg}; color: ${col}; padding: 5px 4px; border-radius: 4px; text-align: center; font-size: 10px; cursor: ${cursor}; ${extra}">${txt}${mark}</div>`;
     });
     h += `</div>`;
@@ -3596,7 +3611,17 @@ async function confirmScheduleEditorChanges() {
     }
   }
 
-  const confirmMsg = `${toAdd.length > 0 ? `Agregar ${toAdd.length} clase${toAdd.length === 1 ? '' : 's'}` : ''}${toAdd.length > 0 && toCancel.length > 0 ? ' y ' : ''}${toCancel.length > 0 ? `cancelar ${toCancel.length}` : ''}?`;
+  const todayIso = new Date().toISOString().slice(0, 10);
+  const toAddPast = toAdd.filter(k => k.split('|')[0] < todayIso);
+  const pastCount = toAddPast.length;
+
+  const confirmParts = [];
+  if (toAdd.length > 0) confirmParts.push(`Agregar ${toAdd.length} clase${toAdd.length === 1 ? '' : 's'}`);
+  if (toCancel.length > 0) confirmParts.push(`cancelar ${toCancel.length}`);
+  let confirmMsg = confirmParts.join(' y ') + '?';
+  if (pastCount > 0) {
+    confirmMsg += `\n\n⏱ ${pastCount} ${pastCount === 1 ? 'es de fecha pasada y se marcará' : 'son de fechas pasadas y se marcarán'} como atendida${pastCount === 1 ? '' : 's'} automáticamente.`;
+  }
   if (!confirm(confirmMsg)) return;
 
   const stud = ed.student;
@@ -3620,12 +3645,16 @@ async function confirmScheduleEditorChanges() {
   }
 
   // Agregar: si ya existe un booking (cancelled), re-activarlo. Si no, INSERT.
+  // Si la fecha es pasada, también crear attendance 'attended' y marcar la sesión como delivered.
+  const stamp2 = new Date().toLocaleString('es-PE', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+  let pastMarkedAttended = 0;
   for (const k of toAdd) {
     const [iso, hourStr] = k.split('|');
     const hour = parseInt(hourStr);
     const dateLocal = new Date(iso + 'T12:00:00');
     const sessionId = await getOrCreateSession(ed.locationId, dateLocal, hour);
     if (!sessionId) { errors++; continue; }
+    const isPast = iso < todayIso;
 
     // ¿Ya existe un booking para este alumno+sesión?
     const { data: existing } = await sb.from('session_bookings')
@@ -3634,26 +3663,70 @@ async function confirmScheduleEditorChanges() {
       .eq('student_id', ed.studentId)
       .maybeSingle();
 
+    let bookingId = null;
     if (existing) {
+      bookingId = existing.id;
       if (existing.cancelled_at) {
         // Estaba cancelado: re-activar
         const { error } = await sb.from('session_bookings').update({
           cancelled_at: null,
           cancelled_reason: null,
         }).eq('id', existing.id);
-        if (error) { errors++; console.error(error); } else added++;
+        if (error) { errors++; console.error(error); continue; } else added++;
       } else {
         // Ya estaba agendado, no hay nada que hacer (no es error)
         added++;
       }
     } else {
-      const { error } = await sb.from('session_bookings').insert({
+      const { data: newBooking, error } = await sb.from('session_bookings').insert({
         session_id: sessionId,
         student_id: ed.studentId,
         source,
-      });
-      if (error) { errors++; console.error(error); } else added++;
+      }).select('id').single();
+      if (error) { errors++; console.error(error); continue; }
+      bookingId = newBooking.id;
+      added++;
     }
+
+    // Si la fecha es pasada y hay booking, crear/actualizar attendance como 'attended'
+    if (isPast && bookingId) {
+      const { data: existingAtt } = await sb.from('attendance')
+        .select('id, status')
+        .eq('booking_id', bookingId)
+        .maybeSingle();
+
+      const attPayload = {
+        booking_id: bookingId,
+        session_id: sessionId,
+        student_id: ed.studentId,
+        status: 'attended',
+        is_recoverable: false,
+        counts_against_package: true,
+        notes: `[${stamp2}] Agendada retroactivamente por ${actor} · marcada como atendida`,
+        marked_at: new Date().toISOString(),
+      };
+      if (existingAtt) {
+        // Solo actualizar si no estaba ya marcada como attended (preserva otras marcas)
+        if (existingAtt.status !== 'attended') {
+          await sb.from('attendance').update(attPayload).eq('id', existingAtt.id);
+          pastMarkedAttended++;
+        }
+      } else {
+        await sb.from('attendance').insert(attPayload);
+        pastMarkedAttended++;
+      }
+
+      // Marcar la sesión como entregada
+      await sb.from('class_sessions').update({
+        class_status: 'delivered',
+        status_changed_at: new Date().toISOString(),
+      }).eq('id', sessionId);
+    }
+  }
+
+  // Si se marcaron clases pasadas como atendidas, recalcular contadores del paquete
+  if (pastMarkedAttended > 0) {
+    await recalcPackageCounters(ed.studentId);
   }
 
   if (added > 0 || cancelled > 0) {
