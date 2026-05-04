@@ -3126,6 +3126,22 @@ async function openStudentScheduleEditor(studentId, locationId) {
           ed.monthDate = new Date(y, m - 1, 1);
         }
       }
+      // Si el paquete está completado, mostrar mensaje en lugar del calendario
+      if ((ed.package.classes_used || 0) >= (ed.package.classes_total || 0)) {
+        document.getElementById('schedule-editor-body').innerHTML = `
+          <div style="padding: 50px 24px; text-align: center;">
+            <div style="font-size: 36px; margin-bottom: 14px;">🏁</div>
+            <div style="font-family: var(--display); font-size: 22px; color: var(--fit-purple); margin-bottom: 8px;">Paquete completado</div>
+            <div style="font-size: 13px; color: var(--ink-mute); margin-bottom: 24px; max-width: 380px; margin-left: auto; margin-right: auto; line-height: 1.5;">
+              ${escape(stud.first_name)} ya consumió las ${ed.package.classes_total} clases de este paquete. Renueva el paquete para poder agendar nuevas clases.
+            </div>
+            <div style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;">
+              <button class="btn btn-ghost" onclick="closeModals()" style="padding: 9px 18px;">Cerrar</button>
+              <button class="btn btn-primary" onclick="closeModals(); openAssignPackageModal('${studentId}')" style="padding: 9px 18px;">Renovar paquete</button>
+            </div>
+          </div>`;
+        return;
+      }
     }
     renderScheduleEditor();
   } catch (err) {
@@ -3737,10 +3753,9 @@ async function confirmScheduleEditorChanges() {
     }
   }
 
-  // Si se marcaron clases pasadas como atendidas, recalcular contadores del paquete
-  if (pastMarkedAttended > 0) {
-    await recalcPackageCounters(ed.studentId);
-  }
+  // Recalcular contadores del paquete (siempre, no solo si hay clases pasadas)
+  // Esto asegura que classes_used refleje el estado real después de cualquier cambio
+  await recalcPackageCounters(ed.studentId);
 
   if (added > 0 || cancelled > 0) {
     const parts = [];
@@ -7662,6 +7677,18 @@ function renderStudentDetail() {
       ? '<span class="modality-pill modality-flexible">↻ Flexible</span>'
       : '<span class="modality-pill modality-trial">✦ Prueba</span>');
 
+  // Detectar si el paquete activo está completado (todas las clases consumidas)
+  // → en ese caso, deshabilitar el botón "Agendar clases"
+  const _data = STATE.studentDetailData || {};
+  const _todayIso = new Date().toISOString().slice(0, 10);
+  const _activePkg = (_data.packages || []).find(p => !p.is_frozen && p.expiration_date >= _todayIso);
+  const _isPkgComplete = _activePkg && ((_activePkg.classes_used || 0) >= (_activePkg.classes_total || 0));
+  const _hasNoActivePkg = !_activePkg;
+  const _agendarDisabled = _isPkgComplete || _hasNoActivePkg;
+  const _agendarTooltip = _isPkgComplete
+    ? 'Paquete completado. Renueva el paquete para seguir agendando.'
+    : (_hasNoActivePkg ? 'Sin paquete activo. Asigna un paquete primero.' : '');
+
   const tabs = [
     { id: 'summary', label: 'Resumen' },
     { id: 'classes', label: 'Clases' },
@@ -7710,8 +7737,8 @@ function renderStudentDetail() {
         </div>
         <div style="display: flex; gap: 8px; flex-wrap: wrap;">
           <button class="btn btn-ghost" onclick="openStudentModal('${stud.id}')" style="padding: 8px 14px; font-size: 12px;">Editar perfil</button>
-          <button class="btn btn-ghost" onclick="openStudentScheduleEditor('${stud.id}')" style="padding: 8px 14px; font-size: 12px;">Agendar clases</button>
-          <button class="btn btn-primary" onclick="openAssignPackageFromDetail('${stud.id}')" style="padding: 8px 14px; font-size: 12px;">Asignar paquete</button>
+          <button class="btn btn-ghost" onclick="${_agendarDisabled ? '' : `openStudentScheduleEditor('${stud.id}')`}" ${_agendarDisabled ? 'disabled' : ''} title="${escape(_agendarTooltip)}" style="padding: 8px 14px; font-size: 12px; ${_agendarDisabled ? 'opacity: 0.45; cursor: not-allowed;' : ''}">Agendar clases</button>
+          <button class="btn btn-primary" onclick="openAssignPackageFromDetail('${stud.id}')" style="padding: 8px 14px; font-size: 12px;">${_isPkgComplete ? 'Renovar paquete' : 'Asignar paquete'}</button>
         </div>
       </div>
     </div>
@@ -7744,6 +7771,9 @@ function renderDetailSummary(stud) {
   const data = STATE.studentDetailData || {};
   const todayIso = new Date().toISOString().slice(0,10);
   const activePkg = (data.packages || []).find(p => !p.is_frozen && p.expiration_date >= todayIso);
+
+  // ¿El paquete está completado? (todas las clases ya consumidas)
+  const isPackageComplete = activePkg && ((activePkg.classes_used || 0) >= (activePkg.classes_total || 0));
 
   // Bookings activos (no cancelados) y futuros
   const upcomingClasses = (data.bookings || []).filter(b =>
@@ -7814,13 +7844,20 @@ function renderDetailSummary(stud) {
 
   // Bloque del paquete activo
   const activePkgBlock = activePkg ? `
-    <div style="background: white; border: 1px solid var(--line); border-radius: var(--radius-md); padding: 18px 20px; margin-bottom: 16px; display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap;">
+    <div style="background: white; border: 1px solid ${isPackageComplete ? '#C5DCB0' : 'var(--line)'}; border-radius: var(--radius-md); padding: 18px 20px; margin-bottom: 16px; display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap;">
       <div style="flex: 1; min-width: 240px;">
         <div style="font-size: 11px; color: var(--ink-mute); text-transform: uppercase; letter-spacing: 0.5px; font-weight: 500; margin-bottom: 4px;">Paquete activo</div>
         <div style="font-family: var(--display); font-size: 18px; color: var(--fit-purple); font-style: italic;">${escape(activePkg.packages?.name || `Paquete ${activePkg.classes_total || ''} clases`)}</div>
         <div style="font-size: 12px; color: var(--ink-mute); margin-top: 3px;">Compra ${formatDate(activePkg.purchase_date)} · vence ${formatDate(activePkg.expiration_date)}</div>
+        ${isPackageComplete ? `<div style="font-size: 12px; color: #27500A; margin-top: 6px; font-weight: 500;">🏁 Todas las clases consumidas. Renueva el paquete para seguir agendando.</div>` : ''}
       </div>
-      ${activePkgOwed > 0 ? `
+      ${isPackageComplete ? `
+        <div style="background: #EAF3DE; border: 1px solid #C5DCB0; border-radius: var(--radius-sm); padding: 10px 14px;">
+          <div style="font-size: 10px; color: #3B6D11; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">Completado 🏁</div>
+          <div style="font-family: var(--display); font-size: 20px; color: #27500A; margin-top: 2px;">${activePkg.classes_used}/${activePkg.classes_total}</div>
+        </div>
+        <button class="btn btn-primary" onclick="openAssignPackageModal('${stud.id}')" style="padding: 8px 16px; font-size: 12px; flex-shrink: 0;">Renovar paquete</button>
+      ` : (activePkgOwed > 0 ? `
         <div style="background: #FEF7E6; border: 1px solid #F4D58A; border-radius: var(--radius-sm); padding: 10px 14px;">
           <div style="font-size: 10px; color: #8B6F1A; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">Saldo pendiente</div>
           <div style="font-family: var(--display); font-size: 20px; color: #633806; margin-top: 2px;">S/ ${activePkgOwed.toFixed(2)}</div>
@@ -7832,7 +7869,7 @@ function renderDetailSummary(stud) {
           <div style="font-size: 10px; color: #3B6D11; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">Pagado ✓</div>
           <div style="font-family: var(--display); font-size: 20px; color: #27500A; margin-top: 2px;">S/ ${activePkgPaid.toFixed(2)}</div>
         </div>
-      `}
+      `)}
     </div>
   ` : `
     <div style="background: #FEF7E6; border: 1px solid #F4D58A; border-radius: var(--radius-md); padding: 16px 20px; margin-bottom: 16px; display: flex; align-items: center; justify-content: space-between; gap: 12px;">
