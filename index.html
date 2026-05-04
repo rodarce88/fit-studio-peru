@@ -3114,6 +3114,19 @@ async function openStudentScheduleEditor(studentId, locationId) {
   renderScheduleEditorLoading();
   try {
     await loadScheduleEditorData();
+    // Si el paquete arranca en un mes pasado, abrir el calendario en ese mes
+    // (así el coordinador ve directamente las fechas pasadas del paquete para agendarlas retroactivamente)
+    const ed = STATE.scheduleEditor;
+    if (ed.package) {
+      const purchaseIso = ed.package.purchase_date || ed.package.start_date;
+      if (purchaseIso) {
+        const todayIso = new Date().toISOString().slice(0, 10);
+        if (purchaseIso < todayIso) {
+          const [y, m] = purchaseIso.split('-').map(Number);
+          ed.monthDate = new Date(y, m - 1, 1);
+        }
+      }
+    }
     renderScheduleEditor();
   } catch (err) {
     console.error('Error cargando editor:', err);
