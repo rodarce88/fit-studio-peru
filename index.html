@@ -3760,15 +3760,29 @@ async function confirmScheduleEditorChanges() {
     return;
   }
 
-  // Validación server-side: refrescar capacidad con datos en vivo
-  // (cancelaciones primero liberan cupo, así que restamos toCancel del current)
+  // Validación: capacidad del paquete TARGET (el que el usuario seleccionó en el selector),
+  // no del activo. Cuenta cuántas bookings sin attendance ya están imputadas al target
+  // (vía bookingPkgMap), excluyendo las que se van a cancelar.
   if (toAdd.length > 0) {
-    const cap = await getStudentBookingCapacity(ed.studentId);
-    if (cap.hasPackage) {
-      const effectiveCurrent = cap.current - toCancel.length;
-      const effectiveRemaining = cap.max - effectiveCurrent;
-      if (toAdd.length > effectiveRemaining) {
-        showToast(`No se puede guardar: solo hay ${effectiveRemaining} cupo${effectiveRemaining === 1 ? '' : 's'} disponible${effectiveRemaining === 1 ? '' : 's'} (${cap.current - toCancel.length}/${cap.max} usadas tras cancelar). Quita ${toAdd.length - effectiveRemaining} fecha${(toAdd.length - effectiveRemaining) === 1 ? '' : 's'}.`, 'error');
+    const targetPkg = ed.targetPackageId
+      ? (ed.allPackages || []).find(p => p.id === ed.targetPackageId)
+      : ed.package;
+    if (targetPkg) {
+      const max = Math.max(0, (targetPkg.classes_total || 0) - (targetPkg.classes_used || 0));
+      // Bookings ya imputadas al target en BD (sin attendance todavía, no canceladas)
+      let bookingsAlreadyOnTarget = 0;
+      ed.bookingPkgMap.forEach((pkgId, k) => {
+        if (pkgId !== ed.targetPackageId) return;
+        if (!ed.original.has(k)) return; // si no está en original, no es booking activa
+        if (toCancel.includes(k)) return; // se va a cancelar, libera cupo
+        if (ed.consumed.has(k) || ed.missed.has(k)) return; // ya está en classes_used
+        bookingsAlreadyOnTarget++;
+      });
+      const totalAfterChange = bookingsAlreadyOnTarget + toAdd.length;
+      const cuposDisponibles = max - bookingsAlreadyOnTarget;
+      if (totalAfterChange > max) {
+        const exceso = totalAfterChange - max;
+        showToast(`No se puede guardar: el paquete tiene ${cuposDisponibles} cupo${cuposDisponibles === 1 ? '' : 's'} disponible${cuposDisponibles === 1 ? '' : 's'}, intentas agregar ${toAdd.length}. Quita ${exceso} fecha${exceso === 1 ? '' : 's'}.`, 'error');
         return;
       }
     }
