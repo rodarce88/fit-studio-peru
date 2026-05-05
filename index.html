@@ -1455,7 +1455,7 @@ function getCurrentLocation() {
 // Aplica fechas de vigencia (effective_from/to)
 // ============================================
 function resolveInstructor(locationId, date, dow, hour) {
-  const dateKey = date.toISOString().slice(0,10);
+  const dateKey = dateToIsoLocal(date);
 
   // 0. Si existe class_sessions del día con instructor_id explícito (incluido NULL = quitado)
   const session = STATE.classSessions && STATE.classSessions.find(s =>
@@ -1610,7 +1610,7 @@ async function loadRescheduleList() {
 
   listEl.innerHTML = '<div style="padding: 20px; text-align: center; color: var(--ink-mute); font-size: 12px;">Calculando...</div>';
 
-  const todayIso = new Date().toISOString().slice(0, 10);
+  const todayIso = dateToIsoLocal(new Date());
   const locId = STATE.currentLocationId;
 
   // 1. Paquetes vivos (no congelados)
@@ -1720,9 +1720,9 @@ async function loadToPayList() {
     if (price <= 0) continue; // sin precio definido, asumir gratis o no aplica
 
     const { data: pays } = await sb.from('payments')
-      .select('amount')
+      .select('amount_pen')
       .eq('student_package_id', pkg.id);
-    const totalPaid = (pays || []).reduce((s, p) => s + parseFloat(p.amount || 0), 0);
+    const totalPaid = (pays || []).reduce((s, p) => s + parseFloat(p.amount_pen || 0), 0);
 
     if (totalPaid < price) {
       pkgsWithBalance.push({
@@ -1822,7 +1822,7 @@ async function openAssignPackageWithPending(studentId) {
 // ============================================
 async function loadDayData() {
   if (!isOnline) return;
-  const dateStr = STATE.currentDate.toISOString().slice(0,10);
+  const dateStr = dateToIsoLocal(STATE.currentDate);
   const locId = STATE.currentLocationId;
   if (!locId) return;
 
@@ -1854,7 +1854,7 @@ function findAttendance(studentId, sessionId) {
 
 async function getOrCreateSession(locationId, date, hour) {
   if (!isOnline) return null;
-  const dateStr = date.toISOString().slice(0,10);
+  const dateStr = dateToIsoLocal(date);
 
   let session = STATE.classSessions.find(s =>
     s.location_id === locationId && s.session_date === dateStr && s.hour === hour
@@ -1943,7 +1943,7 @@ function renderTimeline() {
 
   body.innerHTML = hours.map(h => {
     // Buscar session existente para este slot
-    const dateStr = STATE.currentDate.toISOString().slice(0,10);
+    const dateStr = dateToIsoLocal(STATE.currentDate);
     const session = STATE.classSessions.find(s =>
       s.location_id === loc.id && s.session_date === dateStr && s.hour === h
     );
@@ -2174,7 +2174,7 @@ function renderInstructorsScheduleGrid() {
     { idx: 6, label: 'Sáb' },
     { idx: 0, label: 'Dom' },
   ];
-  const today = new Date().toISOString().slice(0,10);
+  const today = dateToIsoLocal(new Date());
 
   // Filtrar schedules vigentes hoy en la sede activa
   const activeSchedules = STATE.schedules.filter(s =>
@@ -2281,7 +2281,7 @@ function renderInstructors() {
     grid.innerHTML = '<div class="empty-state"><h3>No hay <em>profesores</em> registrados</h3><p>Click en "Agregar profesor" para crear el primero.</p></div>';
     return;
   }
-  const today = new Date().toISOString().slice(0,10);
+  const today = dateToIsoLocal(new Date());
   grid.innerHTML = STATE.instructors.map(i => {
     const color = getInstructorColor(i);
     // Contar slots vigentes hoy
@@ -2393,8 +2393,8 @@ async function loadScheduleWeekData() {
   const start = STATE.scheduleWeekStart;
   const end = new Date(start);
   end.setDate(end.getDate() + 6);
-  const startIso = start.toISOString().slice(0, 10);
-  const endIso = end.toISOString().slice(0, 10);
+  const startIso = dateToIsoLocal(start);
+  const endIso = dateToIsoLocal(end);
 
   const { data: sessions } = await sb.from('class_sessions')
     .select('id, session_date, hour, location_id, is_cancelled, instructor_id')
@@ -2417,7 +2417,7 @@ async function loadScheduleWeekData() {
 // Cuenta DISTINCT alumnos agendados en la celda (combina fixed + session_bookings)
 function countCellOccupancy(locationId, date, hour) {
   const dow = date.getDay();
-  const dateIso = date.toISOString().slice(0, 10);
+  const dateIso = dateToIsoLocal(date);
 
   // Verificar si la sesión existe y está cancelada
   const session = (STATE.scheduleWeekSessions || []).find(s =>
@@ -2444,7 +2444,7 @@ function countCellOccupancy(locationId, date, hour) {
 
 function getCellStudents(locationId, date, hour) {
   const dow = date.getDay();
-  const dateIso = date.toISOString().slice(0, 10);
+  const dateIso = dateToIsoLocal(date);
   const session = (STATE.scheduleWeekSessions || []).find(s =>
     s.location_id === locationId && s.session_date === dateIso && s.hour === hour
   );
@@ -2502,13 +2502,13 @@ function renderSchedule() {
   }
   const dayLabels = ['LUN', 'MAR', 'MIÉ', 'JUE', 'VIE', 'SÁB', 'DOM'];
   const hours = [6, 7, 8, 9, 10, 11, 16, 17, 18, 19, 20];
-  const todayIso = new Date().toISOString().slice(0, 10);
+  const todayIso = dateToIsoLocal(new Date());
 
   // Header row
   let html = `<div style="display: grid; grid-template-columns: 70px repeat(7, 1fr); gap: 6px;">`;
   html += `<div></div>`; // esquina vacía
   dates.forEach((d, i) => {
-    const isToday = d.toISOString().slice(0, 10) === todayIso;
+    const isToday = dateToIsoLocal(d) === todayIso;
     html += `<div style="text-align: center; padding: 8px 4px; ${isToday ? 'background: var(--fit-lavender-pale); border-radius: 8px;' : ''}">
       <div style="font-size: 11px; color: var(--ink-mute); letter-spacing: 0.5px;">${dayLabels[i]}</div>
       <div style="font-family: var(--display); font-size: 16px; color: ${isToday ? 'var(--fit-purple)' : 'var(--ink)'}; margin-top: 2px;">${d.getDate()}</div>
@@ -2523,9 +2523,9 @@ function renderSchedule() {
       const cap = loc.capacity;
       const count = occ.count;
       const pct = Math.min(100, (count / cap) * 100);
-      const isPast = d.toISOString().slice(0, 10) < todayIso;
+      const isPast = dateToIsoLocal(d) < todayIso;
       const isFull = count >= cap;
-      const dateIso = d.toISOString().slice(0, 10);
+      const dateIso = dateToIsoLocal(d);
 
       let bgColor = 'var(--fit-cream)';
       let countColor = 'var(--ink-faint)';
@@ -2567,7 +2567,7 @@ function openScheduleCellModal(locationId, dateIso, hour) {
   const loc = STATE.locations.find(l => l.id === locationId);
   const students = getCellStudents(locationId, date, hour);
   const cap = loc?.capacity || 9;
-  const isPast = dateIso < new Date().toISOString().slice(0, 10);
+  const isPast = dateIso < dateToIsoLocal(new Date());
 
   const session = (STATE.scheduleWeekSessions || []).find(s =>
     s.location_id === locationId && s.session_date === dateIso && s.hour === hour
@@ -2632,7 +2632,7 @@ async function removeBookingFromCell(bookingId) {
   // Re-render del modal y de la grilla
   const ctx = STATE.cellModalCtx;
   if (ctx) {
-    openScheduleCellModal(ctx.locationId, ctx.date.toISOString().slice(0, 10), ctx.hour);
+    openScheduleCellModal(ctx.locationId, dateToIsoLocal(ctx.date), ctx.hour);
   }
   renderSchedule();
 }
@@ -2818,14 +2818,14 @@ function renderMiniCalendar() {
   const ctx = STATE.assignCtx;
   const cal = document.getElementById('mini-calendar');
   if (!cal) return;
-  const todayIso = new Date().toISOString().slice(0, 10);
+  const todayIso = dateToIsoLocal(new Date());
   const month = ctx.miniCalendarMonth;
   const year = month.getFullYear();
   const monthIdx = month.getMonth();
   const monthLabels = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
   const pkg = ctx.studentActivePackage;
   const maxDateIso = null; // los paquetes ya no vencen
-  const primaryIso = ctx.primaryDate.toISOString().slice(0, 10);
+  const primaryIso = dateToIsoLocal(ctx.primaryDate);
 
   // Total que el alumno puede asignar = restantes del paquete (las recuperables NO suman extra)
   const remaining = pkg ? Math.max(0, (pkg.classes_total || 0) - (pkg.classes_used || 0)) : 0;
@@ -2863,13 +2863,13 @@ function renderMiniCalendar() {
   for (let i = 0; i < startDow; i++) html += `<div></div>`;
   for (let day = 1; day <= daysInMonth; day++) {
     const cellDate = new Date(year, monthIdx, day);
-    const cellIso = cellDate.toISOString().slice(0, 10);
+    const cellIso = dateToIsoLocal(cellDate);
     const isPrimary = cellIso === primaryIso;
     const isPast = cellIso < todayIso;
     const isOutOfPackage = maxDateIso && cellIso > maxDateIso;
     const hasSameHour = existingSameHour.has(cellIso) && !isPrimary;
     const hasOtherHour = existingOtherHour.has(cellIso) && !hasSameHour && !isPrimary;
-    const isSelected = ctx.additionalDates.some(d => d.toISOString().slice(0, 10) === cellIso);
+    const isSelected = ctx.additionalDates.some(d => dateToIsoLocal(d) === cellIso);
     const isAtLimit = !isSelected && !isPrimary && currentSelected >= maxSelectable && maxSelectable > 0;
     const isDisabled = isPrimary || isPast || isOutOfPackage || hasSameHour || isAtLimit;
 
@@ -2931,7 +2931,7 @@ function navMiniCalendar(delta) {
 
 function toggleMiniCalendarDate(iso) {
   const ctx = STATE.assignCtx;
-  const idx = ctx.additionalDates.findIndex(d => d.toISOString().slice(0, 10) === iso);
+  const idx = ctx.additionalDates.findIndex(d => dateToIsoLocal(d) === iso);
   if (idx >= 0) ctx.additionalDates.splice(idx, 1);
   else ctx.additionalDates.push(new Date(iso + 'T00:00:00'));
   renderAssignStep2Repeat();
@@ -3032,7 +3032,7 @@ function getCurrentActorLabel() {
 // son contador histórico). pendingToReschedule = max - agendadas futuras.
 async function getStudentBookingCapacity(studentId) {
   if (!isOnline) return { hasPackage: false, max: 0, current: 0, remaining: 0, pendingToReschedule: 0 };
-  const todayIso = new Date().toISOString().slice(0, 10);
+  const todayIso = dateToIsoLocal(new Date());
 
   // Cargar todos los paquetes y buscar el activo (FIFO = más antiguo con clases libres)
   const { data: allPkgs } = await sb.from('student_packages')
@@ -3109,7 +3109,7 @@ async function openStudentScheduleEditor(studentId, locationId) {
     if (ed.package) {
       const purchaseIso = ed.package.purchase_date || ed.package.start_date;
       if (purchaseIso) {
-        const todayIso = new Date().toISOString().slice(0, 10);
+        const todayIso = dateToIsoLocal(new Date());
         if (purchaseIso < todayIso) {
           const [y, m] = purchaseIso.split('-').map(Number);
           ed.monthDate = new Date(y, m - 1, 1);
@@ -3237,8 +3237,8 @@ async function loadScheduleEditorOccupancy() {
   const m = ed.monthDate;
   const monthStart = new Date(m.getFullYear(), m.getMonth(), 1);
   const monthEnd = new Date(m.getFullYear(), m.getMonth() + 1, 0);
-  const startIso = new Date(monthStart.getTime() - 7 * 86400000).toISOString().slice(0, 10);
-  const endIso = new Date(monthEnd.getTime() + 7 * 86400000).toISOString().slice(0, 10);
+  const startIso = dateToIsoLocal(new Date(monthStart.getTime() - 7 * 86400000));
+  const endIso = dateToIsoLocal(new Date(monthEnd.getTime() + 7 * 86400000));
 
   console.log('[schedEditor] occupancy range:', startIso, '→', endIso, 'loc:', ed.locationId);
 
@@ -3297,7 +3297,7 @@ async function loadScheduleEditorOccupancy() {
     const endD = new Date(endIso + 'T12:00:00');
     for (let d = new Date(startD); d <= endD; d.setDate(d.getDate() + 1)) {
       if (d.getDay() !== dow) continue;
-      const iso = d.toISOString().slice(0, 10);
+      const iso = dateToIsoLocal(d);
       const k = `${iso}|${hour}`;
       if (!ed.occupancyByKey.has(k)) ed.occupancyByKey.set(k, studSet.size);
     }
@@ -3490,7 +3490,7 @@ function renderScheduleEditorMonthGrid() {
 
 function renderScheduleEditorDayCell(d) {
   const ed = STATE.scheduleEditor;
-  const todayIso = new Date().toISOString().slice(0, 10);
+  const todayIso = dateToIsoLocal(new Date());
   const past = d.iso < todayIso;
   const oob = !d.inMonth;
 
@@ -3541,7 +3541,7 @@ function renderScheduleEditorDayCell(d) {
 
 function renderScheduleEditorWeekDetail(week) {
   const ed = STATE.scheduleEditor;
-  const todayIso = new Date().toISOString().slice(0, 10);
+  const todayIso = dateToIsoLocal(new Date());
   // Usar el paquete target (el que la coordinadora eligió en el selector)
   const targetPkg = ed.targetPackageId
     ? (ed.allPackages || []).find(p => p.id === ed.targetPackageId)
@@ -3730,7 +3730,7 @@ async function confirmScheduleEditorChanges() {
     }
   }
 
-  const todayIso = new Date().toISOString().slice(0, 10);
+  const todayIso = dateToIsoLocal(new Date());
   const toAddPast = toAdd.filter(k => k.split('|')[0] < todayIso);
   const pastCount = toAddPast.length;
 
@@ -4122,6 +4122,18 @@ function compressImage(file, maxSize, quality) {
     img.onerror = reject;
     img.src = url;
   });
+}
+
+// Convierte un Date object a 'YYYY-MM-DD' usando hora LOCAL (no UTC).
+// Crítico para evitar el bug de timezone donde a las 11pm Lima, toISOString()
+// devuelve el día siguiente porque la hora UTC ya pasó la medianoche.
+function dateToIsoLocal(d) {
+  if (!d) return '';
+  if (!(d instanceof Date)) d = new Date(d);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
 }
 
 function formatDate(isoStr) {
@@ -4629,7 +4641,7 @@ async function applyInstructorChange() {
   const newInstId = document.getElementById('change-new-instructor').value;
   const reason = document.getElementById('change-reason').value.trim();
   const loc = getCurrentLocation();
-  const dateKey = STATE.currentDate.toISOString().slice(0,10);
+  const dateKey = dateToIsoLocal(STATE.currentDate);
 
   // Determinar qué horas afecta
   let hours = [];
@@ -4691,7 +4703,7 @@ function openInstructorScheduleModal(instructorId) {
   sedeSel.onchange = () => loadScheduleEditorMarks();
 
   // Fechas default
-  document.getElementById('sched-from').value = new Date().toISOString().slice(0,10);
+  document.getElementById('sched-from').value = dateToIsoLocal(new Date());
   document.getElementById('sched-to').value = '';
 
   loadScheduleEditorMarks();
@@ -4702,7 +4714,7 @@ function openInstructorScheduleModal(instructorId) {
 
 function loadScheduleEditorMarks() {
   const locId = document.getElementById('sched-location').value;
-  const dateRef = document.getElementById('sched-from').value || new Date().toISOString().slice(0,10);
+  const dateRef = document.getElementById('sched-from').value || dateToIsoLocal(new Date());
   // Cargar slots existentes del profesor en esa sede vigentes en la fecha de referencia
   SCHEDULE_CTX.marks = new Set();
   STATE.schedules
@@ -5067,77 +5079,76 @@ async function recalcPackageCounters(studentId) {
     return;
   }
 
-  // Cargar todas las attendances del alumno (incluyendo session_date para resolver pkg_id por fecha)
+  // Cargar todas las attendances del alumno
   const { data: allAtt } = await sb.from('attendance')
     .select('id, status, counts_against_package, is_recoverable, student_package_id, class_sessions(session_date)')
     .eq('student_id', studentId);
 
+  console.log(`[recalcPackageCounters] alumno ${studentId}: ${(allAtt || []).length} att(s), ${allPkgs.length} pkg(s)`);
+
   // ============ CLEANUP DEFENSIVO #1 ============
   // Forzar counts_against_package=true para attendances con status que SIEMPRE consumen clase
-  // (attended, lost, no_show) — por si quedaron en false por algún bug
   const wronglyMarked = (allAtt || []).filter(a =>
     ['attended', 'lost', 'no_show'].includes(a.status) && a.counts_against_package === false
   );
   if (wronglyMarked.length > 0) {
-    console.log(`[recalcPackageCounters] Corrigiendo ${wronglyMarked.length} attendance(s) con counts_against_package=false que deberían contar`);
+    console.log(`[recalcPackageCounters] Corrigiendo ${wronglyMarked.length} att con counts_against_package=false`);
     const ids = wronglyMarked.map(a => a.id);
     await sb.from('attendance').update({ counts_against_package: true }).in('id', ids);
     wronglyMarked.forEach(a => { a.counts_against_package = true; });
   }
 
+  // Helper: encontrar paquete cuyo rango cubra la session_date (más reciente cuyo purchase_date <= session_date)
+  const sortedByDate = [...allPkgs].sort((a, b) => {
+    const da = a.purchase_date || a.start_date || '1900-01-01';
+    const db = b.purchase_date || b.start_date || '1900-01-01';
+    return da.localeCompare(db);
+  });
+  const findPkgByDate = (sessionDate) => {
+    if (!sessionDate) return null;
+    let candidate = null;
+    sortedByDate.forEach(p => {
+      const pkgStart = p.purchase_date || p.start_date || '1900-01-01';
+      if (sessionDate >= pkgStart) candidate = p;
+    });
+    return candidate;
+  };
+
   // ============ CLEANUP DEFENSIVO #2 ============
-  // Asignar student_package_id a attendances huérfanas
-  // Estrategia preferida: por fecha de sesión, encontrar el paquete cuyo purchase_date <= session_date (el más antiguo elegible)
-  // Fallback: paquete activo (FIFO con clases libres)
+  // Asignar student_package_id a attendances huérfanas (por fecha de sesión)
   const orphans = (allAtt || []).filter(a => a.counts_against_package && !a.student_package_id);
   if (orphans.length > 0) {
-    console.log(`[recalcPackageCounters] Encontradas ${orphans.length} attendance(s) huérfana(s)`);
-    // Ordenar paquetes por purchase_date asc (más antiguo primero)
-    const sortedByDate = [...allPkgs].sort((a, b) => {
-      const da = a.purchase_date || a.start_date || '1900-01-01';
-      const db = b.purchase_date || b.start_date || '1900-01-01';
-      return da.localeCompare(db);
-    });
-    const activeForFallback = sortedByDate.find(p => !p.is_frozen && (p.classes_used || 0) < (p.classes_total || 0))
-      || sortedByDate[0];
-
+    console.log(`[recalcPackageCounters] ${orphans.length} att(s) huérfana(s) - vinculando por fecha`);
     for (const orphan of orphans) {
       const sessionDate = orphan.class_sessions?.session_date;
-      let targetPkg = null;
-      if (sessionDate) {
-        // Buscar el paquete más antiguo cuyo purchase_date <= session_date
-        targetPkg = sortedByDate.find(p => {
-          if (p.is_frozen) return false;
-          const pkgStart = p.purchase_date || p.start_date || '1900-01-01';
-          return sessionDate >= pkgStart;
-        });
-      }
-      if (!targetPkg) targetPkg = activeForFallback;
+      const targetPkg = findPkgByDate(sessionDate) || sortedByDate.find(p => !p.is_frozen && (p.classes_used || 0) < (p.classes_total || 0)) || sortedByDate[0];
       if (targetPkg) {
         const { error } = await sb.from('attendance').update({ student_package_id: targetPkg.id }).eq('id', orphan.id);
-        if (error) {
-          console.error('[recalcPackageCounters] Error vinculando attendance', orphan.id, error);
-        } else {
+        if (!error) {
           orphan.student_package_id = targetPkg.id;
-          console.log(`[recalcPackageCounters] Vinculé attendance ${orphan.id} (sesión ${sessionDate}) a paquete ${targetPkg.id}`);
+          console.log(`  → att ${orphan.id} (sesión ${sessionDate}) vinculada a pkg ${targetPkg.id}`);
         }
       }
     }
   }
 
-  // ============ RECÁLCULO FINAL ============
+  // ============ RECÁLCULO con FALLBACK POR FECHA ============
+  // Cuenta attendances por paquete usando student_package_id (estricto) +
+  // fallback por fecha si la columna viene null (PostgREST cache stale).
   for (const pkg of allPkgs) {
-    const myAtts = (allAtt || []).filter(a => a.student_package_id === pkg.id);
+    const myAtts = (allAtt || []).filter(a => {
+      // Caso 1: vinculada explícitamente a este paquete
+      if (a.student_package_id === pkg.id) return true;
+      // Caso 2 (fallback): sin vinculación pero sesión cae en el rango de este paquete
+      if (!a.student_package_id) {
+        const sd = a.class_sessions?.session_date;
+        const matched = findPkgByDate(sd);
+        return matched && matched.id === pkg.id;
+      }
+      return false;
+    });
     const used = myAtts.filter(a => a.counts_against_package).length;
     const recoverable = myAtts.filter(a => a.is_recoverable).length;
-
-    // SAFETY CHECK: si JS calcula 0 attendances pero BD tiene > 0, algo está mal.
-    // Probablemente PostgREST tiene schema cacheado y no ve la columna student_package_id.
-    // En ese caso NO sobrescribir — confiar en lo que dice BD.
-    if (used === 0 && (pkg.classes_used || 0) > 0 && (allAtt || []).length > 0) {
-      console.warn(`[recalcPackageCounters] ⚠ SKIP downgrade pkg ${pkg.id}: BD dice ${pkg.classes_used} pero JS calculó 0. Probable schema cache stale en PostgREST. Ejecuta: NOTIFY pgrst, 'reload schema';`);
-      continue;
-    }
 
     if ((pkg.classes_used || 0) !== used || (pkg.classes_recoverable || 0) !== recoverable) {
       console.log(`[recalcPackageCounters] Paquete ${pkg.id}: classes_used ${pkg.classes_used} → ${used}, classes_recoverable ${pkg.classes_recoverable} → ${recoverable}`);
@@ -5161,7 +5172,6 @@ async function recalcPackageCounters(studentId) {
         }
       });
     }
-    // También sincronizar las attendances en cache (con su student_package_id corregido)
     if (STATE.studentDetailData?.attendances && allAtt) {
       allAtt.forEach(updated => {
         const cached = STATE.studentDetailData.attendances.find(a => a.id === updated.id);
@@ -5278,8 +5288,8 @@ async function getOrCreateActivePackageId(studentId) {
     const { data: created, error } = await sb.from('student_packages').insert({
       student_id: studentId,
       package_id: fallback.id,
-      purchase_date: new Date().toISOString().slice(0, 10),
-      start_date: new Date().toISOString().slice(0, 10),
+      purchase_date: dateToIsoLocal(new Date()),
+      start_date: dateToIsoLocal(new Date()),
       classes_total: fallback.sessions || fallback.total_classes || 1,
       sessions_total: fallback.sessions || fallback.total_classes || 1,
       classes_used: 0,
@@ -5296,7 +5306,7 @@ async function getOrCreateActivePackageId(studentId) {
   }
 
   // Clonar el último paquete (sin pago — quedará en "Por cobrar")
-  const todayIso = new Date().toISOString().slice(0, 10);
+  const todayIso = dateToIsoLocal(new Date());
   const { data: created, error } = await sb.from('student_packages').insert({
     student_id: studentId,
     package_id: lastPkg.package_id,
@@ -5393,7 +5403,7 @@ function closeAbsenceMenu() {
 async function clearAttendance(studentId, hour) {
   if (!isOnline) return;
   const loc = getCurrentLocation();
-  const dateStr = STATE.currentDate.toISOString().slice(0,10);
+  const dateStr = dateToIsoLocal(STATE.currentDate);
   const session = STATE.classSessions.find(s =>
     s.location_id === loc.id && s.session_date === dateStr && s.hour === hour
   );
@@ -5426,7 +5436,7 @@ function openMoveStudentModal(studentId, fromHour) {
   MOVE_CTX = { studentId, fromHour };
 
   const loc = getCurrentLocation();
-  const dateStr = STATE.currentDate.toISOString().slice(0,10);
+  const dateStr = dateToIsoLocal(STATE.currentDate);
   document.getElementById('move-student-context').innerHTML = `
     <strong>${escape(student.first_name)} ${escape(student.last_name || '')}</strong><br>
     <span style="color: var(--ink-mute);">Clase actual:</span> ${formatHour(fromHour)} · ${dateStr} · ${loc.name}
@@ -5461,7 +5471,7 @@ async function confirmMoveStudent() {
   const newHour = parseInt(document.getElementById('move-hour').value);
   const reason = document.getElementById('move-reason').value.trim();
   const loc = getCurrentLocation();
-  const fromDateStr = STATE.currentDate.toISOString().slice(0,10);
+  const fromDateStr = dateToIsoLocal(STATE.currentDate);
 
   // 1. Asegurar session destino
   const newDate = new Date(newDateStr + 'T12:00:00');
@@ -5549,7 +5559,7 @@ let ADD_FLEX_CTX = { hour: null };
 function openAddFlexibleModal(hour) {
   ADD_FLEX_CTX = { hour };
   const loc = getCurrentLocation();
-  const dateStr = STATE.currentDate.toISOString().slice(0,10);
+  const dateStr = dateToIsoLocal(STATE.currentDate);
   document.getElementById('add-flex-context').innerHTML = `
     <strong>${formatHour(hour)}</strong> · ${dateStr} · ${loc.name}<br>
     <span style="color: var(--ink-mute);">Buscá un alumno por nombre, apellido o documento.</span>
@@ -5667,7 +5677,7 @@ function openClassMenu(hour, evt) {
   evt.stopPropagation();
   closeClassMenu();
   const loc = getCurrentLocation();
-  const dateStr = STATE.currentDate.toISOString().slice(0,10);
+  const dateStr = dateToIsoLocal(STATE.currentDate);
   const session = STATE.classSessions.find(s =>
     s.location_id === loc.id && s.session_date === dateStr && s.hour === hour
   );
@@ -5752,7 +5762,7 @@ async function cancelClass(hour) {
 async function restoreClass(hour) {
   if (!isOnline) return;
   const loc = getCurrentLocation();
-  const dateStr = STATE.currentDate.toISOString().slice(0,10);
+  const dateStr = dateToIsoLocal(STATE.currentDate);
   const session = STATE.classSessions.find(s =>
     s.location_id === loc.id && s.session_date === dateStr && s.hour === hour
   );
@@ -5794,7 +5804,7 @@ async function removeInstructorFromClass(hour) {
   if (idx >= 0) STATE.classSessions[idx].instructor_id = null;
 
   // También guardar override en localStorage para que resolveInstructor lo respete
-  const dateStr = STATE.currentDate.toISOString().slice(0,10);
+  const dateStr = dateToIsoLocal(STATE.currentDate);
   const overrideKey = `${dateStr}-${loc.id}-${hour}`;
   STATE.classOverrides[overrideKey] = '__none__';
   try { localStorage.setItem('classOverrides', JSON.stringify(STATE.classOverrides)); } catch(e) {}
@@ -6128,7 +6138,7 @@ async function renderInstructorDay() {
   const inst = CURRENT_USER.record;
 
   // Estado por defecto
-  if (!STATE.instDayDate) STATE.instDayDate = new Date().toISOString().slice(0,10);
+  if (!STATE.instDayDate) STATE.instDayDate = dateToIsoLocal(new Date());
   if (!STATE.instDayFilter) STATE.instDayFilter = 'today';
 
   const container = document.getElementById('instructor-view-container');
@@ -6170,7 +6180,7 @@ async function renderInstructorDay() {
 // - pending_confirmation + ya pasaron 3+ días desde la clase → not_delivered (perdida)
 async function autoMarkInstructorClassStates(instructorId) {
   if (!isOnline) return;
-  const todayIso = new Date().toISOString().slice(0,10);
+  const todayIso = dateToIsoLocal(new Date());
   const threeDaysAgoIso = new Date(Date.now() - 3 * 86400000).toISOString().slice(0,10);
 
   // 1. Pasar a pending_confirmation las que ya pasaron y están scheduled
@@ -6193,7 +6203,7 @@ async function autoMarkInstructorClassStates(instructorId) {
 // Devuelve clases del profesor con class_status = 'pending_confirmation'
 async function loadInstructorPendingClasses(instructorId) {
   if (!isOnline) return [];
-  const todayIso = new Date().toISOString().slice(0,10);
+  const todayIso = dateToIsoLocal(new Date());
   const { data } = await sb.from('class_sessions')
     .select('id, session_date, hour, location_id, class_status')
     .eq('instructor_id', instructorId)
@@ -6315,7 +6325,7 @@ function renderInstructorStatsBlock(stats) {
 function renderInstructorFiltersBlock() {
   const block = document.querySelector('[data-inst-filters]');
   if (!block) return;
-  const todayIso = new Date().toISOString().slice(0,10);
+  const todayIso = dateToIsoLocal(new Date());
   const tomorrowIso = new Date(Date.now() + 86400000).toISOString().slice(0,10);
   const dateObj = new Date(STATE.instDayDate + 'T12:00:00');
   const dayLabels = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
@@ -6479,7 +6489,7 @@ async function loadInstructorClassesForDate(inst, dateIso) {
 
 function renderInstructorClassCard(c) {
   const now = new Date();
-  const todayIso = now.toISOString().slice(0,10);
+  const todayIso = dateToIsoLocal(now);
   const isToday = c.dateIso === todayIso;
   const isPast = c.dateIso < todayIso;
   const currentHour = now.getHours();
@@ -6644,7 +6654,7 @@ function renderInstructorStudentRow(item, classCtx) {
 
 async function instructorSetDate(filter) {
   STATE.instDayFilter = filter;
-  const today = new Date().toISOString().slice(0,10);
+  const today = dateToIsoLocal(new Date());
   if (filter === 'today') STATE.instDayDate = today;
   else if (filter === 'tomorrow') STATE.instDayDate = new Date(Date.now() + 86400000).toISOString().slice(0,10);
   STATE.instAbsenceMenuOpen = null;
@@ -6960,7 +6970,7 @@ async function instructorRenderCase(caseType, stud, pkg) {
     `;
   } else if (caseType === 'B') {
     // Cargar bookings futuros para swap
-    const todayIso = new Date().toISOString().slice(0,10);
+    const todayIso = dateToIsoLocal(new Date());
     const { data: futureBookings } = await sb.from('session_bookings')
       .select('id, session_id, class_sessions(id, session_date, hour, location_id, is_cancelled)')
       .eq('student_id', stud.id)
@@ -7238,7 +7248,7 @@ async function instructorConfirmInvite() {
 
 async function confirmMyShift() {
   if (!CURRENT_USER || CURRENT_USER.role !== 'instructor') return;
-  const today = new Date().toISOString().slice(0,10);
+  const today = dateToIsoLocal(new Date());
   const key = `shift_confirmed_${CURRENT_USER.record.id}_${today}`;
   localStorage.setItem(key, '1');
   // Idealmente esto va a una tabla shift_confirmations(instructor_id, date, confirmed_at)
@@ -7266,7 +7276,7 @@ async function renderStudentHome() {
     const remaining = (active.classes_total || 0) - (active.classes_used || 0);
 
     // Calcular "por re-agendar" en vivo (clases del paquete que no están agendadas)
-    const todayIso = new Date().toISOString().slice(0,10);
+    const todayIso = dateToIsoLocal(new Date());
     let upcomingCount = 0;
     if (isOnline) {
       const { data: futureBookings } = await sb.from('session_bookings')
@@ -7324,7 +7334,7 @@ function renderStudentClassesFiltered(stud) {
   const upBlock = document.getElementById('student-upcoming-classes');
   if (!upBlock) return;
   const dayLabels = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
-  const todayIso = new Date().toISOString().slice(0,10);
+  const todayIso = dateToIsoLocal(new Date());
   const filter = STATE.studentClassFilter || 'upcoming';
 
   // Calcular rangos de fecha
@@ -7335,8 +7345,8 @@ function renderStudentClassesFiltered(stud) {
   startOfWeek.setDate(startOfWeek.getDate() - daysFromMonday);
   const endOfWeek = new Date(startOfWeek);
   endOfWeek.setDate(endOfWeek.getDate() + 6);
-  const startOfWeekIso = startOfWeek.toISOString().slice(0,10);
-  const endOfWeekIso = endOfWeek.toISOString().slice(0,10);
+  const startOfWeekIso = dateToIsoLocal(startOfWeek);
+  const endOfWeekIso = dateToIsoLocal(endOfWeek);
   const startOfMonthIso = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0,10);
   const endOfMonthIso = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().slice(0,10);
 
@@ -7456,7 +7466,7 @@ async function renderStudentRecoverables(stud) {
     recBlock.innerHTML = '<p style="color: var(--ink-mute); font-size: 13px;">Conexión requerida.</p>';
     return;
   }
-  const todayIso = new Date().toISOString().slice(0,10);
+  const todayIso = dateToIsoLocal(new Date());
 
   // Cargar paquete activo (FIFO) para acotar el rango
   const { data: allPkgs } = await sb.from('student_packages')
@@ -7631,7 +7641,7 @@ async function openAssignPackageModal(studentId) {
   select.innerHTML = '<option value="">Selecciona un paquete</option>' +
     STATE.packages.map(p => `<option value="${p.id}" data-classes="${p.sessions}" data-price="${p.price_pen}">${escape(p.name)} — S/${p.price_pen} (${p.sessions} ${p.sessions===1?'sesión':'sesiones'})</option>`).join('');
 
-  const today = new Date().toISOString().slice(0,10);
+  const today = dateToIsoLocal(new Date());
   document.getElementById('assign-pkg-purchase').value = today;
   document.getElementById('assign-pkg-price').value = '';
   document.getElementById('assign-pkg-classes').value = '';
@@ -7762,7 +7772,7 @@ function openPaymentModal(studentId, packageId, suggestedAmount) {
   document.getElementById('payment-context').innerHTML = `Pago de <strong>${escape(student?.first_name||'')} ${escape(student?.last_name||'')}</strong>`;
   document.getElementById('pay-amount').value = suggestedAmount || '';
   document.getElementById('pay-method').value = 'yape';
-  document.getElementById('pay-date').value = new Date().toISOString().slice(0,10);
+  document.getElementById('pay-date').value = dateToIsoLocal(new Date());
   document.getElementById('pay-reference').value = '';
   document.getElementById('pay-notes').value = '';
   document.getElementById('pay-receipt-url').value = '';
@@ -7817,7 +7827,7 @@ async function saveRegisterPayment() {
     location_id: paymentLocationId,
     amount_pen: amount,
     method: method,
-    payment_date: payDate || new Date().toISOString().slice(0,10),
+    payment_date: payDate || dateToIsoLocal(new Date()),
     reference: reference,
     notes: notes,
     receipt_url: receiptUrl,
@@ -8257,7 +8267,7 @@ function openAssignPackageFromDetail(studentId) {
 
 function renderDetailSummary(stud) {
   const data = STATE.studentDetailData || {};
-  const todayIso = new Date().toISOString().slice(0,10);
+  const todayIso = dateToIsoLocal(new Date());
   const allPackages = data.packages || [];
   const activePkg = getActivePackage(allPackages);
   const upcomingPackages = getUpcomingPackages(allPackages);
@@ -8523,7 +8533,7 @@ function renderDetailSummary(stud) {
 
 function renderDetailClasses(stud) {
   const data = STATE.studentDetailData || {};
-  const todayIso = new Date().toISOString().slice(0,10);
+  const todayIso = dateToIsoLocal(new Date());
   const filter = STATE.studentDetailClassFilter || 'upcoming';
 
   // Calcular rangos
@@ -8534,8 +8544,8 @@ function renderDetailClasses(stud) {
   startOfWeek.setDate(startOfWeek.getDate() - daysFromMonday);
   const endOfWeek = new Date(startOfWeek);
   endOfWeek.setDate(endOfWeek.getDate() + 6);
-  const startOfWeekIso = startOfWeek.toISOString().slice(0,10);
-  const endOfWeekIso = endOfWeek.toISOString().slice(0,10);
+  const startOfWeekIso = dateToIsoLocal(startOfWeek);
+  const endOfWeekIso = dateToIsoLocal(endOfWeek);
   const startOfMonthIso = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0,10);
   const endOfMonthIso = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().slice(0,10);
 
