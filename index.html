@@ -5721,14 +5721,14 @@ function openReplacementModal(student, upcomingBookings, hour) {
   }).join('');
 
   modal.innerHTML = `
-    <div class="modal" style="max-width: 460px;">
+    <div class="modal" style="max-width: 460px; background: white; border-radius: 16px; box-shadow: 0 20px 60px rgba(0,0,0,0.25);">
       <div style="padding: 24px;">
         <div style="margin-bottom: 16px;">
           <div style="font-family: var(--display); font-size: 22px; color: var(--fit-purple); font-style: italic; line-height: 1.2;">
             ${escape(student.first_name)} ya tiene todas sus clases agendadas
           </div>
           <div style="font-size: 13px; color: var(--ink-mute); margin-top: 8px; line-height: 1.5;">
-            Para registrarla en la clase de <strong>${todayLabel} · ${formatHour(hour)}</strong>, elige cuál de sus clases agendadas quieres cancelar para liberar el cupo.
+            Para registrarla en la clase de <strong>${todayLabel} · ${formatHour(hour)}</strong>, elige cuál de sus clases del paquete actual quieres mover a hoy.
           </div>
         </div>
         <div style="max-height: 320px; overflow-y: auto; margin-bottom: 16px;">
@@ -5789,23 +5789,54 @@ async function addStudentToClass(studentId) {
   if (!cap.hasPackage) {
     if (!confirm(`${student.first_name} no tiene paquete activo. ¿Asignar igual como cortesía?`)) return;
   } else if (cap.remaining <= 0) {
-    // No hay cupos libres → cargar bookings futuras y ofrecer reemplazo
+    // No hay cupos libres → cargar bookings del PAQUETE ACTIVO y ofrecer reemplazo
+    // (ignoramos bookings de paquetes futuros — esos se mueven desde el calendario)
     const todayIso = dateToIsoLocal(new Date());
     const { data: futureBookings } = await sb.from('session_bookings')
       .select('id, class_sessions(id, session_date, hour, location_id)')
       .eq('student_id', studentId)
       .is('cancelled_at', null);
-    const upcomingValid = (futureBookings || [])
+
+    // Cargar todos los paquetes para hacer FIFO y saber cuál es el activo
+    const { data: allPkgs } = await sb.from('student_packages')
+      .select('id, classes_total, classes_used, purchase_date, start_date, is_frozen')
+      .eq('student_id', studentId)
+      .eq('is_frozen', false)
+      .order('purchase_date', { ascending: true });
+
+    const sortedPkgs = (allPkgs || []).filter(p => !p.is_frozen);
+    const activePkg = sortedPkgs.find(p => (p.classes_used || 0) < (p.classes_total || 0));
+
+    // Asignar bookings sin attendance al paquete vía FIFO
+    const futureUsageByPkg = new Map();
+    sortedPkgs.forEach(p => futureUsageByPkg.set(p.id, 0));
+    const sortedBookings = (futureBookings || [])
       .filter(b => b.class_sessions && b.class_sessions.session_date >= todayIso)
       .sort((a, b) => a.class_sessions.session_date.localeCompare(b.class_sessions.session_date) || a.class_sessions.hour - b.class_sessions.hour);
 
-    if (upcomingValid.length === 0) {
+    const bookingsOfActivePkg = [];
+    sortedBookings.forEach(b => {
+      const sd = b.class_sessions.session_date;
+      const eligible = sortedPkgs.find(p => {
+        const pkgStart = p.purchase_date || p.start_date || '1900-01-01';
+        if (pkgStart > sd) return false;
+        const libreOriginal = (p.classes_total || 0) - (p.classes_used || 0);
+        const usedByBookings = futureUsageByPkg.get(p.id) || 0;
+        return usedByBookings < libreOriginal;
+      });
+      if (eligible) {
+        futureUsageByPkg.set(eligible.id, (futureUsageByPkg.get(eligible.id) || 0) + 1);
+        if (activePkg && eligible.id === activePkg.id) bookingsOfActivePkg.push(b);
+      }
+    });
+
+    if (bookingsOfActivePkg.length === 0) {
       showToast(`${student.first_name} ya alcanzó su límite (${cap.current}/${cap.max}). Debe renovar antes.`, 'error');
       return;
     }
 
     // Mostrar modal de reemplazo y salir
-    openReplacementModal(student, upcomingValid, ADD_FLEX_CTX.hour);
+    openReplacementModal(student, bookingsOfActivePkg, ADD_FLEX_CTX.hour);
     return;
   }
 
