@@ -3677,6 +3677,28 @@ async function confirmScheduleEditorChanges() {
   // Si la fecha es pasada, también crear attendance 'attended' y marcar la sesión como delivered.
   const stamp2 = new Date().toLocaleString('es-PE', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
   let pastMarkedAttended = 0;
+  let attendanceErrors = 0;
+
+  // Auto-extender purchase_date del paquete si se están agendando clases pasadas anteriores al inicio del paquete
+  // (esto evita que esas clases queden fuera del rango del paquete y por ende no cuenten en classes_used)
+  if (ed.package && toAdd.length > 0) {
+    const earliestAdd = toAdd.map(k => k.split('|')[0]).sort()[0];
+    const currentPurchase = ed.package.purchase_date || ed.package.start_date;
+    if (earliestAdd && currentPurchase && earliestAdd < currentPurchase) {
+      const { error: extErr } = await sb.from('student_packages').update({
+        purchase_date: earliestAdd,
+        start_date: earliestAdd,
+      }).eq('id', ed.package.id);
+      if (extErr) {
+        console.error('Error extendiendo purchase_date:', extErr);
+      } else {
+        ed.package.purchase_date = earliestAdd;
+        ed.package.start_date = earliestAdd;
+        console.log(`[scheduleEditor] purchase_date extendido a ${earliestAdd} (era ${currentPurchase})`);
+      }
+    }
+  }
+
   for (const k of toAdd) {
     const [iso, hourStr] = k.split('|');
     const hour = parseInt(hourStr);
@@ -3701,7 +3723,7 @@ async function confirmScheduleEditorChanges() {
           cancelled_at: null,
           cancelled_reason: null,
         }).eq('id', existing.id);
-        if (error) { errors++; console.error(error); continue; } else added++;
+        if (error) { errors++; console.error('Error re-activando booking:', error); continue; } else added++;
       } else {
         // Ya estaba agendado, no hay nada que hacer (no es error)
         added++;
@@ -3712,7 +3734,7 @@ async function confirmScheduleEditorChanges() {
         student_id: ed.studentId,
         source,
       }).select('id').single();
-      if (error) { errors++; console.error(error); continue; }
+      if (error) { errors++; console.error('Error creando booking:', error); continue; }
       bookingId = newBooking.id;
       added++;
     }
@@ -3737,20 +3759,35 @@ async function confirmScheduleEditorChanges() {
       if (existingAtt) {
         // Solo actualizar si no estaba ya marcada como attended (preserva otras marcas)
         if (existingAtt.status !== 'attended') {
-          await sb.from('attendance').update(attPayload).eq('id', existingAtt.id);
-          pastMarkedAttended++;
+          const { error: updErr } = await sb.from('attendance').update(attPayload).eq('id', existingAtt.id);
+          if (updErr) {
+            console.error('Error updating attendance retroactiva:', updErr);
+            attendanceErrors++;
+          } else {
+            pastMarkedAttended++;
+          }
         }
       } else {
-        await sb.from('attendance').insert(attPayload);
-        pastMarkedAttended++;
+        const { error: insErr } = await sb.from('attendance').insert(attPayload);
+        if (insErr) {
+          console.error('Error insertando attendance retroactiva:', insErr);
+          attendanceErrors++;
+        } else {
+          pastMarkedAttended++;
+        }
       }
 
       // Marcar la sesión como entregada
-      await sb.from('class_sessions').update({
+      const { error: csErr } = await sb.from('class_sessions').update({
         class_status: 'delivered',
         status_changed_at: new Date().toISOString(),
       }).eq('id', sessionId);
+      if (csErr) console.error('Error marcando sesión delivered:', csErr);
     }
+  }
+
+  if (attendanceErrors > 0) {
+    showToast(`⚠ ${attendanceErrors} clase${attendanceErrors === 1 ? '' : 's'} pasada${attendanceErrors === 1 ? '' : 's'} no se marcaron como atendidas. Revisa la consola.`, 'error');
   }
 
   // Recalcular contadores del paquete (siempre, no solo si hay clases pasadas)
