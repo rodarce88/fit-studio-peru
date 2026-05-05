@@ -5684,6 +5684,91 @@ function renderFlexibleSearch() {
   `).join('');
 }
 
+// Modal de reemplazo: cuando un alumno no tiene cupos libres pero tiene clases agendadas
+// para más adelante. Permite cancelar una agendada y usar el cupo HOY.
+function openReplacementModal(student, upcomingBookings, hour) {
+  // Cerrar modal de búsqueda flexible primero
+  document.getElementById('add-flexible-modal')?.classList.remove('is-open');
+
+  // Crear modal dinámico
+  let modal = document.getElementById('replacement-modal');
+  if (modal) modal.remove();
+  modal = document.createElement('div');
+  modal.id = 'replacement-modal';
+  modal.className = 'modal-backdrop is-open';
+  modal.style.zIndex = '1100';
+
+  const todayLabel = formatDate(dateToIsoLocal(STATE.currentDate));
+
+  const rowsHTML = upcomingBookings.map(b => {
+    const sess = b.class_sessions;
+    const lc = STATE.locations.find(l => l.id === sess.location_id);
+    return `
+      <button onclick="executeReplacement('${b.id}', '${student.id}', ${hour})" style="
+        display: flex; align-items: center; justify-content: space-between; width: 100%;
+        background: white; border: 1px solid var(--line); border-radius: 10px;
+        padding: 14px 16px; margin-bottom: 8px; cursor: pointer; text-align: left;
+        transition: all 0.15s;
+      " onmouseover="this.style.background='var(--fit-lavender-pale)'; this.style.borderColor='var(--fit-purple)';"
+         onmouseout="this.style.background='white'; this.style.borderColor='var(--line)';">
+        <div>
+          <div style="font-weight: 500; font-size: 14px; color: var(--ink);">${formatDate(sess.session_date)} · ${formatHour(sess.hour)}</div>
+          <div style="font-size: 11px; color: var(--ink-mute); margin-top: 2px;">${escape(lc?.name || '')}</div>
+        </div>
+        <span style="font-size: 12px; color: var(--fit-purple); font-weight: 500;">Mover a hoy →</span>
+      </button>
+    `;
+  }).join('');
+
+  modal.innerHTML = `
+    <div class="modal" style="max-width: 460px;">
+      <div style="padding: 24px;">
+        <div style="margin-bottom: 16px;">
+          <div style="font-family: var(--display); font-size: 22px; color: var(--fit-purple); font-style: italic; line-height: 1.2;">
+            ${escape(student.first_name)} ya tiene todas sus clases agendadas
+          </div>
+          <div style="font-size: 13px; color: var(--ink-mute); margin-top: 8px; line-height: 1.5;">
+            Para registrarla en la clase de <strong>${todayLabel} · ${formatHour(hour)}</strong>, elige cuál de sus clases agendadas quieres cancelar para liberar el cupo.
+          </div>
+        </div>
+        <div style="max-height: 320px; overflow-y: auto; margin-bottom: 16px;">
+          ${rowsHTML}
+        </div>
+        <div style="display: flex; justify-content: flex-end; gap: 8px;">
+          <button class="btn btn-ghost" onclick="closeReplacementModal()" style="padding: 8px 16px; font-size: 13px;">Cancelar</button>
+        </div>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(modal);
+  modal.onclick = (e) => { if (e.target === modal) closeReplacementModal(); };
+}
+
+function closeReplacementModal() {
+  const modal = document.getElementById('replacement-modal');
+  if (modal) modal.remove();
+}
+
+async function executeReplacement(bookingToCancelId, studentId, hour) {
+  if (!isOnline) { showToast('Conexión requerida', 'error'); return; }
+
+  // 1. Cancelar el booking elegido
+  const { error: cancelErr } = await sb.from('session_bookings')
+    .update({ cancelled_at: new Date().toISOString() })
+    .eq('id', bookingToCancelId);
+  if (cancelErr) {
+    showToast('Error cancelando: ' + cancelErr.message, 'error');
+    return;
+  }
+
+  // 2. Cerrar modales y refrescar contexto
+  closeReplacementModal();
+  ADD_FLEX_CTX = { hour };
+
+  // 3. Re-llamar al flujo original (ahora hay 1 cupo libre)
+  await addStudentToClass(studentId);
+}
+
 async function addStudentToClass(studentId) {
   if (!isOnline) { showToast('Necesita conexión', 'error'); return; }
   const loc = getCurrentLocation();
@@ -5704,7 +5789,23 @@ async function addStudentToClass(studentId) {
   if (!cap.hasPackage) {
     if (!confirm(`${student.first_name} no tiene paquete activo. ¿Asignar igual como cortesía?`)) return;
   } else if (cap.remaining <= 0) {
-    showToast(`${student.first_name} ya alcanzó su límite (${cap.current}/${cap.max}). Debe renovar o liberar otra clase antes.`, 'error');
+    // No hay cupos libres → cargar bookings futuras y ofrecer reemplazo
+    const todayIso = dateToIsoLocal(new Date());
+    const { data: futureBookings } = await sb.from('session_bookings')
+      .select('id, class_sessions(id, session_date, hour, location_id)')
+      .eq('student_id', studentId)
+      .is('cancelled_at', null);
+    const upcomingValid = (futureBookings || [])
+      .filter(b => b.class_sessions && b.class_sessions.session_date >= todayIso)
+      .sort((a, b) => a.class_sessions.session_date.localeCompare(b.class_sessions.session_date) || a.class_sessions.hour - b.class_sessions.hour);
+
+    if (upcomingValid.length === 0) {
+      showToast(`${student.first_name} ya alcanzó su límite (${cap.current}/${cap.max}). Debe renovar antes.`, 'error');
+      return;
+    }
+
+    // Mostrar modal de reemplazo y salir
+    openReplacementModal(student, upcomingValid, ADD_FLEX_CTX.hour);
     return;
   }
 
