@@ -1164,12 +1164,9 @@
       <div class="form-grid">
         <div class="form-row">
           <label>Fecha de compra <span class="req">*</span></label>
-          <input type="date" id="assign-pkg-purchase" required onchange="updateAssignPkgPreview()" />
+          <input type="date" id="assign-pkg-purchase" required />
         </div>
-        <div class="form-row">
-          <label>Vencimiento (auto)</label>
-          <input type="date" id="assign-pkg-expiration" disabled />
-        </div>
+        <input type="hidden" id="assign-pkg-expiration" value="" />
         <div class="form-row">
           <label>Precio pagado (S/)</label>
           <input type="number" id="assign-pkg-price" step="0.01" min="0" />
@@ -1616,11 +1613,10 @@ async function loadRescheduleList() {
   const todayIso = new Date().toISOString().slice(0, 10);
   const locId = STATE.currentLocationId;
 
-  // 1. Paquetes activos
+  // 1. Paquetes vivos (no congelados)
   const { data: pkgs } = await sb.from('student_packages')
-    .select('id, student_id, classes_total, classes_used, classes_recoverable, expiration_date')
-    .eq('is_frozen', false)
-    .gte('expiration_date', todayIso);
+    .select('id, student_id, classes_total, classes_used, classes_recoverable')
+    .eq('is_frozen', false);
 
   if (!pkgs || pkgs.length === 0) {
     countEl.textContent = '0';
@@ -1660,7 +1656,7 @@ async function loadRescheduleList() {
     const current = futureCountByStudent.get(p.student_id) || 0;
     const pending = max - current;
     const stud = STATE.students.find(s => s.id === p.student_id);
-    return { stud, pending, max, current, recoverable: p.classes_recoverable || 0, expiration: p.expiration_date };
+    return { stud, pending, max, current, recoverable: p.classes_recoverable || 0 };
   }).filter(item => item.stud && item.pending > 0)
     .sort((a, b) => {
       if (a.recoverable !== b.recoverable) return b.recoverable - a.recoverable;
@@ -1714,16 +1710,12 @@ async function loadToPayList() {
 
   // Cargar paquetes con saldo pendiente (caso 2: alumnas con paquete sin pagar completo)
   const { data: allPkgs } = await sb.from('student_packages')
-    .select('id, student_id, price_paid, classes_total, expiration_date, end_date, is_frozen');
+    .select('id, student_id, price_paid, classes_total, is_frozen');
 
-  const todayIso = new Date().toISOString().slice(0,10);
-
-  // Para cada paquete activo no congelado, sumar pagos y comparar con price_paid
+  // Para cada paquete no congelado, sumar pagos y comparar con price_paid
   const pkgsWithBalance = [];
   for (const pkg of (allPkgs || [])) {
     if (pkg.is_frozen === true) continue;
-    const endRange = pkg.expiration_date || pkg.end_date;
-    if (endRange && endRange < todayIso) continue; // vencido
     const price = parseFloat(pkg.price_paid || 0);
     if (price <= 0) continue; // sin precio definido, asumir gratis o no aplica
 
@@ -2742,17 +2734,14 @@ async function selectStudentForAssign(studentId) {
   const student = STATE.students.find(s => s.id === studentId);
   if (!student) return;
   STATE.assignCtx.selectedStudent = student;
-  // Cargar paquete activo del alumno para conocer expiration_date (límite del mini calendario)
+  // Cargar paquete activo del alumno (FIFO = más antiguo con clases libres)
   if (isOnline) {
-    const todayIso = new Date().toISOString().slice(0, 10);
-    const { data: pkg } = await sb.from('student_packages')
-      .select('id, expiration_date, end_date, classes_total, classes_used, classes_recoverable')
+    const { data: allPkgs } = await sb.from('student_packages')
+      .select('id, classes_total, classes_used, classes_recoverable, purchase_date, start_date, is_frozen')
       .eq('student_id', studentId)
       .eq('is_frozen', false)
-      .gte('expiration_date', todayIso)
-      .order('purchase_date', { ascending: false })
-      .limit(1)
-      .maybeSingle();
+      .order('purchase_date', { ascending: true });
+    const pkg = (allPkgs || []).find(p => (p.classes_used || 0) < (p.classes_total || 0));
     STATE.assignCtx.studentActivePackage = pkg || null;
 
     // Cargar fechas ya agendadas del alumno (futuras, no canceladas)
@@ -2791,7 +2780,7 @@ function renderAssignStep2Repeat() {
       <div class="student-avatar" style="width: 36px; height: 36px; font-size: 13px;">${initials(stud)}</div>
       <div style="flex: 1;">
         <div style="font-weight: 500; font-size: 14px;">${escape(stud.first_name)} ${escape(stud.last_name || '')}</div>
-        <div style="font-size: 11px; color: var(--ink-mute);">${pkg ? `Paquete: ${remaining} restantes${recoverable > 0 ? ` + ${recoverable} recuperable${recoverable === 1 ? '' : 's'}` : ''}${pkg.expiration_date ? ' · vence ' + formatDate(pkg.expiration_date) : ''}` : 'Sin paquete activo'}</div>
+        <div style="font-size: 11px; color: var(--ink-mute);">${pkg ? `Paquete: ${remaining} restantes${recoverable > 0 ? ` + ${recoverable} recuperable${recoverable === 1 ? '' : 's'}` : ''}` : 'Sin paquete activo'}</div>
       </div>
       <button onclick="STATE.assignCtx.selectedStudent = null; renderAssignStudentModal();" style="padding: 4px 10px; background: transparent; border: 1px solid var(--line); border-radius: 999px; font-size: 11px; cursor: pointer;">Cambiar</button>
     </div>
@@ -2835,7 +2824,7 @@ function renderMiniCalendar() {
   const monthIdx = month.getMonth();
   const monthLabels = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
   const pkg = ctx.studentActivePackage;
-  const maxDateIso = pkg ? (pkg.expiration_date || pkg.end_date) : null;
+  const maxDateIso = null; // los paquetes ya no vencen
   const primaryIso = ctx.primaryDate.toISOString().slice(0, 10);
 
   // Total que el alumno puede asignar = restantes del paquete (las recuperables NO suman extra)
@@ -3045,14 +3034,14 @@ async function getStudentBookingCapacity(studentId) {
   if (!isOnline) return { hasPackage: false, max: 0, current: 0, remaining: 0, pendingToReschedule: 0 };
   const todayIso = new Date().toISOString().slice(0, 10);
 
-  const { data: pkg } = await sb.from('student_packages')
-    .select('id, classes_total, classes_used, classes_recoverable, expiration_date, end_date, purchase_date, start_date')
+  // Cargar todos los paquetes y buscar el activo (FIFO = más antiguo con clases libres)
+  const { data: allPkgs } = await sb.from('student_packages')
+    .select('id, classes_total, classes_used, classes_recoverable, purchase_date, start_date, is_frozen')
     .eq('student_id', studentId)
     .eq('is_frozen', false)
-    .gte('expiration_date', todayIso)
-    .order('purchase_date', { ascending: false })
-    .limit(1)
-    .maybeSingle();
+    .order('purchase_date', { ascending: true });
+
+  const pkg = (allPkgs || []).find(p => (p.classes_used || 0) < (p.classes_total || 0));
 
   if (!pkg) return { hasPackage: false, max: 0, current: 0, remaining: 0, pendingToReschedule: 0, pkg: null };
 
@@ -3126,22 +3115,21 @@ async function openStudentScheduleEditor(studentId, locationId) {
           ed.monthDate = new Date(y, m - 1, 1);
         }
       }
-      // Si el paquete está completado, mostrar mensaje en lugar del calendario
-      if ((ed.package.classes_used || 0) >= (ed.package.classes_total || 0)) {
-        document.getElementById('schedule-editor-body').innerHTML = `
-          <div style="padding: 50px 24px; text-align: center;">
-            <div style="font-size: 36px; margin-bottom: 14px;">🏁</div>
-            <div style="font-family: var(--display); font-size: 22px; color: var(--fit-purple); margin-bottom: 8px;">Paquete completado</div>
-            <div style="font-size: 13px; color: var(--ink-mute); margin-bottom: 24px; max-width: 380px; margin-left: auto; margin-right: auto; line-height: 1.5;">
-              ${escape(stud.first_name)} ya consumió las ${ed.package.classes_total} clases de este paquete. Renueva el paquete para poder agendar nuevas clases.
-            </div>
-            <div style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;">
-              <button class="btn btn-ghost" onclick="closeModals()" style="padding: 9px 18px;">Cerrar</button>
-              <button class="btn btn-primary" onclick="closeModals(); openAssignPackageModal('${studentId}')" style="padding: 9px 18px;">Renovar paquete</button>
-            </div>
-          </div>`;
-        return;
-      }
+    } else {
+      // Sin paquete activo (todos completados o sin paquetes): mostrar mensaje
+      document.getElementById('schedule-editor-body').innerHTML = `
+        <div style="padding: 50px 24px; text-align: center;">
+          <div style="font-size: 36px; margin-bottom: 14px;">🏁</div>
+          <div style="font-family: var(--display); font-size: 22px; color: var(--fit-purple); margin-bottom: 8px;">Sin paquete activo</div>
+          <div style="font-size: 13px; color: var(--ink-mute); margin-bottom: 24px; max-width: 380px; margin-left: auto; margin-right: auto; line-height: 1.5;">
+            ${escape(stud.first_name)} no tiene un paquete con clases libres. Asigna un paquete nuevo para poder agendar clases.
+          </div>
+          <div style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;">
+            <button class="btn btn-ghost" onclick="closeModals()" style="padding: 9px 18px;">Cerrar</button>
+            <button class="btn btn-primary" onclick="closeModals(); openAssignPackageModal('${studentId}')" style="padding: 9px 18px;">Asignar paquete</button>
+          </div>
+        </div>`;
+      return;
     }
     renderScheduleEditor();
   } catch (err) {
@@ -3164,20 +3152,30 @@ function renderScheduleEditorLoading() {
 
 async function loadScheduleEditorData() {
   const ed = STATE.scheduleEditor;
-  const todayIso = new Date().toISOString().slice(0, 10);
 
-  console.log('[schedEditor] step 1: load package');
+  console.log('[schedEditor] step 1: load packages');
+  // Cargar TODOS los paquetes del alumno (no solo el activo)
   const pkgResp = await sb.from('student_packages')
-    .select('id, expiration_date, end_date, classes_total, classes_used, classes_recoverable, purchase_date, start_date')
+    .select('id, classes_total, classes_used, classes_recoverable, purchase_date, start_date, is_frozen, packages(name, price_pen)')
     .eq('student_id', ed.studentId)
-    .eq('is_frozen', false)
-    .gte('expiration_date', todayIso)
-    .order('purchase_date', { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  if (pkgResp.error) throw new Error('Paquete: ' + pkgResp.error.message);
-  ed.package = pkgResp.data || null;
-  console.log('[schedEditor] package:', ed.package);
+    .order('purchase_date', { ascending: true });
+  if (pkgResp.error) throw new Error('Paquetes: ' + pkgResp.error.message);
+
+  const allPackages = pkgResp.data || [];
+  // Paquetes vivos: no congelados, con clases libres
+  const livePackages = allPackages.filter(p => {
+    if (p.is_frozen) return false;
+    return (p.classes_used || 0) < (p.classes_total || 0);
+  });
+  // Paquete activo (FIFO) = el más antiguo con clases libres
+  const activePackage = livePackages[0] || null;
+
+  ed.allPackages = allPackages;
+  ed.livePackages = livePackages;
+  ed.package = activePackage;
+  // targetPackageId: paquete elegido por la coordinadora (default = activo)
+  ed.targetPackageId = activePackage ? activePackage.id : null;
+  console.log('[schedEditor] live packages:', livePackages.length, 'active:', activePackage?.id);
 
   console.log('[schedEditor] step 2: load bookings');
   const bookingsResp = await sb.from('session_bookings')
@@ -3190,22 +3188,29 @@ async function loadScheduleEditorData() {
   console.log('[schedEditor] step 3: load attendances');
   const bookingIds = bookings.map(b => b.id);
   let attendanceMap = new Map();
+  let attendancePkgMap = new Map();   // booking_id → student_package_id
   if (bookingIds.length > 0) {
     const attResp = await sb.from('attendance')
-      .select('booking_id, status')
+      .select('booking_id, status, student_package_id')
       .in('booking_id', bookingIds);
     if (attResp.error) throw new Error('Attendance: ' + attResp.error.message);
-    (attResp.data || []).forEach(a => attendanceMap.set(a.booking_id, a.status));
+    (attResp.data || []).forEach(a => {
+      attendanceMap.set(a.booking_id, a.status);
+      if (a.student_package_id) attendancePkgMap.set(a.booking_id, a.student_package_id);
+    });
   }
 
   ed.original = new Set();
   ed.consumed = new Set();
   ed.missed = new Set();
+  ed.bookingPkgMap = new Map();   // key (date|hour) → student_package_id (de la attendance existente)
   bookings.forEach(b => {
     const cs = b.class_sessions;
     if (!cs || cs.is_cancelled) return;
     const k = `${cs.session_date}|${cs.hour}`;
     const att = attendanceMap.get(b.id);
+    const attPkg = attendancePkgMap.get(b.id);
+    if (attPkg) ed.bookingPkgMap.set(k, attPkg);
 
     // Si tiene attendance, está consumida o perdida (sin importar si es pasada o futura)
     if (att === 'attended') {
@@ -3319,12 +3324,25 @@ function _renderScheduleEditorImpl() {
   const ed = STATE.scheduleEditor;
   if (!ed) return;
   const stud = ed.student;
-  const pkg = ed.package;
-  // Modelo: max = classes_total - classes_used (recuperables NO suman crédito extra,
-  // son contador histórico informativo)
-  const max = pkg ? Math.max(0, (pkg.classes_total || 0) - (pkg.classes_used || 0)) : 0;
+
+  // Encontrar el paquete actualmente apuntado (target)
+  const targetPkg = ed.targetPackageId
+    ? (ed.allPackages || []).find(p => p.id === ed.targetPackageId)
+    : ed.package;
+
+  // Solo contar selected/original que apuntan al paquete actual (para el max y el conteo)
+  const selectedForTarget = new Set();
+  ed.selected.forEach(k => {
+    // Si la celda tenía pkg asignado de antes y NO es del target → no cuenta
+    const existingPkg = ed.bookingPkgMap.get(k);
+    if (existingPkg && existingPkg !== ed.targetPackageId) return;
+    selectedForTarget.add(k);
+  });
+
+  // Modelo: max = classes_total - classes_used del paquete target
+  const max = targetPkg ? Math.max(0, (targetPkg.classes_total || 0) - (targetPkg.classes_used || 0)) : 0;
   const remaining = max;
-  const recoverable = pkg ? (pkg.classes_recoverable || 0) : 0;
+  const recoverable = targetPkg ? (targetPkg.classes_recoverable || 0) : 0;
 
   // Diff
   const toAdd = [], toCancel = [];
@@ -3332,10 +3350,31 @@ function _renderScheduleEditorImpl() {
   ed.original.forEach(k => { if (!ed.selected.has(k)) toCancel.push(k); });
   const hasChanges = toAdd.length > 0 || toCancel.length > 0;
 
-  const pending = max - ed.selected.size;
+  const pending = max - selectedForTarget.size;
   const monthLabels = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
   const monthLabel = `${monthLabels[ed.monthDate.getMonth()]} ${ed.monthDate.getFullYear()}`;
   const loc = STATE.locations.find(l => l.id === ed.locationId);
+
+  // Selector de paquete (solo si hay 2+ paquetes vivos)
+  const livePkgs = ed.livePackages || [];
+  const hasMultiplePackages = livePkgs.length > 1;
+  const pkgOptionsHtml = hasMultiplePackages ? `
+    <div style="padding: 12px 24px; background: var(--fit-lavender-pale); border-bottom: 1px solid var(--line);">
+      <div style="font-size: 11px; color: var(--ink-mute); margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px;">Estás añadiendo clases al paquete:</div>
+      <select onchange="changeScheduleEditorTargetPackage(this.value)" style="width: 100%; padding: 8px 10px; border: 1px solid var(--line); border-radius: 6px; font-size: 13px; background: white; color: var(--ink); font-family: inherit;">
+        ${livePkgs.map((p, idx) => {
+          const restantes = (p.classes_total || 0) - (p.classes_used || 0);
+          const isActive = idx === 0;
+          const label = `${escape(p.packages?.name || `Paquete ${p.classes_total}`)} · ${restantes} libre${restantes === 1 ? '' : 's'} · compra ${formatDate(p.purchase_date)}${isActive ? ' · ACTIVO' : ''}`;
+          return `<option value="${p.id}" ${p.id === ed.targetPackageId ? 'selected' : ''}>${label}</option>`;
+        }).join('')}
+      </select>
+    </div>
+  ` : '';
+
+  const pkgInfoLine = targetPkg
+    ? `Paquete ${targetPkg.classes_total} · ${remaining} restantes${recoverable > 0 ? ` + ${recoverable} recuperable${recoverable === 1 ? '' : 's'}` : ''}`
+    : 'Sin paquete activo';
 
   document.getElementById('schedule-editor-body').innerHTML = `
     <div style="padding: 4px 24px 14px; border-bottom: 1px solid var(--line); display: flex; align-items: flex-start; justify-content: space-between; gap: 16px;">
@@ -3344,18 +3383,20 @@ function _renderScheduleEditorImpl() {
           <div class="student-avatar" style="width: 30px; height: 30px; font-size: 11px;">${initials(stud)}</div>
           <div>
             <div style="font-size: 14px; font-weight: 500;">${escape(stud.first_name)} ${escape(stud.last_name || '')}</div>
-            <div style="font-size: 11px; color: var(--ink-mute); margin-top: 1px;">${pkg ? `Paquete ${pkg.classes_total} · ${remaining} restantes${recoverable > 0 ? ` + ${recoverable} recuperable${recoverable === 1 ? '' : 's'}` : ''} · vence ${formatDate(pkg.expiration_date)}` : 'Sin paquete activo'}</div>
+            <div style="font-size: 11px; color: var(--ink-mute); margin-top: 1px;">${pkgInfoLine}</div>
           </div>
         </div>
       </div>
       <div style="text-align: right;">
         <div style="padding: 4px 14px; background: var(--fit-cream); border-radius: 10px; min-width: 90px;">
-          <div style="font-size: 22px; font-weight: 500; color: var(--fit-purple); line-height: 1.1;">${ed.selected.size}<span style="color: var(--ink-faint); font-size: 16px;">/${max}</span></div>
+          <div style="font-size: 22px; font-weight: 500; color: var(--fit-purple); line-height: 1.1;">${selectedForTarget.size}<span style="color: var(--ink-faint); font-size: 16px;">/${max}</span></div>
           <div style="font-size: 9px; color: var(--ink-mute); text-transform: uppercase; letter-spacing: 0.5px; margin-top: 2px;">agendadas</div>
         </div>
         ${pending > 0 ? `<div style="margin-top: 6px; font-size: 10px; color: #8B6F1A; padding: 3px 8px; background: #FCEBA8; border-radius: 999px; display: inline-block;">${pending} sin agendar</div>` : ''}
       </div>
     </div>
+
+    ${pkgOptionsHtml}
 
     ${hasChanges ? `
       <div style="padding: 8px 24px; background: var(--fit-lavender-pale); font-size: 11px; color: var(--fit-purple); border-bottom: 1px solid var(--line);">
@@ -3450,13 +3491,11 @@ function renderScheduleEditorMonthGrid() {
 function renderScheduleEditorDayCell(d) {
   const ed = STATE.scheduleEditor;
   const todayIso = new Date().toISOString().slice(0, 10);
-  const expirationIso = ed.package ? (ed.package.expiration_date || ed.package.end_date) : null;
   const past = d.iso < todayIso;
-  const expired = expirationIso && d.iso > expirationIso;
   const oob = !d.inMonth;
 
   let bg = '#F5F0E5';
-  if (d.inMonth && !expired) {
+  if (d.inMonth) {
     let avail = 0;
     SCHED_HOURS.forEach(h => {
       const occ = ed.occupancyByKey.get(`${d.iso}|${h}`) || 0;
@@ -3471,16 +3510,14 @@ function renderScheduleEditorDayCell(d) {
       else if (avail >= 1) bg = '#F5E9CC';
       else bg = '#F8D9D9';
     }
-  } else if (expired) {
-    bg = '#EFEBE0';
   }
 
-  const op = oob || expired ? 0.5 : (past ? 0.75 : 1);
+  const op = oob ? 0.5 : (past ? 0.75 : 1);
   const hasSel = d.inMonth && Array.from(ed.selected).some(k => k.startsWith(d.iso + '|'));
   const hasConsumed = d.inMonth && Array.from(ed.consumed).some(k => k.startsWith(d.iso + '|'));
 
   let dispLabel = '';
-  if (d.inMonth && !expired) {
+  if (d.inMonth) {
     let avail = 0;
     SCHED_HOURS.forEach(h => {
       const occ = ed.occupancyByKey.get(`${d.iso}|${h}`) || 0;
@@ -3505,8 +3542,18 @@ function renderScheduleEditorDayCell(d) {
 function renderScheduleEditorWeekDetail(week) {
   const ed = STATE.scheduleEditor;
   const todayIso = new Date().toISOString().slice(0, 10);
-  const expirationIso = ed.package ? (ed.package.expiration_date || ed.package.end_date) : null;
-  const max = ed.package ? Math.max(0, (ed.package.classes_total || 0) - (ed.package.classes_used || 0)) : 0;
+  // Usar el paquete target (el que la coordinadora eligió en el selector)
+  const targetPkg = ed.targetPackageId
+    ? (ed.allPackages || []).find(p => p.id === ed.targetPackageId)
+    : ed.package;
+  const max = targetPkg ? Math.max(0, (targetPkg.classes_total || 0) - (targetPkg.classes_used || 0)) : 0;
+  // Contar selecciones para el target (excluyendo las que pertenecen a otros pkgs)
+  let selectedForTarget = 0;
+  ed.selected.forEach(k => {
+    const existingPkg = ed.bookingPkgMap.get(k);
+    if (existingPkg && existingPkg !== ed.targetPackageId) return;
+    selectedForTarget++;
+  });
   const dayLabels = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
   const monthLabels = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
 
@@ -3526,8 +3573,7 @@ function renderScheduleEditorWeekDetail(week) {
 
     week.forEach(d => {
       const past = d.iso < todayIso;
-      const expired = expirationIso && d.iso > expirationIso;
-      const oob = !d.inMonth || expired;
+      const oob = !d.inMonth;
       const k = `${d.iso}|${hour}`;
       const isSel = ed.selected.has(k);
       const wasOriginal = ed.original.has(k);
@@ -3535,7 +3581,7 @@ function renderScheduleEditorWeekDetail(week) {
       const isMissed = ed.missed.has(k);
       const occCount = ed.occupancyByKey.get(k) || 0;
       const isFull = occCount >= ed.capacity;
-      const cantSelect = !isSel && ed.selected.size >= max && max > 0;
+      const cantSelect = !isSel && selectedForTarget >= max && max > 0;
 
       let bg = '#fff', col = 'var(--ink)', txt = '', cursor = 'pointer', extra = '', mark = '';
 
@@ -3591,14 +3637,58 @@ function toggleScheduleEditorWeek(idx) {
 
 function toggleScheduleEditorSlot(key) {
   const ed = STATE.scheduleEditor;
-  const max = ed.package ? Math.max(0, (ed.package.classes_total || 0) - (ed.package.classes_used || 0)) : 0;
+  const targetPkg = ed.targetPackageId
+    ? (ed.allPackages || []).find(p => p.id === ed.targetPackageId)
+    : ed.package;
+  const max = targetPkg ? Math.max(0, (targetPkg.classes_total || 0) - (targetPkg.classes_used || 0)) : 0;
+
+  // Contar cuántas selecciones nuevas se imputarán al targetPkg (excluir las que ya pertenecen a otros pkgs)
+  let countForTarget = 0;
+  ed.selected.forEach(k => {
+    const existingPkg = ed.bookingPkgMap.get(k);
+    if (existingPkg && existingPkg !== ed.targetPackageId) return;
+    countForTarget++;
+  });
+
   if (ed.selected.has(key)) {
     ed.selected.delete(key);
-  } else if (ed.selected.size < max) {
+  } else if (countForTarget < max) {
     ed.selected.add(key);
   } else {
-    showToast(`Has alcanzado el límite de ${max} clases`, 'error');
+    showToast(`Has alcanzado el límite de ${max} clases del paquete elegido. Cambia de paquete arriba o cancela alguna selección.`, 'error');
     return;
+  }
+  renderScheduleEditor();
+}
+
+// Cambiar el paquete al que se imputarán las nuevas clases
+async function changeScheduleEditorTargetPackage(pkgId) {
+  const ed = STATE.scheduleEditor;
+  if (!ed) return;
+  ed.targetPackageId = pkgId;
+  // Si hay cambios pendientes (toAdd) que excederían el cupo del nuevo paquete, los limpiamos
+  // Solo mantenemos las selecciones que ya estaban originalmente o que caben en el cupo
+  const targetPkg = (ed.allPackages || []).find(p => p.id === pkgId);
+  if (targetPkg) {
+    const max = Math.max(0, (targetPkg.classes_total || 0) - (targetPkg.classes_used || 0));
+    // Recalcular contador de selecciones para el target
+    let countForTarget = 0;
+    const toRemove = [];
+    Array.from(ed.selected).forEach(k => {
+      // Si la selección ya estaba originalmente con otro paquete, no cuenta
+      const existingPkg = ed.bookingPkgMap.get(k);
+      if (existingPkg && existingPkg !== pkgId) return;
+      if (countForTarget < max) {
+        countForTarget++;
+      } else if (!ed.original.has(k)) {
+        // Excede el cupo y es una selección nueva → quitar
+        toRemove.push(k);
+      }
+    });
+    toRemove.forEach(k => ed.selected.delete(k));
+    if (toRemove.length > 0) {
+      showToast(`Se quitaron ${toRemove.length} selección${toRemove.length === 1 ? '' : 'es'} que excedían el cupo del paquete nuevo.`, 'warning');
+    }
   }
   renderScheduleEditor();
 }
@@ -3746,6 +3836,7 @@ async function confirmScheduleEditorChanges() {
         .eq('booking_id', bookingId)
         .maybeSingle();
 
+      // Usar el paquete seleccionado en el editor (default = activo FIFO)
       const attPayload = {
         booking_id: bookingId,
         session_id: sessionId,
@@ -3755,6 +3846,7 @@ async function confirmScheduleEditorChanges() {
         counts_against_package: true,
         notes: `[${stamp2}] Agendada retroactivamente por ${actor} · marcada como atendida`,
         marked_at: new Date().toISOString(),
+        student_package_id: ed.targetPackageId || (ed.package ? ed.package.id : null),
       };
       if (existingAtt) {
         // Solo actualizar si no estaba ya marcada como attended (preserva otras marcas)
@@ -4866,6 +4958,13 @@ async function markAttendance(studentId, hour, status, notes) {
 
   // 5. Upsert attendance
   const existing = STATE.attendances.find(a => a.booking_id === booking.id);
+
+  // Si la asistencia cuenta contra el paquete, obtener el paquete activo (FIFO) o auto-crear uno
+  let pkgId = null;
+  if (countsAgainst) {
+    pkgId = await getOrCreateActivePackageId(studentId);
+  }
+
   const payload = {
     booking_id: booking.id,
     student_id: studentId,
@@ -4875,6 +4974,7 @@ async function markAttendance(studentId, hour, status, notes) {
     is_recoverable: isRecoverable,
     counts_against_package: countsAgainst,
     marked_at: new Date().toISOString(),
+    student_package_id: pkgId,
   };
 
   if (existing) {
@@ -4954,69 +5054,196 @@ async function markAttendance(studentId, hour, status, notes) {
 // cambio en attendance (mark/clear/update).
 async function recalcPackageCounters(studentId) {
   if (!isOnline) return;
-  const todayIso = new Date().toISOString().slice(0,10);
 
-  // Buscar paquete activo: traer todos del alumno y filtrar en JS para soportar NULLs
+  // Cargar TODOS los paquetes del alumno (no solo el "activo")
   const { data: allPkgs } = await sb.from('student_packages')
-    .select('id, classes_total, purchase_date, expiration_date, start_date, end_date, is_frozen')
+    .select('id, classes_total, classes_used, classes_recoverable, purchase_date, start_date, is_frozen')
     .eq('student_id', studentId);
 
-  const activePkgs = (allPkgs || []).filter(p => {
-    if (p.is_frozen) return false;
-    const endRange = p.expiration_date || p.end_date;
-    if (!endRange) return true; // sin fecha de vencimiento → considerar activo
-    return endRange >= todayIso;
-  });
-
-  // Ordenar por fecha de compra descendente (purchase_date o start_date)
-  activePkgs.sort((a, b) => {
-    const da = a.purchase_date || a.start_date || '1900-01-01';
-    const db = b.purchase_date || b.start_date || '1900-01-01';
-    return db.localeCompare(da);
-  });
-
-  const pkg = activePkgs[0];
-  if (!pkg) {
-    console.warn('[recalcPackageCounters] No active package for student', studentId);
+  if (!allPkgs || allPkgs.length === 0) {
+    console.warn('[recalcPackageCounters] No packages for student', studentId);
     return;
   }
 
-  const startRange = pkg.purchase_date || pkg.start_date;
-  const endRange = pkg.expiration_date || pkg.end_date;
-
-  // Cargar todos los attendance del alumno con la fecha de la sesión
+  // Cargar todas las attendances del alumno con su student_package_id
   const { data: allAtt } = await sb.from('attendance')
-    .select('counts_against_package, is_recoverable, class_sessions(session_date)')
+    .select('counts_against_package, is_recoverable, student_package_id')
     .eq('student_id', studentId);
 
-  const inRange = (allAtt || []).filter(a => {
-    const date = a.class_sessions?.session_date;
-    if (!date) return false;
-    if (startRange && date < startRange) return false;
-    if (endRange && date > endRange) return false;
-    return true;
-  });
+  // Recalcular cada paquete usando student_package_id
+  for (const pkg of allPkgs) {
+    const myAtts = (allAtt || []).filter(a => a.student_package_id === pkg.id);
+    const used = myAtts.filter(a => a.counts_against_package).length;
+    const recoverable = myAtts.filter(a => a.is_recoverable).length;
 
-  const used = inRange.filter(a => a.counts_against_package).length;
-  const recoverable = inRange.filter(a => a.is_recoverable).length;
-
-  await sb.from('student_packages').update({
-    classes_used: used,
-    classes_recoverable: recoverable,
-  }).eq('id', pkg.id);
+    if ((pkg.classes_used || 0) !== used || (pkg.classes_recoverable || 0) !== recoverable) {
+      await sb.from('student_packages').update({
+        classes_used: used,
+        classes_recoverable: recoverable,
+      }).eq('id', pkg.id);
+      pkg.classes_used = used;
+      pkg.classes_recoverable = recoverable;
+    }
+  }
 
   // Refrescar la vista detalle si está abierta para este alumno
   if (STATE.studentDetailId === studentId && document.getElementById('view-student-detail')?.classList.contains('is-active')) {
-    // Actualizar el cache local sin re-fetchear todo
     if (STATE.studentDetailData?.packages) {
-      const cached = STATE.studentDetailData.packages.find(p => p.id === pkg.id);
-      if (cached) {
-        cached.classes_used = used;
-        cached.classes_recoverable = recoverable;
-      }
+      // Sincronizar el cache local con los nuevos valores
+      allPkgs.forEach(updated => {
+        const cached = STATE.studentDetailData.packages.find(p => p.id === updated.id);
+        if (cached) {
+          cached.classes_used = updated.classes_used;
+          cached.classes_recoverable = updated.classes_recoverable;
+        }
+      });
     }
     renderStudentDetail();
   }
+}
+
+// ============================================
+// PAQUETE ACTIVO (FIFO): el más antiguo con clases libres
+// ============================================
+function getActivePackage(packages) {
+  if (!packages || packages.length === 0) return null;
+  // Filtrar paquetes vivos (no congelados, con clases libres)
+  const alive = packages.filter(p => {
+    if (p.is_frozen) return false;
+    const used = p.classes_used || 0;
+    const total = p.classes_total || 0;
+    return used < total;
+  });
+  if (alive.length === 0) return null;
+  // FIFO: el más antiguo primero
+  alive.sort((a, b) => {
+    const da = a.purchase_date || a.start_date || '1900-01-01';
+    const db = b.purchase_date || b.start_date || '1900-01-01';
+    return da.localeCompare(db);
+  });
+  return alive[0];
+}
+
+// Devuelve los paquetes "futuros" (ya comprados pero aún sin tocar el activo)
+function getUpcomingPackages(packages) {
+  const active = getActivePackage(packages);
+  if (!packages || !active) return [];
+  return packages.filter(p => {
+    if (p.id === active.id) return false;
+    if (p.is_frozen) return false;
+    const used = p.classes_used || 0;
+    const total = p.classes_total || 0;
+    return used < total;
+  }).sort((a, b) => {
+    const da = a.purchase_date || a.start_date || '1900-01-01';
+    const db = b.purchase_date || b.start_date || '1900-01-01';
+    return da.localeCompare(db);
+  });
+}
+
+// Devuelve los paquetes completados (sin clases libres)
+function getCompletedPackages(packages) {
+  if (!packages) return [];
+  return packages.filter(p => {
+    const used = p.classes_used || 0;
+    const total = p.classes_total || 0;
+    return used >= total && total > 0;
+  }).sort((a, b) => {
+    const da = b.purchase_date || b.start_date || '1900-01-01';
+    const db = a.purchase_date || a.start_date || '1900-01-01';
+    return da.localeCompare(db);
+  });
+}
+
+// Suma de clases libres en TODOS los paquetes vivos del alumno
+function totalRemainingClasses(packages) {
+  if (!packages) return 0;
+  return packages.reduce((sum, p) => {
+    if (p.is_frozen) return sum;
+    const used = p.classes_used || 0;
+    const total = p.classes_total || 0;
+    return sum + Math.max(0, total - used);
+  }, 0);
+}
+
+// ============================================
+// ASIGNACIÓN AUTOMÁTICA DE PAQUETE A UNA ATTENDANCE
+// Devuelve el student_package_id del paquete activo del alumno (FIFO).
+// Si NO hay paquete activo: auto-crea uno del mismo tipo que el último que tuvo,
+// sin pago registrado → queda en "Por cobrar". La coordinadora puede editarlo.
+// ============================================
+async function getOrCreateActivePackageId(studentId) {
+  // 1. Buscar paquete activo en BD (FIFO)
+  const { data: pkgs } = await sb.from('student_packages')
+    .select('id, package_id, classes_total, classes_used, purchase_date, start_date, is_frozen, price_paid')
+    .eq('student_id', studentId)
+    .order('purchase_date', { ascending: true });
+
+  const active = (pkgs || []).find(p => {
+    if (p.is_frozen) return false;
+    const used = p.classes_used || 0;
+    return used < (p.classes_total || 0);
+  });
+
+  if (active) return active.id;
+
+  // 2. No hay paquete activo → auto-crear uno del mismo tipo que el último que tuvo
+  // Tomar el último paquete por purchase_date para clonar package_id, classes_total, price_paid
+  const lastPkg = (pkgs || []).slice().sort((a, b) => {
+    const da = b.purchase_date || b.start_date || '1900-01-01';
+    const db = a.purchase_date || a.start_date || '1900-01-01';
+    return da.localeCompare(db);
+  })[0];
+
+  if (!lastPkg) {
+    // El alumno NUNCA tuvo paquete: usar el primero del catálogo como fallback
+    const fallback = STATE.packages?.[0];
+    if (!fallback) {
+      console.error('[getOrCreateActivePackageId] No hay catálogo de paquetes');
+      return null;
+    }
+    const { data: created, error } = await sb.from('student_packages').insert({
+      student_id: studentId,
+      package_id: fallback.id,
+      purchase_date: new Date().toISOString().slice(0, 10),
+      start_date: new Date().toISOString().slice(0, 10),
+      classes_total: fallback.sessions || fallback.total_classes || 1,
+      sessions_total: fallback.sessions || fallback.total_classes || 1,
+      classes_used: 0,
+      classes_recoverable: 0,
+      is_frozen: false,
+      price_paid: fallback.price_pen || 0,
+    }).select('id').single();
+    if (error) {
+      console.error('[getOrCreateActivePackageId] Error auto-creando paquete fallback:', error);
+      return null;
+    }
+    showToast('⚠ Auto-creé un paquete (sin pago) para registrar la clase. Edítalo desde el perfil.', 'warning');
+    return created.id;
+  }
+
+  // Clonar el último paquete (sin pago — quedará en "Por cobrar")
+  const todayIso = new Date().toISOString().slice(0, 10);
+  const { data: created, error } = await sb.from('student_packages').insert({
+    student_id: studentId,
+    package_id: lastPkg.package_id,
+    purchase_date: todayIso,
+    start_date: todayIso,
+    classes_total: lastPkg.classes_total,
+    sessions_total: lastPkg.classes_total,
+    classes_used: 0,
+    classes_recoverable: 0,
+    is_frozen: false,
+    price_paid: lastPkg.price_paid || 0,
+  }).select('id').single();
+
+  if (error) {
+    console.error('[getOrCreateActivePackageId] Error auto-creando paquete:', error);
+    return null;
+  }
+
+  showToast('⚠ Auto-renové paquete (sin pago). Aparece en "Por cobrar" — edítalo si necesitas.', 'warning');
+  return created.id;
 }
 
 // ============================================
@@ -5533,6 +5760,103 @@ function escape(s) {
   const div = document.createElement('div');
   div.textContent = s;
   return div.innerHTML;
+}
+
+// Mostrar modal con detalle de un paquete (próximo o completado) y sus clases
+function toggleUpcomingPkg(pkgId) {
+  const data = STATE.studentDetailData || {};
+  const pkg = (data.packages || []).find(p => p.id === pkgId);
+  if (!pkg) return;
+
+  const restantes = (pkg.classes_total || 0) - (pkg.classes_used || 0);
+  const price = parseFloat(pkg.price_paid || pkg.packages?.price_pen || 0);
+  const paid = (data.payments || []).filter(pm => pm.student_package_id === pkg.id).reduce((s, pm) => s + parseFloat(pm.amount_pen || pm.amount || 0), 0);
+  const owed = Math.max(0, price - paid);
+
+  // Clases asociadas a este paquete
+  const myAtts = (data.attendances || []).filter(a => a.student_package_id === pkg.id);
+  myAtts.sort((a, b) => {
+    const da = a.class_sessions?.session_date || '';
+    const db = b.class_sessions?.session_date || '';
+    return db.localeCompare(da);
+  });
+
+  const statusLabels = {
+    attended: '✓ Asistió',
+    recoverable: '⊙ Falta justificada',
+    lost: '⚠ Cancelación tardía',
+    no_show: '✗ No vino',
+    pending: '? Pendiente',
+    rescheduled: '↔ Reprogramada',
+  };
+
+  const html = `
+    <div style="padding: 24px;">
+      <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; margin-bottom: 20px;">
+        <div>
+          <div style="font-family: var(--display); font-size: 22px; color: var(--fit-purple); font-style: italic;">${escape(pkg.packages?.name || `Paquete ${pkg.classes_total} clases`)}</div>
+          <div style="font-size: 13px; color: var(--ink-mute); margin-top: 4px;">Compra ${formatDate(pkg.purchase_date)}</div>
+        </div>
+        <button class="btn btn-ghost" onclick="closePkgDetailModal()" style="padding: 6px 14px; font-size: 12px;">Cerrar</button>
+      </div>
+
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-bottom: 20px;">
+        <div style="background: var(--fit-cream); padding: 14px; border-radius: 8px;">
+          <div style="font-size: 10px; color: var(--ink-mute); text-transform: uppercase; letter-spacing: 0.5px;">Tomadas</div>
+          <div style="font-family: var(--display); font-size: 22px; color: var(--fit-purple); margin-top: 4px;">${pkg.classes_used || 0}<span style="color: var(--ink-faint); font-size: 16px;">/${pkg.classes_total}</span></div>
+        </div>
+        <div style="background: var(--fit-cream); padding: 14px; border-radius: 8px;">
+          <div style="font-size: 10px; color: var(--ink-mute); text-transform: uppercase; letter-spacing: 0.5px;">Restantes</div>
+          <div style="font-family: var(--display); font-size: 22px; color: var(--fit-purple); margin-top: 4px;">${restantes}</div>
+        </div>
+        <div style="background: ${owed > 0 ? '#FEF7E6' : '#EAF3DE'}; padding: 14px; border-radius: 8px; border: 1px solid ${owed > 0 ? '#F4D58A' : '#C5DCB0'};">
+          <div style="font-size: 10px; color: ${owed > 0 ? '#8B6F1A' : '#3B6D11'}; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">${owed > 0 ? 'Saldo pendiente' : 'Pagado ✓'}</div>
+          <div style="font-family: var(--display); font-size: 20px; color: ${owed > 0 ? '#633806' : '#27500A'}; margin-top: 4px;">S/ ${(owed > 0 ? owed : paid).toFixed(2)}</div>
+          <div style="font-size: 10px; color: var(--ink-mute); margin-top: 2px;">de S/ ${price.toFixed(2)}</div>
+        </div>
+      </div>
+
+      <div style="font-size: 11px; color: var(--ink-mute); text-transform: uppercase; letter-spacing: 0.5px; font-weight: 500; margin-bottom: 8px;">Clases del paquete (${myAtts.length})</div>
+      <div style="background: white; border: 1px solid var(--line); border-radius: 8px; max-height: 320px; overflow-y: auto;">
+        ${myAtts.length === 0 ? `
+          <div style="padding: 24px; text-align: center; color: var(--ink-mute); font-size: 13px;">Aún no se ha tomado ninguna clase de este paquete.</div>
+        ` : myAtts.map(a => {
+          const sess = a.class_sessions;
+          if (!sess) return '';
+          const lc = STATE.locations.find(l => l.id === sess.location_id);
+          return `
+            <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; border-bottom: 1px solid var(--line-soft);">
+              <div>
+                <div style="font-size: 13px; font-weight: 500;">${formatDate(sess.session_date)} · ${formatHour(sess.hour)}</div>
+                <div style="font-size: 11px; color: var(--ink-mute); margin-top: 2px;">${escape(lc?.name || '')}</div>
+              </div>
+              <span style="font-size: 11px; color: var(--ink-mute); padding: 3px 8px; background: var(--fit-cream); border-radius: 4px;">${statusLabels[a.status] || a.status}</span>
+            </div>
+          `;
+        }).join('')}
+      </div>
+    </div>
+  `;
+
+  let modal = document.getElementById('pkg-detail-modal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'pkg-detail-modal';
+    modal.style.cssText = 'position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 1000; display: none; align-items: center; justify-content: center; padding: 20px;';
+    modal.onclick = (e) => { if (e.target === modal) closePkgDetailModal(); };
+    const inner = document.createElement('div');
+    inner.style.cssText = 'background: white; border-radius: 12px; max-width: 600px; width: 100%; max-height: 85vh; overflow-y: auto;';
+    inner.id = 'pkg-detail-modal-content';
+    modal.appendChild(inner);
+    document.body.appendChild(modal);
+  }
+  document.getElementById('pkg-detail-modal-content').innerHTML = html;
+  modal.style.display = 'flex';
+}
+
+function closePkgDetailModal() {
+  const m = document.getElementById('pkg-detail-modal');
+  if (m) m.style.display = 'none';
 }
 
 function showToast(msg, type = '') {
@@ -6366,6 +6690,13 @@ async function instructorWriteAttendance(studentId, dateIso, hour, locationId, s
   const isRecoverable = (status === 'recoverable');
   const countsAgainst = ['attended','lost','no_show'].includes(status);
 
+  // Si la asistencia cuenta contra el paquete, obtener/auto-crear paquete activo (FIFO)
+  // Esto también funciona cuando el profesor marca asistencia sin coordinadora en turno
+  let pkgId = null;
+  if (countsAgainst) {
+    pkgId = await getOrCreateActivePackageId(studentId);
+  }
+
   const payload = {
     booking_id: booking.id,
     session_id: session.id,
@@ -6375,6 +6706,7 @@ async function instructorWriteAttendance(studentId, dateIso, hour, locationId, s
     counts_against_package: countsAgainst,
     notes: noteLine,
     marked_at: new Date().toISOString(),
+    student_package_id: pkgId,
     // marked_by omitido: el FK apunta a users y el profesor no está ahí; la auditoría queda en notes
   };
 
@@ -6507,16 +6839,15 @@ async function instructorPickStudent(studentId) {
   STATE.instAddPick = studentId;
 
   // Detectar caso: D (frozen), C (sin paquete), B (en límite), A (tiene cupo)
-  const todayIso = new Date().toISOString().slice(0,10);
   const { data: anyPkg } = await sb.from('student_packages')
-    .select('id, classes_total, classes_used, classes_recoverable, expiration_date, end_date, purchase_date, start_date, is_frozen')
+    .select('id, classes_total, classes_used, classes_recoverable, purchase_date, start_date, is_frozen')
     .eq('student_id', studentId)
     .order('purchase_date', { ascending: false })
     .limit(1)
     .maybeSingle();
 
   let caseType;
-  if (anyPkg && anyPkg.is_frozen && anyPkg.expiration_date >= todayIso) {
+  if (anyPkg && anyPkg.is_frozen) {
     caseType = 'D'; // frozen
   } else {
     const cap = await getStudentBookingCapacity(studentId);
@@ -6550,7 +6881,7 @@ async function instructorRenderCase(caseType, stud, pkg) {
       ${studHeader}
       <div style="padding: 14px; background: #EAF3DE; border-radius: var(--radius-sm); margin-bottom: 14px;">
         <div style="font-size: 12px; font-weight: 500; color: #27500A; margin-bottom: 4px;">✓ Tiene cupo en su paquete</div>
-        <div style="font-size: 11px; color: #3B6D11;">Tiene ${cap.remaining} ${cap.remaining === 1 ? 'clase disponible' : 'clases disponibles'} (usa ${cap.pkg.classes_used || 0}/${cap.pkg.classes_total} · vence ${formatDate(cap.pkg.expiration_date)})</div>
+        <div style="font-size: 11px; color: #3B6D11;">Tiene ${cap.remaining} ${cap.remaining === 1 ? 'clase disponible' : 'clases disponibles'} (usa ${cap.pkg.classes_used || 0}/${cap.pkg.classes_total})</div>
       </div>
       <button onclick="instructorConfirmAddCaseA('${stud.id}')" style="width: 100%; padding: 12px; font-size: 14px; background: var(--fit-purple); color: white; border: none; border-radius: var(--radius-sm); font-weight: 500; cursor: pointer;">Agregar y marcar asistida</button>
     `;
@@ -6596,7 +6927,7 @@ async function instructorRenderCase(caseType, stud, pkg) {
       ${studHeader}
       <div style="padding: 14px; background: #FAECE7; border-radius: var(--radius-sm); margin-bottom: 14px;">
         <div style="font-size: 12px; font-weight: 500; color: #712B13; margin-bottom: 4px;">⚠ Sin paquete activo</div>
-        <div style="font-size: 11px; color: #993C1D;">${pkg ? (pkg.expiration_date < new Date().toISOString().slice(0,10) ? `Paquete vencido el ${formatDate(pkg.expiration_date)}` : 'Sin clases disponibles') : 'No tiene ningún paquete asignado'}</div>
+        <div style="font-size: 11px; color: #993C1D;">${pkg ? 'Sin clases disponibles' : 'No tiene ningún paquete asignado'}</div>
       </div>
       <div style="padding: 12px 14px; background: var(--bg); border-radius: var(--radius-sm); margin-bottom: 14px; font-size: 11px; color: var(--ink-mute); line-height: 1.5;">
         Puedes registrarla igual. Aparecerá en el dashboard del coordinador como pendiente de cobro. Cuando le venda paquete, esta clase se imputa al nuevo.
@@ -6686,6 +7017,12 @@ async function instructorMarkAttendedDirect(sessionId, studentId, opts) {
     .eq('student_id', studentId)
     .maybeSingle();
 
+  // Si cuenta contra paquete (no es invitada pendiente), asignar paquete activo (FIFO) o auto-crear
+  let pkgId = null;
+  if (!opts?.pendingPayment) {
+    pkgId = await getOrCreateActivePackageId(studentId);
+  }
+
   const payload = {
     booking_id: bk?.id || null,
     session_id: sessionId,
@@ -6696,6 +7033,7 @@ async function instructorMarkAttendedDirect(sessionId, studentId, opts) {
     notes: noteParts.join(' · '),
     pending_payment_at: opts?.pendingPayment ? new Date().toISOString() : null,
     marked_at: new Date().toISOString(),
+    student_package_id: pkgId,
     // marked_by omitido: el FK apunta a users y el profesor no está ahí; la auditoría queda en notes
   };
 
@@ -6846,9 +7184,9 @@ async function renderStudentHome() {
   document.getElementById('student-greet-name').textContent = stud.first_name || '';
   document.getElementById('student-greet-sub').textContent = (STATE.locations.find(l => l.id === stud.location_id)?.name) ? `Sede ${STATE.locations.find(l => l.id === stud.location_id).name}` : '';
 
-  // Cargar paquete activo del alumno
+  // Cargar paquete activo del alumno (FIFO)
   const pkgs = await loadStudentPackages(stud.id);
-  const active = pkgs.find(p => !p.is_frozen && new Date(p.expiration_date) >= new Date());
+  const active = pkgs.find(p => !p.is_frozen && (p.classes_used || 0) < (p.classes_total || 0));
   const pkgBlock = document.getElementById('student-active-package');
   if (active) {
     const cat = STATE.packages.find(p => p.id === active.package_id);
@@ -6873,7 +7211,7 @@ async function renderStudentHome() {
     pkgBlock.innerHTML = `
       <div class="pkg-card">
         <div class="pkg-card-name">${escape(cat?.name || 'Paquete')}</div>
-        <div class="pkg-card-meta">Vence ${formatDate(active.expiration_date)}</div>
+        <div class="pkg-card-meta">Compra ${formatDate(active.purchase_date)}</div>
         <div class="pkg-card-stats">
           <div><div class="pkg-stat-num">${remaining}</div><div class="pkg-stat-lbl">Restantes</div></div>
           <div><div class="pkg-stat-num">${active.classes_used || 0}</div><div class="pkg-stat-lbl">Tomadas</div></div>
@@ -7047,18 +7385,16 @@ async function renderStudentRecoverables(stud) {
   }
   const todayIso = new Date().toISOString().slice(0,10);
 
-  // Cargar paquete activo para acotar las recuperables al rango del paquete
-  const { data: pkg } = await sb.from('student_packages')
-    .select('purchase_date, start_date, expiration_date, end_date')
+  // Cargar paquete activo (FIFO) para acotar el rango
+  const { data: allPkgs } = await sb.from('student_packages')
+    .select('purchase_date, start_date, classes_total, classes_used, is_frozen')
     .eq('student_id', stud.id)
     .eq('is_frozen', false)
-    .gte('expiration_date', todayIso)
-    .order('purchase_date', { ascending: false })
-    .limit(1)
-    .maybeSingle();
+    .order('purchase_date', { ascending: true });
+  const pkg = (allPkgs || []).find(p => (p.classes_used || 0) < (p.classes_total || 0));
 
   const startRange = pkg ? (pkg.purchase_date || pkg.start_date) : null;
-  const endRange = pkg ? (pkg.expiration_date || pkg.end_date) : null;
+  const endRange = null; // los paquetes no vencen
 
   // status='recoverable' (en inglés, como lo guarda markAttendance)
   const { data: recs } = await sb.from('attendance')
@@ -7118,19 +7454,18 @@ async function renderActivePackageBlock(student) {
     return;
   }
   const pkgs = await loadStudentPackages(student.id);
-  const active = pkgs.find(p => !p.is_frozen && new Date(p.expiration_date) >= new Date());
+  const active = pkgs.find(p => !p.is_frozen && (p.classes_used || 0) < (p.classes_total || 0));
   const frozen = pkgs.find(p => p.is_frozen);
 
   if (active) {
     const cat = STATE.packages.find(p => p.id === active.package_id);
     const remaining = (active.classes_total || 0) - (active.classes_used || 0);
-    const expiresIn = Math.ceil((new Date(active.expiration_date) - new Date()) / (1000*60*60*24));
     block.innerHTML = `
       <div style="background: var(--fit-lavender-pale); border: 1px solid var(--fit-purple-soft); border-radius: var(--radius-sm); padding: 14px 16px;">
         <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 10px;">
           <div>
             <div style="font-weight: 500; color: var(--fit-purple-deep);">${escape(cat?.name || 'Paquete')}</div>
-            <div style="font-size: 12px; color: var(--ink-soft); margin-top: 2px;">Compra ${formatDate(active.purchase_date)} · vence ${formatDate(active.expiration_date)} (en ${expiresIn} días)</div>
+            <div style="font-size: 12px; color: var(--ink-soft); margin-top: 2px;">Compra ${formatDate(active.purchase_date)}</div>
           </div>
           <div style="text-align: right;">
             <div style="font-family: var(--display); font-size: 22px; color: var(--fit-purple); font-style: italic;">${remaining}/${active.classes_total}</div>
@@ -7198,6 +7533,24 @@ async function renderPaymentsHistoryBlock(student) {
 async function openAssignPackageModal(studentId) {
   const student = STATE.students.find(s => s.id === studentId);
   if (!student) return;
+
+  // Si ya tiene un paquete con clases libres, confirmar antes de asignar otro
+  if (isOnline) {
+    const { data: livePkgs } = await sb.from('student_packages')
+      .select('id, classes_total, classes_used, packages(name)')
+      .eq('student_id', studentId)
+      .eq('is_frozen', false);
+    const stillLive = (livePkgs || []).filter(p => (p.classes_used || 0) < (p.classes_total || 0));
+    if (stillLive.length > 0) {
+      const totalRest = stillLive.reduce((s, p) => s + ((p.classes_total || 0) - (p.classes_used || 0)), 0);
+      const pkgList = stillLive.map(p => `• ${p.packages?.name || `Paquete ${p.classes_total}`} — ${(p.classes_total||0) - (p.classes_used||0)} libre${((p.classes_total||0) - (p.classes_used||0)) === 1 ? '' : 's'}`).join('\n');
+      const confirm1 = confirm(
+        `${student.first_name} ya tiene ${stillLive.length} paquete${stillLive.length === 1 ? '' : 's'} con clases libres (${totalRest} en total):\n\n${pkgList}\n\n¿Igual quieres asignarle un paquete adicional?`
+      );
+      if (!confirm1) return;
+    }
+  }
+
   document.getElementById('assign-pkg-student-id').value = studentId;
   document.getElementById('assign-pkg-student').innerHTML = `<strong>${escape(student.first_name)} ${escape(student.last_name||'')}</strong> · ${escape(student.email||'sin email')}`;
 
@@ -7209,7 +7562,9 @@ async function openAssignPackageModal(studentId) {
   document.getElementById('assign-pkg-purchase').value = today;
   document.getElementById('assign-pkg-price').value = '';
   document.getElementById('assign-pkg-classes').value = '';
-  document.getElementById('assign-pkg-expiration').value = '';
+  // expiration ya no aplica — campo oculto pero lo dejamos vacío
+  const expEl = document.getElementById('assign-pkg-expiration');
+  if (expEl) expEl.value = '';
 
   // Cargar attendance pendientes de pago
   const pendingBlock = document.getElementById('assign-pkg-pending-block');
@@ -7253,12 +7608,7 @@ function updateAssignPkgPreview() {
     document.getElementById('assign-pkg-classes').value = opt.dataset.classes;
     document.getElementById('assign-pkg-price').value = opt.dataset.price;
   }
-  const purchase = document.getElementById('assign-pkg-purchase').value;
-  if (purchase) {
-    const exp = new Date(purchase + 'T12:00:00');
-    exp.setDate(exp.getDate() + 30);
-    document.getElementById('assign-pkg-expiration').value = exp.toISOString().slice(0,10);
-  }
+  // Lógica nueva: paquetes no vencen → no calculamos expiration
 }
 
 async function saveAssignPackage() {
@@ -7266,7 +7616,6 @@ async function saveAssignPackage() {
   const studentId = document.getElementById('assign-pkg-student-id').value;
   const packageId = document.getElementById('assign-pkg-id').value;
   const purchaseDate = document.getElementById('assign-pkg-purchase').value;
-  const expirationDate = document.getElementById('assign-pkg-expiration').value;
   const price = parseFloat(document.getElementById('assign-pkg-price').value) || null;
   const classes = parseInt(document.getElementById('assign-pkg-classes').value, 10);
 
@@ -7281,13 +7630,14 @@ async function saveAssignPackage() {
   const shouldImpute = imputeCheckbox && imputeCheckbox.checked && pendingAtts.length > 0;
   const initialUsed = shouldImpute ? Math.min(pendingAtts.length, classes) : 0;
 
+  // Lógica nueva: paquetes no vencen → expiration_date y end_date quedan NULL
   const { data, error } = await sb.from('student_packages').insert({
     student_id: studentId,
     package_id: packageId,
     purchase_date: purchaseDate,
     start_date: purchaseDate,
-    expiration_date: expirationDate,
-    end_date: expirationDate,
+    expiration_date: null,
+    end_date: null,
     classes_total: classes,
     sessions_total: classes,
     classes_used: initialUsed,
@@ -7298,12 +7648,13 @@ async function saveAssignPackage() {
 
   if (error) { showToast('Error: '+error.message, 'error'); return; }
 
-  // Imputar attendance pendientes: limpiar pending_payment_at en las primeras N
+  // Imputar attendance pendientes: limpiar pending_payment_at + asignar el nuevo student_package_id
   if (shouldImpute) {
     const idsToImpute = pendingAtts.slice(0, initialUsed).map(a => a.id);
     await sb.from('attendance').update({
       pending_payment_at: null,
       counts_against_package: true,
+      student_package_id: data.id,
     }).in('id', idsToImpute);
   }
 
@@ -7451,13 +7802,9 @@ async function saveFreezePackage() {
 async function reactivatePackage(pkgId) {
   if (!isOnline) { showToast('Conexión requerida', 'error'); return; }
   if (!confirm('¿Reactivar el paquete?\n\nEl vencimiento se recalcula a 30 días desde hoy.')) return;
-  const today = new Date();
-  const newExp = new Date(today);
-  newExp.setDate(newExp.getDate() + 30);
   const { error } = await sb.from('student_packages').update({
     is_frozen: false,
     freeze_started_at: null,
-    expiration_date: newExp.toISOString().slice(0,10),
   }).eq('id', pkgId);
   if (error) { showToast('Error: '+error.message, 'error'); return; }
   showToast('Paquete reactivado', 'success');
@@ -7486,18 +7833,13 @@ async function loadAndRenderPendingRecovery() {
   const { data: pkgs } = await sb.from('student_packages').select('*').in('student_id', studentIds).eq('is_frozen', false);
   const pkgByStudent = {};
   (pkgs||[]).forEach(p => {
-    if (!pkgByStudent[p.student_id] || new Date(p.expiration_date) > new Date(pkgByStudent[p.student_id].expiration_date)) {
+    // Más reciente por purchase_date (sin expiration ya)
+    if (!pkgByStudent[p.student_id] || (p.purchase_date && p.purchase_date > (pkgByStudent[p.student_id].purchase_date || ''))) {
       pkgByStudent[p.student_id] = p;
     }
   });
 
-  const today = new Date();
-  const rows = recs.map(r => {
-    const pkg = pkgByStudent[r.student_id];
-    const expiry = pkg ? new Date(pkg.expiration_date) : null;
-    const daysLeft = expiry ? Math.ceil((expiry - today)/(1000*60*60*24)) : null;
-    return { rec: r, expiry, daysLeft };
-  }).sort((a,b) => (a.daysLeft??999) - (b.daysLeft??999));
+  const rows = recs.map(r => ({ rec: r, pkg: pkgByStudent[r.student_id] }));
 
   document.getElementById('badge-recovery').textContent = rows.length;
 
@@ -7506,17 +7848,16 @@ async function loadAndRenderPendingRecovery() {
     return;
   }
 
-  tbody.innerHTML = rows.map(({ rec, expiry, daysLeft }) => {
+  tbody.innerHTML = rows.map(({ rec, pkg }) => {
     const s = rec.students;
     const sess = rec.class_sessions;
-    const urgent = daysLeft !== null && daysLeft <= 5;
     return `
       <tr onclick="openStudentModal('${rec.student_id}')">
         <td><strong>${escape(s?.first_name||'')} ${escape(s?.last_name||'')}</strong></td>
         <td>${sess ? formatDate(sess.session_date) + ' · ' + formatHour(sess.hour) : '—'}</td>
-        <td>${expiry ? formatDate(expiry.toISOString()) : '—'}</td>
-        <td>${daysLeft !== null ? `<span style="color:${urgent?'var(--danger)':'var(--ink)'}; font-weight:${urgent?'500':'400'};">${daysLeft} días</span>` : '—'}</td>
-        <td>${s?.phone ? `<a href="${whatsappLink(s.phone, recoveryMessage(s.first_name, daysLeft))}" target="_blank" onclick="event.stopPropagation()" style="color: #25D366; font-size: 12px;">WhatsApp</a>` : ''}</td>
+        <td>${pkg ? `Paquete ${pkg.classes_total}` : '—'}</td>
+        <td>${pkg ? `${(pkg.classes_total||0) - (pkg.classes_used||0)} libre${((pkg.classes_total||0) - (pkg.classes_used||0)) === 1 ? '' : 's'}` : '—'}</td>
+        <td>${s?.phone ? `<a href="${whatsappLink(s.phone, recoveryMessage(s.first_name, null))}" target="_blank" onclick="event.stopPropagation()" style="color: #25D366; font-size: 12px;">WhatsApp</a>` : ''}</td>
       </tr>
     `;
   }).join('');
@@ -7532,14 +7873,28 @@ async function loadAndRenderRenewals() {
 
   const { data: pkgs, error } = await sb.from('student_packages')
     .select('*, students(first_name, last_name, phone), packages(name)')
-    .eq('is_frozen', false)
-    .gte('expiration_date', new Date().toISOString().slice(0,10));
+    .eq('is_frozen', false);
   if (error) { tbody.innerHTML = `<tr><td colspan="5">Error: ${error.message}</td></tr>`; return; }
 
-  const candidates = (pkgs||[]).filter(p => {
-    const remaining = (p.classes_total||0) - (p.classes_used||0);
-    return remaining <= 1;
-  }).sort((a,b) => new Date(a.expiration_date) - new Date(b.expiration_date));
+  // Agrupar por alumno: sumar restantes de TODOS sus paquetes vivos
+  const byStudent = new Map();
+  (pkgs || []).forEach(p => {
+    const remaining = Math.max(0, (p.classes_total || 0) - (p.classes_used || 0));
+    if (remaining <= 0) return; // paquete completado, ignorar
+    if (!byStudent.has(p.student_id)) {
+      byStudent.set(p.student_id, { student: p.students, totalRemaining: 0, latestPkg: p });
+    }
+    const entry = byStudent.get(p.student_id);
+    entry.totalRemaining += remaining;
+    // Mantener el paquete más reciente como "latestPkg" (para nombre)
+    if ((p.purchase_date || '') > (entry.latestPkg.purchase_date || '')) entry.latestPkg = p;
+  });
+
+  // Candidatos a renovar = suma de remaining ≤ 1
+  const candidates = Array.from(byStudent.entries())
+    .filter(([_, e]) => e.totalRemaining <= 1)
+    .map(([studentId, e]) => ({ studentId, ...e }))
+    .sort((a, b) => a.totalRemaining - b.totalRemaining);
 
   document.getElementById('badge-renewals').textContent = candidates.length;
 
@@ -7548,16 +7903,15 @@ async function loadAndRenderRenewals() {
     return;
   }
 
-  tbody.innerHTML = candidates.map(p => {
-    const s = p.students;
-    const remaining = (p.classes_total||0) - (p.classes_used||0);
+  tbody.innerHTML = candidates.map(({ studentId, student, totalRemaining, latestPkg }) => {
+    const s = student;
     return `
-      <tr onclick="openStudentModal('${p.student_id}')">
+      <tr onclick="openStudentModal('${studentId}')">
         <td><strong>${escape(s?.first_name||'')} ${escape(s?.last_name||'')}</strong></td>
-        <td>${escape(p.packages?.name||'—')}</td>
-        <td>${remaining}</td>
-        <td>${formatDate(p.expiration_date)}</td>
-        <td>${s?.phone ? `<a href="${whatsappLink(s.phone, renewalMessage(s.first_name, remaining))}" target="_blank" onclick="event.stopPropagation()" style="color: #25D366; font-size: 12px;">WhatsApp</a>` : ''}</td>
+        <td>${escape(latestPkg.packages?.name || '—')}</td>
+        <td>${totalRemaining}</td>
+        <td>${formatDate(latestPkg.purchase_date)}</td>
+        <td>${s?.phone ? `<a href="${whatsappLink(s.phone, renewalMessage(s.first_name, totalRemaining))}" target="_blank" onclick="event.stopPropagation()" style="color: #25D366; font-size: 12px;">WhatsApp</a>` : ''}</td>
       </tr>
     `;
   }).join('');
@@ -7714,30 +8068,19 @@ function renderStudentDetail() {
       ? '<span class="modality-pill modality-flexible">↻ Flexible</span>'
       : '<span class="modality-pill modality-trial">✦ Prueba</span>');
 
-  // Detectar si el paquete activo está completado (todas las clases consumidas)
-  // → en ese caso, deshabilitar el botón "Agendar clases"
-  // Calculamos en vivo desde attendances (no confiar en el cache classes_used que puede desincronizarse)
+  // Determinar si el botón "Agendar clases" debe estar deshabilitado.
+  // Lo está solo cuando NO hay paquete activo (es decir, no hay ningún paquete con clases libres).
   const _data = STATE.studentDetailData || {};
-  const _todayIso = new Date().toISOString().slice(0, 10);
-  const _activePkg = (_data.packages || []).find(p => !p.is_frozen && p.expiration_date >= _todayIso);
-  let _liveUsed = 0;
-  if (_activePkg) {
-    const _start = _activePkg.purchase_date || _activePkg.start_date;
-    const _end = _activePkg.expiration_date || _activePkg.end_date;
-    (_data.attendances || []).forEach(a => {
-      const sd = a.class_sessions?.session_date;
-      if (!sd) return;
-      if (_start && sd < _start) return;
-      if (_end && sd > _end) return;
-      if (a.counts_against_package) _liveUsed++;
-    });
-  }
-  const _isPkgComplete = _activePkg && (_liveUsed >= (_activePkg.classes_total || 0));
+  const _activePkg = getActivePackage(_data.packages || []);
   const _hasNoActivePkg = !_activePkg;
-  const _agendarDisabled = _isPkgComplete || _hasNoActivePkg;
-  const _agendarTooltip = _isPkgComplete
-    ? 'Paquete completado. Renueva el paquete para seguir agendando.'
-    : (_hasNoActivePkg ? 'Sin paquete activo. Asigna un paquete primero.' : '');
+  const _agendarDisabled = _hasNoActivePkg;
+  const _agendarTooltip = _hasNoActivePkg
+    ? 'Sin paquete activo. Asigna un paquete primero.'
+    : '';
+  const _hasCompletedPkgs = (_data.packages || []).some(p => {
+    const used = p.classes_used || 0;
+    return used >= (p.classes_total || 0) && (p.classes_total || 0) > 0;
+  });
 
   const tabs = [
     { id: 'summary', label: 'Resumen' },
@@ -7788,7 +8131,7 @@ function renderStudentDetail() {
         <div style="display: flex; gap: 8px; flex-wrap: wrap;">
           <button class="btn btn-ghost" onclick="openStudentModal('${stud.id}')" style="padding: 8px 14px; font-size: 12px;">Editar perfil</button>
           <button class="btn btn-ghost" onclick="${_agendarDisabled ? '' : `openStudentScheduleEditor('${stud.id}')`}" ${_agendarDisabled ? 'disabled' : ''} title="${escape(_agendarTooltip)}" style="padding: 8px 14px; font-size: 12px; ${_agendarDisabled ? 'opacity: 0.45; cursor: not-allowed;' : ''}">Agendar clases</button>
-          <button class="btn btn-primary" onclick="openAssignPackageFromDetail('${stud.id}')" style="padding: 8px 14px; font-size: 12px;">${_isPkgComplete ? 'Renovar paquete' : 'Asignar paquete'}</button>
+          <button class="btn btn-primary" onclick="openAssignPackageFromDetail('${stud.id}')" style="padding: 8px 14px; font-size: 12px;">${_hasCompletedPkgs && _hasNoActivePkg ? 'Renovar paquete' : 'Asignar paquete'}</button>
         </div>
       </div>
     </div>
@@ -7820,39 +8163,38 @@ function openAssignPackageFromDetail(studentId) {
 function renderDetailSummary(stud) {
   const data = STATE.studentDetailData || {};
   const todayIso = new Date().toISOString().slice(0,10);
-  const activePkg = (data.packages || []).find(p => !p.is_frozen && p.expiration_date >= todayIso);
+  const allPackages = data.packages || [];
+  const activePkg = getActivePackage(allPackages);
+  const upcomingPackages = getUpcomingPackages(allPackages);
+  const completedPackages = getCompletedPackages(allPackages);
 
-  // ⚠️ IMPORTANTE: calcular classes_used EN VIVO desde attendances (no confiar en el cache del paquete)
-  // El campo `classes_used` es un denormalizado que puede desincronizarse si recalcPackageCounters falla.
-  // La fuente de verdad son las attendances con counts_against_package=true en el rango del paquete.
+  // Calcular classes_used EN VIVO usando student_package_id
+  // (la fuente de verdad son las attendances; el campo classes_used es un cache que puede desincronizarse)
   let liveUsed = 0;
   let liveRecoverable = 0;
   if (activePkg) {
-    const startRange = activePkg.purchase_date || activePkg.start_date;
-    const endRange = activePkg.expiration_date || activePkg.end_date;
     (data.attendances || []).forEach(a => {
-      const sd = a.class_sessions?.session_date;
-      if (!sd) return;
-      if (startRange && sd < startRange) return;
-      if (endRange && sd > endRange) return;
+      if (a.student_package_id !== activePkg.id) return;
       if (a.counts_against_package) liveUsed++;
       if (a.is_recoverable) liveRecoverable++;
     });
-    // Si el cache está desincronizado, lo arreglamos en BD silenciosamente
+    // Si el cache está desincronizado, arreglarlo en BD silenciosamente
     if ((activePkg.classes_used || 0) !== liveUsed || (activePkg.classes_recoverable || 0) !== liveRecoverable) {
       sb.from('student_packages').update({
         classes_used: liveUsed,
         classes_recoverable: liveRecoverable,
       }).eq('id', activePkg.id).then(() => {
-        // Actualizar también el state local para que el próximo render no vuelva a disparar el update
         activePkg.classes_used = liveUsed;
         activePkg.classes_recoverable = liveRecoverable;
       });
     }
   }
 
-  // ¿El paquete está completado? (todas las clases ya consumidas)
-  const isPackageComplete = activePkg && (liveUsed >= (activePkg.classes_total || 0));
+  // Suma total de remaining (todos los paquetes vivos)
+  const totalRemaining = totalRemainingClasses(allPackages);
+
+  // ¿No hay paquete activo? (todos completados o sin paquetes)
+  const hasNoActivePkg = !activePkg;
 
   // Bookings activos (no cancelados) y futuros
   const upcomingClasses = (data.bookings || []).filter(b =>
@@ -7867,14 +8209,11 @@ function renderDetailSummary(stud) {
   });
   const nextClass = upcomingClasses[0];
 
-  // Recuperables EN VIVO desde attendance (no depender del cache classes_recoverable)
-  const startRange = activePkg ? (activePkg.purchase_date || activePkg.start_date) : null;
-  const endRange = activePkg ? (activePkg.expiration_date || activePkg.end_date) : null;
+  // Recuperables EN VIVO desde attendance del paquete activo (por student_package_id)
   const recoverableAtts = (data.attendances || []).filter(a => {
     if (a.status !== 'recoverable') return false;
-    const sd = a.class_sessions?.session_date;
-    if (!sd) return false;
-    return (!startRange || sd >= startRange) && (!endRange || sd <= endRange);
+    if (!activePkg) return false;
+    return a.student_package_id === activePkg.id;
   });
   recoverableAtts.sort((a,b) => (b.class_sessions.session_date + String(b.class_sessions.hour).padStart(2,'0'))
     .localeCompare(a.class_sessions.session_date + String(a.class_sessions.hour).padStart(2,'0')));
@@ -7900,14 +8239,14 @@ function renderDetailSummary(stud) {
 
   const cards = [
     {
-      label: 'Clases restantes',
-      value: activePkg ? `${(activePkg.classes_total || 0) - liveUsed}` : '—',
-      sub: activePkg ? `de ${activePkg.classes_total || 0} · vence ${formatDate(activePkg.expiration_date)}` : 'Sin paquete activo',
+      label: activePkg ? 'Restantes (activo)' : 'Total libres',
+      value: activePkg ? `${(activePkg.classes_total || 0) - liveUsed}` : `${totalRemaining}`,
+      sub: activePkg ? `de ${activePkg.classes_total} en paquete activo${upcomingPackages.length > 0 ? ` · +${totalRemaining - ((activePkg.classes_total || 0) - liveUsed)} en próximos` : ''}` : (allPackages.length > 0 ? 'Sin paquete activo' : 'Sin paquetes asignados'),
     },
     {
       label: 'Tomadas',
       value: activePkg ? `${liveUsed}` : '—',
-      sub: activePkg ? 'Asistidas + perdidas' : '—',
+      sub: activePkg ? 'En el paquete activo' : '—',
     },
     {
       label: 'Por re-agendar',
@@ -7921,22 +8260,15 @@ function renderDetailSummary(stud) {
     },
   ];
 
-  // Bloque del paquete activo
+  // Bloque del paquete activo (FIFO: el más antiguo con clases libres)
   const activePkgBlock = activePkg ? `
-    <div style="background: white; border: 1px solid ${isPackageComplete ? '#C5DCB0' : 'var(--line)'}; border-radius: var(--radius-md); padding: 18px 20px; margin-bottom: 16px; display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap;">
+    <div style="background: white; border: 1px solid var(--line); border-radius: var(--radius-md); padding: 18px 20px; margin-bottom: 16px; display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap;">
       <div style="flex: 1; min-width: 240px;">
         <div style="font-size: 11px; color: var(--ink-mute); text-transform: uppercase; letter-spacing: 0.5px; font-weight: 500; margin-bottom: 4px;">Paquete activo</div>
         <div style="font-family: var(--display); font-size: 18px; color: var(--fit-purple); font-style: italic;">${escape(activePkg.packages?.name || `Paquete ${activePkg.classes_total || ''} clases`)}</div>
-        <div style="font-size: 12px; color: var(--ink-mute); margin-top: 3px;">Compra ${formatDate(activePkg.purchase_date)} · vence ${formatDate(activePkg.expiration_date)}</div>
-        ${isPackageComplete ? `<div style="font-size: 12px; color: #27500A; margin-top: 6px; font-weight: 500;">🏁 Todas las clases consumidas. Renueva el paquete para seguir agendando.</div>` : ''}
+        <div style="font-size: 12px; color: var(--ink-mute); margin-top: 3px;">Compra ${formatDate(activePkg.purchase_date)} · ${liveUsed}/${activePkg.classes_total} clases usadas</div>
       </div>
-      ${isPackageComplete ? `
-        <div style="background: #EAF3DE; border: 1px solid #C5DCB0; border-radius: var(--radius-sm); padding: 10px 14px;">
-          <div style="font-size: 10px; color: #3B6D11; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">Completado 🏁</div>
-          <div style="font-family: var(--display); font-size: 20px; color: #27500A; margin-top: 2px;">${liveUsed}/${activePkg.classes_total}</div>
-        </div>
-        <button class="btn btn-primary" onclick="openAssignPackageModal('${stud.id}')" style="padding: 8px 16px; font-size: 12px; flex-shrink: 0;">Renovar paquete</button>
-      ` : (activePkgOwed > 0 ? `
+      ${activePkgOwed > 0 ? `
         <div style="background: #FEF7E6; border: 1px solid #F4D58A; border-radius: var(--radius-sm); padding: 10px 14px;">
           <div style="font-size: 10px; color: #8B6F1A; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">Saldo pendiente</div>
           <div style="font-family: var(--display); font-size: 20px; color: #633806; margin-top: 2px;">S/ ${activePkgOwed.toFixed(2)}</div>
@@ -7948,17 +8280,55 @@ function renderDetailSummary(stud) {
           <div style="font-size: 10px; color: #3B6D11; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">Pagado ✓</div>
           <div style="font-family: var(--display); font-size: 20px; color: #27500A; margin-top: 2px;">S/ ${activePkgPaid.toFixed(2)}</div>
         </div>
-      `)}
+      `}
     </div>
   ` : `
     <div style="background: #FEF7E6; border: 1px solid #F4D58A; border-radius: var(--radius-md); padding: 16px 20px; margin-bottom: 16px; display: flex; align-items: center; justify-content: space-between; gap: 12px;">
       <div>
-        <div style="font-family: var(--display); font-size: 15px; color: #633806; font-style: italic;">Sin paquete activo</div>
-        <div style="font-size: 11px; color: #854F0B; margin-top: 2px;">Asigna un paquete para que pueda agendar clases</div>
+        <div style="font-family: var(--display); font-size: 15px; color: #633806; font-style: italic;">${completedPackages.length > 0 ? 'Sin paquete activo · todos completados 🏁' : 'Sin paquete activo'}</div>
+        <div style="font-size: 11px; color: #854F0B; margin-top: 2px;">${completedPackages.length > 0 ? 'Renueva el paquete para que pueda seguir agendando clases' : 'Asigna un paquete para que pueda agendar clases'}</div>
       </div>
-      <button class="btn btn-primary" onclick="openAssignPackageModal('${stud.id}')" style="padding: 8px 16px; font-size: 12px;">Asignar paquete</button>
+      <button class="btn btn-primary" onclick="openAssignPackageModal('${stud.id}')" style="padding: 8px 16px; font-size: 12px;">${completedPackages.length > 0 ? 'Renovar paquete' : 'Asignar paquete'}</button>
     </div>
   `;
+
+  // Bloque de "Próximos paquetes" (los que aún no se empezaron a consumir, comprados después del activo)
+  const upcomingPkgsBlock = upcomingPackages.length > 0 ? `
+    <div style="margin-bottom: 16px;">
+      <div style="font-size: 11px; color: var(--ink-mute); text-transform: uppercase; letter-spacing: 0.5px; font-weight: 500; margin-bottom: 8px; padding-left: 4px;">Próximos paquetes (${upcomingPackages.length})</div>
+      ${upcomingPackages.map(p => {
+        const restantes = (p.classes_total || 0) - (p.classes_used || 0);
+        const price = parseFloat(p.price_paid || p.packages?.price_pen || 0);
+        const paid = (data.payments || []).filter(pm => pm.student_package_id === p.id).reduce((s, pm) => s + parseFloat(pm.amount_pen || pm.amount || 0), 0);
+        const owed = Math.max(0, price - paid);
+        return `
+          <div onclick="toggleUpcomingPkg('${p.id}')" style="background: white; border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 12px 16px; margin-bottom: 8px; cursor: pointer; display: flex; align-items: center; justify-content: space-between; gap: 10px;">
+            <div style="flex: 1;">
+              <div style="font-size: 13px; font-weight: 500; color: var(--ink);">${escape(p.packages?.name || `Paquete ${p.classes_total} clases`)}</div>
+              <div style="font-size: 11px; color: var(--ink-mute); margin-top: 2px;">${restantes} libre${restantes === 1 ? '' : 's'} · compra ${formatDate(p.purchase_date)} · S/ ${price.toFixed(2)}${owed > 0 ? ` · <span style="color: #8B6F1A; font-weight: 500;">debe S/ ${owed.toFixed(2)}</span>` : ' · pagado ✓'}</div>
+            </div>
+            <div style="font-size: 11px; color: var(--fit-purple);">▾</div>
+          </div>
+        `;
+      }).join('')}
+    </div>
+  ` : '';
+
+  // Bloque de paquetes completados (colapsado por default)
+  const completedPkgsBlock = completedPackages.length > 0 ? `
+    <div style="margin-bottom: 16px;">
+      <div style="font-size: 11px; color: var(--ink-mute); text-transform: uppercase; letter-spacing: 0.5px; font-weight: 500; margin-bottom: 8px; padding-left: 4px;">Paquetes completados (${completedPackages.length})</div>
+      ${completedPackages.map(p => `
+        <div onclick="toggleUpcomingPkg('${p.id}')" style="background: var(--fit-cream); border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 10px 16px; margin-bottom: 6px; display: flex; align-items: center; justify-content: space-between; gap: 10px; cursor: pointer;">
+          <div style="flex: 1;">
+            <div style="font-size: 12px; color: var(--ink); font-weight: 500;">${escape(p.packages?.name || `Paquete ${p.classes_total} clases`)}</div>
+            <div style="font-size: 10px; color: var(--ink-mute); margin-top: 2px;">${p.classes_total}/${p.classes_total} consumidas · compra ${formatDate(p.purchase_date)}</div>
+          </div>
+          <div style="font-size: 10px; color: #3B6D11; font-weight: 600;">🏁 COMPLETADO</div>
+        </div>
+      `).join('')}
+    </div>
+  ` : '';
 
   return `
     ${activePkgBlock}
@@ -7971,6 +8341,9 @@ function renderDetailSummary(stud) {
         </div>
       `).join('')}
     </div>
+
+    ${upcomingPkgsBlock}
+    ${completedPkgsBlock}
 
     ${pendingToReschedule > 0 ? `
       <div style="background: #FEF7E6; border: 1px solid #F4D58A; border-radius: var(--radius-md); padding: 18px; margin-bottom: 16px;">
@@ -8095,6 +8468,97 @@ function renderDetailClasses(stud) {
       past: 'Sin historial de clases.',
     };
     listHTML = `<p style="color: var(--ink-mute); font-size: 13px; padding: 20px 0;">${emptyLabels[filter]}</p>`;
+  } else if (filter === 'past') {
+    // Agrupar por paquete (usando attendance.student_package_id)
+    const packages = data.packages || [];
+    const attsByBookingId = new Map();
+    (data.attendances || []).forEach(a => attsByBookingId.set(a.booking_id, a));
+
+    // Ordenar paquetes: activos primero, luego por purchase_date asc
+    const sortedPkgs = [...packages].sort((a, b) => {
+      const da = a.purchase_date || a.start_date || '1900-01-01';
+      const db = b.purchase_date || b.start_date || '1900-01-01';
+      return da.localeCompare(db);
+    });
+
+    // Agrupar bookings pasadas por paquete
+    const bookingsByPkg = new Map();
+    const bookingsSinPkg = [];
+    classes.forEach(b => {
+      const att = attsByBookingId.get(b.id);
+      if (att && att.student_package_id) {
+        if (!bookingsByPkg.has(att.student_package_id)) bookingsByPkg.set(att.student_package_id, []);
+        bookingsByPkg.get(att.student_package_id).push({ b, att });
+      } else {
+        bookingsSinPkg.push({ b, att });
+      }
+    });
+
+    const renderClassRow = ({ b, att }) => {
+      const sess = b.class_sessions;
+      const lc = STATE.locations.find(l => l.id === sess.location_id);
+      const inst = STATE.instructors.find(i => i.id === sess.instructor_id);
+      const status = att?.status || b.status;
+      const statusBadges = {
+        attended:    '<span style="font-size: 11px; padding: 2px 8px; background: #d4f4d4; color: #1a5e1a; border-radius: 999px;">✓ Asistió</span>',
+        recoverable: '<span style="font-size: 11px; padding: 2px 8px; background: var(--warn-soft); color: #412402; border-radius: 999px;">⊙ Falta justificada</span>',
+        lost:        '<span style="font-size: 11px; padding: 2px 8px; background: #fee; color: #b00; border-radius: 999px;">⚠ Cancelación tardía</span>',
+        no_show:     '<span style="font-size: 11px; padding: 2px 8px; background: #fee; color: #b00; border-radius: 999px;">✗ No vino</span>',
+        pending:     '<span style="font-size: 11px; padding: 2px 8px; background: var(--fit-cream); color: var(--ink-mute); border-radius: 999px;">? Pendiente</span>',
+        cancelled:   '<span style="font-size: 11px; padding: 2px 8px; background: #fee; color: #b00; border-radius: 999px;">Cancelada</span>',
+      };
+      const statusBadge = statusBadges[status] || '';
+      return `
+        <div style="background: white; border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 10px 14px; margin-bottom: 6px; display: flex; align-items: center; justify-content: space-between;">
+          <div>
+            <div style="font-weight: 500; font-size: 13px;">${formatDate(sess.session_date)} · ${formatHour(sess.hour)}</div>
+            <div style="font-size: 11px; color: var(--ink-mute); margin-top: 2px;">${escape(lc?.name || '')}${inst ? ' · Prof. ' + escape(inst.first_name) : ''}</div>
+          </div>
+          ${statusBadge}
+        </div>
+      `;
+    };
+
+    // Renderizar grupos
+    const groupBlocks = [];
+    sortedPkgs.forEach(p => {
+      const items = bookingsByPkg.get(p.id) || [];
+      if (items.length === 0) return;
+      const price = parseFloat(p.price_paid || p.packages?.price_pen || 0);
+      const paid = (data.payments || []).filter(pm => pm.student_package_id === p.id).reduce((s, pm) => s + parseFloat(pm.amount_pen || pm.amount || 0), 0);
+      const owed = Math.max(0, price - paid);
+      // Ordenar items por fecha desc dentro del paquete
+      items.sort((a, b) => b.b.class_sessions.session_date.localeCompare(a.b.class_sessions.session_date));
+      groupBlocks.push(`
+        <div style="margin-bottom: 20px;">
+          <div style="background: var(--fit-lavender-pale); border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 12px 16px; margin-bottom: 8px;">
+            <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px;">
+              <div>
+                <div style="font-family: var(--display); font-size: 15px; color: var(--fit-purple); font-style: italic;">${escape(p.packages?.name || `Paquete ${p.classes_total} clases`)}</div>
+                <div style="font-size: 11px; color: var(--ink-mute); margin-top: 2px;">${items.length} clase${items.length === 1 ? '' : 's'} · compra ${formatDate(p.purchase_date)} · S/ ${price.toFixed(2)}${owed > 0 ? ` · <span style="color: #8B6F1A; font-weight: 500;">debe S/ ${owed.toFixed(2)}</span>` : ' · pagado ✓'}</div>
+              </div>
+            </div>
+          </div>
+          ${items.map(renderClassRow).join('')}
+        </div>
+      `);
+    });
+
+    // Bookings sin paquete asignado (rare)
+    if (bookingsSinPkg.length > 0) {
+      bookingsSinPkg.sort((a, b) => b.b.class_sessions.session_date.localeCompare(a.b.class_sessions.session_date));
+      groupBlocks.push(`
+        <div style="margin-bottom: 20px;">
+          <div style="background: #FEF7E6; border: 1px solid #F4D58A; border-radius: var(--radius-sm); padding: 12px 16px; margin-bottom: 8px;">
+            <div style="font-family: var(--display); font-size: 14px; color: #633806; font-style: italic;">Sin paquete asignado (${bookingsSinPkg.length})</div>
+            <div style="font-size: 11px; color: #854F0B; margin-top: 2px;">Estas clases no están vinculadas a un paquete específico</div>
+          </div>
+          ${bookingsSinPkg.map(renderClassRow).join('')}
+        </div>
+      `);
+    }
+
+    listHTML = groupBlocks.join('') || '<p style="color: var(--ink-mute); font-size: 13px; padding: 20px 0;">Sin historial de clases.</p>';
   } else {
     listHTML = classes.map(b => {
       const sess = b.class_sessions;
