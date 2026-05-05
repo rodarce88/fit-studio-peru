@@ -1704,7 +1704,7 @@ async function loadToPayList() {
 
   // Cargar attendance con pending_payment_at no nulo (caso 1: invitadas/sin paquete que asistieron)
   const { data: pending } = await sb.from('attendance')
-    .select('id, student_id, status, pending_payment_at, class_sessions(session_date, hour, location_id)')
+    .select('id, student_id, status, pending_payment_at, class_sessions!attendance_session_id_fkey(session_date, hour, location_id)')
     .not('pending_payment_at', 'is', null)
     .order('pending_payment_at', { ascending: false });
 
@@ -5080,11 +5080,11 @@ async function recalcPackageCounters(studentId) {
   }
 
   // Cargar todas las attendances del alumno
-  // OJO: usamos select('*') en lugar de listar columnas explícitas
-  // porque PostgREST a veces tiene cache stale y falla al pedir student_package_id por nombre.
-  // Con * trae todas las columnas que estén en su cache (suficiente).
+  // OJO: especificamos !attendance_session_id_fkey porque attendance tiene 2 FKs
+  // hacia class_sessions (session_id y recovered_in_session_id) y PostgREST
+  // necesita saber cuál usar.
   const { data: allAtt, error: attErr } = await sb.from('attendance')
-    .select('*, class_sessions(session_date)')
+    .select('*, class_sessions!attendance_session_id_fkey(session_date)')
     .eq('student_id', studentId);
 
   if (attErr) {
@@ -7499,7 +7499,7 @@ async function renderStudentRecoverables(stud) {
 
   // status='recoverable' (en inglés, como lo guarda markAttendance)
   const { data: recs } = await sb.from('attendance')
-    .select('*, class_sessions(session_date, hour, location_id)')
+    .select('*, class_sessions!attendance_session_id_fkey(session_date, hour, location_id)')
     .eq('student_id', stud.id)
     .eq('status', 'recoverable')
     .order('marked_at', { ascending: false });
@@ -7673,7 +7673,7 @@ async function openAssignPackageModal(studentId) {
   STATE.assignPkgPendingAtts = [];
   if (isOnline) {
     const { data: pending } = await sb.from('attendance')
-      .select('id, status, pending_payment_at, class_sessions(session_date, hour, location_id)')
+      .select('id, status, pending_payment_at, class_sessions!attendance_session_id_fkey(session_date, hour, location_id)')
       .eq('student_id', studentId)
       .not('pending_payment_at', 'is', null)
       .order('pending_payment_at', { ascending: false });
@@ -7925,7 +7925,7 @@ async function loadAndRenderPendingRecovery() {
   if (!isOnline) { tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:40px;color:var(--ink-mute);">Conexión requerida</td></tr>'; return; }
 
   const { data: recs, error } = await sb.from('attendance')
-    .select('*, class_sessions(session_date, hour, location_id), students(first_name, last_name, phone)')
+    .select('*, class_sessions!attendance_session_id_fkey(session_date, hour, location_id), students(first_name, last_name, phone)')
     .eq('status', 'recuperable');
   if (error) { tbody.innerHTML = `<tr><td colspan="5">Error: ${error.message}</td></tr>`; return; }
 
@@ -8143,7 +8143,7 @@ async function openStudentDetail(id) {
         .order('purchase_date', { ascending: false })
         .then(r => ({ packages: r.data || [] })),
       sb.from('attendance')
-        .select('*, class_sessions(id, session_date, hour, location_id, is_cancelled)')
+        .select('*, class_sessions!attendance_session_id_fkey(id, session_date, hour, location_id, is_cancelled)')
         .eq('student_id', id)
         .order('marked_at', { ascending: false })
         .then(r => ({ attendances: r.data || [] }))
@@ -8159,7 +8159,7 @@ async function openStudentDetail(id) {
       // Recargar attendances y packages después del cleanup
       const [attResp, pkgResp] = await Promise.all([
         sb.from('attendance')
-          .select('*, class_sessions(id, session_date, hour, location_id, is_cancelled)')
+          .select('*, class_sessions!attendance_session_id_fkey(id, session_date, hour, location_id, is_cancelled)')
           .eq('student_id', id)
           .order('marked_at', { ascending: false }),
         sb.from('student_packages')
