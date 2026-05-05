@@ -2754,7 +2754,7 @@ async function selectStudentForAssign(studentId) {
     const existing = (existingBookings || [])
       .filter(b => b.class_sessions
         && !b.class_sessions.is_cancelled
-        && b.status !== 'cancelled'
+        && !b.cancelled_at
         && b.class_sessions.session_date >= todayIso)
       .map(b => ({ date: b.class_sessions.session_date, hour: b.class_sessions.hour }));
     STATE.assignCtx.existingBookings = existing;
@@ -8803,10 +8803,10 @@ function renderDetailClasses(stud) {
   const startOfMonthIso = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0,10);
   const endOfMonthIso = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().slice(0,10);
 
-  let classes = (data.bookings || []).filter(b => b.class_sessions && !b.class_sessions.is_cancelled);
+  let classes = (data.bookings || []).filter(b => b.class_sessions && !b.class_sessions.is_cancelled && !b.cancelled_at);
 
   if (filter === 'upcoming') {
-    classes = classes.filter(b => b.class_sessions.session_date >= todayIso && b.status !== 'cancelled');
+    classes = classes.filter(b => b.class_sessions.session_date >= todayIso);
     classes.sort((a,b) => a.class_sessions.session_date.localeCompare(b.class_sessions.session_date) || a.class_sessions.hour - b.class_sessions.hour);
   } else if (filter === 'week') {
     classes = classes.filter(b => b.class_sessions.session_date >= startOfWeekIso && b.class_sessions.session_date <= endOfWeekIso);
