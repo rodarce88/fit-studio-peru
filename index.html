@@ -335,6 +335,9 @@
   .pkg-card-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; margin-top: 18px; padding-top: 18px; border-top: 1px solid rgba(255,255,255,0.2); }
   .pkg-stat-num { font-family: var(--display); font-size: 28px; font-weight: 500; }
   .pkg-stat-lbl { font-size: 11px; opacity: 0.85; text-transform: uppercase; letter-spacing: 0.08em; }
+  details summary::-webkit-details-marker { display: none; }
+  details summary { list-style: none; }
+  details[open] > summary .upcoming-arrow { transform: rotate(90deg); }
 </style>
 </head>
 <body>
@@ -5972,6 +5975,7 @@ function toggleUpcomingPkg(pkgId) {
           <div style="font-size: 10px; color: ${owed > 0 ? '#8B6F1A' : '#3B6D11'}; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">${owed > 0 ? 'Saldo pendiente' : 'Pagado ✓'}</div>
           <div style="font-family: var(--display); font-size: 20px; color: ${owed > 0 ? '#633806' : '#27500A'}; margin-top: 4px;">S/ ${(owed > 0 ? owed : paid).toFixed(2)}</div>
           <div style="font-size: 10px; color: var(--ink-mute); margin-top: 2px;">de S/ ${price.toFixed(2)}</div>
+          ${owed > 0 ? `<button class="btn btn-primary" onclick="closePkgDetailModal(); openPaymentModal('${STATE.studentDetailId}', '${pkg.id}', ${owed})" style="margin-top: 10px; padding: 6px 12px; font-size: 11px; width: 100%;">+ Registrar pago</button>` : ''}
         </div>
       </div>
 
@@ -8782,6 +8786,106 @@ function renderDetailClasses(stud) {
     }
 
     listHTML = groupBlocks.join('') || '<p style="color: var(--ink-mute); font-size: 13px; padding: 20px 0;">Sin historial de clases.</p>';
+  } else if (filter === 'upcoming') {
+    // Agrupar por paquete usando FIFO (igual que en schedEditor) — bookings futuras sin attendance
+    const packages = data.packages || [];
+    const sortedPkgs = [...packages].sort((a, b) => {
+      const da = a.purchase_date || a.start_date || '1900-01-01';
+      const db = b.purchase_date || b.start_date || '1900-01-01';
+      return da.localeCompare(db);
+    });
+    // El paquete "activo" = el más antiguo con classes_used < classes_total
+    const activePkgId = sortedPkgs.find(p => !p.is_frozen && (p.classes_used || 0) < (p.classes_total || 0))?.id;
+
+    // Asignar bookings futuras al paquete que les corresponde (FIFO)
+    const bookingsByPkg = new Map();
+    const bookingsSinPkg = [];
+    const futureUsageByPkg = new Map();
+    sortedPkgs.forEach(p => futureUsageByPkg.set(p.id, 0));
+
+    // Ordenar las bookings cronológicamente
+    const sortedFuture = [...classes].sort((a, b) =>
+      a.class_sessions.session_date.localeCompare(b.class_sessions.session_date) ||
+      a.class_sessions.hour - b.class_sessions.hour
+    );
+
+    sortedFuture.forEach(b => {
+      const sd = b.class_sessions.session_date;
+      const eligible = sortedPkgs.find(p => {
+        const pkgStart = p.purchase_date || p.start_date || '1900-01-01';
+        if (pkgStart > sd) return false;
+        const libreOriginal = (p.classes_total || 0) - (p.classes_used || 0);
+        const usedByBookings = futureUsageByPkg.get(p.id) || 0;
+        return usedByBookings < libreOriginal;
+      });
+      if (eligible) {
+        if (!bookingsByPkg.has(eligible.id)) bookingsByPkg.set(eligible.id, []);
+        bookingsByPkg.get(eligible.id).push(b);
+        futureUsageByPkg.set(eligible.id, (futureUsageByPkg.get(eligible.id) || 0) + 1);
+      } else {
+        bookingsSinPkg.push(b);
+      }
+    });
+
+    const renderUpcomingRow = (b) => {
+      const sess = b.class_sessions;
+      const lc = STATE.locations.find(l => l.id === sess.location_id);
+      const inst = STATE.instructors.find(i => i.id === sess.instructor_id);
+      const statusBadge = b.status === 'cancelled'
+        ? '<span style="font-size: 11px; padding: 2px 8px; background: #fee; color: #b00; border-radius: 999px;">Cancelada</span>'
+        : '<span style="font-size: 11px; padding: 2px 8px; background: var(--fit-lavender-pale); color: var(--fit-purple); border-radius: 999px;">Asignada</span>';
+      return `
+        <div style="background: white; border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 10px 14px; margin-bottom: 6px; display: flex; align-items: center; justify-content: space-between;">
+          <div>
+            <div style="font-weight: 500; font-size: 13px;">${formatDate(sess.session_date)} · ${formatHour(sess.hour)}</div>
+            <div style="font-size: 11px; color: var(--ink-mute); margin-top: 2px;">${escape(lc?.name || '')}${inst ? ' · Prof. ' + escape(inst.first_name) : ''}</div>
+          </div>
+          ${statusBadge}
+        </div>
+      `;
+    };
+
+    const groupBlocks = [];
+    sortedPkgs.forEach(p => {
+      const items = bookingsByPkg.get(p.id) || [];
+      if (items.length === 0) return;
+      const isActive = p.id === activePkgId;
+      const restantes = (p.classes_total || 0) - (p.classes_used || 0);
+      const price = parseFloat(p.price_paid || p.packages?.price_pen || 0);
+      const paid = (data.payments || []).filter(pm => pm.student_package_id === p.id).reduce((s, pm) => s + parseFloat(pm.amount_pen || pm.amount || 0), 0);
+      const owed = Math.max(0, price - paid);
+      groupBlocks.push(`
+        <details ${isActive ? 'open' : ''} style="margin-bottom: 12px;">
+          <summary style="background: ${isActive ? 'var(--fit-lavender-pale)' : 'var(--fit-cream)'}; border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 12px 16px; cursor: pointer; list-style: none; display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+            <div style="display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0;">
+              <span class="upcoming-arrow" style="color: var(--fit-purple); transition: transform 0.2s; display: inline-block;">▶</span>
+              <div style="min-width: 0;">
+                <div style="font-family: var(--display); font-size: 15px; color: var(--fit-purple); font-style: italic;">${escape(p.packages?.name || `Paquete ${p.classes_total} clases`)}${isActive ? ' <span style="font-size: 10px; background: var(--fit-purple); color: white; padding: 2px 6px; border-radius: 999px; font-style: normal; margin-left: 4px; vertical-align: middle;">ACTIVO</span>' : ''}</div>
+                <div style="font-size: 11px; color: var(--ink-mute); margin-top: 2px;">${items.length} agendada${items.length === 1 ? '' : 's'} · ${restantes} restante${restantes === 1 ? '' : 's'}${owed > 0 ? ` · <span style="color: #8B6F1A; font-weight: 500;">debe S/ ${owed.toFixed(2)}</span>` : ' · pagado ✓'}</div>
+              </div>
+            </div>
+          </summary>
+          <div style="margin-top: 8px;">
+            ${items.map(renderUpcomingRow).join('')}
+          </div>
+        </details>
+      `);
+    });
+
+    // Bookings sin paquete asignado
+    if (bookingsSinPkg.length > 0) {
+      groupBlocks.push(`
+        <details style="margin-bottom: 12px;">
+          <summary style="background: #FEF7E6; border: 1px solid #F4D58A; border-radius: var(--radius-sm); padding: 12px 16px; cursor: pointer; list-style: none;">
+            <div style="font-family: var(--display); font-size: 14px; color: #633806; font-style: italic;">Sin paquete asignado (${bookingsSinPkg.length})</div>
+            <div style="font-size: 11px; color: #854F0B; margin-top: 2px;">Click para ver</div>
+          </summary>
+          <div style="margin-top: 8px;">${bookingsSinPkg.map(renderUpcomingRow).join('')}</div>
+        </details>
+      `);
+    }
+
+    listHTML = groupBlocks.join('') || '<p style="color: var(--ink-mute); font-size: 13px; padding: 20px 0;">No hay clases próximas.</p>';
   } else {
     listHTML = classes.map(b => {
       const sess = b.class_sessions;
