@@ -5752,21 +5752,61 @@ function closeReplacementModal() {
 async function executeReplacement(bookingToCancelId, studentId, hour) {
   if (!isOnline) { showToast('Conexión requerida', 'error'); return; }
 
-  // 1. Cancelar el booking elegido
+  const student = STATE.students.find(s => s.id === studentId);
+  if (!student) { showToast('Alumno no encontrado', 'error'); return; }
+
+  // 1. Cancelar el booking elegido (libera el cupo)
   const { error: cancelErr } = await sb.from('session_bookings')
-    .update({ cancelled_at: new Date().toISOString() })
+    .update({ cancelled_at: new Date().toISOString(), cancelled_reason: 'replaced' })
     .eq('id', bookingToCancelId);
   if (cancelErr) {
     showToast('Error cancelando: ' + cancelErr.message, 'error');
     return;
   }
 
-  // 2. Cerrar modales y refrescar contexto
-  closeReplacementModal();
-  ADD_FLEX_CTX = { hour };
+  // 2. Crear/obtener sesión de hoy
+  const loc = getCurrentLocation();
+  const sessionId = await getOrCreateSession(loc.id, STATE.currentDate, hour);
+  if (!sessionId) { showToast('Error creando la clase', 'error'); return; }
 
-  // 3. Re-llamar al flujo original (ahora hay 1 cupo libre)
-  await addStudentToClass(studentId);
+  // 3. Insert/re-activar booking para hoy directamente (sin re-validar capacidad)
+  const source = student.modality === 'flexible' ? 'flexible' : 'fixed';
+  const { data: dbExisting } = await sb.from('session_bookings')
+    .select('id, cancelled_at')
+    .eq('session_id', sessionId)
+    .eq('student_id', studentId)
+    .maybeSingle();
+
+  let bookingErr = null;
+  if (dbExisting && dbExisting.cancelled_at) {
+    const r = await sb.from('session_bookings')
+      .update({ cancelled_at: null, cancelled_reason: null })
+      .eq('id', dbExisting.id);
+    bookingErr = r.error;
+  } else if (dbExisting) {
+    showToast(`${student.first_name} ya está en la clase de hoy`, 'error');
+    closeReplacementModal();
+    closeModals();
+    return;
+  } else {
+    const r = await sb.from('session_bookings').insert({
+      session_id: sessionId,
+      student_id: studentId,
+      source,
+    });
+    bookingErr = r.error;
+  }
+
+  if (bookingErr) {
+    showToast('Error agregando: ' + bookingErr.message, 'error');
+    return;
+  }
+
+  // 4. Cerrar modales y refrescar
+  closeReplacementModal();
+  closeModals();
+  showToast(`${student.first_name} agregado · clase agendada movida a hoy`, 'success');
+  await loadAll();
 }
 
 async function addStudentToClass(studentId) {
@@ -5775,8 +5815,8 @@ async function addStudentToClass(studentId) {
   const sessionId = await getOrCreateSession(loc.id, STATE.currentDate, ADD_FLEX_CTX.hour);
   if (!sessionId) { showToast('Error creando la clase', 'error'); return; }
 
-  // Verificar que no esté ya
-  const existing = STATE.sessionBookings.find(b => b.session_id === sessionId && b.student_id === studentId);
+  // Verificar que no esté ya (solo bookings activos, no cancelados)
+  const existing = STATE.sessionBookings.find(b => b.session_id === sessionId && b.student_id === studentId && !b.cancelled_at);
   if (existing) {
     showToast('El alumno ya está en esta clase', 'error');
     return;
