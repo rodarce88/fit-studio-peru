@@ -3223,6 +3223,50 @@ async function loadScheduleEditorData() {
       ed.original.add(k);
     }
   });
+
+  // FIFO: asignar bookings sin attendance a su paquete correspondiente.
+  // Las bookings agendadas (sin attendance todavía) consumen libres del paquete activo más antiguo.
+  // Esto permite que al cambiar de paquete en el selector, sepamos cuáles bookings YA pertenecían
+  // a otro paquete y no deben contarse en el conteo del paquete recién seleccionado.
+  const sortedLivePkgs = [...(ed.livePackages || [])].sort((a, b) =>
+    (a.purchase_date || a.start_date || '1900-01-01').localeCompare(b.purchase_date || b.start_date || '1900-01-01')
+  );
+  const futureUsageByPkg = new Map();
+  sortedLivePkgs.forEach(p => futureUsageByPkg.set(p.id, 0));
+
+  // Bookings sin attendance ordenadas por fecha
+  const orphanBookings = bookings
+    .filter(b => {
+      const cs = b.class_sessions;
+      if (!cs || cs.is_cancelled) return false;
+      if (b.cancelled_at) return false;
+      if (attendanceMap.has(b.id)) return false; // tiene attendance, ya está mapeada arriba
+      return true;
+    })
+    .sort((a, b) => {
+      const ka = `${a.class_sessions.session_date}|${String(a.class_sessions.hour).padStart(2,'0')}`;
+      const kb = `${b.class_sessions.session_date}|${String(b.class_sessions.hour).padStart(2,'0')}`;
+      return ka.localeCompare(kb);
+    });
+
+  orphanBookings.forEach(b => {
+    const cs = b.class_sessions;
+    const k = `${cs.session_date}|${cs.hour}`;
+    if (ed.bookingPkgMap.has(k)) return; // ya asignada (no debería pasar pero por si acaso)
+    // Encontrar el primer paquete con purchase_date <= session_date y libres disponibles
+    const eligible = sortedLivePkgs.find(p => {
+      const pkgStart = p.purchase_date || p.start_date || '1900-01-01';
+      if (pkgStart > cs.session_date) return false;
+      const libreOriginal = (p.classes_total || 0) - (p.classes_used || 0);
+      const usedByBookings = futureUsageByPkg.get(p.id) || 0;
+      return usedByBookings < libreOriginal;
+    });
+    if (eligible) {
+      ed.bookingPkgMap.set(k, eligible.id);
+      futureUsageByPkg.set(eligible.id, (futureUsageByPkg.get(eligible.id) || 0) + 1);
+    }
+  });
+  console.log('[schedEditor] bookingPkgMap entries:', ed.bookingPkgMap.size);
   ed.selected = new Set(ed.original);
 
   console.log('[schedEditor] step 4: load occupancy');
@@ -7866,6 +7910,8 @@ async function saveRegisterPayment() {
   if (STATE.studentDetailId === studentId && document.getElementById('view-student-detail')?.classList.contains('is-active')) {
     openStudentDetail(studentId);
   }
+  // Refrescar widget de "Por cobrar" en Mi día
+  if (typeof loadToPayList === 'function') loadToPayList();
 }
 
 function openFreezeModal(packageId) {
