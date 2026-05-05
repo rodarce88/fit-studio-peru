@@ -5080,11 +5080,29 @@ async function recalcPackageCounters(studentId) {
   }
 
   // Cargar todas las attendances del alumno
-  const { data: allAtt } = await sb.from('attendance')
-    .select('id, status, counts_against_package, is_recoverable, student_package_id, class_sessions(session_date)')
+  // OJO: usamos select('*') en lugar de listar columnas explícitas
+  // porque PostgREST a veces tiene cache stale y falla al pedir student_package_id por nombre.
+  // Con * trae todas las columnas que estén en su cache (suficiente).
+  const { data: allAtt, error: attErr } = await sb.from('attendance')
+    .select('*, class_sessions(session_date)')
     .eq('student_id', studentId);
 
+  if (attErr) {
+    console.error('[recalcPackageCounters] ERROR cargando attendances:', attErr.message, attErr.details, attErr.hint);
+    return;
+  }
+
   console.log(`[recalcPackageCounters] alumno ${studentId}: ${(allAtt || []).length} att(s), ${allPkgs.length} pkg(s)`);
+  if ((allAtt || []).length > 0) {
+    const sample = allAtt[0];
+    console.log(`[recalcPackageCounters] sample att:`, {
+      id: sample.id,
+      status: sample.status,
+      counts_against_package: sample.counts_against_package,
+      student_package_id: sample.student_package_id,
+      session_date: sample.class_sessions?.session_date
+    });
+  }
 
   // ============ CLEANUP DEFENSIVO #1 ============
   // Forzar counts_against_package=true para attendances con status que SIEMPRE consumen clase
