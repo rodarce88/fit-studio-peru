@@ -3355,10 +3355,10 @@ function _renderScheduleEditorImpl() {
   const monthLabel = `${monthLabels[ed.monthDate.getMonth()]} ${ed.monthDate.getFullYear()}`;
   const loc = STATE.locations.find(l => l.id === ed.locationId);
 
-  // Selector de paquete (solo si hay 2+ paquetes vivos)
+  // Selector de paquete (siempre que haya al menos 1 paquete vivo, para que la coordinadora vea explícitamente a cuál asigna)
   const livePkgs = ed.livePackages || [];
-  const hasMultiplePackages = livePkgs.length > 1;
-  const pkgOptionsHtml = hasMultiplePackages ? `
+  const hasAnyLivePackage = livePkgs.length >= 1;
+  const pkgOptionsHtml = hasAnyLivePackage ? `
     <div style="padding: 12px 24px; background: var(--fit-lavender-pale); border-bottom: 1px solid var(--line);">
       <div style="font-size: 11px; color: var(--ink-mute); margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px;">Estás añadiendo clases al paquete:</div>
       <select onchange="changeScheduleEditorTargetPackage(this.value)" style="width: 100%; padding: 8px 10px; border: 1px solid var(--line); border-radius: 6px; font-size: 13px; background: white; color: var(--ink); font-family: inherit;">
@@ -3849,15 +3849,17 @@ async function confirmScheduleEditorChanges() {
         student_package_id: ed.targetPackageId || (ed.package ? ed.package.id : null),
       };
       if (existingAtt) {
-        // Solo actualizar si no estaba ya marcada como attended (preserva otras marcas)
-        if (existingAtt.status !== 'attended') {
-          const { error: updErr } = await sb.from('attendance').update(attPayload).eq('id', existingAtt.id);
-          if (updErr) {
-            console.error('Error updating attendance retroactiva:', updErr);
-            attendanceErrors++;
-          } else {
-            pastMarkedAttended++;
-          }
+        // Si ya estaba marked attended pero le falta student_package_id, ASEGURAR que se actualice ese campo
+        // Si no estaba attended, hacer el update completo
+        const updatePayload = (existingAtt.status !== 'attended')
+          ? attPayload
+          : { student_package_id: attPayload.student_package_id };
+        const { error: updErr } = await sb.from('attendance').update(updatePayload).eq('id', existingAtt.id);
+        if (updErr) {
+          console.error('Error updating attendance retroactiva:', updErr);
+          attendanceErrors++;
+        } else if (existingAtt.status !== 'attended') {
+          pastMarkedAttended++;
         }
       } else {
         const { error: insErr } = await sb.from('attendance').insert(attPayload);
@@ -5067,10 +5069,32 @@ async function recalcPackageCounters(studentId) {
 
   // Cargar todas las attendances del alumno con su student_package_id
   const { data: allAtt } = await sb.from('attendance')
-    .select('counts_against_package, is_recoverable, student_package_id')
+    .select('id, counts_against_package, is_recoverable, student_package_id')
     .eq('student_id', studentId);
 
-  // Recalcular cada paquete usando student_package_id
+  // CLEANUP DEFENSIVO: si hay attendances que cuentan pero no tienen student_package_id,
+  // asignarlas al paquete activo (FIFO = más antiguo con clases libres).
+  // Esto blinda contra desincronizaciones por bugs antiguos o asignaciones manuales sueltas.
+  const orphans = (allAtt || []).filter(a => a.counts_against_package && !a.student_package_id);
+  if (orphans.length > 0) {
+    // Encontrar paquete activo (el más antiguo con clases libres)
+    const sortedByDate = [...allPkgs].sort((a, b) => {
+      const da = a.purchase_date || a.start_date || '1900-01-01';
+      const db = b.purchase_date || b.start_date || '1900-01-01';
+      return da.localeCompare(db);
+    });
+    const activeForOrphans = sortedByDate.find(p => !p.is_frozen && (p.classes_used || 0) < (p.classes_total || 0))
+      || sortedByDate[0]; // fallback: si no hay con clases libres, el más antiguo
+    if (activeForOrphans) {
+      console.log(`[recalcPackageCounters] Vinculando ${orphans.length} attendance(s) huérfana(s) al paquete ${activeForOrphans.id}`);
+      const orphanIds = orphans.map(a => a.id);
+      await sb.from('attendance').update({ student_package_id: activeForOrphans.id }).in('id', orphanIds);
+      // Actualizar el cache local para que el siguiente cálculo lo refleje
+      orphans.forEach(a => { a.student_package_id = activeForOrphans.id; });
+    }
+  }
+
+  // Recalcular cada paquete usando student_package_id (ahora ya sin huérfanas)
   for (const pkg of allPkgs) {
     const myAtts = (allAtt || []).filter(a => a.student_package_id === pkg.id);
     const used = myAtts.filter(a => a.counts_against_package).length;
