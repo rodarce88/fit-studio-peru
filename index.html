@@ -266,6 +266,12 @@
   .modal-backdrop { position: fixed; inset: 0; background: rgba(26, 20, 25, 0.5); backdrop-filter: blur(6px); display: none; z-index: 200; align-items: center; justify-content: center; }
   .modal-backdrop.is-open { display: flex; }
   .modal-card { background: white; border-radius: var(--radius-lg); width: 600px; max-width: 95vw; max-height: 90vh; overflow: hidden; box-shadow: var(--shadow-lg); display: flex; flex-direction: column; }
+  /* Mobile: convertir modales en bottom sheets para mejor manejo de teclado virtual */
+  @media (max-width: 600px) {
+    .modal-backdrop { align-items: flex-end; padding: 0; }
+    .modal-card { width: 100% !important; max-width: 100% !important; max-height: 92dvh; border-radius: var(--radius-lg) var(--radius-lg) 0 0; animation: modal-slide-up 0.28s ease-out; }
+    @keyframes modal-slide-up { from { transform: translateY(100%); } to { transform: translateY(0); } }
+  }
   .modal-header { padding: 22px 26px; border-bottom: 1px solid var(--line-soft); display: flex; align-items: center; justify-content: space-between; }
   .modal-title { font-family: var(--display); font-size: 22px; font-weight: 400; }
   .modal-title em { font-style: italic; color: var(--fit-purple); }
@@ -7255,6 +7261,16 @@ function openInstructorStudentSheet(studentId, dateIso, hour, locationId, curren
           <div class="inst-sa-label">No vino</div>
           <div class="inst-sa-sub">justificada / sin avisar</div>
         </button>
+        <button class="inst-sa-btn" onclick="closeInstructorStudentSheet(); instructorOpenMoveModal('${studentId}','${dateIso}',${hour},'${locationId}');">
+          <div class="inst-sa-icon">⇄</div>
+          <div class="inst-sa-label">Mover de horario</div>
+          <div class="inst-sa-sub">a otro día u hora</div>
+        </button>
+        <button class="inst-sa-btn is-danger" onclick="closeInstructorStudentSheet(); instructorRemoveFromClass('${studentId}','${dateIso}',${hour},'${locationId}');">
+          <div class="inst-sa-icon">⌫</div>
+          <div class="inst-sa-label">Quitar de la clase</div>
+          <div class="inst-sa-sub">liberar el cupo</div>
+        </button>
         ${status && status !== 'attended' ? `
           <button class="inst-sa-btn" onclick="closeInstructorStudentSheet(); instructorResetAttendance('${studentId}','${dateIso}',${hour},'${locationId}');" style="grid-column: span 2;">
             <div class="inst-sa-icon">↺</div>
@@ -7401,6 +7417,76 @@ async function instructorResetAttendance(studentId, dateIso, hour, locationId) {
   await instructorWriteAttendance(studentId, dateIso, hour, locationId, 'pending');
 }
 
+// Quita al alumno del slot (cancela el booking). Si tenía attendance, también la borra.
+async function instructorRemoveFromClass(studentId, dateIso, hour, locationId) {
+  if (!isOnline) { showToast('Necesitas conexión', 'error'); return; }
+  const stud = STATE.students.find(s => s.id === studentId);
+  const name = stud ? stud.first_name : 'el alumno';
+  if (!confirm(`¿Quitar a ${name} de esta clase?\n\nSe libera el cupo. Si tenía asistencia marcada, también se borra.`)) return;
+
+  // Buscar session
+  const { data: session } = await sb.from('class_sessions')
+    .select('id')
+    .eq('location_id', locationId)
+    .eq('session_date', dateIso)
+    .eq('hour', hour)
+    .maybeSingle();
+  if (!session) { showToast('No se pudo encontrar la clase', 'error'); return; }
+
+  // Cancelar booking (todos los activos del alumno en esta sesión)
+  await sb.from('session_bookings')
+    .update({ cancelled_at: new Date().toISOString(), cancelled_reason: 'instructor_removed' })
+    .eq('session_id', session.id)
+    .eq('student_id', studentId)
+    .is('cancelled_at', null);
+
+  // Borrar attendance si existe
+  await sb.from('attendance')
+    .delete()
+    .eq('session_id', session.id)
+    .eq('student_id', studentId);
+
+  showToast(`✓ ${name} fue quitado/a de la clase`, 'success');
+
+  // Re-render
+  const inst = CURRENT_USER.record;
+  const classes = await loadInstructorClassesForDate(inst, dateIso);
+  renderInstructorClassesBlock(classes);
+  renderInstructorNextClassBlock(classes);
+}
+
+// Abre modal de mover de horario adaptando contexto del coordinador
+function instructorOpenMoveModal(studentId, dateIso, hour, locationId) {
+  // Guardar contexto coordinador previo
+  const prevDate = STATE.currentDate;
+  const prevLocId = STATE.currentLocationId;
+  // Setear contexto temporal al de la clase del profesor
+  STATE.currentDate = new Date(dateIso + 'T12:00:00');
+  STATE.currentLocationId = locationId;
+  // Abrir modal estándar de mover
+  openMoveStudentModal(studentId, hour);
+  // Hook al cierre para restaurar contexto y re-render
+  const restore = () => {
+    STATE.currentDate = prevDate;
+    STATE.currentLocationId = prevLocId;
+    // Re-render del profesor
+    if (CURRENT_USER && CURRENT_USER.role === 'instructor') {
+      renderInstructorDay();
+    }
+  };
+  // Esperar que se cierre el modal escuchando un click en cancelar o submit
+  const modal = document.getElementById('move-student-modal');
+  if (modal) {
+    const observer = new MutationObserver(() => {
+      if (!modal.classList.contains('is-open')) {
+        observer.disconnect();
+        setTimeout(restore, 300);
+      }
+    });
+    observer.observe(modal, { attributes: true, attributeFilter: ['class'] });
+  }
+}
+
 async function instructorWriteAttendance(studentId, dateIso, hour, locationId, status) {
   if (!isOnline) { showToast('Necesitas conexión', 'error'); return; }
 
@@ -7545,12 +7631,19 @@ async function instructorOpenAddStudent(dateIso, hour, locationId) {
 function instructorRenderAddSearch(query) {
   const body = document.getElementById('inst-add-body');
   body.innerHTML = `
-    <input id="inst-add-search" placeholder="Buscar nombre o teléfono..." value="${escape(query)}"
-      style="width: 100%; padding: 10px 14px; font-size: 14px; border: 1px solid var(--line); border-radius: var(--radius-sm); margin-bottom: 12px; box-sizing: border-box;" />
+    <div style="position: sticky; top: 0; background: white; padding-bottom: 12px; z-index: 5;">
+      <input id="inst-add-search" placeholder="Buscar nombre o teléfono..." value="${escape(query)}"
+        style="width: 100%; padding: 12px 16px; font-size: 15px; border: 1.5px solid var(--line); border-radius: var(--radius-sm); box-sizing: border-box; -webkit-appearance: none;" />
+    </div>
     <div id="inst-add-results"></div>
   `;
   const input = document.getElementById('inst-add-search');
   input.addEventListener('input', (e) => instructorRenderResults(e.target.value));
+  // En mobile, al enfocar el input, scrollear el body del modal hasta arriba
+  input.addEventListener('focus', () => {
+    const card = input.closest('.modal-card');
+    if (card) card.scrollTop = 0;
+  });
   instructorRenderResults(query);
 }
 
