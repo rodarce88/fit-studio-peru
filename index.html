@@ -6732,8 +6732,8 @@ function renderInstructorGreetBlock() {
   if (hh < 12) greet = 'Buen día';
   else if (hh < 19) greet = 'Buenas tardes';
   else greet = 'Buenas noches';
-  // Sede principal del profesor (si tiene clases asociadas, mostramos la primera)
-  const loc = STATE.locations[0];
+  // Sede actualmente seleccionada en el switcher (no la primera del array)
+  const loc = getCurrentLocation();
   const locName = loc ? loc.name : '';
 
   block.innerHTML = `
