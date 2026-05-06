@@ -344,6 +344,120 @@
   details summary::-webkit-details-marker { display: none; }
   details summary { list-style: none; }
   details[open] > summary .upcoming-arrow { transform: rotate(90deg); }
+
+  /* ==============================================================
+     VISTA PROFESOR — REDISEÑO MOBILE (mockup A)
+     ============================================================== */
+  .inst-greet { padding: 8px 0 18px; }
+  .inst-greet-tag { font-size: 11px; text-transform: uppercase; letter-spacing: 1.2px; color: var(--ink-mute); }
+  .inst-greet-title { font-family: var(--display); font-style: italic; font-size: 24px; color: var(--fit-purple-deep); margin-top: 2px; line-height: 1.1; }
+
+  .inst-day-strip { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 6px; margin-bottom: 16px; }
+  .inst-day-strip::-webkit-scrollbar { display: none; }
+  .inst-day-pill { flex: 0 0 auto; min-width: 46px; padding: 8px 0; border-radius: 12px; background: white; border: 1px solid var(--line); text-align: center; cursor: pointer; transition: all 0.15s; }
+  .inst-day-pill:hover { border-color: var(--fit-purple); }
+  .inst-day-pill.is-active { background: var(--fit-purple); border-color: var(--fit-purple); color: white; }
+  .inst-day-pill.is-today:not(.is-active) { border-color: var(--fit-purple); color: var(--fit-purple); }
+  .inst-day-pill .dow { font-size: 9px; text-transform: uppercase; letter-spacing: 0.5px; opacity: 0.7; }
+  .inst-day-pill .num { font-family: var(--display); font-size: 16px; font-weight: 600; margin-top: 2px; }
+  .inst-day-pill.is-other { background: var(--fit-lavender-pale); border-style: dashed; color: var(--fit-purple); font-size: 11px; padding: 14px 12px; min-width: 80px; }
+
+  /* Next class card morado */
+  .inst-next-card { background: linear-gradient(135deg, var(--fit-purple) 0%, var(--fit-purple-deep) 100%); color: white; border-radius: 18px; padding: 18px; margin-bottom: 18px; position: relative; overflow: hidden; }
+  .inst-next-card::before { content: ''; position: absolute; top: -40px; right: -40px; width: 140px; height: 140px; background: radial-gradient(circle, rgba(255,255,255,0.12), transparent); pointer-events: none; }
+  .inst-next-tag { font-size: 10px; text-transform: uppercase; letter-spacing: 1.5px; opacity: 0.7; display: flex; align-items: center; gap: 6px; }
+  .inst-next-tag::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: #FF8B5C; box-shadow: 0 0 0 4px rgba(255,139,92,0.3); animation: inst-pulse 1.6s ease-out infinite; }
+  @keyframes inst-pulse { 0%,100% { box-shadow: 0 0 0 4px rgba(255,139,92,0.3); } 50% { box-shadow: 0 0 0 7px rgba(255,139,92,0.15); } }
+  .inst-next-time { font-family: var(--display); font-style: italic; font-size: 36px; line-height: 1; margin-top: 4px; }
+  .inst-next-info { font-size: 13px; opacity: 0.9; margin-top: 6px; }
+
+  /* Past hours toggle */
+  .inst-past-toggle { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; margin-bottom: 14px; background: white; border: 1px dashed var(--line); border-radius: 12px; cursor: pointer; transition: all 0.2s; font-size: 12px; color: var(--ink-mute); }
+  .inst-past-toggle:hover { border-color: var(--fit-purple); background: var(--fit-lavender-pale); color: var(--fit-purple); }
+  .inst-past-toggle strong { color: var(--fit-purple); font-weight: 500; }
+  .inst-past-toggle.is-open { background: var(--fit-lavender-pale); border-color: var(--fit-purple); border-style: solid; color: var(--fit-purple); }
+
+  .inst-section-title { font-size: 11px; text-transform: uppercase; letter-spacing: 1.3px; color: var(--ink-mute); font-weight: 500; margin: 4px 0 10px; display: flex; justify-content: space-between; align-items: center; }
+  .inst-section-title .pill { font-size: 10px; background: var(--fit-lavender-pale); color: var(--fit-purple); padding: 3px 8px; border-radius: 999px; letter-spacing: 0.5px; text-transform: none; font-weight: 500; }
+
+  /* Hour cards (rediseñadas) */
+  .inst-hour-card { background: white; border: 1px solid var(--line); border-radius: 16px; margin-bottom: 10px; overflow: hidden; transition: opacity 0.2s; }
+  .inst-hour-card.is-now { border-color: var(--fit-purple); box-shadow: 0 4px 16px rgba(91, 42, 143, 0.1); }
+  .inst-hour-card.is-past { opacity: 0.55; }
+  .inst-hour-card.is-not-delivered { opacity: 0.45; background: repeating-linear-gradient(45deg, white, white 14px, rgba(150,150,150,0.06) 14px, rgba(150,150,150,0.06) 16px); }
+  .inst-hour-head { display: flex; align-items: center; gap: 14px; padding: 14px 16px; }
+  .inst-hour-time { font-family: var(--display); font-style: italic; font-size: 22px; color: var(--fit-purple); min-width: 56px; }
+  .inst-hour-card.is-past .inst-hour-time { color: var(--ink-mute); }
+  .inst-hour-meta { flex: 1; min-width: 0; }
+  .inst-hour-meta .label { font-size: 13px; font-weight: 500; }
+  .inst-hour-meta .sub { font-size: 11px; color: var(--ink-mute); margin-top: 2px; }
+  .inst-hour-count { background: var(--fit-lavender-pale); color: var(--fit-purple); padding: 4px 10px; border-radius: 999px; font-size: 11px; font-weight: 500; flex-shrink: 0; }
+  .inst-hour-count.is-empty { background: var(--fit-cream); color: var(--ink-mute); }
+  .inst-hour-students { border-top: 1px solid var(--line); }
+
+  /* Student row */
+  .inst-stud-row { display: flex; align-items: center; gap: 12px; padding: 12px 16px; transition: background 0.15s; }
+  .inst-stud-row + .inst-stud-row { border-top: 1px solid var(--fit-lavender-pale); }
+  .inst-stud-row.is-attended { background: var(--good-soft); }
+  .inst-stud-row.is-recoverable { background: var(--warn-soft); }
+  .inst-stud-row.is-lost, .inst-stud-row.is-no_show { background: #FCEBEB; }
+  .inst-stud-tap { display: flex; flex: 1; min-width: 0; align-items: center; gap: 12px; cursor: pointer; }
+  .inst-stud-tap:hover { opacity: 0.85; }
+  .inst-stud-avatar { width: 36px; height: 36px; border-radius: 50%; background: var(--fit-lavender-pale); color: var(--fit-purple); display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 500; flex-shrink: 0; }
+  .inst-stud-info { flex: 1; min-width: 0; }
+  .inst-stud-name { font-size: 13px; font-weight: 500; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  .inst-stud-tag { font-size: 9px; padding: 2px 6px; border-radius: 4px; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 500; background: var(--fit-lavender-pale); color: var(--fit-purple); }
+  .inst-stud-tag.is-flex { background: #FEE7E0; color: #C24F2C; }
+  .inst-stud-meta { font-size: 11px; color: var(--ink-mute); margin-top: 2px; }
+  .inst-stud-status { font-size: 11px; color: var(--good); margin-top: 2px; font-weight: 500; }
+  .inst-stud-status.is-warn { color: #633806; }
+  .inst-stud-status.is-danger { color: #791F1F; }
+
+  /* Check button inline */
+  .inst-check-btn { width: 36px; height: 36px; border-radius: 50%; border: 1.5px solid var(--line); background: white; display: flex; align-items: center; justify-content: center; font-size: 14px; color: var(--ink-mute); cursor: pointer; flex-shrink: 0; transition: all 0.15s; }
+  .inst-check-btn:hover { border-color: var(--good); color: var(--good); }
+  .inst-check-btn.is-attended { background: var(--good); border-color: var(--good); color: white; }
+
+  /* Empty slot */
+  .inst-empty-slot { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-top: 1px dashed var(--line); color: var(--ink-mute); font-size: 12px; cursor: pointer; transition: all 0.15s; }
+  .inst-empty-slot:hover { background: var(--fit-lavender-pale); color: var(--fit-purple); }
+  .inst-empty-slot-icon { width: 28px; height: 28px; border-radius: 50%; border: 1px dashed var(--line); display: flex; align-items: center; justify-content: center; font-size: 14px; }
+
+  /* Empty state */
+  .inst-empty-day { background: white; border: 1px solid var(--line); border-radius: 16px; padding: 50px 24px; text-align: center; }
+  .inst-empty-day-title { font-family: var(--display); font-style: italic; font-size: 22px; color: var(--fit-purple-deep); }
+  .inst-empty-day-sub { font-size: 13px; color: var(--ink-mute); margin-top: 8px; }
+
+  /* Stats compact (footer) */
+  .inst-stats-footer { background: white; border: 1px solid var(--line); border-radius: 16px; padding: 16px 18px; margin-top: 22px; }
+  .inst-stats-footer-title { font-size: 11px; text-transform: uppercase; letter-spacing: 1.2px; color: var(--ink-mute); margin-bottom: 12px; }
+  .inst-stats-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  .inst-stat-cell { text-align: center; }
+  .inst-stat-num { font-family: var(--display); font-style: italic; font-size: 28px; color: var(--fit-purple); line-height: 1; }
+  .inst-stat-lbl { font-size: 10px; color: var(--ink-mute); text-transform: uppercase; letter-spacing: 0.8px; margin-top: 6px; }
+
+  /* Bottom sheet del alumno */
+  .inst-sheet-backdrop { position: fixed; inset: 0; background: rgba(26,20,25,0.55); backdrop-filter: blur(4px); display: none; align-items: flex-end; z-index: 200; }
+  .inst-sheet-backdrop.is-open { display: flex; }
+  .inst-sheet { background: var(--fit-cream); border-radius: 24px 24px 0 0; width: 100%; max-width: 520px; margin: 0 auto; padding-top: 12px; animation: inst-slide-up 0.28s ease-out; max-height: 85vh; overflow-y: auto; }
+  @keyframes inst-slide-up { from { transform: translateY(100%); } to { transform: translateY(0); } }
+  .inst-sheet-handle { width: 40px; height: 4px; background: var(--line); border-radius: 2px; margin: 0 auto 12px; }
+  .inst-sheet-header { padding: 8px 24px 16px; display: flex; align-items: center; gap: 14px; border-bottom: 1px solid var(--line); }
+  .inst-sheet-avatar { width: 56px; height: 56px; border-radius: 50%; background: var(--fit-lavender-pale); color: var(--fit-purple); display: flex; align-items: center; justify-content: center; font-size: 16px; font-weight: 500; flex-shrink: 0; }
+  .inst-sheet-info { flex: 1; min-width: 0; }
+  .inst-sheet-name { font-family: var(--display); font-style: italic; font-size: 22px; color: var(--ink); line-height: 1.1; }
+  .inst-sheet-meta { font-size: 12px; color: var(--ink-mute); margin-top: 4px; }
+  .inst-sheet-close { width: 32px; height: 32px; border-radius: 50%; background: white; border: 1px solid var(--line); display: flex; align-items: center; justify-content: center; font-size: 14px; color: var(--ink-mute); flex-shrink: 0; cursor: pointer; }
+  .inst-sheet-actions { padding: 16px 16px 24px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .inst-sa-btn { background: white; border: 1px solid var(--line); border-radius: 14px; padding: 16px 12px; display: flex; flex-direction: column; align-items: center; gap: 6px; cursor: pointer; transition: all 0.15s; text-align: center; color: var(--ink); font-family: var(--body); }
+  .inst-sa-btn:hover { border-color: var(--fit-purple); background: var(--fit-lavender-pale); }
+  .inst-sa-btn.is-primary { background: var(--good); border-color: var(--good); color: white; }
+  .inst-sa-btn.is-warn:hover { background: var(--warn-soft); border-color: var(--warn); color: var(--warn); }
+  .inst-sa-btn.is-danger:hover { background: var(--danger-soft); border-color: var(--danger); color: var(--danger); }
+  .inst-sa-icon { font-size: 22px; width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.04); }
+  .inst-sa-btn.is-primary .inst-sa-icon { background: rgba(255,255,255,0.2); }
+  .inst-sa-label { font-size: 12px; font-weight: 500; }
+  .inst-sa-sub { font-size: 10px; opacity: 0.7; }
 </style>
 </head>
 <body>
@@ -6433,16 +6547,21 @@ async function renderInstructorDay() {
   // Estado por defecto
   if (!STATE.instDayDate) STATE.instDayDate = dateToIsoLocal(new Date());
   if (!STATE.instDayFilter) STATE.instDayFilter = 'today';
+  if (STATE.instShowPast === undefined) STATE.instShowPast = false;
 
   const container = document.getElementById('instructor-view-container');
   const isFirstRender = !container.querySelector('[data-inst-shell]');
   if (isFirstRender) {
-    // Render shell con placeholders, no flash
     container.innerHTML = `
       <div data-inst-shell>
-        <div data-inst-stats style="background: white; border: 1px solid var(--line); border-radius: var(--radius-lg); padding: 18px 22px; margin-bottom: 18px; min-height: 130px;"></div>
-        <div data-inst-filters style="margin-bottom: 14px;"></div>
-        <div data-inst-classes style="display: flex; flex-direction: column; gap: 12px; min-height: 100px;"></div>
+        <div data-inst-greet></div>
+        <div data-inst-daystrip></div>
+        <div data-inst-pending-banner></div>
+        <div data-inst-next style="margin-bottom: 18px;"></div>
+        <div data-inst-classes-header></div>
+        <div data-inst-past-toggle></div>
+        <div data-inst-classes style="display: flex; flex-direction: column; gap: 0; min-height: 100px;"></div>
+        <div data-inst-stats></div>
       </div>
     `;
   }
@@ -6451,13 +6570,14 @@ async function renderInstructorDay() {
   await autoMarkInstructorClassStates(inst.id);
 
   // Cargar stats del mes solo si no están cacheadas o son del mes anterior
-  const monthKey = new Date().toISOString().slice(0,7); // YYYY-MM
+  const monthKey = new Date().toISOString().slice(0,7);
   if (!STATE.instMonthStats || STATE.instMonthStatsKey !== monthKey) {
     STATE.instMonthStats = await loadInstructorMonthStats(inst.id);
     STATE.instMonthStatsKey = monthKey;
   }
-  renderInstructorStatsBlock(STATE.instMonthStats);
-  renderInstructorFiltersBlock();
+
+  renderInstructorGreetBlock();
+  renderInstructorDayStrip();
 
   // Cargar pendientes por marcar (banner arriba)
   const pending = await loadInstructorPendingClasses(inst.id);
@@ -6465,7 +6585,9 @@ async function renderInstructorDay() {
 
   // Cargar y renderizar clases del día
   const classes = await loadInstructorClassesForDate(inst, STATE.instDayDate);
+  renderInstructorNextClassBlock(classes);
   renderInstructorClassesBlock(classes);
+  renderInstructorStatsBlock(STATE.instMonthStats);
 }
 
 // Auto-actualiza class_status:
@@ -6508,21 +6630,13 @@ async function loadInstructorPendingClasses(instructorId) {
 }
 
 function renderInstructorPendingBanner(pending) {
-  // Insertar banner antes del bloque de stats si hay pendientes
-  const shell = document.querySelector('[data-inst-shell]');
-  let banner = document.querySelector('[data-inst-pending]');
+  // Insertar banner en su contenedor reservado
+  const banner = document.querySelector('[data-inst-pending-banner]');
+  if (!banner) return;
 
   if (!pending || pending.length === 0) {
-    if (banner) banner.remove();
+    banner.innerHTML = '';
     return;
-  }
-
-  if (!banner) {
-    banner = document.createElement('div');
-    banner.setAttribute('data-inst-pending', '');
-    banner.style.cssText = 'background: #FAEEDA; border: 1px solid #F4D58A; border-radius: var(--radius-md); padding: 14px 18px; margin-bottom: 14px;';
-    const stats = document.querySelector('[data-inst-stats]');
-    shell.insertBefore(banner, stats);
   }
 
   const monthLabels = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
@@ -6543,11 +6657,13 @@ function renderInstructorPendingBanner(pending) {
   }).join('');
 
   banner.innerHTML = `
-    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
-      <div style="font-size: 11px; color: #633806; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">⏰ ${pending.length} clase${pending.length === 1 ? '' : 's'} pendiente${pending.length === 1 ? '' : 's'} de marcar</div>
+    <div style="background: #FAEEDA; border: 1px solid #F4D58A; border-radius: var(--radius-md); padding: 14px 18px; margin-bottom: 14px;">
+      <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+        <div style="font-size: 11px; color: #633806; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">⏰ ${pending.length} clase${pending.length === 1 ? '' : 's'} pendiente${pending.length === 1 ? '' : 's'} de marcar</div>
+      </div>
+      <div style="font-size: 11px; color: #854F0B; margin-bottom: 4px;">Tienes 3 días desde la fecha de cada clase para confirmar asistencia. Si no, la clase queda como no dictada.</div>
+      ${items}
     </div>
-    <div style="font-size: 11px; color: #854F0B; margin-bottom: 4px;">Tienes 3 días desde la fecha de cada clase para confirmar asistencia. Si no, la clase queda como no dictada.</div>
-    ${items}
   `;
 }
 
@@ -6560,6 +6676,116 @@ async function instructorGoToPending(dateIso, locationId) {
   renderInstructorClassesBlock(classes);
 }
 
+function renderInstructorGreetBlock() {
+  const block = document.querySelector('[data-inst-greet]');
+  if (!block) return;
+  const inst = CURRENT_USER && CURRENT_USER.record;
+  const firstName = inst ? (inst.first_name || 'Profe') : 'Profe';
+  const now = new Date();
+  const hh = now.getHours();
+  let greet = 'Hola';
+  if (hh < 12) greet = 'Buen día';
+  else if (hh < 19) greet = 'Buenas tardes';
+  else greet = 'Buenas noches';
+  // Sede principal del profesor (si tiene clases asociadas, mostramos la primera)
+  const loc = STATE.locations[0];
+  const locName = loc ? loc.name : '';
+
+  block.innerHTML = `
+    <div class="inst-greet">
+      <div class="inst-greet-tag">${greet}, ${escape(firstName)}${hh >= 6 ? ` · ${hh > 12 ? hh-12 : (hh === 0 ? 12 : hh)}:${now.getMinutes().toString().padStart(2,'0')} ${hh >= 12 ? 'pm' : 'am'}` : ''}</div>
+      <div class="inst-greet-title">Tu día${locName ? ` en <em>${escape(locName)}</em>` : ''}</div>
+    </div>
+  `;
+}
+
+function renderInstructorDayStrip() {
+  const block = document.querySelector('[data-inst-daystrip]');
+  if (!block) return;
+  const todayIso = dateToIsoLocal(new Date());
+  const dowLabels = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
+
+  // 7 días empezando hoy (excepto si está mirando otra fecha pasada/futura, en cuyo caso muestra 3 antes y 3 después)
+  const baseDate = new Date();
+  baseDate.setHours(0,0,0,0);
+  const pills = [];
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(baseDate);
+    d.setDate(d.getDate() + i);
+    const iso = dateToIsoLocal(d);
+    const isToday = iso === todayIso;
+    const isActive = iso === STATE.instDayDate;
+    pills.push(`
+      <div class="inst-day-pill ${isActive ? 'is-active' : ''} ${isToday && !isActive ? 'is-today' : ''}" onclick="instructorSetDateIso('${iso}')">
+        <div class="dow">${dowLabels[d.getDay()]}</div>
+        <div class="num">${d.getDate()}</div>
+      </div>
+    `);
+  }
+  // Botón "Otra fecha"
+  pills.push(`<div class="inst-day-pill is-other" onclick="instructorOpenDatePicker()">Otra<br/>fecha</div>`);
+
+  block.innerHTML = `
+    <div class="inst-day-strip">${pills.join('')}</div>
+    <input type="date" id="inst-date-picker" onchange="instructorSetCustomDate(this.value)" value="${STATE.instDayDate}" style="display:none;" />
+  `;
+}
+
+function renderInstructorNextClassBlock(classes) {
+  const block = document.querySelector('[data-inst-next]');
+  if (!block) return;
+
+  const todayIso = dateToIsoLocal(new Date());
+  const isViewingToday = STATE.instDayDate === todayIso;
+  const now = new Date();
+  const currentHour = now.getHours();
+  const currentMin = now.getMinutes();
+
+  // Solo mostrar la card de "próxima/en curso" si estamos viendo HOY
+  if (!isViewingToday) { block.innerHTML = ''; return; }
+
+  // Buscar la clase que está en curso o la próxima
+  const sorted = [...(classes || [])].sort((a,b) => a.hour - b.hour);
+  // En curso: si current hour == c.hour O si current hour == c.hour-1 y currentMin >= 50 (margen 10 min)
+  let inProgress = sorted.find(c => {
+    const status = c.session?.class_status || 'scheduled';
+    if (status === 'delivered' || c.session?.is_cancelled) return false;
+    return currentHour === c.hour || (currentHour === c.hour - 1 && currentMin >= 50);
+  });
+  let next = null;
+  if (!inProgress) {
+    next = sorted.find(c => {
+      const status = c.session?.class_status || 'scheduled';
+      if (status === 'delivered' || c.session?.is_cancelled) return false;
+      return c.hour > currentHour || (c.hour === currentHour && currentMin < 10);
+    });
+  }
+  const target = inProgress || next;
+  if (!target) { block.innerHTML = ''; return; }
+
+  const isInProgress = !!inProgress;
+  const studentsCount = target.students.length;
+  const markedCount = target.marked || 0;
+
+  // Calcular tiempo hasta inicio
+  let timeLabel = '';
+  if (isInProgress) {
+    timeLabel = 'en curso ahora';
+  } else {
+    const minsToStart = (target.hour - currentHour) * 60 - currentMin;
+    if (minsToStart < 60) timeLabel = `en ${minsToStart} min`;
+    else { const h = Math.floor(minsToStart/60); const m = minsToStart % 60; timeLabel = `en ${h}h${m > 0 ? ` ${m}min` : ''}`; }
+  }
+
+  block.innerHTML = `
+    <div class="inst-next-card">
+      <div class="inst-next-tag">${isInProgress ? 'EN CURSO · AHORA' : 'TU PRÓXIMA CLASE'}</div>
+      <div class="inst-next-time">${formatHour(target.hour)}</div>
+      <div class="inst-next-info">${timeLabel} · ${studentsCount} alumno${studentsCount === 1 ? '' : 's'}${isInProgress && markedCount > 0 ? ` · ${markedCount} ya marcado${markedCount === 1 ? '' : 's'}` : ''}</div>
+    </div>
+  `;
+}
+
 function renderInstructorStatsBlock(stats) {
   const block = document.querySelector('[data-inst-stats]');
   if (!block) return;
@@ -6569,86 +6795,131 @@ function renderInstructorStatsBlock(stats) {
   const totalMarked = stats.attended + stats.recoverable + stats.lost + stats.no_show;
   const totalExpected = Math.max(stats.students, totalMarked);
   const pctAttended = totalExpected > 0 ? Math.round((stats.attended / totalExpected) * 100) : 0;
-  const segAttended = totalExpected > 0 ? (stats.attended / totalExpected) * 100 : 0;
-  const segRecoverable = totalExpected > 0 ? (stats.recoverable / totalExpected) * 100 : 0;
-  const segLost = totalExpected > 0 ? (stats.lost / totalExpected) * 100 : 0;
-  const segNoShow = totalExpected > 0 ? (stats.no_show / totalExpected) * 100 : 0;
 
   block.innerHTML = `
-    <div style="display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 14px;">
-      <div style="font-size: 11px; color: var(--ink-mute); text-transform: uppercase; letter-spacing: 0.5px;">Tu ${monthLabel}</div>
-      <div style="font-size: 11px; color: var(--ink-mute);">al ${now.getDate()} ${monthLabel.slice(0,3)}.</div>
+    <div class="inst-stats-footer">
+      <div class="inst-stats-footer-title">Tu ${monthLabel} · al ${now.getDate()} ${monthLabel.slice(0,3)}.</div>
+      <div class="inst-stats-grid">
+        <div class="inst-stat-cell">
+          <div class="inst-stat-num">${stats.classes}</div>
+          <div class="inst-stat-lbl">clases</div>
+        </div>
+        <div class="inst-stat-cell">
+          <div class="inst-stat-num">${totalExpected}</div>
+          <div class="inst-stat-lbl">alumnos</div>
+        </div>
+        <div class="inst-stat-cell">
+          <div class="inst-stat-num" style="color: var(--good);">${stats.attended}</div>
+          <div class="inst-stat-lbl">asistieron</div>
+        </div>
+      </div>
+      ${totalExpected > 0 ? `
+        <div style="margin-top: 14px;">
+          <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px;">
+            <div style="font-size: 11px; color: var(--ink-mute);">tasa de asistencia</div>
+            <div style="font-size: 13px; font-weight: 500; color: var(--good);">${pctAttended}%</div>
+          </div>
+          <div style="height: 6px; background: var(--bg); border-radius: 999px; overflow: hidden;">
+            <div style="width: ${pctAttended}%; height: 100%; background: var(--good);"></div>
+          </div>
+        </div>
+      ` : ''}
     </div>
-    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 18px;">
-      <div style="text-align: center;">
-        <div style="font-family: var(--display); font-size: 30px; color: var(--fit-purple); line-height: 1;">${stats.classes}</div>
-        <div style="font-size: 11px; color: var(--ink-mute); margin-top: 4px;">clases</div>
-      </div>
-      <div style="text-align: center; border-left: 1px solid var(--line); border-right: 1px solid var(--line);">
-        <div style="font-family: var(--display); font-size: 30px; color: var(--fit-purple); line-height: 1;">${totalExpected}</div>
-        <div style="font-size: 11px; color: var(--ink-mute); margin-top: 4px;">alumnos</div>
-      </div>
-      <div style="text-align: center;">
-        <div style="font-family: var(--display); font-size: 30px; color: #27500A; line-height: 1;">${stats.attended}</div>
-        <div style="font-size: 11px; color: var(--ink-mute); margin-top: 4px;">asistieron</div>
-      </div>
-    </div>
-    ${totalExpected > 0 ? `
-      <div>
-        <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px;">
-          <div style="font-size: 12px; color: var(--ink-mute);">tasa de asistencia</div>
-          <div style="font-size: 14px; font-weight: 500; color: #27500A;">${pctAttended}%</div>
-        </div>
-        <div style="height: 8px; background: var(--bg); border-radius: 999px; overflow: hidden; display: flex;">
-          <div style="width: ${segAttended}%; background: #639922;"></div>
-          <div style="width: ${segRecoverable}%; background: #EF9F27;"></div>
-          <div style="width: ${segLost}%; background: #D85A30;"></div>
-          <div style="width: ${segNoShow}%; background: #E24B4A;"></div>
-        </div>
-        <div style="display: flex; gap: 14px; flex-wrap: wrap; margin-top: 8px; font-size: 11px; color: var(--ink-mute);">
-          <div style="display: flex; align-items: center; gap: 5px;"><span style="width: 7px; height: 7px; border-radius: 50%; background: #EF9F27; display: inline-block;"></span>${stats.recoverable} justific.</div>
-          <div style="display: flex; align-items: center; gap: 5px;"><span style="width: 7px; height: 7px; border-radius: 50%; background: #D85A30; display: inline-block;"></span>${stats.lost} cancel. tardía</div>
-          <div style="display: flex; align-items: center; gap: 5px;"><span style="width: 7px; height: 7px; border-radius: 50%; background: #E24B4A; display: inline-block;"></span>${stats.no_show} no avisó</div>
-        </div>
-      </div>
-    ` : ''}
   `;
 }
 
 function renderInstructorFiltersBlock() {
+  // Esta función queda obsoleta: ahora usamos day-strip directamente.
+  // La dejamos vacía por compatibilidad si algún call-site la invoca.
   const block = document.querySelector('[data-inst-filters]');
-  if (!block) return;
-  const todayIso = dateToIsoLocal(new Date());
-  const tomorrowIso = new Date(Date.now() + 86400000).toISOString().slice(0,10);
-  const dateObj = new Date(STATE.instDayDate + 'T12:00:00');
-  const dayLabels = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
-  const monthLabels = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
-  const dateLabel = `${dayLabels[dateObj.getDay()]} ${dateObj.getDate()} ${monthLabels[dateObj.getMonth()]}`;
-
-  block.innerHTML = `
-    <div style="display: flex; gap: 6px; align-items: center; flex-wrap: wrap;">
-      <button onclick="instructorSetDate('today')" class="inst-pill ${STATE.instDayFilter === 'today' ? 'is-active' : ''}">Hoy</button>
-      <button onclick="instructorSetDate('tomorrow')" class="inst-pill ${STATE.instDayFilter === 'tomorrow' ? 'is-active' : ''}">Mañana</button>
-      <button onclick="instructorOpenDatePicker()" class="inst-pill ${STATE.instDayFilter === 'other' ? 'is-active' : ''}">Otra fecha</button>
-      <input type="date" id="inst-date-picker" onchange="instructorSetCustomDate(this.value)" value="${STATE.instDayDate}" style="${STATE.instDayFilter === 'other' ? '' : 'display: none;'} padding: 7px 10px; font-size: 12px; border: 1px solid var(--line); border-radius: 999px;" />
-      <div style="flex: 1; text-align: right; font-size: 12px; color: var(--ink-mute);">${dateLabel}${STATE.instDayDate === todayIso ? ' · hoy' : (STATE.instDayDate === tomorrowIso ? ' · mañana' : '')}</div>
-    </div>
-  `;
+  if (block) block.innerHTML = '';
 }
 
 function renderInstructorClassesBlock(classes) {
   const block = document.querySelector('[data-inst-classes]');
+  const headerBlock = document.querySelector('[data-inst-classes-header]');
+  const pastToggleBlock = document.querySelector('[data-inst-past-toggle]');
   if (!block) return;
-  if (classes.length === 0) {
+
+  if (!classes || classes.length === 0) {
+    if (headerBlock) headerBlock.innerHTML = '';
+    if (pastToggleBlock) pastToggleBlock.innerHTML = '';
     block.innerHTML = `
-      <div style="background: white; border: 1px solid var(--line); border-radius: var(--radius-lg); padding: 40px 20px; text-align: center; color: var(--ink-mute);">
-        <div style="font-family: var(--display); font-size: 18px; font-style: italic; margin-bottom: 6px;">Sin clases este día</div>
-        <div style="font-size: 13px;">No tienes turnos asignados.</div>
+      <div class="inst-empty-day">
+        <div class="inst-empty-day-title">Sin clases este día</div>
+        <div class="inst-empty-day-sub">No tienes turnos asignados.</div>
       </div>
     `;
-  } else {
-    block.innerHTML = classes.map(c => renderInstructorClassCard(c)).join('');
+    return;
   }
+
+  // Filtro temporal: solo si estamos viendo HOY
+  const todayIso = dateToIsoLocal(new Date());
+  const isViewingToday = STATE.instDayDate === todayIso;
+  const now = new Date();
+  const currentHour = now.getHours();
+  const currentMin = now.getMinutes();
+
+  // Una clase se considera "pasada" si terminó (su hora fin = hour+1, así que h < currentHour - 0)
+  // Para simplificar: pasada si h < currentHour. Margen: la hora == currentHour-1 se mantiene visible.
+  let hiddenPastSet = new Set();
+  let lastPastHour = null;
+  if (isViewingToday) {
+    const pastHours = classes.filter(c => c.hour < currentHour).map(c => c.hour);
+    if (pastHours.length > 0) lastPastHour = Math.max(...pastHours);
+    hiddenPastSet = new Set(pastHours.filter(h => h !== lastPastHour));
+  }
+
+  // Filtrar las clases visibles
+  const showAll = STATE.instShowPast || hiddenPastSet.size === 0;
+  const visibleClasses = showAll ? classes : classes.filter(c => !hiddenPastSet.has(c.hour));
+
+  // Header con label "Tu día" o equivalente
+  if (headerBlock) {
+    const visibleCount = visibleClasses.length;
+    headerBlock.innerHTML = `
+      <div class="inst-section-title">
+        <span>${isViewingToday ? 'Resto del día' : 'Clases'}</span>
+        <span class="pill">${visibleCount} ${visibleCount === 1 ? 'clase' : 'clases'}</span>
+      </div>
+    `;
+  }
+
+  // Toggle de pasadas
+  if (pastToggleBlock) {
+    if (hiddenPastSet.size > 0) {
+      if (STATE.instShowPast) {
+        pastToggleBlock.innerHTML = `
+          <div class="inst-past-toggle is-open" onclick="instructorTogglePast()">
+            <span><strong>Ocultar clases anteriores</strong> · ${hiddenPastSet.size} mostradas</span>
+            <span>▲</span>
+          </div>
+        `;
+      } else {
+        const hList = Array.from(hiddenPastSet).sort((a,b) => a-b).map(h => formatHour(h)).join(', ');
+        pastToggleBlock.innerHTML = `
+          <div class="inst-past-toggle" onclick="instructorTogglePast()">
+            <span><strong>Ver ${hiddenPastSet.size} clases anteriores</strong> · ${hList}</span>
+            <span>▼</span>
+          </div>
+        `;
+      }
+    } else {
+      pastToggleBlock.innerHTML = '';
+    }
+  }
+
+  block.innerHTML = visibleClasses.map(c => renderInstructorClassCard(c, { isViewingToday, currentHour, currentMin })).join('');
+}
+
+function instructorTogglePast() {
+  STATE.instShowPast = !STATE.instShowPast;
+  // Re-render solo las clases (más rápido que re-cargar)
+  const inst = CURRENT_USER && CURRENT_USER.record;
+  if (!inst) return;
+  loadInstructorClassesForDate(inst, STATE.instDayDate).then(classes => {
+    renderInstructorClassesBlock(classes);
+  });
 }
 
 async function loadInstructorMonthStats(instructorId) {
@@ -6780,13 +7051,14 @@ async function loadInstructorClassesForDate(inst, dateIso) {
   return result;
 }
 
-function renderInstructorClassCard(c) {
-  const now = new Date();
-  const todayIso = dateToIsoLocal(now);
+function renderInstructorClassCard(c, ctx) {
+  const todayIso = dateToIsoLocal(new Date());
   const isToday = c.dateIso === todayIso;
   const isPast = c.dateIso < todayIso;
-  const currentHour = now.getHours();
-  const currentMin = now.getMinutes();
+  ctx = ctx || {};
+  const isViewingToday = ctx.isViewingToday !== undefined ? ctx.isViewingToday : isToday;
+  const currentHour = ctx.currentHour !== undefined ? ctx.currentHour : new Date().getHours();
+  const currentMin = ctx.currentMin !== undefined ? ctx.currentMin : new Date().getMinutes();
 
   const classStatus = c.session?.class_status || 'scheduled';
   const isCancelled = c.session?.is_cancelled === true;
@@ -6794,62 +7066,244 @@ function renderInstructorClassCard(c) {
   const isNotDelivered = classStatus === 'not_delivered' || isCancelled;
   const isPending = classStatus === 'pending_confirmation';
 
-  let status = 'próxima', headerBg = 'var(--bg)', headerColor = 'var(--ink)', statusColor = 'var(--ink-mute)';
-  if (isCancelled) {
-    status = 'cancelada'; headerBg = '#F5F5F5'; headerColor = '#999'; statusColor = '#999';
-  } else if (isNotDelivered) {
-    status = 'no dictada'; headerBg = '#F5F5F5'; headerColor = '#999'; statusColor = '#999';
-  } else if (isDelivered) {
-    status = 'dictada ✓'; headerBg = '#EAF3DE'; headerColor = '#27500A'; statusColor = '#3B6D11';
-  } else if (isPending) {
-    status = '⏰ pendiente de marcar'; headerBg = '#FAEEDA'; headerColor = '#633806'; statusColor = '#854F0B';
-  } else if (isToday) {
-    if (currentHour > c.hour) { status = 'terminada'; }
-    else if (currentHour === c.hour || (currentHour === c.hour - 1 && currentMin >= 50)) {
-      status = 'en curso'; headerBg = '#EEEDFE'; headerColor = '#3C3489'; statusColor = '#534AB7';
-    }
-  } else if (isPast) {
-    status = 'terminada';
-  }
+  // Determinar estado para visual
+  const isInProgress = isViewingToday && !isDelivered && !isCancelled
+    && (currentHour === c.hour || (currentHour === c.hour - 1 && currentMin >= 50));
+  const isPastClass = (isViewingToday && c.hour < currentHour) || isPast;
 
-  const studentsHtml = c.students.length === 0
-    ? '<div style="padding: 14px 16px; color: var(--ink-mute); font-size: 13px; text-align: center;">Sin alumnos esta clase</div>'
-    : c.students.map(item => renderInstructorStudentRow(item, c)).join('');
+  // Sub-label de estado
+  let subLabel = '';
+  let labelClass = '';
+  if (isCancelled) { subLabel = 'cancelada'; labelClass = ''; }
+  else if (isNotDelivered) { subLabel = 'no dictada'; }
+  else if (isDelivered) { subLabel = 'dictada ✓'; labelClass = 'is-attended'; }
+  else if (isPending) { subLabel = '⏰ pendiente de marcar'; labelClass = 'is-warn'; }
+  else if (isInProgress) { subLabel = 'en curso'; }
+  else if (isPastClass) { subLabel = 'terminada'; }
+  else if (isToday && c.hour > currentHour) { subLabel = 'próxima'; }
+  else if (!isToday) { subLabel = ''; }
 
-  // Card con tachón si no se dictó/cancelada
-  const cardStyle = isNotDelivered
-    ? 'background: white; border: 1px solid var(--line); border-radius: var(--radius-lg); overflow: hidden; opacity: 0.6; position: relative;'
-    : 'background: white; border: 1px solid var(--line); border-radius: var(--radius-lg); overflow: hidden;';
+  const studentsCount = c.students.length;
+  const markedCount = c.marked || 0;
 
-  // Botón "Clase dictada sin asistentes" — solo si: no se dictó todavía, no está cancelada, y la clase ya pasó (o es hoy y ya empezó)
+  // Sub-info
+  const subParts = [];
+  if (subLabel) subParts.push(subLabel);
+  if (studentsCount === 0) subParts.push('sin alumnos');
+  else if (markedCount > 0 && !isDelivered) subParts.push(`${markedCount} de ${studentsCount} marcados`);
+
+  // Cards classes
+  const cardClass = [
+    'inst-hour-card',
+    isInProgress ? 'is-now' : '',
+    (isPastClass && !isInProgress) ? 'is-past' : '',
+    isNotDelivered ? 'is-not-delivered' : '',
+  ].filter(Boolean).join(' ');
+
+  // Students inside (si tiene alumnos)
+  const studentsHtml = studentsCount === 0
+    ? `<div class="inst-empty-slot" onclick="instructorOpenAddStudent('${c.dateIso}', ${c.hour}, '${c.location.id}')">
+         <div class="inst-empty-slot-icon">+</div>
+         <span>Sin alumnos · tap para agregar</span>
+       </div>`
+    : c.students.map(item => renderInstructorStudentRow(item, c)).join('') +
+      (!isCancelled && !isNotDelivered
+        ? `<div class="inst-empty-slot" onclick="instructorOpenAddStudent('${c.dateIso}', ${c.hour}, '${c.location.id}')">
+             <div class="inst-empty-slot-icon">+</div>
+             <span>Agregar alumno flexible</span>
+           </div>`
+        : '');
+
+  // Botón "Clase dictada sin asistentes" para clases ya empezadas y no marcadas
   const canMarkEmpty = !isDelivered && !isCancelled && (isPast || (isToday && currentHour >= c.hour));
-  const sessionId = c.session ? c.session.id : '';
-
-  // Acciones del card
-  let actionsHtml = '';
-  if (!isCancelled && !isNotDelivered) {
-    const actions = [];
-    actions.push(`<button onclick="instructorOpenAddStudent('${c.dateIso}', ${c.hour}, '${c.location.id}')" style="flex: 1; padding: 10px; font-size: 12px; border: 1px dashed var(--line); background: transparent; border-radius: var(--radius-sm); color: var(--ink-mute); cursor: pointer;">+ Agregar alumno</button>`);
-    if (canMarkEmpty) {
-      actions.push(`<button onclick="instructorMarkClassDelivered('${c.dateIso}', ${c.hour}, '${c.location.id}')" style="flex: 1; padding: 10px; font-size: 12px; border: 1px solid #639922; background: white; border-radius: var(--radius-sm); color: #27500A; cursor: pointer;">✓ Dictada sin asistentes</button>`);
-    }
-    actionsHtml = `<div style="border-top: 1px solid var(--line); padding: 10px 14px; display: flex; gap: 8px;">${actions.join('')}</div>`;
-  }
+  const markDeliveredBtn = canMarkEmpty && studentsCount === 0
+    ? `<div style="border-top: 1px solid var(--line); padding: 10px 14px;">
+         <button onclick="instructorMarkClassDelivered('${c.dateIso}', ${c.hour}, '${c.location.id}')" style="width:100%; padding: 10px; font-size: 12px; border: 1px solid var(--good); background: var(--good-soft); border-radius: 10px; color: #27500A; cursor: pointer; font-family: var(--body);">✓ Marcar como dictada (sin asistentes)</button>
+       </div>`
+    : '';
 
   return `
-    <div style="${cardStyle}">
-      ${isNotDelivered ? '<div style="position: absolute; inset: 0; background: repeating-linear-gradient(45deg, transparent, transparent 14px, rgba(150,150,150,0.08) 14px, rgba(150,150,150,0.08) 16px); pointer-events: none; z-index: 1;"></div>' : ''}
-      <div style="background: ${headerBg}; padding: 12px 18px; display: flex; align-items: center; justify-content: space-between; ${isNotDelivered ? 'text-decoration: line-through;' : ''}">
-        <div style="display: flex; align-items: baseline; gap: 10px;">
-          <div style="font-family: var(--display); font-size: 20px; color: ${headerColor};">${formatHour(c.hour)}</div>
-          <div style="font-size: 11px; color: ${statusColor}; font-weight: 500;">${status}</div>
+    <div class="${cardClass}">
+      <div class="inst-hour-head">
+        <div class="inst-hour-time">${formatHour(c.hour)}</div>
+        <div class="inst-hour-meta">
+          <div class="label">${studentsCount} alumno${studentsCount === 1 ? '' : 's'}${subLabel ? ` · ${subLabel}` : ''}</div>
+          ${markedCount > 0 && !isDelivered ? `<div class="sub">${markedCount} marcado${markedCount === 1 ? '' : 's'} de ${studentsCount}</div>` : ''}
         </div>
-        <div style="font-size: 11px; color: ${statusColor};">${c.marked}/${c.students.length} marcados · cap. ${c.capacity}</div>
+        <div class="inst-hour-count ${studentsCount === 0 ? 'is-empty' : ''}">${studentsCount}/${c.capacity}</div>
       </div>
-      ${studentsHtml}
-      ${actionsHtml}
+      ${studentsCount > 0 || (!isCancelled && !isNotDelivered) ? `<div class="inst-hour-students">${studentsHtml}</div>` : ''}
+      ${markDeliveredBtn}
     </div>
   `;
+}
+
+function renderInstructorStudentRow(item, classCtx) {
+  const s = item.student;
+  const att = item.attendance;
+  const status = att ? att.status : null;
+
+  const STATES = {
+    attended:    { label: 'Asistió',            klass: 'is-attended' },
+    recoverable: { label: 'Falta justificada',  klass: 'is-recoverable' },
+    lost:        { label: 'Cancelación tardía', klass: 'is-lost' },
+    no_show:     { label: 'No vino sin avisar', klass: 'is-no_show' },
+  };
+  const st = (status && STATES[status]) ? STATES[status] : null;
+  const rowKlass = st ? st.klass : '';
+
+  const isPending = att?.pending_payment_at;
+  const isTrial = s.student_status === 'trial';
+  const isFlex = s.modality === 'flexible';
+
+  // Tag
+  const tag = isFlex
+    ? '<span class="inst-stud-tag is-flex">Flex</span>'
+    : (s.modality === 'fixed' ? '<span class="inst-stud-tag">Fijo</span>' : '');
+
+  // Status / meta
+  let statusLine = '';
+  if (st) {
+    let statusClass = '';
+    if (status === 'attended') statusClass = '';
+    else if (status === 'recoverable') statusClass = 'is-warn';
+    else if (status === 'lost' || status === 'no_show') statusClass = 'is-danger';
+    statusLine = `<div class="inst-stud-status ${statusClass}">● ${st.label}</div>`;
+  } else {
+    statusLine = `<div class="inst-stud-meta">Sin marcar · tap nombre para opciones</div>`;
+  }
+
+  // El check inline solo se muestra si NO está ya marcada como attended
+  const isAttended = status === 'attended';
+  const checkBtnHtml = isAttended
+    ? `<button class="inst-check-btn is-attended" onclick="event.stopPropagation(); instructorConfirmUndoAttendance('${s.id}', '${classCtx.dateIso}', ${classCtx.hour}, '${classCtx.location.id}')" title="Tap para deshacer asistencia">✓</button>`
+    : `<button class="inst-check-btn" onclick="event.stopPropagation(); instructorMarkAttended('${s.id}', '${classCtx.dateIso}', ${classCtx.hour}, '${classCtx.location.id}')" title="Marcar asistencia">✓</button>`;
+
+  return `
+    <div class="inst-stud-row ${rowKlass}">
+      <div class="inst-stud-tap" onclick="openInstructorStudentSheet('${s.id}', '${classCtx.dateIso}', ${classCtx.hour}, '${classCtx.location.id}', '${status || ''}')">
+        <div class="inst-stud-avatar">${initials(s)}</div>
+        <div class="inst-stud-info">
+          <div class="inst-stud-name">
+            ${escape(s.first_name)} ${escape(s.last_name || '')}
+            ${tag}
+            ${isTrial ? '<span class="inst-stud-tag" style="background:#EEEDFE; color:#3C3489;">Invitada</span>' : ''}
+            ${isPending ? '<span class="inst-stud-tag" style="background:var(--warn-soft); color:#633806;">Pendiente pago</span>' : ''}
+          </div>
+          ${statusLine}
+        </div>
+      </div>
+      ${checkBtnHtml}
+    </div>
+  `;
+}
+
+// Bottom sheet del alumno con todas las acciones
+function openInstructorStudentSheet(studentId, dateIso, hour, locationId, currentStatus) {
+  const stud = STATE.students.find(s => s.id === studentId);
+  if (!stud) { showToast('Alumno no encontrado', 'error'); return; }
+
+  const status = currentStatus || null;
+  const isAttended = status === 'attended';
+
+  // Cerrar cualquier sheet previo
+  closeInstructorStudentSheet();
+
+  const backdrop = document.createElement('div');
+  backdrop.id = 'inst-student-sheet';
+  backdrop.className = 'inst-sheet-backdrop is-open';
+  backdrop.onclick = (e) => { if (e.target === backdrop) closeInstructorStudentSheet(); };
+
+  // Construir información de paquete (mejor esfuerzo - sin query async aquí, usamos cache si existe)
+  const modalityLabel = stud.modality === 'fixed' ? 'Fijo' : (stud.modality === 'flexible' ? 'Flexible' : 'Prueba');
+
+  // Acciones disponibles según estado
+  let primaryBtn = '';
+  if (isAttended) {
+    primaryBtn = `
+      <button class="inst-sa-btn is-danger" onclick="instructorConfirmUndoAttendance('${studentId}','${dateIso}',${hour},'${locationId}'); closeInstructorStudentSheet();">
+        <div class="inst-sa-icon">↺</div>
+        <div class="inst-sa-label">Quitar asistencia</div>
+        <div class="inst-sa-sub">deshacer marca</div>
+      </button>
+    `;
+  } else {
+    primaryBtn = `
+      <button class="inst-sa-btn is-primary" onclick="instructorMarkAttended('${studentId}','${dateIso}',${hour},'${locationId}'); closeInstructorStudentSheet();">
+        <div class="inst-sa-icon">✓</div>
+        <div class="inst-sa-label">Marcar asistencia</div>
+        <div class="inst-sa-sub">descontar del paquete</div>
+      </button>
+    `;
+  }
+
+  backdrop.innerHTML = `
+    <div class="inst-sheet">
+      <div class="inst-sheet-handle"></div>
+      <div class="inst-sheet-header">
+        <div class="inst-sheet-avatar">${initials(stud)}</div>
+        <div class="inst-sheet-info">
+          <div class="inst-sheet-name">${escape(stud.first_name)} <em>${escape(stud.last_name || '')}</em></div>
+          <div class="inst-sheet-meta">${modalityLabel} · ${formatHour(hour)} · ${status ? STATES_LABELS[status] : 'sin marcar'}</div>
+        </div>
+        <div class="inst-sheet-close" onclick="closeInstructorStudentSheet()">✕</div>
+      </div>
+      <div class="inst-sheet-actions">
+        ${primaryBtn}
+        <button class="inst-sa-btn is-warn" onclick="closeInstructorStudentSheet(); instructorOpenAbsenceMenu('${studentId}', ${hour});">
+          <div class="inst-sa-icon">✕</div>
+          <div class="inst-sa-label">No vino</div>
+          <div class="inst-sa-sub">justificada / sin avisar</div>
+        </button>
+        ${status && status !== 'attended' ? `
+          <button class="inst-sa-btn" onclick="closeInstructorStudentSheet(); instructorResetAttendance('${studentId}','${dateIso}',${hour},'${locationId}');" style="grid-column: span 2;">
+            <div class="inst-sa-icon">↺</div>
+            <div class="inst-sa-label">Resetear marca</div>
+            <div class="inst-sa-sub">volver a sin marcar</div>
+          </button>
+        ` : ''}
+      </div>
+    </div>
+  `;
+  document.body.appendChild(backdrop);
+}
+
+function closeInstructorStudentSheet() {
+  const el = document.getElementById('inst-student-sheet');
+  if (el) el.remove();
+}
+
+const STATES_LABELS = {
+  attended: 'asistió',
+  recoverable: 'falta justificada',
+  lost: 'cancelación tardía',
+  no_show: 'no vino sin avisar',
+  pending: 'pendiente',
+};
+
+// Confirmación al deshacer asistencia
+function instructorConfirmUndoAttendance(studentId, dateIso, hour, locationId) {
+  const stud = STATE.students.find(s => s.id === studentId);
+  const name = stud ? stud.first_name : 'el alumno';
+  if (confirm(`¿Quitar la asistencia de ${name}? Esto liberará 1 clase de su paquete.`)) {
+    instructorResetAttendance(studentId, dateIso, hour, locationId);
+  }
+}
+
+// Cambio de fecha desde el day-strip
+async function instructorSetDateIso(iso) {
+  STATE.instDayDate = iso;
+  const todayIso = dateToIsoLocal(new Date());
+  const tomorrowIso = new Date(Date.now() + 86400000).toISOString().slice(0,10);
+  STATE.instDayFilter = (iso === todayIso) ? 'today' : (iso === tomorrowIso ? 'tomorrow' : 'other');
+  STATE.instAbsenceMenuOpen = null;
+  STATE.instShowPast = false;
+  // Re-render todo lo que cambia con la fecha
+  renderInstructorDayStrip();
+  const inst = CURRENT_USER.record;
+  const classes = await loadInstructorClassesForDate(inst, STATE.instDayDate);
+  renderInstructorNextClassBlock(classes);
+  renderInstructorClassesBlock(classes);
 }
 
 // Marca la clase como dictada aunque no haya alumnos (o no marcó a ninguno)
@@ -6884,65 +7338,6 @@ async function instructorMarkClassDelivered(dateIso, hour, locationId) {
   showToast('✓ Clase marcada como dictada', 'success');
   STATE.instMonthStats = null;
   renderInstructorDay();
-}
-
-function renderInstructorStudentRow(item, classCtx) {
-  const s = item.student;
-  const att = item.attendance;
-  const status = att ? att.status : null;
-  const STATES = {
-    attended:    { label: 'Asistió',            bg: '#EAF3DE', fg: '#27500A' },
-    recoverable: { label: 'Falta justificada',  bg: '#FAEEDA', fg: '#633806' },
-    lost:        { label: 'Cancelación tardía', bg: '#FAECE7', fg: '#712B13' },
-    no_show:     { label: 'No vino sin avisar', bg: '#FCEBEB', fg: '#791F1F' },
-  };
-  const st = (status && STATES[status]) ? STATES[status] : null;
-  const bg = st ? st.bg : 'transparent';
-  const isPending = att?.pending_payment_at;
-  const isTrial = s.student_status === 'trial';
-
-  const menuOpen = STATE.instAbsenceMenuOpen === s.id + '|' + classCtx.hour;
-
-  return `
-    <div style="border-top: 1px solid var(--line); background: ${bg};">
-      <div style="display: flex; align-items: center; gap: 10px; padding: 11px 16px;">
-        <div class="student-avatar" style="width: 32px; height: 32px; font-size: 11px;">${initials(s)}</div>
-        <div style="flex: 1; min-width: 0;">
-          <div style="font-size: 13px; font-weight: 500; color: ${st ? st.fg : 'var(--ink)'};">
-            ${escape(s.first_name)} ${escape(s.last_name || '')}
-            ${isTrial ? '<span style="font-size: 9px; padding: 2px 6px; background: #EEEDFE; color: #3C3489; border-radius: 999px; margin-left: 4px;">invitada</span>' : ''}
-            ${isPending ? '<span style="font-size: 9px; padding: 2px 6px; background: #FAEEDA; color: #633806; border-radius: 999px; margin-left: 4px;">pendiente pago</span>' : ''}
-          </div>
-          ${st ? `<div style="font-size: 10px; color: ${st.fg}; margin-top: 1px;">● ${st.label}</div>` : ''}
-        </div>
-        ${st
-          ? `<button onclick="instructorResetAttendance('${s.id}', '${classCtx.dateIso}', ${classCtx.hour}, '${classCtx.location.id}')" style="font-size: 11px; padding: 4px 10px; background: transparent; border: 1px solid ${st.fg}40; color: ${st.fg}; border-radius: 999px; cursor: pointer;">Cambiar</button>`
-          : `<div style="display: flex; gap: 6px;">
-              <button onclick="instructorMarkAttended('${s.id}', '${classCtx.dateIso}', ${classCtx.hour}, '${classCtx.location.id}')" title="Asistió" style="width: 36px; height: 36px; border: 1px solid var(--line); background: white; border-radius: 50%; font-size: 16px; color: #639922; cursor: pointer;">✓</button>
-              <button onclick="instructorOpenAbsenceMenu('${s.id}', ${classCtx.hour})" title="Falta" style="width: 36px; height: 36px; border: 1px solid var(--line); background: white; border-radius: 50%; font-size: 16px; color: #E24B4A; cursor: pointer;">✕</button>
-            </div>`
-        }
-      </div>
-      ${menuOpen ? `
-        <div style="padding: 0 16px 12px 58px; display: flex; flex-direction: column; gap: 6px;">
-          <div style="font-size: 10px; color: var(--ink-mute); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 2px;">¿Por qué faltó?</div>
-          <button onclick="instructorMarkAbsence('${s.id}', '${classCtx.dateIso}', ${classCtx.hour}, '${classCtx.location.id}', 'recoverable')" style="text-align: left; padding: 9px 12px; border: 1px solid #EF9F2740; background: #FAEEDA; color: #633806; border-radius: var(--radius-sm); font-size: 12px; cursor: pointer;">
-            <div style="font-weight: 500;">⊙ Falta justificada</div>
-            <div style="font-size: 10px; color: #854F0B; margin-top: 1px;">No descuenta del paquete · puede recuperar</div>
-          </button>
-          <button onclick="instructorMarkAbsence('${s.id}', '${classCtx.dateIso}', ${classCtx.hour}, '${classCtx.location.id}', 'lost')" style="text-align: left; padding: 9px 12px; border: 1px solid #D85A3040; background: #FAECE7; color: #712B13; border-radius: var(--radius-sm); font-size: 12px; cursor: pointer;">
-            <div style="font-weight: 500;">⚠ Cancelación tardía</div>
-            <div style="font-size: 10px; color: #993C1D; margin-top: 1px;">Descuenta del paquete</div>
-          </button>
-          <button onclick="instructorMarkAbsence('${s.id}', '${classCtx.dateIso}', ${classCtx.hour}, '${classCtx.location.id}', 'no_show')" style="text-align: left; padding: 9px 12px; border: 1px solid #E24B4A40; background: #FCEBEB; color: #791F1F; border-radius: var(--radius-sm); font-size: 12px; cursor: pointer;">
-            <div style="font-weight: 500;">✕ No vino sin avisar</div>
-            <div style="font-size: 10px; color: #A32D2D; margin-top: 1px;">Descuenta del paquete</div>
-          </button>
-          <button onclick="instructorCloseAbsenceMenu()" style="margin-top: 2px; padding: 6px; font-size: 11px; background: transparent; border: none; color: var(--ink-mute); cursor: pointer;">cancelar</button>
-        </div>
-      ` : ''}
-    </div>
-  `;
 }
 
 async function instructorSetDate(filter) {
