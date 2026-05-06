@@ -213,6 +213,12 @@
   .att-btn.is-noshow { background: var(--danger); border-color: var(--danger); color: white; }
 
   .empty-slot { display: flex; align-items: center; gap: 12px; padding: 10px 4px; color: var(--ink-mute); font-size: 13px; font-style: italic; cursor: pointer; }
+  .past-toggle { display: flex; align-items: center; justify-content: space-between; padding: 10px 16px; margin-bottom: 14px; background: white; border: 1px dashed var(--line); border-radius: 12px; cursor: pointer; transition: all 0.2s; font-size: 12px; color: var(--ink-mute); }
+  .past-toggle:hover { border-color: var(--fit-purple); background: var(--fit-lavender-pale); color: var(--fit-purple); }
+  .past-toggle strong { color: var(--fit-purple); font-weight: 500; }
+  .past-toggle.is-open { background: var(--fit-lavender-pale); border-color: var(--fit-purple); border-style: solid; color: var(--fit-purple); }
+  .class-block.is-past { opacity: 0.55; }
+  .class-block.is-past .class-time { color: var(--ink-mute); }
   .empty-slot-dot { width: 32px; height: 32px; border-radius: 50%; border: 1.5px dashed var(--ink-faint); color: var(--ink-faint); display: grid; place-items: center; }
   .empty-slot:hover .empty-slot-dot { border-color: var(--fit-purple); color: var(--fit-purple); background: var(--fit-lavender-pale); }
 
@@ -1332,6 +1338,7 @@ const STATE = {
   scheduleWeekBookings: [],      // session_bookings de la semana visible (con joins)
   cellModalCtx: null,            // {locationId, date (Date), hour}
   assignCtx: null,               // contexto del wizard de asignar alumno
+  showPastHours: false,          // mostrar clases anteriores a la actual (filtro temporal en Mi día)
 };
 
 // ============================================
@@ -1885,6 +1892,11 @@ async function getOrCreateSession(locationId, date, hour) {
 }
 
 
+function togglePastHours() {
+  STATE.showPastHours = !STATE.showPastHours;
+  renderTimeline();
+}
+
 function renderTimeline() {
   const body = document.getElementById('timeline-body');
   const loc = getCurrentLocation();
@@ -1944,7 +1956,34 @@ function renderTimeline() {
     return;
   }
 
-  body.innerHTML = hours.map(h => {
+  // Filtro temporal: si estamos viendo HOY, ocultar clases pasadas excepto la inmediatamente anterior (margen de contexto)
+  const nowFilter = new Date();
+  const isViewingToday = STATE.currentDate.toDateString() === nowFilter.toDateString();
+  const currentHourNow = nowFilter.getHours();
+  let hiddenPastSet = new Set();
+  let lastPastHour = null;
+  if (isViewingToday) {
+    const pastHours = hours.filter(h => h < currentHourNow);
+    if (pastHours.length > 0) lastPastHour = Math.max(...pastHours);
+    // Las horas a ocultar: las pasadas excepto la inmediatamente anterior
+    hiddenPastSet = new Set(pastHours.filter(h => h !== lastPastHour));
+  }
+  const finalHours = (STATE.showPastHours || hiddenPastSet.size === 0)
+    ? hours
+    : hours.filter(h => !hiddenPastSet.has(h));
+
+  // Toggle "Ver / Ocultar clases anteriores"
+  let pastTogglerHTML = '';
+  if (hiddenPastSet.size > 0) {
+    if (STATE.showPastHours) {
+      pastTogglerHTML = `<div class="past-toggle is-open" onclick="togglePastHours()"><span><strong>Ocultar clases anteriores</strong> · ${hiddenPastSet.size} mostradas</span><span>▲</span></div>`;
+    } else {
+      const hList = Array.from(hiddenPastSet).sort((a,b) => a-b).map(h => formatHour(h)).join(', ');
+      pastTogglerHTML = `<div class="past-toggle" onclick="togglePastHours()"><span><strong>Ver ${hiddenPastSet.size} clases anteriores</strong> · ${hList}</span><span>▼</span></div>`;
+    }
+  }
+
+  body.innerHTML = pastTogglerHTML + finalHours.map(h => {
     // Buscar session existente para este slot
     const dateStr = dateToIsoLocal(STATE.currentDate);
     const session = STATE.classSessions.find(s =>
@@ -1985,8 +2024,10 @@ function renderTimeline() {
 
     const now = new Date();
     const isCurrentClass = STATE.currentDate.toDateString() === now.toDateString() && now.getHours() === h;
+    const isPastClass = isViewingToday && h < currentHourNow;
     const wasOpen = openHours.has(h);
     const stateClass = isCurrentClass ? 'is-current is-open' : (wasOpen ? 'is-open' : (occ === 0 ? 'is-empty' : ''));
+    const pastClass = isPastClass ? 'is-past' : '';
 
     // Resolver profesor REAL para esta clase basado en fecha + sede + día_semana + hora
     const inst = resolveInstructor(loc.id, STATE.currentDate, dow, h);
@@ -2052,7 +2093,7 @@ function renderTimeline() {
     `).join('');
 
     return `
-      <div class="class-block ${stateClass} ${isCancelled ? 'is-cancelled' : ''}" ${isCancelled ? 'style="opacity:0.5; background: repeating-linear-gradient(45deg, transparent, transparent 10px, rgba(0,0,0,0.03) 10px, rgba(0,0,0,0.03) 20px);"' : ''}>
+      <div class="class-block ${stateClass} ${pastClass} ${isCancelled ? 'is-cancelled' : ''}" ${isCancelled ? 'style="opacity:0.5; background: repeating-linear-gradient(45deg, transparent, transparent 10px, rgba(0,0,0,0.03) 10px, rgba(0,0,0,0.03) 20px);"' : ''}>
         <div class="class-header" onclick="this.parentElement.classList.toggle('is-open')">
           <div>
             <div class="class-time">${formatHour(h)} ${isCancelled ? '<span style="font-size:11px;color:var(--err);background:#fef2f2;padding:2px 8px;border-radius:999px;margin-left:6px;">✗ CANCELADA</span>' : ''}</div>
