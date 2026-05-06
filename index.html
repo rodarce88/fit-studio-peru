@@ -50,7 +50,13 @@
   }
   *, *::before, *::after { box-sizing: border-box; }
   html, body { margin: 0; padding: 0; }
-  body { font-family: var(--body); font-size: 15px; color: var(--ink); background: var(--bg); -webkit-font-smoothing: antialiased; line-height: 1.5; min-height: 100vh; }
+  body { font-family: var(--body); font-size: 15px; color: var(--ink); background: var(--bg); -webkit-font-smoothing: antialiased; line-height: 1.5; min-height: 100vh; -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+  /* Mobile: forzar 16px mínimo en inputs/textarea/select para evitar auto-zoom de iOS Safari al enfocar */
+  @media (max-width: 600px) {
+    input[type="text"], input[type="search"], input[type="email"], input[type="tel"],
+    input[type="password"], input[type="number"], input[type="date"], input[type="time"],
+    input:not([type]), textarea, select { font-size: 16px !important; }
+  }
   button { font-family: inherit; cursor: pointer; border: none; background: none; color: inherit; }
   input, select, textarea { font-family: inherit; font-size: inherit; color: inherit; }
   h1, h2, h3, h4 { margin: 0; font-weight: 500; letter-spacing: -0.01em; }
@@ -356,7 +362,10 @@
      ============================================================== */
   .inst-greet { padding: 8px 0 18px; }
   .inst-greet-tag { font-size: 11px; text-transform: uppercase; letter-spacing: 1.2px; color: var(--ink-mute); }
-  .inst-greet-title { font-family: var(--display); font-style: italic; font-size: 24px; color: var(--fit-purple-deep); margin-top: 2px; line-height: 1.1; }
+  .inst-greet-title { font-family: var(--display); font-style: italic; font-size: 24px; color: var(--fit-purple-deep); margin-top: 2px; line-height: 1.15; word-break: break-word; }
+  @media (max-width: 600px) {
+    .inst-greet-title { font-size: 22px; }
+  }
 
   .inst-day-strip { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 6px; margin-bottom: 16px; }
   .inst-day-strip::-webkit-scrollbar { display: none; }
@@ -7620,12 +7629,44 @@ async function instructorOpenAddStudent(dateIso, hour, locationId) {
   const dayLabels = ['dom','lun','mar','mié','jue','vie','sáb'];
   document.getElementById('inst-add-sub').textContent = `${dayLabels[dateObj.getDay()]} ${dateObj.getDate()} · ${formatHour(hour)} · ${loc?.name || ''}`;
 
-  document.getElementById('instructor-add-modal').classList.add('is-open');
+  const modal = document.getElementById('instructor-add-modal');
+  modal.classList.add('is-open');
   instructorRenderAddSearch('');
+  setupModalKeyboardAdjust(modal);
   setTimeout(() => {
     const input = document.getElementById('inst-add-search');
     if (input) input.focus();
   }, 50);
+}
+
+// Ajusta el modal-card a la altura del visualViewport cuando aparece el teclado virtual
+function setupModalKeyboardAdjust(modalEl) {
+  if (!window.visualViewport) return;
+  const vv = window.visualViewport;
+  const card = modalEl.querySelector('.modal-card');
+  if (!card) return;
+
+  const apply = () => {
+    // Solo aplicar en mobile
+    if (window.innerWidth > 600) { card.style.maxHeight = ''; return; }
+    const h = Math.floor(vv.height * 0.92);
+    card.style.maxHeight = `${h}px`;
+  };
+
+  apply();
+  vv.addEventListener('resize', apply);
+  vv.addEventListener('scroll', apply);
+
+  // Cleanup al cerrar el modal
+  const observer = new MutationObserver(() => {
+    if (!modalEl.classList.contains('is-open')) {
+      vv.removeEventListener('resize', apply);
+      vv.removeEventListener('scroll', apply);
+      card.style.maxHeight = '';
+      observer.disconnect();
+    }
+  });
+  observer.observe(modalEl, { attributes: true, attributeFilter: ['class'] });
 }
 
 function instructorRenderAddSearch(query) {
