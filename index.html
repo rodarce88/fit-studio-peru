@@ -1354,11 +1354,13 @@
 <div class="modal-backdrop" id="payment-modal" onclick="if(event.target===this) closeModals()">
   <div class="modal-card" style="width: 540px;">
     <div class="modal-header">
-      <div class="modal-title">Registrar <em>pago</em></div>
+      <div class="modal-title" id="payment-modal-title">Registrar <em>pago</em></div>
       <button class="modal-close" onclick="closeModals()">✕</button>
     </div>
     <div class="modal-body">
       <div id="payment-context" style="background: var(--fit-lavender-pale); padding: 14px 18px; border-radius: var(--radius-md); margin-bottom: 18px; font-size: 13px;"></div>
+      <div id="payment-package-locked" style="display:none; background: var(--bg); padding: 10px 14px; border-radius: var(--radius-sm); margin-bottom: 14px; font-size: 12px; color: var(--ink-mute); border: 1px dashed var(--line);"></div>
+      <input type="hidden" id="pay-id" />
       <input type="hidden" id="pay-student-id" />
       <input type="hidden" id="pay-package-id" />
       <div class="form-grid">
@@ -1385,7 +1387,7 @@
           <label>Referencia / nro. operación</label>
           <input type="text" id="pay-reference" />
         </div>
-        <div class="form-row full">
+        <div class="form-row full" id="pay-receipt-row">
           <label>Comprobante (foto opcional)</label>
           <input type="file" id="pay-receipt" accept="image/*" onchange="handleReceiptUpload(event)" />
           <div id="pay-receipt-preview" style="margin-top:8px;"></div>
@@ -1396,10 +1398,14 @@
           <textarea id="pay-notes" rows="2"></textarea>
         </div>
       </div>
+      <div id="pay-metadata" style="display:none; margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--line); font-size: 11px; color: var(--ink-mute); line-height: 1.6;"></div>
     </div>
-    <div class="modal-footer">
-      <button class="btn btn-ghost" onclick="closeModals()">Cancelar</button>
-      <button class="btn btn-primary" onclick="saveRegisterPayment()">Guardar pago</button>
+    <div class="modal-footer" style="display: flex; justify-content: space-between; align-items: center; gap: 8px;">
+      <button class="btn" id="pay-delete-btn" onclick="confirmDeletePayment()" style="display:none; background: transparent; color: var(--danger); border: 1px solid var(--danger-soft); padding: 8px 14px; font-size: 12px;">Eliminar pago</button>
+      <div style="display: flex; gap: 8px; margin-left: auto;">
+        <button class="btn btn-ghost" onclick="closeModals()">Cancelar</button>
+        <button class="btn btn-primary" id="pay-save-btn" onclick="savePayment()">Guardar pago</button>
+      </div>
     </div>
   </div>
 </div>
@@ -8413,17 +8419,20 @@ async function renderPaymentsHistoryBlock(student) {
     return;
   }
   const methodLabels = { cash: 'Efectivo', yape: 'Yape', plin: 'Plin', transfer: 'Transferencia', pos: 'POS', other: 'Otro' };
+  const canEdit = CURRENT_USER && CURRENT_USER.role === 'coordinator';
   block.innerHTML = `
     <div style="border: 1px solid var(--line); border-radius: var(--radius-sm); overflow: hidden;">
-      ${payments.slice(0, 10).map(p => `
-        <div style="padding: 10px 14px; border-bottom: 1px solid var(--line-soft); display: flex; justify-content: space-between; align-items: center;">
+      ${payments.slice(0, 10).map(p => {
+        const editBadge = p.updated_at ? ' <span style="font-size:9px; padding:1px 5px; background:var(--bg); color:var(--ink-mute); border-radius:3px; text-transform:uppercase; letter-spacing:0.4px;">editado</span>' : '';
+        return `
+        <div ${canEdit ? `onclick="openEditPaymentModal('${p.id}')"` : ''} style="padding: 10px 14px; border-bottom: 1px solid var(--line-soft); display: flex; justify-content: space-between; align-items: center; ${canEdit ? 'cursor:pointer; transition: background 0.15s;' : ''}" ${canEdit ? `onmouseover="this.style.background='var(--fit-lavender-pale)'" onmouseout="this.style.background='transparent'"` : ''}>
           <div>
-            <div style="font-weight: 500;">S/${p.amount_pen ?? p.amount ?? 0} <span style="color: var(--ink-mute); font-weight: 400; font-size: 12px;">· ${methodLabels[p.method] || p.method}</span></div>
+            <div style="font-weight: 500;">S/${p.amount_pen ?? p.amount ?? 0} <span style="color: var(--ink-mute); font-weight: 400; font-size: 12px;">· ${methodLabels[p.method] || p.method}</span>${editBadge}</div>
             <div style="font-size: 11px; color: var(--ink-mute);">${formatDate(p.payment_date)}${p.reference ? ' · '+escape(p.reference) : ''}</div>
           </div>
-          ${p.receipt_url ? `<a href="${p.receipt_url}" target="_blank" style="font-size: 11px; color: var(--fit-purple);">Ver comprobante →</a>` : ''}
+          ${p.receipt_url ? `<a href="${p.receipt_url}" target="_blank" onclick="event.stopPropagation()" style="font-size: 11px; color: var(--fit-purple);">Ver comprobante →</a>` : ''}
         </div>
-      `).join('').replace(/border-bottom: 1px solid var\(--line-soft\);(?!.*border-bottom)/, '')}
+      `;}).join('').replace(/border-bottom: 1px solid var\(--line-soft\);(?!.*border-bottom)/, '')}
     </div>
   `;
 }
@@ -8582,9 +8591,18 @@ async function saveAssignPackage() {
 
 function openPaymentModal(studentId, packageId, suggestedAmount) {
   const student = STATE.students.find(s => s.id === studentId);
+  // Reset a modo "Registrar"
+  document.getElementById('pay-id').value = '';
   document.getElementById('pay-student-id').value = studentId;
   document.getElementById('pay-package-id').value = packageId || '';
   document.getElementById('payment-context').innerHTML = `Pago de <strong>${escape(student?.first_name||'')} ${escape(student?.last_name||'')}</strong>`;
+  document.getElementById('payment-package-locked').style.display = 'none';
+  document.getElementById('payment-modal-title').innerHTML = 'Registrar <em>pago</em>';
+  document.getElementById('pay-save-btn').textContent = 'Guardar pago';
+  document.getElementById('pay-delete-btn').style.display = 'none';
+  document.getElementById('pay-metadata').style.display = 'none';
+  document.getElementById('pay-receipt-row').style.display = '';
+
   document.getElementById('pay-amount').value = suggestedAmount || '';
   document.getElementById('pay-method').value = 'yape';
   document.getElementById('pay-date').value = dateToIsoLocal(new Date());
@@ -8593,6 +8611,151 @@ function openPaymentModal(studentId, packageId, suggestedAmount) {
   document.getElementById('pay-receipt-url').value = '';
   document.getElementById('pay-receipt-preview').innerHTML = '';
   document.getElementById('payment-modal').classList.add('is-open');
+}
+
+// Modo edición: solo coordinador. Carga el pago y abre el modal con valores precargados.
+async function openEditPaymentModal(paymentId) {
+  if (!CURRENT_USER || CURRENT_USER.role !== 'coordinator') {
+    showToast('Solo el coordinador puede editar pagos', 'error');
+    return;
+  }
+  if (!isOnline) { showToast('Conexión requerida', 'error'); return; }
+
+  const { data: pay, error } = await sb.from('payments').select('*').eq('id', paymentId).maybeSingle();
+  if (error || !pay) { showToast('No se pudo cargar el pago', 'error'); return; }
+
+  const student = STATE.students.find(s => s.id === pay.student_id);
+
+  // Pre-llenar
+  document.getElementById('pay-id').value = pay.id;
+  document.getElementById('pay-student-id').value = pay.student_id;
+  document.getElementById('pay-package-id').value = pay.student_package_id || '';
+  document.getElementById('payment-context').innerHTML = `Editando pago de <strong>${escape(student?.first_name||'')} ${escape(student?.last_name||'')}</strong>`;
+
+  // Mostrar paquete vinculado como info inmutable
+  const lockedDiv = document.getElementById('payment-package-locked');
+  if (pay.student_package_id) {
+    // Buscar info del paquete (best effort)
+    const { data: pkg } = await sb.from('student_packages')
+      .select('id, packages(name)')
+      .eq('id', pay.student_package_id)
+      .maybeSingle();
+    const pkgName = pkg?.packages?.name || 'paquete';
+    lockedDiv.innerHTML = `🔒 Vinculado a <strong>${escape(pkgName)}</strong>. El paquete asociado no se puede cambiar. Si necesitas mover este pago a otro paquete, elimínalo y crea uno nuevo.`;
+    lockedDiv.style.display = 'block';
+  } else {
+    lockedDiv.innerHTML = `🔒 Pago sin paquete vinculado.`;
+    lockedDiv.style.display = 'block';
+  }
+
+  document.getElementById('payment-modal-title').innerHTML = 'Editar <em>pago</em>';
+  document.getElementById('pay-save-btn').textContent = 'Guardar cambios';
+  document.getElementById('pay-delete-btn').style.display = '';
+  document.getElementById('pay-receipt-row').style.display = 'none';
+
+  document.getElementById('pay-amount').value = pay.amount_pen ?? pay.amount ?? '';
+  document.getElementById('pay-method').value = pay.method || 'cash';
+  document.getElementById('pay-date').value = pay.payment_date || dateToIsoLocal(new Date());
+  document.getElementById('pay-reference').value = pay.reference || '';
+  document.getElementById('pay-notes').value = pay.notes || '';
+  document.getElementById('pay-receipt-url').value = pay.receipt_url || '';
+  document.getElementById('pay-receipt-preview').innerHTML = pay.receipt_url
+    ? `<a href="${escape(pay.receipt_url)}" target="_blank" style="font-size:12px;color:var(--fit-purple);">Ver comprobante actual ↗</a>`
+    : '';
+
+  // Metadata creado/editado
+  const meta = document.getElementById('pay-metadata');
+  let lines = [];
+  if (pay.created_at) lines.push(`Creado: ${formatDate(pay.created_at.slice(0,10))} ${pay.created_at.slice(11,16)}`);
+  if (pay.updated_at) lines.push(`Editado: ${formatDate(pay.updated_at.slice(0,10))} ${pay.updated_at.slice(11,16)}`);
+  meta.innerHTML = lines.join(' · ');
+  meta.style.display = lines.length ? 'block' : 'none';
+
+  document.getElementById('payment-modal').classList.add('is-open');
+}
+
+// Router: detecta si es modo registrar o editar
+async function savePayment() {
+  const editId = document.getElementById('pay-id').value;
+  if (editId) {
+    await saveEditPayment(editId);
+  } else {
+    await saveRegisterPayment();
+  }
+}
+
+async function saveEditPayment(paymentId) {
+  if (!isOnline) { showToast('Conexión requerida', 'error'); return; }
+  const amount = parseFloat(document.getElementById('pay-amount').value);
+  const method = document.getElementById('pay-method').value;
+  const payDate = document.getElementById('pay-date').value;
+  const reference = document.getElementById('pay-reference').value.trim() || null;
+  const notes = document.getElementById('pay-notes').value.trim() || null;
+
+  if (!amount || amount <= 0) { showToast('Ingresa un monto válido', 'error'); return; }
+
+  const studentId = document.getElementById('pay-student-id').value;
+
+  const { error } = await sb.from('payments').update({
+    amount_pen: amount,
+    method: method,
+    payment_date: payDate || dateToIsoLocal(new Date()),
+    reference: reference,
+    notes: notes,
+    updated_at: new Date().toISOString(),
+    updated_by: CURRENT_USER?.authUser?.id || null,
+  }).eq('id', paymentId);
+
+  if (error) { showToast('Error: '+error.message, 'error'); return; }
+  showToast('✓ Pago actualizado', 'success');
+  closeModals();
+  // Refrescar el modal del alumno si está abierto
+  const studentModalOpen = document.getElementById('student-modal').classList.contains('is-open');
+  if (studentModalOpen) {
+    const s = STATE.students.find(x => x.id === studentId);
+    if (s) {
+      renderActivePackageBlock(s);
+      renderPaymentsHistoryBlock(s);
+    }
+  }
+  // Refrescar la vista detalle si es del mismo alumno
+  if (STATE.studentDetailId === studentId && document.getElementById('view-student-detail')?.classList.contains('is-active')) {
+    openStudentDetail(studentId);
+  }
+}
+
+function confirmDeletePayment() {
+  const paymentId = document.getElementById('pay-id').value;
+  if (!paymentId) return;
+  if (!confirm('¿Eliminar este pago?\n\nSe borra del sistema. El paquete vinculado quedará sin este pago. Si querías moverlo a otro paquete, después puedes registrar uno nuevo.')) return;
+  deletePayment(paymentId);
+}
+
+async function deletePayment(paymentId) {
+  if (!CURRENT_USER || CURRENT_USER.role !== 'coordinator') {
+    showToast('Solo el coordinador puede eliminar pagos', 'error');
+    return;
+  }
+  if (!isOnline) { showToast('Conexión requerida', 'error'); return; }
+  const studentId = document.getElementById('pay-student-id').value;
+
+  const { error } = await sb.from('payments').delete().eq('id', paymentId);
+  if (error) { showToast('Error: '+error.message, 'error'); return; }
+  showToast('✓ Pago eliminado', 'success');
+  closeModals();
+
+  // Refrescar
+  const studentModalOpen = document.getElementById('student-modal').classList.contains('is-open');
+  if (studentModalOpen) {
+    const s = STATE.students.find(x => x.id === studentId);
+    if (s) {
+      renderActivePackageBlock(s);
+      renderPaymentsHistoryBlock(s);
+    }
+  }
+  if (STATE.studentDetailId === studentId && document.getElementById('view-student-detail')?.classList.contains('is-active')) {
+    openStudentDetail(studentId);
+  }
 }
 
 async function handleReceiptUpload(evt) {
@@ -9678,19 +9841,23 @@ function renderDetailPayments(stud) {
     </div>
 
     <div style="background: white; border: 1px solid var(--line); border-radius: var(--radius-md); overflow: hidden;">
-      ${payments.map(p => `
-        <div style="display: flex; align-items: center; justify-content: space-between; padding: 14px 18px; border-bottom: 1px solid var(--line);">
+      ${payments.map(p => {
+        const canEdit = CURRENT_USER && CURRENT_USER.role === 'coordinator';
+        const editBadge = p.updated_at ? '<span style="font-size:9px; padding:2px 6px; background:var(--bg); color:var(--ink-mute); border-radius:4px; margin-left:6px; text-transform:uppercase; letter-spacing:0.5px;">editado</span>' : '';
+        return `
+        <div ${canEdit ? `onclick="openEditPaymentModal('${p.id}')" style="cursor:pointer;"` : 'style=""'} class="${canEdit ? 'pay-row-editable' : ''}" style="display: flex; align-items: center; justify-content: space-between; padding: 14px 18px; border-bottom: 1px solid var(--line); ${canEdit ? 'cursor:pointer; transition: background 0.15s;' : ''}" ${canEdit ? `onmouseover="this.style.background='var(--fit-lavender-pale)'" onmouseout="this.style.background='white'"` : ''}>
           <div style="flex: 1;">
-            <div style="font-weight: 500;">S/ ${parseFloat(p.amount_pen || p.amount || 0).toFixed(2)} <span style="font-weight: 400; color: var(--ink-mute); font-size: 12px;">· ${escape(methodLabels[p.method] || p.method || '')}</span></div>
+            <div style="font-weight: 500;">S/ ${parseFloat(p.amount_pen || p.amount || 0).toFixed(2)} <span style="font-weight: 400; color: var(--ink-mute); font-size: 12px;">· ${escape(methodLabels[p.method] || p.method || '')}</span>${editBadge}</div>
             <div style="font-size: 12px; color: var(--ink-mute); margin-top: 2px;">
               ${formatDate(p.payment_date)}
               ${p.reference ? ' · Ref. ' + escape(p.reference) : ''}
               ${p.notes ? ' · ' + escape(p.notes) : ''}
             </div>
           </div>
-          ${p.receipt_url ? `<a href="${escape(p.receipt_url)}" target="_blank" style="font-size: 12px; color: var(--fit-purple); text-decoration: none; padding: 6px 12px; border: 1px solid var(--line); border-radius: 999px;">Ver comprobante →</a>` : ''}
+          ${p.receipt_url ? `<a href="${escape(p.receipt_url)}" target="_blank" onclick="event.stopPropagation()" style="font-size: 12px; color: var(--fit-purple); text-decoration: none; padding: 6px 12px; border: 1px solid var(--line); border-radius: 999px;">Ver comprobante →</a>` : ''}
+          ${canEdit ? '<span style="font-size:11px; color: var(--ink-mute); margin-left: 12px;">editar →</span>' : ''}
         </div>
-      `).join('')}
+      `;}).join('')}
     </div>
   `;
 }
