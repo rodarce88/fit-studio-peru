@@ -5183,30 +5183,34 @@ async function saveInstructorSchedule() {
     if (error) { showToast('Error: ' + error.message, 'error'); return; }
   }
 
-  // Sincronizar class_sessions del rango con el nuevo horario:
-  // Para cada slot (dow+hour+location) en el nuevo schedule, actualizar las sessions del rango
-  // que no tengan asignación manual de suplencia (actual_instructor_id).
-  // Esto resuelve el problema de "cambié el horario pero las clases viejas siguen con otro profesor o sin asignar".
+  // Sincronizar class_sessions:
+  // - Sessions huérfanas (instructor_id IS NULL) cuyo slot coincide → SIEMPRE asignar (sin importar effective_from)
+  // - Sessions con instructor_id distinto al nuevo → solo dentro del rango effective_from-to
+  // - Nunca tocar sessions con actual_instructor_id (suplencias manuales)
   let sessionsSynced = 0;
   if (newRows.length > 0) {
-    const fromIso = effFrom || '1900-01-01';
-    const toIso = effTo || '2099-12-31';
-    // Cargar sessions del rango en esa sede
-    const { data: sessionsInRange } = await sb.from('class_sessions')
+    // Cargar TODAS las sessions de esa sede (sin filtrar por fecha — necesitamos huérfanas también)
+    const { data: allSessions } = await sb.from('class_sessions')
       .select('id, session_date, hour, instructor_id, actual_instructor_id')
-      .eq('location_id', locId)
-      .gte('session_date', fromIso)
-      .lte('session_date', toIso);
+      .eq('location_id', locId);
 
     const sessionsToUpdate = [];
-    for (const s of (sessionsInRange || [])) {
+    const fromIso = effFrom || '1900-01-01';
+    const toIso = effTo || '2099-12-31';
+    for (const s of (allSessions || [])) {
       const dow = new Date(s.session_date + 'T12:00:00').getDay();
       const matchesSchedule = newRows.some(r => r.day_of_week === dow && r.hour === s.hour);
       if (!matchesSchedule) continue;
-      // No tocar sessions que tengan suplencia manual asignada
-      if (s.actual_instructor_id && s.actual_instructor_id !== instructorId) continue;
-      // Solo actualizar si el instructor actual es distinto al nuevo
-      if (s.instructor_id !== instructorId) {
+      if (s.actual_instructor_id) continue; // suplencia manual, no tocar
+
+      const isOrphan = (s.instructor_id == null);
+      const inRange = (s.session_date >= fromIso && s.session_date <= toIso);
+      const sameInstructor = (s.instructor_id === instructorId);
+
+      // Siempre adoptar huérfanas. Reasignar (en rango) sólo si cambia el profesor.
+      if (isOrphan) {
+        sessionsToUpdate.push(s.id);
+      } else if (inRange && !sameInstructor) {
         sessionsToUpdate.push(s.id);
       }
     }
