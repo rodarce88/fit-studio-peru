@@ -10311,7 +10311,7 @@ async function loadInstructorClassesInRange(instructorId, startIso, endIso) {
   if (!isOnline) return [];
   // Cargar TODAS las sessions del rango (sin filtrar por instructor en SQL — filtramos en JS con resolución completa)
   const { data: allSessions } = await sb.from('class_sessions')
-    .select('id, location_id, session_date, hour, instructor_id, actual_instructor_id, delivery_status')
+    .select('id, location_id, session_date, hour, instructor_id, actual_instructor_id, is_cancelled')
     .gte('session_date', startIso)
     .lte('session_date', endIso);
 
@@ -10319,11 +10319,12 @@ async function loadInstructorClassesInRange(instructorId, startIso, endIso) {
   // - actual_instructor_id == instructorId (suplencia explícita), o
   // - instructor_id == instructorId, o
   // - instructor_id es null Y el schedule fijo de ese slot apunta al profesor
+  // Además, descartamos sessions canceladas (no se pagan)
   const sessions = (allSessions || []).filter(s => {
+    if (s.is_cancelled) return false;
     if (s.actual_instructor_id) return s.actual_instructor_id === instructorId;
     if (s.instructor_id === instructorId) return true;
     if (s.instructor_id == null) {
-      // Resolver desde schedule fijo
       const dow = new Date(s.session_date + 'T12:00:00').getDay();
       const sched = (STATE.schedules || []).find(sc =>
         sc.instructor_id === instructorId &&
@@ -10387,7 +10388,7 @@ function generateSyntheticClassesFromSchedule(instructorId, startIso, endIso, ex
         hour: sched.hour,
         instructor_id: instructorId,
         actual_instructor_id: null,
-        delivery_status: null,
+        is_cancelled: false,
         attendance: [],
         bookings: [],
       });
