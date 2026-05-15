@@ -10450,28 +10450,48 @@ function countClassForPay(cls) {
 async function calculateInstructorPayReport(instructorId, startIso, endIso) {
   const config = getPayConfigFor(instructorId);
   const classes = await loadInstructorClassesInRange(instructorId, startIso, endIso);
+  const todayIso = dateToIsoLocal(new Date());
 
   // Agrupar por día
   const byDay = {};
+  let totalProjectedPay = 0;
+
   for (const cls of classes) {
     const dateIso = cls.session_date;
     if (!byDay[dateIso]) byDay[dateIso] = { date: dateIso, classes: [], dayTotal: 0, dayPending: 0, dayStudentsCounted: 0 };
 
     const cnt = countClassForPay(cls);
-    const pay = (cnt.totalRegistered === 0) ? 0 : getPayForCount(cnt.counted, config.tiers);
+    const realPay = (cnt.totalRegistered === 0) ? 0 : getPayForCount(cnt.counted, config.tiers);
+
+    // PROYECCIÓN: para clases futuras o de hoy con pendientes,
+    // asumir que los pendientes van a contar (escenario optimista realista).
+    let projectedPay = realPay;
+    if (cnt.totalRegistered > 0) {
+      const isFuture = cls.session_date > todayIso;
+      if (isFuture) {
+        // Clase futura: todos los registrados (fijos + bookings activos) suman al tier
+        projectedPay = getPayForCount(cnt.totalRegistered, config.tiers);
+      } else if (cnt.pending > 0) {
+        // Hoy o pasado con pendientes: asumir optimistamente que los pendientes contarán
+        projectedPay = getPayForCount(cnt.counted + cnt.pending, config.tiers);
+      }
+    }
+
     const tierLabel = getTierLabelForCount(cnt.counted, config.tiers);
     const isEmpty = cnt.totalRegistered === 0;
 
     byDay[dateIso].classes.push({
       ...cls,
       countInfo: cnt,
-      pay,
+      pay: realPay,
+      projectedPay,
       tierLabel,
       isEmpty
     });
-    byDay[dateIso].dayTotal += pay;
+    byDay[dateIso].dayTotal += realPay;
     byDay[dateIso].dayPending += cnt.pending;
     byDay[dateIso].dayStudentsCounted += cnt.counted;
+    totalProjectedPay += projectedPay;
   }
 
   // Totales del periodo
@@ -10481,21 +10501,14 @@ async function calculateInstructorPayReport(instructorId, startIso, endIso) {
   const totalStudentsCounted = days.reduce((sum, d) => sum + d.dayStudentsCounted, 0);
   const totalPending = days.reduce((sum, d) => sum + d.dayPending, 0);
 
-  // Proyección: total / días transcurridos * días totales del periodo
-  const today = dateToIsoLocal(new Date());
-  const start = new Date(startIso + 'T12:00:00');
-  const end = new Date(endIso + 'T12:00:00');
-  const todayDate = new Date(today + 'T12:00:00');
-  const elapsed = Math.max(1, Math.min(
-    Math.ceil((todayDate - start) / 86400000) + 1,
-    Math.ceil((end - start) / 86400000) + 1
-  ));
-  const totalDays = Math.ceil((end - start) / 86400000) + 1;
-  const projection = totalDays > elapsed ? Math.round(total / elapsed * totalDays) : total;
+  // Si el periodo ya terminó, no hay proyección
+  const periodEnded = endIso < todayIso;
+  const projection = periodEnded ? total : Math.round(totalProjectedPay);
 
   return {
     config, days, total, totalClassesCounted, totalStudentsCounted, totalPending,
-    projection, periodStart: startIso, periodEnd: endIso
+    projection,
+    periodStart: startIso, periodEnd: endIso
   };
 }
 
@@ -10586,13 +10599,25 @@ async function _renderPayViewFor(inst, container, isCoordinator) {
         <div class="pay-hero-label">Al día de hoy · ${formatShortDay(today)}</div>
         <div class="pay-hero-amount">S/ ${report.total.toFixed(2)}</div>
         <div class="pay-hero-sub">${report.days.length} día${report.days.length === 1 ? '' : 's'} · ${report.totalClassesCounted} clases · ${report.totalStudentsCounted} alumnos</div>
-        ${report.projection > report.total ? `
-          <div class="pay-hero-div"></div>
-          <div class="pay-hero-proj">
-            <span>Proyección fin de ${periodFreqLabel.toLowerCase()}</span>
-            <strong>~ S/ ${report.projection.toFixed(0)}</strong>
-          </div>
-        ` : ''}
+        ${report.projection > report.total ? (() => {
+          const futureClasses = report.days
+            .flatMap(d => d.classes)
+            .filter(c => !c.isEmpty && c.session_date > today).length;
+          const todayPending = report.days
+            .flatMap(d => d.classes)
+            .filter(c => !c.isEmpty && c.session_date === today && c.countInfo.pending > 0).length;
+          const extras = [];
+          if (futureClasses > 0) extras.push(`${futureClasses} clase${futureClasses === 1 ? '' : 's'} agendada${futureClasses === 1 ? '' : 's'}`);
+          if (todayPending > 0) extras.push(`${todayPending} pendiente${todayPending === 1 ? '' : 's'} de hoy`);
+          return `
+            <div class="pay-hero-div"></div>
+            <div class="pay-hero-proj">
+              <span>Proyección fin de ${periodFreqLabel.toLowerCase()}</span>
+              <strong>~ S/ ${report.projection.toFixed(0)}</strong>
+            </div>
+            ${extras.length > 0 ? `<div style="font-size: 11px; opacity: 0.75; margin-top: 4px;">incluye ${extras.join(' y ')}</div>` : ''}
+          `;
+        })() : ''}
       </div>
 
       ${report.totalPending > 0 ? `
