@@ -5183,11 +5183,58 @@ async function saveInstructorSchedule() {
     if (error) { showToast('Error: ' + error.message, 'error'); return; }
   }
 
+  // Sincronizar class_sessions del rango con el nuevo horario:
+  // Para cada slot (dow+hour+location) en el nuevo schedule, actualizar las sessions del rango
+  // que no tengan asignación manual de suplencia (actual_instructor_id).
+  // Esto resuelve el problema de "cambié el horario pero las clases viejas siguen con otro profesor o sin asignar".
+  let sessionsSynced = 0;
+  if (newRows.length > 0) {
+    const fromIso = effFrom || '1900-01-01';
+    const toIso = effTo || '2099-12-31';
+    // Cargar sessions del rango en esa sede
+    const { data: sessionsInRange } = await sb.from('class_sessions')
+      .select('id, session_date, hour, instructor_id, actual_instructor_id')
+      .eq('location_id', locId)
+      .gte('session_date', fromIso)
+      .lte('session_date', toIso);
+
+    const sessionsToUpdate = [];
+    for (const s of (sessionsInRange || [])) {
+      const dow = new Date(s.session_date + 'T12:00:00').getDay();
+      const matchesSchedule = newRows.some(r => r.day_of_week === dow && r.hour === s.hour);
+      if (!matchesSchedule) continue;
+      // No tocar sessions que tengan suplencia manual asignada
+      if (s.actual_instructor_id && s.actual_instructor_id !== instructorId) continue;
+      // Solo actualizar si el instructor actual es distinto al nuevo
+      if (s.instructor_id !== instructorId) {
+        sessionsToUpdate.push(s.id);
+      }
+    }
+
+    if (sessionsToUpdate.length > 0) {
+      const { error: updErr } = await sb.from('class_sessions')
+        .update({ instructor_id: instructorId })
+        .in('id', sessionsToUpdate);
+      if (updErr) {
+        console.error('Error sincronizando class_sessions:', updErr);
+      } else {
+        sessionsSynced = sessionsToUpdate.length;
+      }
+    }
+  }
+
   // Recargar schedules en STATE
   const { data } = await sb.from('instructor_schedules').select('*').eq('is_active', true);
   STATE.schedules = data || [];
 
-  showToast(`✓ ${newRows.length} horarios guardados`, 'success');
+  // Recargar class_sessions si hubo cambios
+  if (sessionsSynced > 0) {
+    const { data: refreshedSessions } = await sb.from('class_sessions').select('*');
+    STATE.classSessions = refreshedSessions || [];
+  }
+
+  const syncMsg = sessionsSynced > 0 ? ` · ${sessionsSynced} clases sincronizadas` : '';
+  showToast(`✓ ${newRows.length} horarios guardados${syncMsg}`, 'success');
   closeModals();
   renderAll();
 }
@@ -6867,15 +6914,18 @@ function renderInstructorDayStrip() {
   if (!block) return;
   const todayIso = dateToIsoLocal(new Date());
   const dowLabels = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
+  const monthLabels = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
 
-  // 7 días empezando hoy (excepto si está mirando otra fecha pasada/futura, en cuyo caso muestra 3 antes y 3 después)
+  // 7 días empezando hoy
   const baseDate = new Date();
   baseDate.setHours(0,0,0,0);
   const pills = [];
+  const visibleIsos = [];
   for (let i = 0; i < 7; i++) {
     const d = new Date(baseDate);
     d.setDate(d.getDate() + i);
     const iso = dateToIsoLocal(d);
+    visibleIsos.push(iso);
     const isToday = iso === todayIso;
     const isActive = iso === STATE.instDayDate;
     pills.push(`
@@ -6886,9 +6936,24 @@ function renderInstructorDayStrip() {
     `);
   }
   // Botón "Otra fecha"
-  pills.push(`<div class="inst-day-pill is-other" onclick="instructorOpenDatePicker()">Otra<br/>fecha</div>`);
+  const selectedOutsideStrip = STATE.instDayDate && !visibleIsos.includes(STATE.instDayDate);
+  pills.push(`<div class="inst-day-pill is-other ${selectedOutsideStrip ? 'is-active' : ''}" onclick="instructorOpenDatePicker()">Otra<br/>fecha</div>`);
+
+  // Banner superior con fecha seleccionada (siempre visible para claridad)
+  const selDate = new Date(STATE.instDayDate + 'T12:00:00');
+  const isToday = STATE.instDayDate === todayIso;
+  const banner = `
+    <div style="font-size: 12px; color: var(--ink-mute); margin-bottom: 8px; display: flex; align-items: center; gap: 8px;">
+      <span style="text-transform: uppercase; letter-spacing: 1px; font-size: 10px;">Viendo</span>
+      <span style="font-weight: 500; color: ${isToday ? 'var(--fit-purple)' : 'var(--ink)'};">
+        ${isToday ? 'Hoy · ' : ''}${dowLabels[selDate.getDay()]} ${selDate.getDate()} ${monthLabels[selDate.getMonth()]}
+      </span>
+      ${!isToday ? `<button onclick="instructorSetDateIso('${todayIso}')" style="margin-left: auto; padding: 3px 10px; background: var(--fit-lavender-pale); color: var(--fit-purple); border: 1px solid var(--fit-lavender); border-radius: 999px; font-size: 11px; cursor: pointer; font-family: var(--body);">ir a hoy</button>` : ''}
+    </div>
+  `;
 
   block.innerHTML = `
+    ${banner}
     <div class="inst-day-strip">${pills.join('')}</div>
     <input type="date" id="inst-date-picker" onchange="instructorSetCustomDate(this.value)" value="${STATE.instDayDate}" style="display:none;" />
   `;
@@ -10240,23 +10305,39 @@ function shiftPeriod(periodStart, frequency, delta) {
 // Carga las clases dictadas por un profesor en un rango de fechas
 async function loadInstructorClassesInRange(instructorId, startIso, endIso) {
   if (!isOnline) return [];
-  // Sessions del profesor en el rango (incluye actual_instructor_id si existe — suplencias)
-  const { data: sessionsScheduled } = await sb.from('class_sessions')
+  // Cargar TODAS las sessions del rango (sin filtrar por instructor en SQL — filtramos en JS con resolución completa)
+  const { data: allSessions } = await sb.from('class_sessions')
     .select('id, location_id, session_date, hour, instructor_id, actual_instructor_id, delivery_status')
     .gte('session_date', startIso)
     .lte('session_date', endIso);
 
-  const sessions = (sessionsScheduled || []).filter(s => {
-    const effectiveInstructorId = s.actual_instructor_id || s.instructor_id;
-    return effectiveInstructorId === instructorId;
+  // Filtro robusto: una session pertenece al profesor si:
+  // - actual_instructor_id == instructorId (suplencia explícita), o
+  // - instructor_id == instructorId, o
+  // - instructor_id es null Y el schedule fijo de ese slot apunta al profesor
+  const sessions = (allSessions || []).filter(s => {
+    if (s.actual_instructor_id) return s.actual_instructor_id === instructorId;
+    if (s.instructor_id === instructorId) return true;
+    if (s.instructor_id == null) {
+      // Resolver desde schedule fijo
+      const dow = new Date(s.session_date + 'T12:00:00').getDay();
+      const sched = (STATE.schedules || []).find(sc =>
+        sc.instructor_id === instructorId &&
+        sc.location_id === s.location_id &&
+        sc.day_of_week === dow &&
+        sc.hour === s.hour &&
+        (!sc.effective_from || s.session_date >= sc.effective_from) &&
+        (!sc.effective_to || s.session_date <= sc.effective_to)
+      );
+      return !!sched;
+    }
+    return false;
   });
 
   if (sessions.length === 0) {
-    // Aun sin sessions creadas, pueden haber clases con fijos. Generamos slots desde schedules + fixed_bookings.
     return generateSyntheticClassesFromSchedule(instructorId, startIso, endIso, []);
   }
 
-  // Cargar attendance y bookings de esas sesiones
   const sessionIds = sessions.map(s => s.id);
   const [attRes, bookRes] = await Promise.all([
     sb.from('attendance').select('session_id, student_id, status').in('session_id', sessionIds),
@@ -10269,7 +10350,6 @@ async function loadInstructorClassesInRange(instructorId, startIso, endIso) {
     bookings: (bookRes.data || []).filter(b => b.session_id === s.id),
   }));
 
-  // Mezclar con clases sintéticas (de schedules + fixed_bookings que aún no tienen session creada)
   return generateSyntheticClassesFromSchedule(instructorId, startIso, endIso, sessionsExtended);
 }
 
@@ -10474,7 +10554,12 @@ async function _renderPayViewFor(inst, container, isCoordinator) {
         <span>Vista de <strong>coordinación</strong> · ${escape(fullName)}</span>
         <a onclick="showView('coord-pay', document.querySelector('[data-view=coord-pay]')); renderCoordPayList();">volver a la tabla →</a>
       </div>
-    ` : ''}
+    ` : `
+      <div class="pay-tabs">
+        <button class="pay-tab" onclick="switchInstructorTab('day', this)">← Mi día</button>
+        <button class="pay-tab is-active" onclick="switchInstructorTab('pay', this)">Mis pagos</button>
+      </div>
+    `}
 
     <div style="padding: 0 4px;">
       <div style="font-size: 11px; text-transform: uppercase; letter-spacing: 1.2px; color: var(--ink-mute);">
