@@ -497,6 +497,98 @@
   .inst-sa-btn.is-primary .inst-sa-icon { background: rgba(255,255,255,0.2); }
   .inst-sa-label { font-size: 12px; font-weight: 500; }
   .inst-sa-sub { font-size: 10px; opacity: 0.7; }
+
+  /* ============ MÓDULO DE PAGOS ============ */
+  .pay-tabs { display: flex; gap: 8px; margin-bottom: 22px; }
+  .pay-tab { padding: 8px 16px; border: 1px solid var(--line); background: white; border-radius: 999px; font-size: 13px; font-weight: 500; color: var(--ink-mute); cursor: pointer; font-family: var(--body); }
+  .pay-tab.is-active { background: var(--fit-purple); color: white; border-color: var(--fit-purple); }
+  .pay-period-pill { display: inline-flex; align-items: center; gap: 6px; background: var(--fit-lavender); color: var(--fit-purple-deep); padding: 7px 14px; border-radius: 999px; font-size: 12px; font-weight: 500; cursor: pointer; border: none; font-family: var(--body); margin-bottom: 16px; }
+  .pay-hero { background: linear-gradient(135deg, var(--fit-purple) 0%, var(--fit-purple-deep) 100%); color: white; padding: 22px 20px; border-radius: 14px; margin-bottom: 14px; }
+  .pay-hero-label { font-size: 11px; text-transform: uppercase; letter-spacing: 1.2px; opacity: 0.85; }
+  .pay-hero-amount { font-family: var(--display); font-style: italic; font-size: 44px; line-height: 1; margin: 6px 0 4px; }
+  .pay-hero-sub { font-size: 12px; opacity: 0.9; }
+  .pay-hero-div { height: 1px; background: rgba(255,255,255,0.18); margin: 14px 0; }
+  .pay-hero-proj { font-size: 12px; opacity: 0.92; display: flex; justify-content: space-between; align-items: baseline; }
+  .pay-hero-proj strong { font-weight: 600; font-size: 16px; }
+  .pay-pending-banner { background: var(--fit-warm-soft, #FBE9D2); border: 1px solid var(--warn, #C97C2A); border-radius: 10px; padding: 10px 12px; margin-bottom: 14px; display: flex; gap: 10px; align-items: center; }
+  .pay-pending-icon { width: 28px; height: 28px; background: var(--warn, #C97C2A); color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 600; flex-shrink: 0; }
+  .pay-pending-text { font-size: 12px; color: var(--ink); }
+  .pay-pending-text strong { color: var(--warn, #C97C2A); }
+  .pay-day-card { background: white; border: 1px solid var(--line); border-radius: 14px; overflow: hidden; margin-bottom: 10px; }
+  .pay-day-card.is-today { border-color: var(--fit-purple); border-width: 1.5px; }
+  .pay-day-header { display: flex; justify-content: space-between; align-items: center; padding: 14px 16px; cursor: pointer; }
+  .pay-day-num { font-family: var(--display); font-style: italic; font-size: 22px; color: var(--fit-purple-deep); }
+  .pay-day-info-day { font-size: 11px; text-transform: uppercase; letter-spacing: 1.2px; color: var(--ink-mute); display: block; line-height: 1.1; }
+  .pay-day-info-meta { color: var(--ink-mute); font-size: 11px; }
+  .pay-day-pay { font-family: var(--display); font-style: italic; font-size: 18px; color: var(--fit-purple-deep); }
+  .pay-day-expanded { border-top: 1px solid var(--line-soft, #F0EBF5); padding: 4px 0; }
+  .pay-class-row { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; border-bottom: 1px solid var(--line-soft, #F0EBF5); font-size: 13px; cursor: pointer; transition: background 0.15s; }
+  .pay-class-row:last-child { border-bottom: none; }
+  .pay-class-row:hover { background: var(--fit-lavender-pale); }
+  .pay-class-row.is-empty { opacity: 0.55; cursor: default; }
+  .pay-class-row.is-empty:hover { background: transparent; }
+  .pay-class-row.has-pending { background: var(--fit-warm-soft, #FBE9D2); }
+  .pay-class-hour { font-family: var(--display); font-style: italic; font-size: 17px; color: var(--fit-purple-deep); }
+  .pay-class-meta { color: var(--ink-mute); font-size: 11px; }
+  .pay-badge { display: inline-block; padding: 1px 7px; border-radius: 4px; font-size: 10px; font-weight: 500; text-transform: lowercase; margin-right: 4px; }
+  .pay-badge-att { background: var(--good-soft, #DBEFE3); color: var(--good, #2F8C5F); }
+  .pay-badge-lost { background: var(--danger-soft, #FFE9E2); color: var(--danger, #E8694A); }
+  .pay-badge-rec { background: var(--fit-warm-soft, #FBE9D2); color: var(--warn, #C97C2A); }
+  .pay-badge-pend { background: #FEF3D5; color: #C19015; }
+  .pay-badge-empty { background: var(--bg); color: var(--ink-faint); }
+  .pay-class-amt { font-weight: 500; color: var(--fit-purple-deep); font-size: 13px; text-align: right; }
+  .pay-class-amt-zero { color: var(--ink-faint); font-style: italic; font-size: 11px; font-weight: 400; }
+  .pay-class-amt-plus { font-size: 9px; color: var(--warn, #C97C2A); display: block; }
+  .pay-coord-banner { background: var(--fit-purple-deep); color: white; padding: 10px 16px; font-size: 12px; display: flex; justify-content: space-between; align-items: center; border-radius: 10px; margin-bottom: 16px; }
+  .pay-coord-banner a { color: white; text-decoration: underline; opacity: 0.85; cursor: pointer; }
+  /* Tabla coordinador */
+  .pay-totals-row { display: flex; gap: 16px; margin-bottom: 22px; flex-wrap: wrap; }
+  .pay-totals-card { flex: 1; min-width: 200px; background: white; border: 1px solid var(--line); border-radius: 14px; padding: 18px 22px; }
+  .pay-totals-label { font-size: 11px; text-transform: uppercase; letter-spacing: 1.2px; color: var(--ink-mute); }
+  .pay-totals-value { font-family: var(--display); font-style: italic; font-size: 30px; color: var(--fit-purple-deep); line-height: 1.1; margin-top: 4px; }
+  .pay-totals-sub { font-size: 12px; color: var(--ink-mute); margin-top: 4px; }
+  .pay-teachers-table { width: 100%; border-collapse: collapse; background: white; border: 1px solid var(--line); border-radius: 14px; overflow: hidden; }
+  .pay-teachers-table thead th { background: var(--fit-lavender-pale); color: var(--ink-mute); font-weight: 500; font-size: 11px; text-transform: uppercase; letter-spacing: 1.2px; text-align: left; padding: 12px 16px; border-bottom: 1px solid var(--line); }
+  .pay-teachers-table thead th.num { text-align: right; }
+  .pay-teachers-table tbody td { padding: 14px 16px; border-bottom: 1px solid var(--line-soft, #F0EBF5); font-size: 14px; }
+  .pay-teachers-table tbody td.num { text-align: right; }
+  .pay-teachers-table tbody tr:hover { background: var(--fit-lavender-pale); cursor: pointer; }
+  .pay-teachers-table tbody tr:last-child td { border-bottom: none; }
+  .pay-t-name { display: flex; align-items: center; gap: 12px; }
+  .pay-t-avatar { width: 36px; height: 36px; background: var(--fit-lavender); color: var(--fit-purple); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600; }
+  .pay-t-amount { font-family: var(--display); font-style: italic; font-size: 18px; color: var(--fit-purple-deep); }
+  .pay-pill-warn { background: var(--fit-warm-soft, #FBE9D2); color: var(--warn, #C97C2A); padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 500; }
+  .pay-pill-ok { background: var(--good-soft, #DBEFE3); color: var(--good, #2F8C5F); padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 500; }
+  /* Configuración */
+  .pay-config-grid { display: grid; grid-template-columns: 260px 1fr; gap: 24px; margin-top: 12px; }
+  .pay-config-side { background: white; border: 1px solid var(--line); border-radius: 14px; padding: 4px; height: fit-content; }
+  .pay-config-side-row { padding: 10px 14px; border-radius: 10px; display: flex; align-items: center; gap: 10px; font-size: 13px; cursor: pointer; }
+  .pay-config-side-row.is-active { background: var(--fit-lavender); color: var(--fit-purple-deep); font-weight: 500; }
+  .pay-config-side-avatar { width: 28px; height: 28px; background: var(--fit-lavender); color: var(--fit-purple); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 600; flex-shrink: 0; }
+  .pay-config-side-row.is-active .pay-config-side-avatar { background: var(--fit-purple); color: white; }
+  .pay-config-main { background: white; border: 1px solid var(--line); border-radius: 14px; padding: 24px 28px; }
+  .pay-config-section { margin-bottom: 28px; }
+  .pay-config-section:last-child { margin-bottom: 0; }
+  .pay-config-section-title { font-family: var(--display); font-style: italic; font-size: 17px; color: var(--fit-purple-deep); margin: 0 0 4px; }
+  .pay-config-section-desc { font-size: 12px; color: var(--ink-mute); margin: 0 0 14px; }
+  .pay-config-row { display: flex; gap: 14px; align-items: center; margin-bottom: 10px; }
+  .pay-config-row label { font-size: 13px; font-weight: 500; min-width: 140px; }
+  .pay-config-row input, .pay-config-row select { padding: 8px 12px; border: 1px solid var(--line); border-radius: 10px; font-family: var(--body); font-size: 13px; background: white; }
+  .pay-tier-table { width: 100%; border-collapse: collapse; background: var(--fit-lavender-pale); border-radius: 10px; overflow: hidden; }
+  .pay-tier-table th { text-align: left; padding: 10px 14px; font-size: 11px; text-transform: uppercase; letter-spacing: 1.2px; color: var(--ink-mute); font-weight: 500; border-bottom: 1px solid var(--line); }
+  .pay-tier-table th.num, .pay-tier-table td.num { text-align: right; }
+  .pay-tier-table td { padding: 10px 14px; font-size: 13px; border-bottom: 1px solid var(--line-soft, #F0EBF5); }
+  .pay-tier-table tr:last-child td { border-bottom: none; }
+  .pay-tier-input { width: 70px; padding: 4px 8px; border: 1px solid var(--line); border-radius: 6px; font-family: var(--body); font-size: 13px; background: white; text-align: right; }
+  .pay-add-tier { margin-top: 10px; padding: 7px 14px; background: white; border: 1px dashed var(--fit-purple); color: var(--fit-purple); border-radius: 999px; font-size: 12px; cursor: pointer; font-family: var(--body); }
+  .pay-x-btn { color: var(--ink-faint); cursor: pointer; font-size: 16px; background: none; border: none; }
+  .pay-x-btn:hover { color: var(--danger, #E8694A); }
+  @media (max-width: 600px) {
+    .pay-config-grid { grid-template-columns: 1fr; }
+    .pay-teachers-table { display: block; overflow-x: auto; font-size: 12px; }
+    .pay-totals-card { padding: 14px 16px; }
+    .pay-totals-value { font-size: 24px; }
+  }
 </style>
 </head>
 <body>
@@ -609,6 +701,10 @@
       <span class="nav-icon"><svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M3 22v-6h6"/><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 2v6h-6"/></svg></span>
       Renovar
       <span class="nav-badge" id="badge-renewals">—</span>
+    </button>
+    <button class="nav-item" data-view="coord-pay" onclick="showView('coord-pay', this); renderCoordPayList();">
+      <span class="nav-icon"><svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="3"/><path d="M6 12h.01M18 12h.01"/></svg></span>
+      Pagos profesores
     </button>
   </div>
   <div class="nav-group">
@@ -847,6 +943,21 @@
   <!-- INSTRUCTOR DAY VIEW (vista profesor) -->
   <section class="view" id="view-instructor-day">
     <div id="instructor-view-container"></div>
+  </section>
+
+  <!-- VISTA PROFESOR: MIS PAGOS -->
+  <section class="view" id="view-instructor-pay">
+    <div id="instructor-pay-container"></div>
+  </section>
+
+  <!-- VISTA COORDINADOR: LISTA DE PROFESORES Y SUS PAGOS -->
+  <section class="view" id="view-coord-pay">
+    <div id="coord-pay-container"></div>
+  </section>
+
+  <!-- VISTA COORDINADOR: CONFIGURACIÓN DE PAGOS POR PROFESOR -->
+  <section class="view" id="view-coord-pay-config">
+    <div id="coord-pay-config-container"></div>
   </section>
 
   <!-- STUDENT DAY VIEW (vista alumno) -->
@@ -1546,13 +1657,14 @@ async function loadAll() {
 }
 
 async function loadFromSupabase() {
-  const [locations, students, instructors, packages, fixedBookings, schedules] = await Promise.all([
+  const [locations, students, instructors, packages, fixedBookings, schedules, payConfigs] = await Promise.all([
     sb.from('locations').select('*').eq('is_active', true).order('name'),
     sb.from('students').select('*').eq('status', 'active').order('first_name'),
     sb.from('instructors').select('*').eq('is_active', true).order('full_name'),
     sb.from('packages').select('*').eq('is_active', true).order('display_order'),
     sb.from('fixed_bookings').select('*').eq('is_active', true),
     sb.from('instructor_schedules').select('*').eq('is_active', true),
+    sb.from('instructor_pay_config').select('*'),
   ]);
 
   if (locations.error) { showToast('Error cargando sedes: ' + locations.error.message, 'error'); return; }
@@ -1563,6 +1675,8 @@ async function loadFromSupabase() {
   STATE.packages = packages.data || [];
   STATE.fixedBookings = fixedBookings.data || [];
   STATE.schedules = schedules.data || [];
+  STATE.payConfigs = {};
+  (payConfigs.data || []).forEach(c => { STATE.payConfigs[c.instructor_id] = c; });
   STATE.classOverrides = STATE.classOverrides || {};  // memoria local: cambios puntuales del día
 
   // Default to Santa Cruz if exists, otherwise first
@@ -6599,6 +6713,10 @@ async function renderInstructorDay() {
   if (isFirstRender) {
     container.innerHTML = `
       <div data-inst-shell>
+        <div class="pay-tabs">
+          <button class="pay-tab is-active" onclick="switchInstructorTab('day', this)">Mi día</button>
+          <button class="pay-tab" onclick="switchInstructorTab('pay', this)">Mis pagos</button>
+        </div>
         <div data-inst-greet></div>
         <div data-inst-daystrip></div>
         <div data-inst-pending-banner></div>
@@ -10019,6 +10137,871 @@ async function syncLocalOverridesToBD() {
   localStorage.setItem('overridesSyncedToBD_v1', '1');
   if (synced > 0) console.log(`[sync] ${synced} overrides persistidos en BD`);
 }
+
+// ============================================================
+// MÓDULO DE PAGOS A PROFESORES
+// ============================================================
+
+const PAY_DEFAULT_TIERS = [
+  { min: 1, max: 3, amount: 30 },
+  { min: 4, max: 4, amount: 40 },
+  { min: 5, max: null, amount: 50 }
+];
+const PAY_DEFAULT_CONFIG = {
+  period_frequency: 'biweekly',
+  period_close_mode: 'manual',
+  tiers: PAY_DEFAULT_TIERS
+};
+
+function getPayConfigFor(instructorId) {
+  const c = STATE.payConfigs && STATE.payConfigs[instructorId];
+  if (!c) return { ...PAY_DEFAULT_CONFIG };
+  return {
+    period_frequency: c.period_frequency || 'biweekly',
+    period_close_mode: c.period_close_mode || 'manual',
+    tiers: (c.tiers && c.tiers.length) ? c.tiers : PAY_DEFAULT_TIERS
+  };
+}
+
+// Dado un count de alumnos contables, retorna el monto según los tiers
+function getPayForCount(count, tiers) {
+  if (count <= 0) return 0;
+  const sorted = [...tiers].sort((a, b) => a.min - b.min);
+  for (const t of sorted) {
+    const max = (t.max === null || t.max === undefined || t.max === '' || t.max === '∞') ? Infinity : Number(t.max);
+    if (count >= Number(t.min) && count <= max) return Number(t.amount) || 0;
+  }
+  return 0;
+}
+
+// Devuelve el texto del tier que aplica (ej: "tier 1-3 alumnos")
+function getTierLabelForCount(count, tiers) {
+  if (count <= 0) return '';
+  const sorted = [...tiers].sort((a, b) => a.min - b.min);
+  for (const t of sorted) {
+    const max = (t.max === null || t.max === undefined || t.max === '' || t.max === '∞') ? Infinity : Number(t.max);
+    if (count >= Number(t.min) && count <= max) {
+      if (max === Infinity) return `tier ${t.min}+`;
+      if (t.min === max) return `tier ${t.min}`;
+      return `tier ${t.min}–${max}`;
+    }
+  }
+  return '';
+}
+
+// Calcula el rango de fechas del periodo que contiene a 'date' según frequency
+function getPeriodRangeFor(dateIso, frequency) {
+  const d = new Date(dateIso + 'T12:00:00');
+  const y = d.getFullYear(), m = d.getMonth(), day = d.getDate();
+  if (frequency === 'weekly') {
+    // Lunes a domingo
+    const dow = d.getDay() === 0 ? 6 : d.getDay() - 1;
+    const start = new Date(y, m, day - dow);
+    const end = new Date(y, m, day - dow + 6);
+    return { start: dateToIsoLocal(start), end: dateToIsoLocal(end), label: `${start.getDate()}–${end.getDate()} ${monthShort(end.getMonth())}` };
+  }
+  if (frequency === 'monthly') {
+    const start = new Date(y, m, 1);
+    const end = new Date(y, m + 1, 0);
+    return { start: dateToIsoLocal(start), end: dateToIsoLocal(end), label: `${monthShort(m)} ${y}` };
+  }
+  // biweekly: 1–15 y 16–fin
+  if (day <= 15) {
+    const start = new Date(y, m, 1);
+    const end = new Date(y, m, 15);
+    return { start: dateToIsoLocal(start), end: dateToIsoLocal(end), label: `1–15 ${monthShort(m)}` };
+  } else {
+    const start = new Date(y, m, 16);
+    const end = new Date(y, m + 1, 0);
+    return { start: dateToIsoLocal(start), end: dateToIsoLocal(end), label: `16–${end.getDate()} ${monthShort(m)}` };
+  }
+}
+
+function monthShort(m) {
+  return ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'][m];
+}
+
+// Mover periodo: -1 = anterior, +1 = siguiente
+function shiftPeriod(periodStart, frequency, delta) {
+  const d = new Date(periodStart + 'T12:00:00');
+  if (frequency === 'weekly') {
+    d.setDate(d.getDate() + 7 * delta);
+    return getPeriodRangeFor(dateToIsoLocal(d), frequency);
+  }
+  if (frequency === 'monthly') {
+    d.setMonth(d.getMonth() + delta);
+    return getPeriodRangeFor(dateToIsoLocal(d), frequency);
+  }
+  // biweekly: avanzar 15 días aprox y recalcular
+  d.setDate(d.getDate() + 15 * delta);
+  return getPeriodRangeFor(dateToIsoLocal(d), frequency);
+}
+
+// Carga las clases dictadas por un profesor en un rango de fechas
+async function loadInstructorClassesInRange(instructorId, startIso, endIso) {
+  if (!isOnline) return [];
+  // Sessions del profesor en el rango (incluye actual_instructor_id si existe — suplencias)
+  const { data: sessionsScheduled } = await sb.from('class_sessions')
+    .select('id, location_id, session_date, hour, instructor_id, actual_instructor_id, delivery_status')
+    .gte('session_date', startIso)
+    .lte('session_date', endIso);
+
+  const sessions = (sessionsScheduled || []).filter(s => {
+    const effectiveInstructorId = s.actual_instructor_id || s.instructor_id;
+    return effectiveInstructorId === instructorId;
+  });
+
+  if (sessions.length === 0) {
+    // Aun sin sessions creadas, pueden haber clases con fijos. Generamos slots desde schedules + fixed_bookings.
+    return generateSyntheticClassesFromSchedule(instructorId, startIso, endIso, []);
+  }
+
+  // Cargar attendance y bookings de esas sesiones
+  const sessionIds = sessions.map(s => s.id);
+  const [attRes, bookRes] = await Promise.all([
+    sb.from('attendance').select('session_id, student_id, status').in('session_id', sessionIds),
+    sb.from('session_bookings').select('session_id, student_id, cancelled_at').in('session_id', sessionIds).is('cancelled_at', null),
+  ]);
+
+  const sessionsExtended = sessions.map(s => ({
+    ...s,
+    attendance: (attRes.data || []).filter(a => a.session_id === s.id),
+    bookings: (bookRes.data || []).filter(b => b.session_id === s.id),
+  }));
+
+  // Mezclar con clases sintéticas (de schedules + fixed_bookings que aún no tienen session creada)
+  return generateSyntheticClassesFromSchedule(instructorId, startIso, endIso, sessionsExtended);
+}
+
+// Genera "clases" para todo el rango usando schedules + fixed_bookings, mezclando con las que ya tienen session
+function generateSyntheticClassesFromSchedule(instructorId, startIso, endIso, existingSessions) {
+  const schedules = (STATE.schedules || []).filter(s => s.instructor_id === instructorId);
+  const fixed = (STATE.fixedBookings || []).filter(fb => fb.is_active);
+  const result = [...existingSessions];
+
+  // Mapa rápido por (date, hour, location)
+  const sessionKey = (s) => `${s.session_date}_${s.hour}_${s.location_id}`;
+  const existingKeys = new Set(existingSessions.map(sessionKey));
+
+  // Iterar día a día en el rango
+  const start = new Date(startIso + 'T12:00:00');
+  const end = new Date(endIso + 'T12:00:00');
+  for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+    const dow = d.getDay(); // 0=dom..6=sab
+    const dateIso = dateToIsoLocal(d);
+    // Schedules del profesor para ese día de la semana
+    const todaySchedules = schedules.filter(s => s.day_of_week === dow);
+    for (const sched of todaySchedules) {
+      const key = `${dateIso}_${sched.hour}_${sched.location_id}`;
+      if (existingKeys.has(key)) continue;
+      // Generar synthetic class
+      result.push({
+        id: null,
+        synthetic: true,
+        location_id: sched.location_id,
+        session_date: dateIso,
+        hour: sched.hour,
+        instructor_id: instructorId,
+        actual_instructor_id: null,
+        delivery_status: null,
+        attendance: [],
+        bookings: [],
+      });
+      existingKeys.add(key);
+    }
+  }
+
+  // Calcular alumnos (fijos + flex) para cada clase
+  for (const c of result) {
+    const fixedHere = fixed.filter(fb =>
+      fb.location_id === c.location_id &&
+      fb.hour === c.hour &&
+      fb.day_of_week === new Date(c.session_date + 'T12:00:00').getDay()
+    );
+    c.fixedStudents = fixedHere;
+    c.totalStudentsRegistered = new Set([
+      ...fixedHere.map(f => f.student_id),
+      ...(c.bookings || []).map(b => b.student_id)
+    ]).size;
+  }
+
+  return result.sort((a, b) => {
+    if (a.session_date !== b.session_date) return a.session_date.localeCompare(b.session_date);
+    return a.hour - b.hour;
+  });
+}
+
+// Cuenta los alumnos contables para el tier de una clase. Retorna {counted, byStatus, totalRegistered}
+function countClassForPay(cls) {
+  const byStatus = { attended: 0, lost: 0, no_show: 0, recoverable: 0, pending: 0, rescheduled: 0, unmarked: 0 };
+  const allStudentIds = new Set([
+    ...(cls.fixedStudents || []).map(f => f.student_id),
+    ...(cls.bookings || []).map(b => b.student_id)
+  ]);
+
+  for (const sid of allStudentIds) {
+    const att = (cls.attendance || []).find(a => a.student_id === sid);
+    if (!att) {
+      byStatus.unmarked += 1;
+    } else {
+      byStatus[att.status] = (byStatus[att.status] || 0) + 1;
+    }
+  }
+
+  // Cuentan para el tier: attended + lost + no_show
+  const counted = byStatus.attended + byStatus.lost + byStatus.no_show;
+  // Pendientes = sin marcar + estado 'pending'
+  const pending = byStatus.unmarked + byStatus.pending;
+
+  return {
+    counted,
+    pending,
+    totalRegistered: allStudentIds.size,
+    byStatus
+  };
+}
+
+// Calcula el reporte completo del profesor en un rango
+async function calculateInstructorPayReport(instructorId, startIso, endIso) {
+  const config = getPayConfigFor(instructorId);
+  const classes = await loadInstructorClassesInRange(instructorId, startIso, endIso);
+
+  // Agrupar por día
+  const byDay = {};
+  for (const cls of classes) {
+    const dateIso = cls.session_date;
+    if (!byDay[dateIso]) byDay[dateIso] = { date: dateIso, classes: [], dayTotal: 0, dayPending: 0, dayStudentsCounted: 0 };
+
+    const cnt = countClassForPay(cls);
+    const pay = (cnt.totalRegistered === 0) ? 0 : getPayForCount(cnt.counted, config.tiers);
+    const tierLabel = getTierLabelForCount(cnt.counted, config.tiers);
+    const isEmpty = cnt.totalRegistered === 0;
+
+    byDay[dateIso].classes.push({
+      ...cls,
+      countInfo: cnt,
+      pay,
+      tierLabel,
+      isEmpty
+    });
+    byDay[dateIso].dayTotal += pay;
+    byDay[dateIso].dayPending += cnt.pending;
+    byDay[dateIso].dayStudentsCounted += cnt.counted;
+  }
+
+  // Totales del periodo
+  const days = Object.values(byDay).sort((a, b) => b.date.localeCompare(a.date));
+  const total = days.reduce((sum, d) => sum + d.dayTotal, 0);
+  const totalClassesCounted = days.reduce((sum, d) => sum + d.classes.filter(c => !c.isEmpty).length, 0);
+  const totalStudentsCounted = days.reduce((sum, d) => sum + d.dayStudentsCounted, 0);
+  const totalPending = days.reduce((sum, d) => sum + d.dayPending, 0);
+
+  // Proyección: total / días transcurridos * días totales del periodo
+  const today = dateToIsoLocal(new Date());
+  const start = new Date(startIso + 'T12:00:00');
+  const end = new Date(endIso + 'T12:00:00');
+  const todayDate = new Date(today + 'T12:00:00');
+  const elapsed = Math.max(1, Math.min(
+    Math.ceil((todayDate - start) / 86400000) + 1,
+    Math.ceil((end - start) / 86400000) + 1
+  ));
+  const totalDays = Math.ceil((end - start) / 86400000) + 1;
+  const projection = totalDays > elapsed ? Math.round(total / elapsed * totalDays) : total;
+
+  return {
+    config, days, total, totalClassesCounted, totalStudentsCounted, totalPending,
+    projection, periodStart: startIso, periodEnd: endIso
+  };
+}
+
+// Switch entre Mi día y Mis pagos (solo profesor)
+function switchInstructorTab(tab, btn) {
+  document.querySelectorAll('.pay-tab').forEach(t => t.classList.remove('is-active'));
+  if (btn) btn.classList.add('is-active');
+  if (tab === 'pay') {
+    showView('instructor-pay', null);
+    renderInstructorPayView();
+  } else {
+    showView('instructor-day', null);
+    renderInstructorDay();
+  }
+}
+
+// ============ VISTA PROFESOR: MIS PAGOS ============
+async function renderInstructorPayView() {
+  const container = document.getElementById('instructor-pay-container');
+  if (!CURRENT_USER || CURRENT_USER.role !== 'instructor') return;
+  const inst = CURRENT_USER.record;
+
+  container.innerHTML = '<div style="text-align:center; padding: 40px; color: var(--ink-mute);">Calculando tu pago…</div>';
+
+  await _renderPayViewFor(inst, container, /*isCoordinator*/ false);
+}
+
+// Vista del coordinador viendo el reporte de un profesor (misma estructura, banner arriba)
+async function showInstructorPayDetail(instructorId) {
+  const inst = STATE.instructors.find(i => i.id === instructorId);
+  if (!inst) return;
+  showView('coord-pay', null);
+  // Reusamos el contenedor de coord-pay pero re-renderizamos como detalle
+  const container = document.getElementById('coord-pay-container');
+  container.innerHTML = '<div style="text-align:center; padding: 40px; color: var(--ink-mute);">Cargando reporte…</div>';
+  await _renderPayViewFor(inst, container, /*isCoordinator*/ true);
+}
+
+async function _renderPayViewFor(inst, container, isCoordinator) {
+  const config = getPayConfigFor(inst.id);
+  // Periodo a mostrar: STATE.payViewPeriodStart / End o el periodo actual
+  if (!STATE.payViewPeriodStart || STATE.payViewPeriodInstId !== inst.id) {
+    const r = getPeriodRangeFor(dateToIsoLocal(new Date()), config.period_frequency);
+    STATE.payViewPeriodStart = r.start;
+    STATE.payViewPeriodEnd = r.end;
+    STATE.payViewPeriodLabel = r.label;
+    STATE.payViewPeriodInstId = inst.id;
+  }
+
+  const report = await calculateInstructorPayReport(inst.id, STATE.payViewPeriodStart, STATE.payViewPeriodEnd);
+
+  const periodFreqLabel = { weekly: 'Semana', biweekly: 'Quincena', monthly: 'Mes' }[config.period_frequency] || 'Periodo';
+  const fullName = inst.full_name || `${inst.first_name || ''} ${inst.last_name || ''}`.trim();
+  const firstName = inst.first_name || fullName.split(' ')[0];
+
+  const today = dateToIsoLocal(new Date());
+
+  container.innerHTML = `
+    ${isCoordinator ? `
+      <div class="pay-coord-banner">
+        <span>Vista de <strong>coordinación</strong> · ${escape(fullName)}</span>
+        <a onclick="showView('coord-pay', document.querySelector('[data-view=coord-pay]')); renderCoordPayList();">volver a la tabla →</a>
+      </div>
+    ` : ''}
+
+    <div style="padding: 0 4px;">
+      <div style="font-size: 11px; text-transform: uppercase; letter-spacing: 1.2px; color: var(--ink-mute);">
+        ${isCoordinator ? 'Pago · ' + periodFreqLabel.toLowerCase() : 'Hola, ' + escape(firstName) + ' · tu pago'}
+      </div>
+      <div style="font-family: var(--display); font-style: italic; font-size: 26px; color: var(--fit-purple-deep); margin: 2px 0 14px; line-height: 1.1;">
+        ${isCoordinator ? escape(firstName) + ' <em>' + escape(inst.last_name || '') + '</em>' : 'Tu ' + periodFreqLabel.toLowerCase()}
+      </div>
+
+      <div style="display:flex; gap:8px; align-items:center; margin-bottom: 14px;">
+        <button class="pay-period-pill" onclick="shiftPayPeriod(-1)" style="padding: 7px 10px;">‹</button>
+        <div class="pay-period-pill" style="cursor: default; flex: 1; justify-content: center;">
+          ${periodFreqLabel} del ${STATE.payViewPeriodLabel || ''}
+        </div>
+        <button class="pay-period-pill" onclick="shiftPayPeriod(1)" style="padding: 7px 10px;">›</button>
+      </div>
+
+      <div class="pay-hero">
+        <div class="pay-hero-label">Al día de hoy · ${formatShortDay(today)}</div>
+        <div class="pay-hero-amount">S/ ${report.total.toFixed(2)}</div>
+        <div class="pay-hero-sub">${report.days.length} día${report.days.length === 1 ? '' : 's'} · ${report.totalClassesCounted} clases · ${report.totalStudentsCounted} alumnos</div>
+        ${report.projection > report.total ? `
+          <div class="pay-hero-div"></div>
+          <div class="pay-hero-proj">
+            <span>Proyección fin de ${periodFreqLabel.toLowerCase()}</span>
+            <strong>~ S/ ${report.projection.toFixed(0)}</strong>
+          </div>
+        ` : ''}
+      </div>
+
+      ${report.totalPending > 0 ? `
+        <div class="pay-pending-banner">
+          <div class="pay-pending-icon">!</div>
+          <div class="pay-pending-text">
+            <strong>${report.totalPending} alumno${report.totalPending === 1 ? '' : 's'} pendiente${report.totalPending === 1 ? '' : 's'}</strong>
+            ${isCoordinator ? ' en sus clases · <span style="color:var(--fit-purple); text-decoration:underline; cursor:pointer;" onclick="showView(\'pending-recovery\', document.querySelector(\'[data-view=pending-recovery]\'))">resolver ahora</span>' : ' de resolver por la coordinadora · podría sumar tu pago'}
+          </div>
+        </div>
+      ` : ''}
+
+      ${report.days.length === 0 ? `
+        <div style="background:white; border:1px solid var(--line); border-radius:14px; padding:32px; text-align:center; color: var(--ink-mute); font-size: 13px;">
+          Sin clases registradas en este periodo.
+        </div>
+      ` : ''}
+
+      <div>
+        ${report.days.map(day => renderPayDayCard(day, today, inst.id)).join('')}
+      </div>
+
+    </div>
+  `;
+}
+
+function renderPayDayCard(day, today, instructorId) {
+  const dateObj = new Date(day.date + 'T12:00:00');
+  const isToday = day.date === today;
+  const dayNum = dateObj.getDate();
+  const dayLabels = ['dom','lun','mar','mié','jue','vie','sáb'];
+  const dayName = isToday ? 'Hoy · ' + dayLabels[dateObj.getDay()] : dayLabels[dateObj.getDay()];
+  const nonEmptyClasses = day.classes.filter(c => !c.isEmpty);
+
+  // Solo expandir el día de hoy por defecto
+  const expandedKey = `pay_day_expanded_${day.date}`;
+  if (isToday && STATE[expandedKey] === undefined) STATE[expandedKey] = true;
+  const isExpanded = !!STATE[expandedKey];
+
+  return `
+    <div class="pay-day-card ${isToday ? 'is-today' : ''}">
+      <div class="pay-day-header" onclick="togglePayDay('${day.date}', '${instructorId}')">
+        <div style="display:flex; gap:12px; align-items:baseline;">
+          <div class="pay-day-num"><em>${dayNum}</em></div>
+          <div>
+            <span class="pay-day-info-day">${dayName}</span>
+            <span class="pay-day-info-meta">${nonEmptyClasses.length} clase${nonEmptyClasses.length === 1 ? '' : 's'} · ${day.dayStudentsCounted} alumnos${day.dayPending > 0 ? ' · ' + day.dayPending + ' pend.' : ''}</span>
+          </div>
+        </div>
+        <div class="pay-day-pay">S/ ${day.dayTotal.toFixed(0)}</div>
+      </div>
+      ${isExpanded ? `
+        <div class="pay-day-expanded">
+          ${day.classes.map(c => renderPayClassRow(c, day.date, instructorId)).join('')}
+        </div>
+      ` : ''}
+    </div>
+  `;
+}
+
+function togglePayDay(dateIso, instructorId) {
+  const key = `pay_day_expanded_${dateIso}`;
+  STATE[key] = !STATE[key];
+  // Re-render
+  const inst = STATE.instructors.find(i => i.id === instructorId);
+  if (!inst) return;
+  if (CURRENT_USER && CURRENT_USER.role === 'coordinator') {
+    showInstructorPayDetail(instructorId);
+  } else {
+    renderInstructorPayView();
+  }
+}
+
+function renderPayClassRow(cls, dateIso, instructorId) {
+  if (cls.isEmpty) {
+    return `
+      <div class="pay-class-row is-empty">
+        <div style="display:flex; gap:10px; align-items:baseline;">
+          <div class="pay-class-hour"><em>${formatHour(cls.hour)}</em></div>
+          <div class="pay-class-meta">
+            <span class="pay-badge pay-badge-empty">sin alumnos</span>
+            <div style="margin-top:3px;">no cuenta como clase</div>
+          </div>
+        </div>
+        <div class="pay-class-amt pay-class-amt-zero">no aplica</div>
+      </div>
+    `;
+  }
+  const bs = cls.countInfo.byStatus;
+  const badges = [];
+  if (bs.attended > 0) badges.push(`<span class="pay-badge pay-badge-att">${bs.attended} asist.</span>`);
+  if ((bs.lost + bs.no_show) > 0) badges.push(`<span class="pay-badge pay-badge-lost">${bs.lost + bs.no_show} perd.</span>`);
+  if (bs.recoverable > 0) badges.push(`<span class="pay-badge pay-badge-rec">${bs.recoverable} recup.</span>`);
+  if (cls.countInfo.pending > 0) badges.push(`<span class="pay-badge pay-badge-pend">${cls.countInfo.pending} pend.</span>`);
+
+  const hasPending = cls.countInfo.pending > 0;
+  const counted = cls.countInfo.counted;
+  return `
+    <div class="pay-class-row ${hasPending ? 'has-pending' : ''}" onclick="openPayClassDetail('${dateIso}', ${cls.hour}, '${instructorId}', '${cls.location_id}')">
+      <div style="display:flex; gap:10px; align-items:baseline; flex:1; min-width:0;">
+        <div class="pay-class-hour"><em>${formatHour(cls.hour)}</em></div>
+        <div class="pay-class-meta" style="flex:1;">
+          <div>${badges.join(' ')}</div>
+          ${cls.tierLabel ? `<div style="margin-top:3px;">${counted} cuenta${counted === 1 ? '' : 'n'} · ${cls.tierLabel}</div>` : `<div style="margin-top:3px;">${counted} cuenta${counted === 1 ? '' : 'n'}</div>`}
+        </div>
+      </div>
+      <div class="pay-class-amt">
+        S/ ${cls.pay.toFixed(0)}
+        ${hasPending ? '<span class="pay-class-amt-plus">+?</span>' : ''}
+      </div>
+    </div>
+  `;
+}
+
+function shiftPayPeriod(delta) {
+  const instId = STATE.payViewPeriodInstId;
+  if (!instId) return;
+  const config = getPayConfigFor(instId);
+  const r = shiftPeriod(STATE.payViewPeriodStart, config.period_frequency, delta);
+  STATE.payViewPeriodStart = r.start;
+  STATE.payViewPeriodEnd = r.end;
+  STATE.payViewPeriodLabel = r.label;
+  if (CURRENT_USER && CURRENT_USER.role === 'coordinator') {
+    showInstructorPayDetail(instId);
+  } else {
+    renderInstructorPayView();
+  }
+}
+
+function formatShortDay(iso) {
+  const d = new Date(iso + 'T12:00:00');
+  return `${d.getDate()} ${monthShort(d.getMonth())}`;
+}
+
+// Detalle de una clase: modal con alumnos y desglose del pago
+async function openPayClassDetail(dateIso, hour, instructorId, locationId) {
+  if (!isOnline) { showToast('Conexión requerida', 'error'); return; }
+
+  // Cargar info detallada
+  const { data: sess } = await sb.from('class_sessions')
+    .select('id')
+    .eq('location_id', locationId).eq('session_date', dateIso).eq('hour', hour)
+    .maybeSingle();
+
+  const sessionId = sess?.id;
+  let attendance = [], bookings = [];
+  if (sessionId) {
+    const [attRes, bookRes] = await Promise.all([
+      sb.from('attendance').select('student_id, status').eq('session_id', sessionId),
+      sb.from('session_bookings').select('student_id, cancelled_at').eq('session_id', sessionId).is('cancelled_at', null),
+    ]);
+    attendance = attRes.data || [];
+    bookings = bookRes.data || [];
+  }
+
+  const dow = new Date(dateIso + 'T12:00:00').getDay();
+  const fixedHere = (STATE.fixedBookings || []).filter(fb =>
+    fb.location_id === locationId && fb.hour === hour && fb.day_of_week === dow && fb.is_active
+  );
+
+  const allStudentIds = new Set([
+    ...fixedHere.map(f => f.student_id),
+    ...bookings.map(b => b.student_id)
+  ]);
+
+  // Construir filas de alumnos
+  const studentRows = [];
+  for (const sid of allStudentIds) {
+    const stud = STATE.students.find(s => s.id === sid);
+    if (!stud) continue;
+    const att = attendance.find(a => a.student_id === sid);
+    const status = att?.status || 'unmarked';
+    studentRows.push({ stud, status });
+  }
+
+  const cnt = {
+    attended: studentRows.filter(r => r.status === 'attended').length,
+    lost: studentRows.filter(r => r.status === 'lost').length,
+    no_show: studentRows.filter(r => r.status === 'no_show').length,
+    recoverable: studentRows.filter(r => r.status === 'recoverable').length,
+    pending: studentRows.filter(r => r.status === 'pending' || r.status === 'unmarked').length,
+  };
+  const counted = cnt.attended + cnt.lost + cnt.no_show;
+  const config = getPayConfigFor(instructorId);
+  const pay = getPayForCount(counted, config.tiers);
+  const tierLabel = getTierLabelForCount(counted, config.tiers);
+  const loc = STATE.locations.find(l => l.id === locationId);
+
+  const statusLabel = {
+    attended: { label: 'asistió', cls: 'pay-badge-att' },
+    lost: { label: 'clase perdida', cls: 'pay-badge-lost' },
+    no_show: { label: 'no vino', cls: 'pay-badge-lost' },
+    recoverable: { label: 'recuperable', cls: 'pay-badge-rec' },
+    pending: { label: 'pendiente', cls: 'pay-badge-pend' },
+    unmarked: { label: 'sin marcar', cls: 'pay-badge-pend' },
+    rescheduled: { label: 'reprogramada', cls: 'pay-badge-empty' },
+  };
+
+  // Mostrar como modal
+  let modal = document.getElementById('pay-class-detail-modal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'pay-class-detail-modal';
+    modal.className = 'modal-backdrop';
+    modal.onclick = (e) => { if (e.target === modal) modal.classList.remove('is-open'); };
+    document.body.appendChild(modal);
+  }
+  modal.innerHTML = `
+    <div class="modal-card" style="width: 480px; max-width: 95vw; max-height: 90vh; overflow-y: auto;">
+      <div class="modal-header">
+        <div>
+          <div class="modal-title">${formatHour(hour)} · ${formatDate(dateIso)}</div>
+          <div style="font-size:12px; color:var(--ink-mute); margin-top:2px;">${escape(loc?.name || '')} · ${allStudentIds.size} cupo${allStudentIds.size === 1 ? '' : 's'} ocupado${allStudentIds.size === 1 ? '' : 's'}</div>
+        </div>
+        <button class="modal-close" onclick="document.getElementById('pay-class-detail-modal').classList.remove('is-open')">✕</button>
+      </div>
+      <div class="modal-body" style="padding: 14px 18px;">
+
+        ${studentRows.length === 0 ? `
+          <div style="text-align:center; padding: 20px; color: var(--ink-mute); font-size: 13px;">Sin alumnos en esta clase.</div>
+        ` : studentRows.map(r => {
+          const sl = statusLabel[r.status] || statusLabel.unmarked;
+          return `
+            <div style="display:flex; align-items:center; gap:10px; padding: 10px 12px; background: white; border: 1px solid var(--line); border-radius: 10px; margin-bottom: 6px;">
+              <div style="width:32px; height:32px; background:var(--fit-lavender); color:var(--fit-purple); border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:600;">
+                ${initials(r.stud)}
+              </div>
+              <div style="flex:1; font-size:13px;">${escape(r.stud.first_name)} <em>${escape(r.stud.last_name || '')}</em></div>
+              <span class="pay-badge ${sl.cls}">${sl.label}</span>
+            </div>
+          `;
+        }).join('')}
+
+        <div style="background: var(--fit-lavender); border-radius: 14px; padding: 16px; margin-top: 16px;">
+          <div style="display:flex; justify-content:space-between; font-size:13px; padding:4px 0;"><span>Asistieron</span><span>${cnt.attended}</span></div>
+          ${cnt.lost + cnt.no_show > 0 ? `<div style="display:flex; justify-content:space-between; font-size:13px; padding:4px 0;"><span>Clases perdidas (cuentan)</span><span>${cnt.lost + cnt.no_show}</span></div>` : ''}
+          ${cnt.recoverable > 0 ? `<div style="display:flex; justify-content:space-between; font-size:13px; padding:4px 0; color:var(--ink-faint);"><span>Recuperables</span><span>${cnt.recoverable}</span></div>` : ''}
+          ${cnt.pending > 0 ? `<div style="display:flex; justify-content:space-between; font-size:13px; padding:4px 0; color:var(--warn, #C97C2A);"><span>Pendientes</span><span>${cnt.pending}</span></div>` : ''}
+          <div style="height:1px; background:var(--fit-purple-soft, #8B6FC9); opacity:0.3; margin:8px 0;"></div>
+          <div style="display:flex; justify-content:space-between; font-size:13px; padding:4px 0; font-weight:500;"><span>Total que cuenta</span><span>${counted} alumno${counted === 1 ? '' : 's'}</span></div>
+          ${tierLabel ? `<div style="display:flex; justify-content:space-between; font-size:12px; padding:2px 0; color:var(--ink-mute);"><span>Aplica ${tierLabel}</span><span></span></div>` : ''}
+          <div style="height:1px; background:var(--fit-purple-soft, #8B6FC9); opacity:0.3; margin:8px 0;"></div>
+          <div style="display:flex; justify-content:space-between; align-items:baseline; font-weight:500;">
+            <span>Pago de esta clase</span>
+            <span style="font-family:var(--display); font-style:italic; font-size:24px; color:var(--fit-purple-deep);">S/ ${pay.toFixed(0)}</span>
+          </div>
+        </div>
+
+        ${cnt.lost + cnt.no_show > 0 ? `
+          <div style="margin-top:14px; font-size:11px; color:var(--ink-mute); padding:10px; background:var(--bg); border-radius:10px; border:1px dashed var(--line);">
+            <strong style="color:var(--ink); font-weight:500;">¿Por qué cuenta la clase perdida?</strong><br>
+            Cuando un alumno avisa tarde o no avisa, el estudio le descuenta esa clase de su paquete. Como cobra, se te paga.
+          </div>
+        ` : ''}
+
+      </div>
+    </div>
+  `;
+  modal.classList.add('is-open');
+}
+
+// ============ VISTA COORDINADOR: LISTA DE PROFESORES ============
+async function renderCoordPayList() {
+  const container = document.getElementById('coord-pay-container');
+  if (!CURRENT_USER || CURRENT_USER.role !== 'coordinator') return;
+  container.innerHTML = '<div style="text-align:center; padding: 40px; color: var(--ink-mute);">Calculando pagos…</div>';
+
+  // Para cada profesor, calcular su reporte del periodo actual (asumimos quincena global por ahora)
+  const today = dateToIsoLocal(new Date());
+  const instructors = STATE.instructors || [];
+
+  const reports = [];
+  for (const inst of instructors) {
+    const config = getPayConfigFor(inst.id);
+    const r = getPeriodRangeFor(today, config.period_frequency);
+    const report = await calculateInstructorPayReport(inst.id, r.start, r.end);
+    reports.push({ inst, report, config, range: r });
+  }
+
+  const grandTotal = reports.reduce((s, r) => s + r.report.total, 0);
+  const grandProj = reports.reduce((s, r) => s + r.report.projection, 0);
+  const grandPending = reports.reduce((s, r) => s + r.report.totalPending, 0);
+  const activeReports = reports.filter(r => r.report.totalClassesCounted > 0).length;
+
+  const periodLabel = reports[0]?.range?.label || '';
+
+  container.innerHTML = `
+    <div class="page-header">
+      <div>
+        <h1 class="page-title">Pagos a <em>profesores</em></h1>
+        <div class="page-sub">Periodo del ${periodLabel} · sede ${escape(getCurrentLocation()?.name || '')}</div>
+      </div>
+    </div>
+
+    <div class="pay-totals-row">
+      <div class="pay-totals-card">
+        <div class="pay-totals-label">Total acumulado</div>
+        <div class="pay-totals-value">S/ ${grandTotal.toFixed(0)}</div>
+        <div class="pay-totals-sub">al día ${formatShortDay(today)} · ${activeReports} profesor${activeReports === 1 ? '' : 'es'} activo${activeReports === 1 ? '' : 's'}</div>
+      </div>
+      <div class="pay-totals-card">
+        <div class="pay-totals-label">Proyección del periodo</div>
+        <div class="pay-totals-value">S/ ${grandProj.toFixed(0)}</div>
+        <div class="pay-totals-sub">si se mantiene el ritmo actual</div>
+      </div>
+      <div class="pay-totals-card">
+        <div class="pay-totals-label">Pendientes</div>
+        <div class="pay-totals-value" style="color: var(--warn, #C97C2A);">${grandPending}</div>
+        <div class="pay-totals-sub">alumnos sin marcar · ${grandPending > 0 ? '<span style="color:var(--fit-purple); text-decoration:underline; cursor:pointer;" onclick="showView(\'pending-recovery\', document.querySelector(\'[data-view=pending-recovery]\'))">ir a bandeja</span>' : 'todo al día'}</div>
+      </div>
+    </div>
+
+    <div style="display:flex; gap:10px; justify-content:flex-end; margin-bottom:18px;">
+      <button class="btn btn-ghost" onclick="showView('coord-pay-config', null); renderCoordPayConfig();">Configurar reglas</button>
+    </div>
+
+    <table class="pay-teachers-table">
+      <thead>
+        <tr>
+          <th>Profesor</th>
+          <th class="num">Clases</th>
+          <th class="num">Alumnos</th>
+          <th class="num">Pendientes</th>
+          <th class="num">Total al día</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${reports.sort((a, b) => b.report.total - a.report.total).map(r => `
+          <tr onclick="showInstructorPayDetail('${r.inst.id}')">
+            <td>
+              <div class="pay-t-name">
+                <div class="pay-t-avatar">${initials(r.inst)}</div>
+                <div>${escape(r.inst.first_name || '')} <em>${escape(r.inst.last_name || '')}</em></div>
+              </div>
+            </td>
+            <td class="num">${r.report.totalClassesCounted}</td>
+            <td class="num">${r.report.totalStudentsCounted}</td>
+            <td class="num">${r.report.totalPending > 0 ? `<span class="pay-pill-warn">${r.report.totalPending}</span>` : '—'}</td>
+            <td class="num"><span class="pay-t-amount">S/ ${r.report.total.toFixed(0)}</span></td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>
+  `;
+}
+
+// ============ VISTA COORDINADOR: CONFIGURACIÓN ============
+function renderCoordPayConfig(instructorId) {
+  const container = document.getElementById('coord-pay-config-container');
+  if (!CURRENT_USER || CURRENT_USER.role !== 'coordinator') return;
+  const instructors = STATE.instructors || [];
+  if (!instructorId && instructors.length > 0) instructorId = instructors[0].id;
+
+  const inst = instructors.find(i => i.id === instructorId);
+  if (!inst) {
+    container.innerHTML = '<div style="padding:40px;">Sin profesores configurados.</div>';
+    return;
+  }
+
+  const config = getPayConfigFor(inst.id);
+
+  container.innerHTML = `
+    <div class="page-header">
+      <div>
+        <h1 class="page-title">Reglas de <em>pago</em></h1>
+        <div class="page-sub">Configura cómo se calcula el pago de cada profesor</div>
+      </div>
+      <button class="btn btn-ghost" onclick="showView('coord-pay', document.querySelector('[data-view=coord-pay]')); renderCoordPayList();">← Volver</button>
+    </div>
+
+    <div class="pay-config-grid">
+      <div class="pay-config-side">
+        ${instructors.map(i => `
+          <div class="pay-config-side-row ${i.id === inst.id ? 'is-active' : ''}" onclick="renderCoordPayConfig('${i.id}')">
+            <div class="pay-config-side-avatar">${initials(i)}</div>
+            <div>${escape(i.first_name || '')} ${escape(i.last_name || '')}</div>
+          </div>
+        `).join('')}
+      </div>
+
+      <div class="pay-config-main">
+        <div class="pay-config-section">
+          <h3 class="pay-config-section-title">Periodo de pago</h3>
+          <p class="pay-config-section-desc">Cómo se agrupa el reporte y cuándo se cierra.</p>
+          <div class="pay-config-row">
+            <label>Frecuencia</label>
+            <select id="pay-cfg-freq">
+              <option value="weekly" ${config.period_frequency === 'weekly' ? 'selected' : ''}>Semanal</option>
+              <option value="biweekly" ${config.period_frequency === 'biweekly' ? 'selected' : ''}>Quincenal</option>
+              <option value="monthly" ${config.period_frequency === 'monthly' ? 'selected' : ''}>Mensual</option>
+            </select>
+          </div>
+          <div class="pay-config-row">
+            <label>Cierre</label>
+            <select id="pay-cfg-close">
+              <option value="manual" ${config.period_close_mode === 'manual' ? 'selected' : ''}>Manual (lo cierra la coordinadora)</option>
+              <option value="automatic" ${config.period_close_mode === 'automatic' ? 'selected' : ''}>Automático al fin del periodo</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="pay-config-section">
+          <h3 class="pay-config-section-title">Tiers de pago por clase</h3>
+          <p class="pay-config-section-desc">Cuánto cobra por clase según los alumnos que cuentan (asistidos + clases perdidas).</p>
+
+          <table class="pay-tier-table" id="pay-tier-table">
+            <thead>
+              <tr><th>Desde</th><th>Hasta</th><th class="num">Pago por clase (S/)</th><th></th></tr>
+            </thead>
+            <tbody>
+              ${config.tiers.map((t, idx) => `
+                <tr data-tier-row="${idx}">
+                  <td><input class="pay-tier-input" data-field="min" value="${t.min}"/></td>
+                  <td><input class="pay-tier-input" data-field="max" value="${t.max === null || t.max === undefined ? '∞' : t.max}"/></td>
+                  <td class="num"><input class="pay-tier-input" data-field="amount" value="${t.amount}"/></td>
+                  <td><button class="pay-x-btn" onclick="removeTierRow(${idx}, '${inst.id}')">✕</button></td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+          <button class="pay-add-tier" onclick="addTierRow('${inst.id}')">+ agregar tier</button>
+        </div>
+
+        <div class="pay-config-section">
+          <h3 class="pay-config-section-title">Reglas de conteo</h3>
+          <p class="pay-config-section-desc">Qué cuenta para determinar el tier (fijo en el sistema).</p>
+          <div style="font-size:13px; line-height:1.9;">
+            <div>✓ Alumnos que <strong>asistieron</strong> · marcados por el profesor</div>
+            <div>✓ <strong>Clases perdidas</strong> (no vino sin avisar, cancelación tardía) · el alumno consumió esa clase</div>
+            <div style="color:var(--ink-mute);">✕ <strong>Recuperables</strong> · el alumno usará la silla en otra clase</div>
+            <div style="color:var(--ink-mute);">✕ <strong>Clase sin alumnos registrados</strong> · no cuenta como clase</div>
+          </div>
+        </div>
+
+        <div style="margin-top: 24px; padding-top: 18px; border-top: 1px solid var(--line); display: flex; justify-content: flex-end; gap: 10px;">
+          <button class="btn btn-ghost" onclick="renderCoordPayConfig('${inst.id}')">Restablecer</button>
+          <button class="btn btn-primary" onclick="saveInstructorPayConfig('${inst.id}')">Guardar configuración</button>
+        </div>
+
+      </div>
+    </div>
+  `;
+}
+
+function addTierRow(instructorId) {
+  const tbody = document.querySelector('#pay-tier-table tbody');
+  const newIdx = tbody.children.length;
+  const tr = document.createElement('tr');
+  tr.setAttribute('data-tier-row', newIdx);
+  tr.innerHTML = `
+    <td><input class="pay-tier-input" data-field="min" value=""/></td>
+    <td><input class="pay-tier-input" data-field="max" value=""/></td>
+    <td class="num"><input class="pay-tier-input" data-field="amount" value=""/></td>
+    <td><button class="pay-x-btn" onclick="removeTierRow(${newIdx}, '${instructorId}')">✕</button></td>
+  `;
+  tbody.appendChild(tr);
+}
+
+function removeTierRow(idx, instructorId) {
+  const row = document.querySelector(`#pay-tier-table tr[data-tier-row="${idx}"]`);
+  if (row) row.remove();
+}
+
+async function saveInstructorPayConfig(instructorId) {
+  if (!CURRENT_USER || CURRENT_USER.role !== 'coordinator') { showToast('Solo coordinador', 'error'); return; }
+  if (!isOnline) { showToast('Conexión requerida', 'error'); return; }
+
+  const freq = document.getElementById('pay-cfg-freq').value;
+  const closeMode = document.getElementById('pay-cfg-close').value;
+  const tierRows = document.querySelectorAll('#pay-tier-table tbody tr');
+  const tiers = [];
+  tierRows.forEach(tr => {
+    const min = tr.querySelector('[data-field=min]').value.trim();
+    const maxRaw = tr.querySelector('[data-field=max]').value.trim();
+    const amt = tr.querySelector('[data-field=amount]').value.trim();
+    if (!min || !amt) return;
+    const max = (maxRaw === '' || maxRaw === '∞') ? null : Number(maxRaw);
+    tiers.push({ min: Number(min), max: max, amount: Number(amt) });
+  });
+  if (tiers.length === 0) { showToast('Define al menos un tier', 'error'); return; }
+
+  const { error } = await sb.from('instructor_pay_config').upsert({
+    instructor_id: instructorId,
+    period_frequency: freq,
+    period_close_mode: closeMode,
+    tiers: tiers,
+    updated_at: new Date().toISOString(),
+    updated_by: CURRENT_USER?.authUser?.id || null,
+  }, { onConflict: 'instructor_id' });
+
+  if (error) { showToast('Error guardando: ' + error.message, 'error'); return; }
+
+  // Actualizar STATE
+  STATE.payConfigs[instructorId] = {
+    instructor_id: instructorId, period_frequency: freq, period_close_mode: closeMode, tiers
+  };
+  showToast('✓ Configuración guardada', 'success');
+}
+
 </script>
 
 </body>
