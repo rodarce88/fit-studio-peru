@@ -3429,7 +3429,12 @@ async function openStudentScheduleEditor(studentId, locationId) {
         const todayIso = dateToIsoLocal(new Date());
         if (purchaseIso < todayIso) {
           const [y, m] = purchaseIso.split('-').map(Number);
-          ed.monthDate = new Date(y, m - 1, 1);
+          const newMonth = new Date(y, m - 1, 1);
+          // Solo recargar occupancy si realmente cambia el mes
+          if (newMonth.getFullYear() !== ed.monthDate.getFullYear() || newMonth.getMonth() !== ed.monthDate.getMonth()) {
+            ed.monthDate = newMonth;
+            await loadScheduleEditorOccupancy();
+          }
         }
       }
     } else {
@@ -5542,20 +5547,30 @@ async function recalcPackageCounters(studentId) {
     wronglyMarked.forEach(a => { a.counts_against_package = true; });
   }
 
-  // Helper: encontrar paquete cuyo rango cubra la session_date (más reciente cuyo purchase_date <= session_date)
+  // Helper: encontrar paquete cuyo rango cubra la session_date.
+  // Cuando hay varios candidatos (misma fecha o anteriores), preferir el primer paquete VIVO en orden FIFO.
+  // Si ninguno tiene clases libres, retornar el más reciente.
   const sortedByDate = [...allPkgs].sort((a, b) => {
     const da = a.purchase_date || a.start_date || '1900-01-01';
     const db = b.purchase_date || b.start_date || '1900-01-01';
-    return da.localeCompare(db);
+    if (da !== db) return da.localeCompare(db);
+    // Desempate por created_at (estable) para evitar orden indeterminado
+    const ca = a.created_at || '';
+    const cb = b.created_at || '';
+    return ca.localeCompare(cb);
   });
   const findPkgByDate = (sessionDate) => {
     if (!sessionDate) return null;
-    let candidate = null;
-    sortedByDate.forEach(p => {
+    const candidates = sortedByDate.filter(p => {
       const pkgStart = p.purchase_date || p.start_date || '1900-01-01';
-      if (sessionDate >= pkgStart) candidate = p;
+      return sessionDate >= pkgStart;
     });
-    return candidate;
+    if (candidates.length === 0) return null;
+    // Preferir paquete VIVO más antiguo (FIFO): consistente con getActivePackage
+    const alive = candidates.filter(p => !p.is_frozen && (p.classes_used || 0) < (p.classes_total || 0));
+    if (alive.length > 0) return alive[0];
+    // Si no hay vivos, retornar el más reciente
+    return candidates[candidates.length - 1];
   };
 
   // ============ CLEANUP DEFENSIVO #2 ============
@@ -5642,11 +5657,14 @@ function getActivePackage(packages) {
     return used < total;
   });
   if (alive.length === 0) return null;
-  // FIFO: el más antiguo primero
+  // FIFO: el más antiguo primero. Desempate por created_at para orden estable.
   alive.sort((a, b) => {
     const da = a.purchase_date || a.start_date || '1900-01-01';
     const db = b.purchase_date || b.start_date || '1900-01-01';
-    return da.localeCompare(db);
+    if (da !== db) return da.localeCompare(db);
+    const ca = a.created_at || '';
+    const cb = b.created_at || '';
+    return ca.localeCompare(cb);
   });
   return alive[0];
 }
@@ -9554,78 +9572,114 @@ function renderDetailSummary(stud) {
     },
   ];
 
-  // Bloque del paquete activo (FIFO: el más antiguo con clases libres)
-  const activePkgBlock = activePkg ? `
-    <div style="background: white; border: 1px solid var(--line); border-radius: var(--radius-md); padding: 18px 20px; margin-bottom: 16px; display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap;">
-      <div style="flex: 1; min-width: 240px;">
-        <div style="font-size: 11px; color: var(--ink-mute); text-transform: uppercase; letter-spacing: 0.5px; font-weight: 500; margin-bottom: 4px;">Paquete activo</div>
-        <div style="font-family: var(--display); font-size: 18px; color: var(--fit-purple); font-style: italic;">${escape(activePkg.packages?.name || `Paquete ${activePkg.classes_total || ''} clases`)}</div>
-        <div style="font-size: 12px; color: var(--ink-mute); margin-top: 3px;">Compra ${formatDate(activePkg.purchase_date)} · ${liveUsed}/${activePkg.classes_total} clases usadas</div>
+  // === LISTA UNIFICADA DE TODOS LOS PAQUETES EN ORDEN CRONOLÓGICO (más reciente arriba) ===
+  // Cada paquete con su estado: Activo / Próximo / Completado / Congelado
+  const allPkgsSorted = [...allPackages].sort((a, b) => {
+    const da = a.purchase_date || a.start_date || '1900-01-01';
+    const db = b.purchase_date || b.start_date || '1900-01-01';
+    if (da !== db) return db.localeCompare(da); // DESC: más reciente arriba
+    const ca = a.created_at || '';
+    const cb = b.created_at || '';
+    return cb.localeCompare(ca);
+  });
+
+  const getPkgStatus = (p) => {
+    const used = p.classes_used || 0;
+    const total = p.classes_total || 0;
+    if (p.is_frozen) return { key: 'frozen', label: '❄ Congelado', color: '#2563EB', bgSoft: '#DBEAFE' };
+    if (used >= total && total > 0) return { key: 'completed', label: '🏁 Completado', color: '#3B6D11', bgSoft: '#EAF3DE' };
+    if (activePkg && p.id === activePkg.id) return { key: 'active', label: '★ Activo', color: '#7c3aed', bgSoft: 'var(--fit-lavender-pale)' };
+    return { key: 'upcoming', label: 'Próximo', color: '#92400E', bgSoft: '#FEF7E6' };
+  };
+
+  const renderPkgCard = (p) => {
+    const status = getPkgStatus(p);
+    const total = p.classes_total || 0;
+    // Si es el activo, usar liveUsed; si no, usar classes_used
+    const used = (activePkg && p.id === activePkg.id) ? liveUsed : (p.classes_used || 0);
+    const remaining = Math.max(0, total - used);
+    const recoverable = (activePkg && p.id === activePkg.id) ? liveRecoverable : (p.classes_recoverable || 0);
+    const price = parseFloat(p.price_paid || p.packages?.price_pen || 0);
+    const paid = (data.payments || [])
+      .filter(pm => pm.student_package_id === p.id)
+      .reduce((s, pm) => s + parseFloat(pm.amount_pen || pm.amount || 0), 0);
+    const owed = Math.max(0, price - paid);
+    const name = escape(p.packages?.name || `Paquete ${total} clases`);
+    const isActive = status.key === 'active';
+
+    // Bloque de pago
+    const payBlock = owed > 0 ? `
+      <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 10px;">
+        <div style="background: #FEF7E6; border: 1px solid #F4D58A; border-radius: var(--radius-sm); padding: 8px 12px; flex: 1; min-width: 180px;">
+          <div style="font-size: 10px; color: #8B6F1A; text-transform: uppercase; letter-spacing: 0.4px; font-weight: 600;">Saldo pendiente</div>
+          <div style="font-family: var(--display); font-size: 18px; color: #633806;">S/ ${owed.toFixed(2)}</div>
+          <div style="font-size: 10px; color: #854F0B;">de S/ ${price.toFixed(2)} · pagado S/ ${paid.toFixed(2)}</div>
+        </div>
+        <button class="btn btn-primary" onclick='openPaymentModal(${JSON.stringify(stud.id).replace(/'/g, "&#39;")}, ${JSON.stringify(p.id).replace(/'/g, "&#39;")}, ${owed})' style="padding: 7px 14px; font-size: 12px; flex-shrink: 0;">Registrar pago</button>
       </div>
-      ${activePkgOwed > 0 ? `
-        <div style="background: #FEF7E6; border: 1px solid #F4D58A; border-radius: var(--radius-sm); padding: 10px 14px;">
-          <div style="font-size: 10px; color: #8B6F1A; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">Saldo pendiente</div>
-          <div style="font-family: var(--display); font-size: 20px; color: #633806; margin-top: 2px;">S/ ${activePkgOwed.toFixed(2)}</div>
-          <div style="font-size: 10px; color: #854F0B; margin-top: 2px;">de S/ ${activePkgPrice.toFixed(2)} · pagado S/ ${activePkgPaid.toFixed(2)}</div>
+    ` : `
+      <div style="display: inline-block; background: #EAF3DE; border: 1px solid #C5DCB0; border-radius: 999px; padding: 3px 10px; font-size: 11px; color: #3B6D11; margin-top: 6px;">Pagado ✓ S/ ${paid.toFixed(2)}</div>
+    `;
+
+    // Acciones según estado
+    let actionsBlock = '';
+    if (isActive) {
+      actionsBlock = `
+        <div style="display: flex; gap: 6px; flex-wrap: wrap; margin-top: 12px;">
+          <button class="btn btn-ghost" onclick="openStudentScheduleEditor('${stud.id}')" style="padding: 6px 12px; font-size: 11px;">Agendar clases →</button>
+          <button class="btn btn-ghost" onclick="openFreezeModal('${p.id}')" style="padding: 6px 12px; font-size: 11px;">Congelar</button>
         </div>
-        <button class="btn btn-primary" onclick='openPaymentModal(${JSON.stringify(stud.id).replace(/'/g, "&#39;")}, ${JSON.stringify(activePkg.id).replace(/'/g, "&#39;")}, ${activePkgOwed})' style="padding: 8px 16px; font-size: 12px; flex-shrink: 0;">Registrar pago</button>
-      ` : `
-        <div style="background: #EAF3DE; border: 1px solid #C5DCB0; border-radius: var(--radius-sm); padding: 10px 14px;">
-          <div style="font-size: 10px; color: #3B6D11; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">Pagado ✓</div>
-          <div style="font-family: var(--display); font-size: 20px; color: #27500A; margin-top: 2px;">S/ ${activePkgPaid.toFixed(2)}</div>
+      `;
+    } else if (status.key === 'frozen') {
+      actionsBlock = `
+        <div style="margin-top: 10px; padding: 8px 12px; background: #DBEAFE; border-radius: 6px; font-size: 12px; color: #1E40AF;">
+          ${escape(p.freeze_reason || 'Paquete congelado')}
+          <button class="btn btn-ghost" onclick="reactivatePackage('${p.id}')" style="margin-left: 8px; padding: 3px 10px; font-size: 11px;">Reactivar</button>
         </div>
-      `}
+      `;
+    }
+
+    return `
+      <div style="background: white; border: 1px solid var(--line); border-radius: var(--radius-md); padding: 16px 18px; margin-bottom: 10px; ${isActive ? 'border-left: 4px solid var(--fit-purple);' : ''}">
+        <div style="display: flex; align-items: start; justify-content: space-between; gap: 12px; flex-wrap: wrap;">
+          <div style="flex: 1; min-width: 200px;">
+            <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 4px;">
+              <div style="font-family: var(--display); font-size: 17px; color: ${isActive ? 'var(--fit-purple)' : 'var(--ink)'}; font-style: italic;">${name}</div>
+              <span style="font-size: 10px; padding: 3px 9px; background: ${status.bgSoft}; color: ${status.color}; border-radius: 999px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.4px;">${status.label}</span>
+            </div>
+            <div style="font-size: 12px; color: var(--ink-mute);">Compra ${formatDate(p.purchase_date)} · ${used}/${total} usadas${recoverable > 0 ? ` · ${recoverable} recuperable${recoverable === 1 ? '' : 's'}` : ''}</div>
+          </div>
+          <div style="text-align: right;">
+            <div style="font-family: var(--display); font-size: 22px; color: ${isActive ? 'var(--fit-purple)' : 'var(--ink)'}; font-style: italic;">${remaining}/${total}</div>
+            <div style="font-size: 10px; color: var(--ink-mute); text-transform: uppercase; letter-spacing: 0.5px;">Restantes</div>
+          </div>
+        </div>
+        ${payBlock}
+        ${actionsBlock}
+      </div>
+    `;
+  };
+
+  const packagesBlock = allPkgsSorted.length > 0 ? `
+    <div style="margin-bottom: 20px;">
+      <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;">
+        <div style="font-size: 11px; color: var(--ink-mute); text-transform: uppercase; letter-spacing: 0.5px; font-weight: 500;">Paquetes (${allPkgsSorted.length})</div>
+        <button class="btn btn-primary" onclick="openAssignPackageModal('${stud.id}')" style="padding: 6px 12px; font-size: 11px;">+ Asignar nuevo</button>
+      </div>
+      ${allPkgsSorted.map(p => renderPkgCard(p)).join('')}
     </div>
   ` : `
     <div style="background: #FEF7E6; border: 1px solid #F4D58A; border-radius: var(--radius-md); padding: 16px 20px; margin-bottom: 16px; display: flex; align-items: center; justify-content: space-between; gap: 12px;">
       <div>
-        <div style="font-family: var(--display); font-size: 15px; color: #633806; font-style: italic;">${completedPackages.length > 0 ? 'Sin paquete activo · todos completados 🏁' : 'Sin paquete activo'}</div>
-        <div style="font-size: 11px; color: #854F0B; margin-top: 2px;">${completedPackages.length > 0 ? 'Renueva el paquete para que pueda seguir agendando clases' : 'Asigna un paquete para que pueda agendar clases'}</div>
+        <div style="font-family: var(--display); font-size: 15px; color: #633806; font-style: italic;">Sin paquetes asignados</div>
+        <div style="font-size: 11px; color: #854F0B; margin-top: 2px;">Asigna un paquete para que pueda agendar clases</div>
       </div>
-      <button class="btn btn-primary" onclick="openAssignPackageModal('${stud.id}')" style="padding: 8px 16px; font-size: 12px;">${completedPackages.length > 0 ? 'Renovar paquete' : 'Asignar paquete'}</button>
+      <button class="btn btn-primary" onclick="openAssignPackageModal('${stud.id}')" style="padding: 8px 16px; font-size: 12px;">Asignar paquete</button>
     </div>
   `;
 
-  // Bloque de "Próximos paquetes" (los que aún no se empezaron a consumir, comprados después del activo)
-  const upcomingPkgsBlock = upcomingPackages.length > 0 ? `
-    <div style="margin-bottom: 16px;">
-      <div style="font-size: 11px; color: var(--ink-mute); text-transform: uppercase; letter-spacing: 0.5px; font-weight: 500; margin-bottom: 8px; padding-left: 4px;">Próximos paquetes (${upcomingPackages.length})</div>
-      ${upcomingPackages.map(p => {
-        const restantes = (p.classes_total || 0) - (p.classes_used || 0);
-        const price = parseFloat(p.price_paid || p.packages?.price_pen || 0);
-        const paid = (data.payments || []).filter(pm => pm.student_package_id === p.id).reduce((s, pm) => s + parseFloat(pm.amount_pen || pm.amount || 0), 0);
-        const owed = Math.max(0, price - paid);
-        return `
-          <div onclick="toggleUpcomingPkg('${p.id}')" style="background: white; border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 12px 16px; margin-bottom: 8px; cursor: pointer; display: flex; align-items: center; justify-content: space-between; gap: 10px;">
-            <div style="flex: 1;">
-              <div style="font-size: 13px; font-weight: 500; color: var(--ink);">${escape(p.packages?.name || `Paquete ${p.classes_total} clases`)}</div>
-              <div style="font-size: 11px; color: var(--ink-mute); margin-top: 2px;">${restantes} libre${restantes === 1 ? '' : 's'} · compra ${formatDate(p.purchase_date)} · S/ ${price.toFixed(2)}${owed > 0 ? ` · <span style="color: #8B6F1A; font-weight: 500;">debe S/ ${owed.toFixed(2)}</span>` : ' · pagado ✓'}</div>
-            </div>
-            <div style="font-size: 11px; color: var(--fit-purple);">▾</div>
-          </div>
-        `;
-      }).join('')}
-    </div>
-  ` : '';
-
-  // Bloque de paquetes completados (colapsado por default)
-  const completedPkgsBlock = completedPackages.length > 0 ? `
-    <div style="margin-bottom: 16px;">
-      <div style="font-size: 11px; color: var(--ink-mute); text-transform: uppercase; letter-spacing: 0.5px; font-weight: 500; margin-bottom: 8px; padding-left: 4px;">Paquetes completados (${completedPackages.length})</div>
-      ${completedPackages.map(p => `
-        <div onclick="toggleUpcomingPkg('${p.id}')" style="background: var(--fit-cream); border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 10px 16px; margin-bottom: 6px; display: flex; align-items: center; justify-content: space-between; gap: 10px; cursor: pointer;">
-          <div style="flex: 1;">
-            <div style="font-size: 12px; color: var(--ink); font-weight: 500;">${escape(p.packages?.name || `Paquete ${p.classes_total} clases`)}</div>
-            <div style="font-size: 10px; color: var(--ink-mute); margin-top: 2px;">${p.classes_total}/${p.classes_total} consumidas · compra ${formatDate(p.purchase_date)}</div>
-          </div>
-          <div style="font-size: 10px; color: #3B6D11; font-weight: 600;">🏁 COMPLETADO</div>
-        </div>
-      `).join('')}
-    </div>
-  ` : '';
-
   return `
-    ${activePkgBlock}
+    ${packagesBlock}
     <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; margin-bottom: 24px;">
       ${cards.map(c => `
         <div style="background: white; border: 1px solid var(--line); border-radius: var(--radius-md); padding: 18px;">
@@ -9635,9 +9689,6 @@ function renderDetailSummary(stud) {
         </div>
       `).join('')}
     </div>
-
-    ${upcomingPkgsBlock}
-    ${completedPkgsBlock}
 
     ${pendingToReschedule > 0 ? `
       <div style="background: #FEF7E6; border: 1px solid #F4D58A; border-radius: var(--radius-md); padding: 18px; margin-bottom: 16px;">
