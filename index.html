@@ -1103,6 +1103,36 @@
   </div>
 </div>
 
+<!-- CONFIRM CLASSES MODAL (mensaje WhatsApp para confirmar clases de la semana) -->
+<div class="modal-backdrop" id="confirm-classes-modal" onclick="if(event.target===this) closeModals()">
+  <div class="modal-card" style="width: 92vw; max-width: 620px; max-height: 92vh; overflow: hidden; display: flex; flex-direction: column;">
+    <div class="modal-header">
+      <div class="modal-title">Confirmar <em>clases</em></div>
+      <button class="modal-close" onclick="closeModals()">✕</button>
+    </div>
+    <div id="confirm-classes-body" style="padding-top: 0; overflow-y: auto; flex: 1;"></div>
+    <div id="confirm-classes-foot" style="border-top: 1px solid var(--line); background: white; padding: 12px 22px; display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-shrink: 0;"></div>
+  </div>
+</div>
+
+<!-- CONFIRM TEMPLATE EDITOR (sub-modal) -->
+<div class="modal-backdrop" id="confirm-template-modal" onclick="if(event.target===this) closeConfirmTemplateModal()" style="z-index: 1200;">
+  <div class="modal-card" style="width: 92vw; max-width: 560px; max-height: 92vh; overflow: hidden; display: flex; flex-direction: column;">
+    <div class="modal-header">
+      <div class="modal-title">Editar <em>plantilla</em></div>
+      <button class="modal-close" onclick="closeConfirmTemplateModal()">✕</button>
+    </div>
+    <div id="confirm-template-body" style="padding: 6px 22px 18px; overflow-y: auto; flex: 1;"></div>
+    <div style="border-top: 1px solid var(--line); padding: 12px 22px; display: flex; justify-content: space-between; gap: 8px;">
+      <button class="btn btn-ghost" onclick="restoreConfirmTemplateDefault()" style="padding: 8px 14px; font-size: 12px;">↺ Restaurar default</button>
+      <div style="display: flex; gap: 8px;">
+        <button class="btn btn-ghost" onclick="closeConfirmTemplateModal()" style="padding: 8px 14px; font-size: 12px;">Cancelar</button>
+        <button class="btn btn-primary" onclick="saveConfirmTemplate()" style="padding: 8px 14px; font-size: 12px;">Guardar plantilla</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- STUDENT MODAL -->
 <div class="modal-backdrop" id="student-modal" onclick="if(event.target===this) closeModals()">
   <div class="modal-card">
@@ -9996,6 +10026,463 @@ function _pdfBuildHTML(stud, data) {
 }
 
 // ============================================
+// CONFIRMAR CLASES SEMANALES
+// Modal para generar mensaje de WhatsApp pidiéndole a la alumna que
+// confirme su asistencia a las clases del rango elegido.
+// Botón en el perfil del alumno; persiste plantilla en localStorage.
+// ============================================
+
+const CONFIRM_DEFAULT_TEMPLATE = `¡Hola {nombre}! 💜
+
+Soy {coordinadora} de FIT Studio {sede}. Te recordamos tus clases de Pilates de esta semana:
+
+{clases}
+
+✨ ¿Nos confirmas a cuáles vas a poder asistir?
+
+¡Te esperamos! 🤍`;
+
+const CONFIRM_DEFAULT_LINE_FORMAT = `📅 {dia} {fecha} · {hora}`;
+
+const CONFIRM_TEMPLATE_KEY = 'fit_confirm_template_v1';
+const CONFIRM_LINE_FORMAT_KEY = 'fit_confirm_line_format_v1';
+
+const CONFIRM_DAY_NAMES = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+const CONFIRM_DAY_SHORT  = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+const CONFIRM_MONTH_SHORT = ['ene','feb','mar','abr','may','jun','jul','ago','set','oct','nov','dic'];
+
+function _confirmGetTemplate() {
+  return localStorage.getItem(CONFIRM_TEMPLATE_KEY) || CONFIRM_DEFAULT_TEMPLATE;
+}
+
+function _confirmGetLineFormat() {
+  return localStorage.getItem(CONFIRM_LINE_FORMAT_KEY) || CONFIRM_DEFAULT_LINE_FORMAT;
+}
+
+function _confirmGetCoordName() {
+  if (CURRENT_USER?.record?.full_name) return CURRENT_USER.record.full_name.split(' ')[0];
+  if (CURRENT_USER?.record?.first_name) return CURRENT_USER.record.first_name;
+  if (CURRENT_USER?.authUser?.email) {
+    const local = CURRENT_USER.authUser.email.split('@')[0].split(/[._-]/)[0];
+    return local.charAt(0).toUpperCase() + local.slice(1).toLowerCase();
+  }
+  return 'el equipo';
+}
+
+// Calcula rango de fechas según preset. Devuelve { fromIso, toIso }.
+// Reglas: si hoy es L-V, los presets de semana incluyen desde hoy;
+// si hoy es S-D, saltan a la semana siguiente.
+function _confirmComputeRange(preset) {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const dow = today.getDay(); // 0=dom .. 6=sab
+  const isWeekday = dow >= 1 && dow <= 5;
+
+  let from, to;
+  if (preset === 'tomorrow') {
+    from = new Date(today); from.setDate(today.getDate() + 1);
+    to = new Date(from);
+  } else if (preset === 'lunviernes') {
+    if (isWeekday) {
+      from = new Date(today);
+      to = new Date(today); to.setDate(today.getDate() + (5 - dow));
+    } else {
+      const daysToMonday = dow === 0 ? 1 : 2;
+      from = new Date(today); from.setDate(today.getDate() + daysToMonday);
+      to = new Date(from); to.setDate(from.getDate() + 4);
+    }
+  } else if (preset === 'week') {
+    if (isWeekday) {
+      from = new Date(today);
+      to = new Date(today); to.setDate(today.getDate() + (7 - dow));
+    } else {
+      const daysToMonday = dow === 0 ? 1 : 2;
+      from = new Date(today); from.setDate(today.getDate() + daysToMonday);
+      to = new Date(from); to.setDate(from.getDate() + 6);
+    }
+  } else if (preset === '7days') {
+    from = new Date(today);
+    to = new Date(today); to.setDate(today.getDate() + 6);
+  } else {
+    from = new Date(today);
+    to = new Date(today);
+  }
+  return { fromIso: dateToIsoLocal(from), toIso: dateToIsoLocal(to) };
+}
+
+function _confirmFmtRangeLabel(fromIso, toIso) {
+  const [fy, fm, fd] = fromIso.split('-').map(Number);
+  const [ty, tm, td] = toIso.split('-').map(Number);
+  if (fromIso === toIso) {
+    const dow = new Date(fy, fm - 1, fd).getDay();
+    return `${CONFIRM_DAY_NAMES[dow]} ${fd} de ${CONFIRM_MONTH_SHORT[fm - 1]}`;
+  }
+  if (fm === tm) return `${fd} – ${td} de ${CONFIRM_MONTH_SHORT[fm - 1]}`;
+  return `${fd} ${CONFIRM_MONTH_SHORT[fm - 1]} – ${td} ${CONFIRM_MONTH_SHORT[tm - 1]}`;
+}
+
+// ---- ABRIR MODAL ----
+async function openConfirmClassesModal(studentId) {
+  const stud = STATE.students.find(s => s.id === studentId);
+  if (!stud) { showToast('Alumno no encontrado', 'error'); return; }
+  if (!isOnline) { showToast('Conexión requerida', 'error'); return; }
+
+  const { fromIso, toIso } = _confirmComputeRange('week');
+  STATE.confirmModal = {
+    studentId,
+    student: stud,
+    preset: 'week',
+    customFrom: fromIso,
+    customTo: toIso,
+    fromIso,
+    toIso,
+    bookings: [],
+    excludedIds: new Set(),
+    loading: true,
+  };
+
+  document.getElementById('confirm-classes-modal').classList.add('is-open');
+  renderConfirmClassesModal();
+  await loadConfirmModalBookings();
+  renderConfirmClassesModal();
+}
+
+async function loadConfirmModalBookings() {
+  const ed = STATE.confirmModal;
+  if (!ed) return;
+  ed.loading = true;
+  try {
+    const { data, error } = await sb.from('session_bookings')
+      .select('id, cancelled_at, class_sessions!session_bookings_session_id_fkey(id, session_date, hour, location_id, is_cancelled)')
+      .eq('student_id', ed.studentId);
+    if (error) throw error;
+
+    // Filtrar: dentro del rango, no canceladas, sesión no cancelada
+    let bookingIds = [];
+    const inRange = (data || []).filter(b => {
+      const cs = b.class_sessions;
+      if (!cs || cs.is_cancelled) return false;
+      if (b.cancelled_at) return false;
+      if (cs.session_date < ed.fromIso || cs.session_date > ed.toIso) return false;
+      bookingIds.push(b.id);
+      return true;
+    });
+
+    // Excluir bookings que ya tienen attendance marcada (no hay nada que confirmar)
+    let withAtt = new Set();
+    if (bookingIds.length > 0) {
+      const attResp = await sb.from('attendance')
+        .select('booking_id, status')
+        .in('booking_id', bookingIds);
+      (attResp.data || []).forEach(a => {
+        if (['attended', 'lost', 'no_show'].includes(a.status)) withAtt.add(a.booking_id);
+      });
+    }
+
+    ed.bookings = inRange
+      .filter(b => !withAtt.has(b.id))
+      .sort((a, b) => {
+        const ka = a.class_sessions.session_date + String(a.class_sessions.hour).padStart(2, '0');
+        const kb = b.class_sessions.session_date + String(b.class_sessions.hour).padStart(2, '0');
+        return ka.localeCompare(kb);
+      });
+  } catch (e) {
+    console.error('[confirmModal] load bookings', e);
+    showToast('Error cargando clases: ' + e.message, 'error');
+    ed.bookings = [];
+  } finally {
+    ed.loading = false;
+  }
+}
+
+// ---- HANDLERS ----
+async function setConfirmPreset(preset) {
+  const ed = STATE.confirmModal;
+  if (!ed) return;
+  ed.preset = preset;
+  if (preset !== 'custom') {
+    const { fromIso, toIso } = _confirmComputeRange(preset);
+    ed.fromIso = fromIso;
+    ed.toIso = toIso;
+    ed.customFrom = fromIso;
+    ed.customTo = toIso;
+  } else {
+    ed.fromIso = ed.customFrom;
+    ed.toIso = ed.customTo;
+  }
+  ed.excludedIds = new Set();
+  renderConfirmClassesModal();
+  await loadConfirmModalBookings();
+  renderConfirmClassesModal();
+}
+
+async function setConfirmCustomDate(field, value) {
+  const ed = STATE.confirmModal;
+  if (!ed) return;
+  if (field === 'from') ed.customFrom = value;
+  if (field === 'to') ed.customTo = value;
+  ed.fromIso = ed.customFrom;
+  ed.toIso = ed.customTo;
+  // Validar: from <= to
+  if (ed.fromIso > ed.toIso) {
+    if (field === 'from') ed.toIso = ed.fromIso; else ed.fromIso = ed.toIso;
+    ed.customFrom = ed.fromIso; ed.customTo = ed.toIso;
+  }
+  ed.excludedIds = new Set();
+  renderConfirmClassesModal();
+  await loadConfirmModalBookings();
+  renderConfirmClassesModal();
+}
+
+function toggleConfirmClassExclusion(bookingId) {
+  const ed = STATE.confirmModal;
+  if (!ed) return;
+  if (ed.excludedIds.has(bookingId)) ed.excludedIds.delete(bookingId);
+  else ed.excludedIds.add(bookingId);
+  renderConfirmClassesModal();
+}
+
+// ---- RENDER PRINCIPAL ----
+function renderConfirmClassesModal() {
+  const ed = STATE.confirmModal;
+  if (!ed) return;
+  const stud = ed.student;
+  const loc = STATE.locations.find(l => l.id === stud.location_id);
+  const initials = `${(stud.first_name || '?')[0]}${(stud.last_name || '')[0] || ''}`.toUpperCase();
+
+  const presets = [
+    { key: 'tomorrow',   label: 'Mañana' },
+    { key: 'lunviernes', label: 'Lun a Vie' },
+    { key: 'week',       label: 'Toda la semana' },
+    { key: '7days',      label: 'Próx. 7 días' },
+    { key: 'custom',     label: '⚙️ Personalizado' },
+  ];
+
+  const presetsHTML = presets.map(p => {
+    const isActive = ed.preset === p.key;
+    return `<button onclick="setConfirmPreset('${p.key}')" style="
+      background: ${isActive ? 'var(--fit-purple)' : 'white'};
+      color: ${isActive ? 'white' : 'var(--ink-soft)'};
+      border: 1px solid ${isActive ? 'var(--fit-purple)' : 'var(--line)'};
+      padding: 8px 13px; border-radius: 999px; cursor: pointer;
+      font-size: 12px; font-weight: 500; font-family: var(--body);
+      transition: all 0.12s;
+    ">${p.label}</button>`;
+  }).join('');
+
+  const customPickerHTML = ed.preset === 'custom' ? `
+    <div style="margin-top: 12px; padding: 14px; background: var(--fit-cream); border-radius: 10px; border: 1px solid var(--fit-lavender);">
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+        <div>
+          <div style="font-size: 10.5px; color: var(--ink-mute); text-transform: uppercase; letter-spacing: 0.12em; font-weight: 600; margin-bottom: 4px;">Desde</div>
+          <input type="date" value="${ed.customFrom}" onchange="setConfirmCustomDate('from', this.value)" style="width: 100%; padding: 9px 12px; border: 1px solid var(--line); border-radius: 8px; font-size: 13px; font-family: var(--body); background: white;" />
+        </div>
+        <div>
+          <div style="font-size: 10.5px; color: var(--ink-mute); text-transform: uppercase; letter-spacing: 0.12em; font-weight: 600; margin-bottom: 4px;">Hasta</div>
+          <input type="date" value="${ed.customTo}" onchange="setConfirmCustomDate('to', this.value)" style="width: 100%; padding: 9px 12px; border: 1px solid var(--line); border-radius: 8px; font-size: 13px; font-family: var(--body); background: white;" />
+        </div>
+      </div>
+    </div>` : '';
+
+  // Resumen del rango
+  const visibleBookings = ed.bookings.filter(b => !ed.excludedIds.has(b.id));
+  const rangeLabel = _confirmFmtRangeLabel(ed.fromIso, ed.toIso);
+  const summaryHTML = `
+    <div style="margin-top: 10px; padding: 8px 12px; background: var(--fit-cream); border-radius: 8px; font-size: 12.5px; color: var(--ink-soft); display: flex; align-items: center; gap: 8px;">
+      <span style="font-size: 14px;">📅</span>
+      <span style="font-family: var(--display); font-style: italic; color: var(--fit-purple-deep); font-weight: 500;">${escape(rangeLabel)}</span>
+      <span style="margin-left: auto; background: var(--fit-lavender-pale); color: var(--fit-purple-deep); font-size: 10.5px; padding: 2px 8px; border-radius: 4px; font-weight: 600;">
+        ${ed.loading ? 'cargando...' : `${visibleBookings.length} clase${visibleBookings.length === 1 ? '' : 's'}`}
+      </span>
+    </div>`;
+
+  // Lista de clases
+  let classesHTML;
+  if (ed.loading) {
+    classesHTML = `<div style="padding: 20px; text-align: center; color: var(--ink-mute); font-size: 12.5px;">Cargando clases...</div>`;
+  } else if (ed.bookings.length === 0) {
+    classesHTML = `
+      <div style="padding: 30px 20px; text-align: center; color: var(--ink-mute);">
+        <div style="font-size: 28px; margin-bottom: 8px;">🌱</div>
+        <div style="font-family: var(--display); font-style: italic; font-size: 15px; color: var(--fit-purple-deep); margin-bottom: 4px;">Sin clases en este rango</div>
+        <div style="font-size: 12px;">Ajusta las fechas o agenda alguna clase desde el perfil.</div>
+      </div>`;
+  } else {
+    classesHTML = ed.bookings.map(b => {
+      const cs = b.class_sessions;
+      const [y, m, d] = cs.session_date.split('-').map(Number);
+      const dt = new Date(y, m - 1, d);
+      const dayName = CONFIRM_DAY_NAMES[dt.getDay()];
+      const excluded = ed.excludedIds.has(b.id);
+      const checkStyle = excluded
+        ? 'background: white; border: 1.5px solid var(--ink-faint);'
+        : 'background: var(--fit-purple); border: 1.5px solid var(--fit-purple); color: white;';
+      const textStyle = excluded ? 'text-decoration: line-through; color: var(--ink-faint);' : 'color: var(--ink-soft);';
+      return `
+        <div onclick="toggleConfirmClassExclusion('${b.id}')" style="display: flex; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--line); gap: 12px; cursor: pointer;">
+          <div style="width: 18px; height: 18px; border-radius: 4px; display: grid; place-items: center; font-size: 11px; font-weight: 700; flex-shrink: 0; ${checkStyle}">${excluded ? '' : '✓'}</div>
+          <div style="flex: 1; display: flex; align-items: baseline; gap: 10px; ${textStyle}">
+            <span style="font-weight: 500; font-size: 13px; min-width: 90px;">${dayName} ${d}</span>
+            <span style="font-size: 12px;">${formatHour(cs.hour)}</span>
+          </div>
+        </div>`;
+    }).join('');
+  }
+
+  // Preview del mensaje
+  const message = _confirmBuildMessage();
+  const previewHTML = ed.bookings.length === 0 ? '' : `
+    <div style="padding: 14px 22px 18px; background: var(--fit-cream); border-top: 1px solid var(--line);">
+      <div style="font-size: 10.5px; color: var(--ink-mute); text-transform: uppercase; letter-spacing: 0.14em; font-weight: 600; margin-bottom: 10px;">💬 Preview del mensaje</div>
+      <div style="background: #DCF8C6; border: 1px solid #C8E6A8; border-radius: 12px; padding: 12px 14px; font-size: 13px; line-height: 1.5; color: var(--ink); white-space: pre-wrap; font-family: -apple-system, BlinkMacSystemFont, sans-serif;">${escape(message)}</div>
+    </div>`;
+
+  document.getElementById('confirm-classes-body').innerHTML = `
+    <div style="display: flex; align-items: center; gap: 10px; margin: 12px 22px 4px; padding: 8px 12px; background: var(--fit-lavender-pale); border-radius: 10px;">
+      <div style="width: 32px; height: 32px; border-radius: 50%; background: var(--fit-purple); color: white; display: grid; place-items: center; font-size: 11px; font-weight: 600; flex-shrink: 0;">${escape(initials)}</div>
+      <div>
+        <div style="font-weight: 500; font-size: 13px; color: var(--ink);">${escape(stud.first_name || '')} ${escape(stud.last_name || '')}</div>
+        <div style="font-size: 11px; color: var(--ink-mute); margin-top: 1px;">${stud.phone ? escape(stud.phone) + ' · ' : ''}Sede ${escape(loc?.name || '—')}</div>
+      </div>
+    </div>
+
+    <div style="padding: 14px 22px 6px;">
+      <div style="font-size: 10.5px; color: var(--ink-mute); text-transform: uppercase; letter-spacing: 0.14em; font-weight: 600; margin-bottom: 8px;">🗓️ Rango de fechas</div>
+      <div style="display: flex; flex-wrap: wrap; gap: 6px;">${presetsHTML}</div>
+      ${customPickerHTML}
+      ${summaryHTML}
+    </div>
+
+    ${ed.bookings.length > 0 ? `<div style="padding: 14px 22px 6px;"><div style="font-size: 10.5px; color: var(--ink-mute); text-transform: uppercase; letter-spacing: 0.14em; font-weight: 600;">✓ Clases a confirmar · desmarca las que no quieras incluir</div></div>` : ''}
+    <div style="padding: 0 22px;">${classesHTML}</div>
+
+    ${previewHTML}
+  `;
+
+  // Footer
+  const canCopy = visibleBookings.length > 0 && !ed.loading;
+  const hasPhone = !!stud.phone;
+  document.getElementById('confirm-classes-foot').innerHTML = `
+    <div style="display: flex; gap: 6px;">
+      <button class="btn btn-ghost" onclick="openConfirmTemplateEditor()" style="padding: 8px 10px; font-size: 14px;" title="Editar plantilla del mensaje">⚙️</button>
+      <button class="btn btn-ghost" onclick="closeModals()" style="padding: 8px 14px; font-size: 12.5px;">Cerrar</button>
+    </div>
+    <div style="display: flex; gap: 6px;">
+      <button class="btn btn-ghost" onclick="copyConfirmMessage()" ${!canCopy ? 'disabled style="opacity:0.45; cursor:not-allowed; padding: 8px 14px; font-size: 12.5px;"' : 'style="padding: 8px 14px; font-size: 12.5px; background: white; border: 1px solid var(--line); color: var(--fit-purple);"'}>📋 Copiar</button>
+      <button class="btn btn-primary" onclick="openConfirmWhatsApp()" ${(!canCopy || !hasPhone) ? 'disabled style="opacity:0.45; cursor:not-allowed; padding: 8px 14px; font-size: 12.5px; background: #25D366;"' : 'style="padding: 8px 14px; font-size: 12.5px; background: #25D366;"'} title="${!hasPhone ? 'Sin teléfono guardado' : ''}">📱 WhatsApp</button>
+    </div>
+  `;
+}
+
+// ---- CONSTRUIR MENSAJE ----
+function _confirmBuildMessage() {
+  const ed = STATE.confirmModal;
+  if (!ed) return '';
+  const stud = ed.student;
+  const loc = STATE.locations.find(l => l.id === stud.location_id);
+  const template = _confirmGetTemplate();
+  const lineFormat = _confirmGetLineFormat();
+  const coordName = _confirmGetCoordName();
+
+  const visible = ed.bookings.filter(b => !ed.excludedIds.has(b.id));
+  const lines = visible.map(b => {
+    const cs = b.class_sessions;
+    const [y, m, d] = cs.session_date.split('-').map(Number);
+    const dt = new Date(y, m - 1, d);
+    return lineFormat
+      .replace(/{dia}/g, CONFIRM_DAY_SHORT[dt.getDay()])
+      .replace(/{fecha}/g, `${d} ${CONFIRM_MONTH_SHORT[m - 1]}`)
+      .replace(/{hora}/g, formatHour(cs.hour));
+  }).join('\n');
+
+  return template
+    .replace(/{nombre}/g, stud.first_name || '')
+    .replace(/{coordinadora}/g, coordName)
+    .replace(/{sede}/g, loc?.name || '')
+    .replace(/{clases}/g, lines);
+}
+
+// ---- ACCIONES ----
+async function copyConfirmMessage() {
+  const msg = _confirmBuildMessage();
+  if (!msg) return;
+  try {
+    await navigator.clipboard.writeText(msg);
+    showToast('✓ Mensaje copiado al portapapeles', 'success');
+  } catch (e) {
+    // Fallback para navegadores sin clipboard API
+    const ta = document.createElement('textarea');
+    ta.value = msg; document.body.appendChild(ta); ta.select();
+    try { document.execCommand('copy'); showToast('✓ Mensaje copiado', 'success'); }
+    catch (e2) { showToast('No se pudo copiar', 'error'); }
+    ta.remove();
+  }
+}
+
+function openConfirmWhatsApp() {
+  const ed = STATE.confirmModal;
+  if (!ed || !ed.student.phone) { showToast('La alumna no tiene teléfono guardado', 'error'); return; }
+  const msg = _confirmBuildMessage();
+  if (!msg) return;
+  window.open(whatsappLink(ed.student.phone, msg), '_blank');
+}
+
+// ---- SUB-MODAL DE PLANTILLA ----
+function openConfirmTemplateEditor() {
+  document.getElementById('confirm-template-modal').classList.add('is-open');
+  renderConfirmTemplateEditor();
+}
+
+function closeConfirmTemplateModal() {
+  document.getElementById('confirm-template-modal').classList.remove('is-open');
+}
+
+function renderConfirmTemplateEditor() {
+  const tpl = _confirmGetTemplate();
+  const lf = _confirmGetLineFormat();
+  document.getElementById('confirm-template-body').innerHTML = `
+    <div style="font-size: 12px; color: var(--ink-mute); margin-bottom: 14px; line-height: 1.5;">
+      Los cambios se aplican a todas las alumnas. Variables se reemplazan automáticamente al generar el mensaje.
+    </div>
+
+    <div style="font-size: 10.5px; color: var(--ink-mute); text-transform: uppercase; letter-spacing: 0.12em; font-weight: 600; margin: 4px 0 6px;">🏷️ Variables disponibles en el mensaje</div>
+    <div style="display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px;">
+      <span style="background: var(--fit-lavender-pale); color: var(--fit-purple-deep); font-family: 'JetBrains Mono', monospace; font-size: 11px; padding: 3px 8px; border-radius: 5px; border: 1px solid var(--fit-lavender);">{nombre}<span style="font-family: var(--body); color: var(--ink-mute); margin-left: 4px;">de la alumna</span></span>
+      <span style="background: var(--fit-lavender-pale); color: var(--fit-purple-deep); font-family: 'JetBrains Mono', monospace; font-size: 11px; padding: 3px 8px; border-radius: 5px; border: 1px solid var(--fit-lavender);">{coordinadora}<span style="font-family: var(--body); color: var(--ink-mute); margin-left: 4px;">tu nombre</span></span>
+      <span style="background: var(--fit-lavender-pale); color: var(--fit-purple-deep); font-family: 'JetBrains Mono', monospace; font-size: 11px; padding: 3px 8px; border-radius: 5px; border: 1px solid var(--fit-lavender);">{sede}<span style="font-family: var(--body); color: var(--ink-mute); margin-left: 4px;">de la alumna</span></span>
+      <span style="background: var(--fit-lavender-pale); color: var(--fit-purple-deep); font-family: 'JetBrains Mono', monospace; font-size: 11px; padding: 3px 8px; border-radius: 5px; border: 1px solid var(--fit-lavender);">{clases}<span style="font-family: var(--body); color: var(--ink-mute); margin-left: 4px;">lista formateada</span></span>
+    </div>
+
+    <div style="font-size: 10.5px; color: var(--ink-mute); text-transform: uppercase; letter-spacing: 0.12em; font-weight: 600; margin: 4px 0 6px;">💬 Mensaje</div>
+    <textarea id="confirm-template-textarea" style="width: 100%; min-height: 180px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 10px; font-family: -apple-system, BlinkMacSystemFont, sans-serif; font-size: 13px; line-height: 1.55; color: var(--ink); background: var(--fit-cream); resize: vertical;">${escape(tpl)}</textarea>
+
+    <div style="font-size: 10.5px; color: var(--ink-mute); text-transform: uppercase; letter-spacing: 0.12em; font-weight: 600; margin: 14px 0 6px;">📅 Formato de cada clase</div>
+    <input id="confirm-template-line" value="${escape(lf)}" style="width: 100%; padding: 9px 12px; border: 1px solid var(--line); border-radius: 8px; font-family: 'JetBrains Mono', monospace; font-size: 12px; background: var(--fit-cream);" />
+    <div style="font-size: 11px; color: var(--ink-mute); margin-top: 6px;">
+      Variables aquí: <code style="background: var(--fit-lavender-pale); padding: 1px 5px; border-radius: 3px; font-size: 10.5px;">{dia}</code> · <code style="background: var(--fit-lavender-pale); padding: 1px 5px; border-radius: 3px; font-size: 10.5px;">{fecha}</code> · <code style="background: var(--fit-lavender-pale); padding: 1px 5px; border-radius: 3px; font-size: 10.5px;">{hora}</code>
+    </div>
+  `;
+}
+
+function saveConfirmTemplate() {
+  const tpl = document.getElementById('confirm-template-textarea').value;
+  const lf = document.getElementById('confirm-template-line').value;
+  localStorage.setItem(CONFIRM_TEMPLATE_KEY, tpl);
+  localStorage.setItem(CONFIRM_LINE_FORMAT_KEY, lf);
+  showToast('✓ Plantilla guardada', 'success');
+  closeConfirmTemplateModal();
+  renderConfirmClassesModal();
+}
+
+function restoreConfirmTemplateDefault() {
+  if (!confirm('¿Restaurar la plantilla al valor por defecto?')) return;
+  localStorage.removeItem(CONFIRM_TEMPLATE_KEY);
+  localStorage.removeItem(CONFIRM_LINE_FORMAT_KEY);
+  renderConfirmTemplateEditor();
+  showToast('Plantilla restaurada', 'success');
+}
+
+// ============================================
 // COPIAR LINK DE ACTIVACIÓN (alternativa a email cuando Resend está en sandbox)
 // ============================================
 async function copyActivationLink(type, recordId) {
@@ -10207,6 +10694,7 @@ function renderStudentDetail() {
         <div style="display: flex; gap: 8px; flex-wrap: wrap;">
           <button class="btn btn-ghost" onclick="openStudentModal('${stud.id}')" style="padding: 8px 14px; font-size: 12px;">Editar perfil</button>
           <button class="btn btn-ghost" onclick="generateStudentPDF('${stud.id}')" style="padding: 8px 14px; font-size: 12px;">Generar PDF</button>
+          <button class="btn btn-ghost" onclick="openConfirmClassesModal('${stud.id}')" style="padding: 8px 14px; font-size: 12px;">Confirmar clases</button>
           <button class="btn btn-ghost" onclick="${_agendarDisabled ? '' : `openStudentScheduleEditor('${stud.id}')`}" ${_agendarDisabled ? 'disabled' : ''} title="${escape(_agendarTooltip)}" style="padding: 8px 14px; font-size: 12px; ${_agendarDisabled ? 'opacity: 0.45; cursor: not-allowed;' : ''}">Agendar clases</button>
           <button class="btn btn-primary" onclick="openAssignPackageFromDetail('${stud.id}')" style="padding: 8px 14px; font-size: 12px;">${_hasCompletedPkgs && _hasNoActivePkg ? 'Renovar paquete' : 'Asignar paquete'}</button>
         </div>
