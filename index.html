@@ -11437,17 +11437,24 @@ async function loadReportData() {
     return;
   }
 
-  // Cargar paquetes creados en el periodo
-  let pkgQuery = sb.from('student_packages')
-    .select('*, packages(name, classes_total, price_pen), students(first_name, last_name, location_id)')
-    .gte('purchase_date', startIso)
-    .lte('purchase_date', endIso);
-  const { data: newPackages } = await pkgQuery;
+  // Cargar TODOS los paquetes con relaciones (sin filtro de fecha en SQL)
+  // y filtrar en JS usando purchase_date o created_at como fallback.
+  // Esto cubre paquetes con purchase_date null y diferencias de zona horaria.
+  const { data: allPackages, error: pkgErr } = await sb.from('student_packages')
+    .select('*, packages(name, classes_total, price_pen), students(first_name, last_name, location_id)');
+  if (pkgErr) console.error('Error cargando paquetes:', pkgErr);
 
-  // Si filtra por sede, descartar paquetes de otras sedes
-  const filteredPackages = (newPackages || []).filter(p =>
-    REPORTS_STATE.locationId === 'all' || p.students?.location_id === REPORTS_STATE.locationId
-  );
+  const filteredPackages = (allPackages || []).filter(p => {
+    // Fecha efectiva: purchase_date si existe, sino created_at (primeros 10 caracteres = YYYY-MM-DD)
+    const effectiveDate = p.purchase_date || (p.created_at ? p.created_at.slice(0, 10) : null);
+    if (!effectiveDate) return false;
+    if (effectiveDate < startIso || effectiveDate > endIso) return false;
+    // Filtro por sede
+    if (REPORTS_STATE.locationId !== 'all' && p.students?.location_id !== REPORTS_STATE.locationId) return false;
+    return true;
+  });
+
+  console.log(`[reportes] ${y}-${m+1}: ${payments?.length || 0} pagos, ${allPackages?.length || 0} paquetes totales, ${filteredPackages.length} en este mes`);
 
   REPORTS_STATE.data = { payments: payments || [], packages: filteredPackages, startIso, endIso };
 }
