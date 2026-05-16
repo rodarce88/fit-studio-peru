@@ -393,15 +393,28 @@
     .inst-greet-title { font-size: 22px; }
   }
 
-  .inst-day-strip { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 6px; margin-bottom: 16px; }
+  .inst-day-strip { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; margin-bottom: 16px; }
   .inst-day-strip::-webkit-scrollbar { display: none; }
-  .inst-day-pill { flex: 0 0 auto; min-width: 46px; padding: 8px 0; border-radius: 12px; background: white; border: 1px solid var(--line); text-align: center; cursor: pointer; transition: all 0.15s; }
+  .inst-day-pill { position: relative; padding: 8px 0; border-radius: 10px; background: white; border: 1px solid var(--line); text-align: center; cursor: pointer; transition: all 0.15s; }
   .inst-day-pill:hover { border-color: var(--fit-purple); }
   .inst-day-pill.is-active { background: var(--fit-purple); border-color: var(--fit-purple); color: white; }
-  .inst-day-pill.is-today:not(.is-active) { border-color: var(--fit-purple); color: var(--fit-purple); }
+  .inst-day-pill.is-today:not(.is-active) { border-color: var(--fit-purple); border-width: 1.5px; color: var(--fit-purple); }
   .inst-day-pill .dow { font-size: 9px; text-transform: uppercase; letter-spacing: 0.5px; opacity: 0.7; }
   .inst-day-pill .num { font-family: var(--display); font-size: 16px; font-weight: 600; margin-top: 2px; }
-  .inst-day-pill.is-other { background: var(--fit-lavender-pale); border-style: dashed; color: var(--fit-purple); font-size: 11px; padding: 14px 12px; min-width: 80px; }
+  .inst-day-pill .today-dot { position: absolute; bottom: 4px; left: 50%; transform: translateX(-50%); width: 4px; height: 4px; border-radius: 50%; background: var(--fit-purple); }
+  .inst-day-pill.is-active .today-dot { background: white; }
+
+  /* Barra de navegación semanal */
+  .inst-week-nav { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; }
+  .inst-week-nav-btn { width: 30px; height: 30px; border-radius: 50%; border: 1px solid var(--line); background: white; display: grid; place-items: center; cursor: pointer; color: var(--fit-purple); font-size: 14px; font-family: var(--body); transition: all 0.12s; flex-shrink: 0; }
+  .inst-week-nav-btn:hover { background: var(--fit-lavender-pale); border-color: var(--fit-purple-soft); }
+  .inst-week-nav-btn.is-picker { background: var(--fit-lavender-pale); border-color: var(--fit-lavender); font-size: 13px; }
+  .inst-week-label { flex: 1; text-align: center; font-family: var(--display); font-style: italic; font-size: 14px; color: var(--fit-purple-deep); font-weight: 500; }
+
+  /* Loading spinner inline */
+  .inst-loading { padding: 30px 20px; text-align: center; color: var(--ink-mute); font-size: 13px; }
+  .inst-loading .spinner { display: inline-block; width: 18px; height: 18px; border: 2px solid var(--fit-lavender); border-top-color: var(--fit-purple); border-radius: 50%; animation: inst-spin 0.8s linear infinite; vertical-align: middle; margin-right: 8px; }
+  @keyframes inst-spin { to { transform: rotate(360deg); } }
 
   /* Next class card morado */
   .inst-next-card { background: linear-gradient(135deg, var(--fit-purple) 0%, var(--fit-purple-deep) 100%); color: white; border-radius: 18px; padding: 18px; margin-bottom: 18px; position: relative; overflow: hidden; }
@@ -423,6 +436,11 @@
 
   /* Hour cards (rediseñadas) */
   .inst-hour-card { background: white; border: 1px solid var(--line); border-radius: 16px; margin-bottom: 10px; overflow: hidden; transition: opacity 0.2s; }
+  .inst-hour-card.is-collapsed { background: var(--fit-cream); }
+  .inst-hour-card.is-collapsed .inst-hour-head:hover { background: white; }
+  .inst-hour-caret { width: 12px; text-align: center; color: var(--ink-mute); font-size: 11px; flex-shrink: 0; user-select: none; transition: transform 0.15s; }
+  .inst-hour-head:hover { background: var(--fit-cream); }
+  .inst-stud-notes-flag { display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; color: #B8860B; font-size: 13px; margin-left: 4px; cursor: help; }
   .inst-hour-card.is-now { border-color: var(--fit-purple); box-shadow: 0 4px 16px rgba(91, 42, 143, 0.1); }
   .inst-hour-card.is-past { opacity: 0.55; }
   .inst-hour-card.is-not-delivered { opacity: 0.45; background: repeating-linear-gradient(45deg, white, white 14px, rgba(150,150,150,0.06) 14px, rgba(150,150,150,0.06) 16px); }
@@ -499,6 +517,32 @@
   .inst-sa-btn.is-primary .inst-sa-icon { background: rgba(255,255,255,0.2); }
   .inst-sa-label { font-size: 12px; font-weight: 500; }
   .inst-sa-sub { font-size: 10px; opacity: 0.7; }
+
+  /* Sección "Notas y molestias" dentro del sheet del alumno */
+  .inst-health-section { padding: 16px; border-top: 1px solid var(--line); background: white; }
+  .inst-health-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+  .inst-health-title { font-size: 10.5px; color: var(--ink-mute); text-transform: uppercase; letter-spacing: 0.14em; font-weight: 600; }
+  .inst-health-edit-btn { font-size: 11.5px; color: var(--fit-purple); background: white; border: 1px solid var(--line); padding: 5px 11px; border-radius: 7px; cursor: pointer; font-weight: 500; font-family: var(--body); }
+  .inst-health-edit-btn:hover { border-color: var(--fit-purple); background: var(--fit-lavender-pale); }
+  .inst-health-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+  .inst-health-chip { display: inline-flex; align-items: center; gap: 4px; padding: 6px 11px; border-radius: 999px; font-size: 11.5px; border: 1px solid var(--line); background: white; color: var(--ink-soft); }
+  .inst-health-chip.is-warn { background: #FDF6E3; color: #6B4F0A; border-color: #E8D78F; }
+  .inst-health-chip.is-info { background: #E8EFF8; color: #2E4F7A; border-color: #B9CAE3; }
+  .inst-health-chip.is-bad  { background: #FBE5E5; color: #8A2A2A; border-color: #E8B9B9; }
+  .inst-health-free { background: var(--fit-cream); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; font-size: 12.5px; color: var(--ink-soft); line-height: 1.5; font-style: italic; }
+  .inst-health-empty { background: var(--fit-cream); border: 1px dashed var(--line); border-radius: 10px; padding: 14px; text-align: center; font-size: 12px; color: var(--ink-mute); }
+
+  /* Editor de notas de salud (modal) */
+  .hn-cat { margin-bottom: 10px; }
+  .hn-cat-label { font-size: 11px; color: var(--fit-purple-deep); font-weight: 600; margin-bottom: 6px; }
+  .hn-tags-row { display: flex; flex-wrap: wrap; gap: 6px; }
+  .hn-tag-row { display: inline-flex; align-items: center; gap: 6px; }
+  .hn-tag { background: white; border: 1px solid var(--line); padding: 6px 12px; border-radius: 999px; font-size: 12px; color: var(--ink-soft); cursor: pointer; font-family: var(--body); transition: all 0.12s; }
+  .hn-tag:hover { border-color: var(--fit-purple-soft); }
+  .hn-tag.is-selected { background: var(--fit-purple); color: white; border-color: var(--fit-purple); font-weight: 500; }
+  .hn-detail-input { border: 1px solid var(--fit-purple-soft); border-radius: 6px; padding: 5px 9px; font-size: 11.5px; font-family: var(--body); background: white; width: 90px; color: var(--ink); }
+  .hn-detail-input:focus { outline: none; border-color: var(--fit-purple); }
+  .hn-detail-pair { display: inline-flex; gap: 4px; }
 
   /* ============ MÓDULO DE PAGOS ============ */
   .pay-tabs { display: flex; gap: 8px; margin-bottom: 22px; }
@@ -1067,6 +1111,24 @@
   </div>
 </div>
 
+<!-- HEALTH NOTES EDITOR (notas y molestias del alumno) -->
+<div class="modal-backdrop" id="health-notes-modal" onclick="if(event.target===this) closeModals()" style="z-index: 1100;">
+  <div class="modal-card" style="width: 92vw; max-width: 560px; max-height: 92vh; overflow: hidden; display: flex; flex-direction: column;">
+    <div class="modal-header">
+      <div>
+        <div class="modal-title">Notas y <em>molestias</em></div>
+        <div id="health-notes-sub" style="font-size: 12px; color: var(--ink-mute); margin-top: 4px;"></div>
+      </div>
+      <button class="modal-close" onclick="closeModals()">✕</button>
+    </div>
+    <div id="health-notes-body" style="overflow-y: auto; flex: 1; padding-top: 4px;"></div>
+    <div style="border-top: 1px solid var(--line); padding: 12px 22px; display: flex; justify-content: space-between; gap: 8px; background: var(--fit-cream);">
+      <button class="btn btn-ghost" onclick="closeModals()" style="padding: 9px 14px; font-size: 12.5px;">Cancelar</button>
+      <button class="btn btn-primary" onclick="saveHealthNotes()" style="padding: 9px 16px; font-size: 12.5px;">Guardar</button>
+    </div>
+  </div>
+</div>
+
 <!-- INSTRUCTOR ADD STUDENT MODAL -->
 <div class="modal-backdrop" id="instructor-add-modal" onclick="if(event.target===this) closeModals()">
   <div class="modal-card" style="width: 480px; max-height: 85vh; overflow-y: auto;">
@@ -1195,8 +1257,10 @@
             <input type="tel" id="f-emergency-phone" />
           </div>
           <div class="form-row full">
-            <label>Lesiones / condiciones médicas</label>
-            <textarea id="f-medical" placeholder="Describir lesiones previas, embarazo, etc."></textarea>
+            <label>Notas y molestias del alumno</label>
+            <div id="f-health-preview" style="margin-top: 4px;"></div>
+            <textarea id="f-medical" placeholder="Notas libres (lesiones previas, observaciones, etc.)" style="margin-top: 8px;"></textarea>
+            <div style="font-size: 11px; color: var(--ink-mute); margin-top: 6px;">Tip: usa el botón "Editar molestias" arriba para marcar condiciones específicas (lumbalgia, embarazo, etc.) que el profesor verá rápidamente en el día.</div>
           </div>
           <div class="form-row full">
             <label>Seguro / cobertura médica</label>
@@ -1675,6 +1739,60 @@ if (SUPABASE_URL && SUPABASE_KEY) {
 // ============================================
 // STATE
 // ============================================
+
+// Catálogo de condiciones de salud / molestias. Agrupadas por zona corporal.
+// Cada tag tiene un id (estable, snake_case) y un label (UI).
+// Algunos tags incluyen 'detail' que activa un input extra al seleccionar:
+//   - 'weeks'      → input numérico de semanas (ej. embarazo)
+//   - 'months'     → input numérico de meses (ej. postparto)
+//   - 'grade'      → grado 1-3 (ej. diástasis)
+//   - 'what_when'  → texto libre + fecha (ej. cirugía/lesión reciente)
+const HEALTH_CATEGORIES = [
+  { id: 'espalda', label: 'Espalda y columna', tags: [
+    { id: 'lumbalgia',     label: 'Lumbalgia' },
+    { id: 'cervicalgia',   label: 'Cervicalgia' },
+    { id: 'hernia_discal', label: 'Hernia discal' },
+    { id: 'escoliosis',    label: 'Escoliosis' },
+  ]},
+  { id: 'rodillas', label: 'Rodillas', tags: [
+    { id: 'dolor_rodilla',    label: 'Dolor de rodilla' },
+    { id: 'menisco',          label: 'Lesión de menisco' },
+    { id: 'artrosis_rodilla', label: 'Artrosis de rodilla' },
+  ]},
+  { id: 'hombros', label: 'Hombros y brazos', tags: [
+    { id: 'dolor_hombro',     label: 'Dolor de hombro' },
+    { id: 'manguito_rotador', label: 'Manguito rotador' },
+    { id: 'tunel_carpiano',   label: 'Túnel carpiano' },
+  ]},
+  { id: 'cadera', label: 'Cadera y pelvis', tags: [
+    { id: 'dolor_cadera',         label: 'Dolor de cadera' },
+    { id: 'inestabilidad_pelvica', label: 'Inestabilidad pélvica' },
+  ]},
+  { id: 'pies', label: 'Tobillos y pies', tags: [
+    { id: 'lesion_tobillo',  label: 'Lesión de tobillo' },
+    { id: 'fascitis_plantar', label: 'Fascitis plantar' },
+  ]},
+  { id: 'generales', label: 'Generales', tags: [
+    { id: 'embarazo',         label: 'Embarazo',          detail: 'weeks'     },
+    { id: 'postparto',        label: 'Postparto',         detail: 'months'    },
+    { id: 'diastasis',        label: 'Diástasis abdominal', detail: 'grade'   },
+    { id: 'osteoporosis',     label: 'Osteoporosis'  },
+    { id: 'hipertension',     label: 'Hipertensión'  },
+    { id: 'vertigo',          label: 'Vértigo'       },
+    { id: 'cirugia_reciente', label: 'Cirugía reciente',  detail: 'what_when' },
+    { id: 'lesion_reciente',  label: 'Lesión reciente',   detail: 'what_when' },
+  ]},
+];
+
+// Map plano id -> { label, category, detail } para lookups O(1)
+const HEALTH_TAG_MAP = (() => {
+  const m = {};
+  HEALTH_CATEGORIES.forEach(cat => {
+    cat.tags.forEach(t => { m[t.id] = { ...t, category: cat.id, categoryLabel: cat.label }; });
+  });
+  return m;
+})();
+
 const STATE = {
   locations: [],
   currentLocationId: null,
@@ -4414,8 +4532,34 @@ function openStudentModal(id) {
   f('f-insurance').value = s?.insurance_provider || '';
   f('f-needs-confirmation').checked = s ? s.needs_confirmation !== false : true;
   renderConsentBlock(s);
+  renderStudentFormHealthPreview(s);
 
   document.getElementById('student-modal').classList.add('is-open');
+}
+
+// Pinta el preview de health_tags dentro del form del student-modal (coordinadora)
+// Solo aparece en edición (cuando s existe) — si no, muestra placeholder.
+function renderStudentFormHealthPreview(stud) {
+  const wrap = document.getElementById('f-health-preview');
+  if (!wrap) return;
+  const editBtn = stud
+    ? `<button type="button" onclick="openHealthNotesEditor('${stud.id}')" style="background: var(--fit-purple); color: white; border: none; padding: 7px 14px; border-radius: 8px; cursor: pointer; font-size: 12px; font-weight: 500; font-family: var(--body);">✎ Editar molestias</button>`
+    : `<span style="font-size: 11px; color: var(--ink-mute); font-style: italic;">Guarda el alumno primero para poder agregar molestias estructuradas.</span>`;
+  const ht = stud?.health_tags || {};
+  const tags = Array.isArray(ht.tags) ? ht.tags : [];
+  const chipsHTML = tags.map(tid => {
+    const meta = HEALTH_TAG_MAP[tid];
+    if (!meta) return '';
+    return `<span style="display: inline-block; background: #FDF6E3; color: #6B4F0A; border: 1px solid #E8D78F; font-size: 11px; padding: 3px 9px; border-radius: 999px;">⚠ ${escape(meta.label)}</span>`;
+  }).filter(Boolean).join(' ');
+  wrap.innerHTML = `
+    <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 10px 12px; background: var(--fit-cream); border: 1px solid var(--line); border-radius: 10px;">
+      <div style="flex: 1; min-width: 0;">
+        ${tags.length > 0 ? chipsHTML : '<span style="font-size: 12px; color: var(--ink-mute); font-style: italic;">Sin molestias marcadas</span>'}
+      </div>
+      ${editBtn}
+    </div>
+  `;
 }
 
 function openInstructorModal(id) {
@@ -7032,49 +7176,78 @@ function renderInstructorDayStrip() {
   if (!block) return;
   const todayIso = dateToIsoLocal(new Date());
   const dowLabels = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
+  const dowLabelsCap = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
   const monthLabels = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
 
-  // 7 días empezando hoy
-  const baseDate = new Date();
-  baseDate.setHours(0,0,0,0);
+  // Calcular el lunes de la semana del día seleccionado
+  const selDate = new Date(STATE.instDayDate + 'T12:00:00');
+  const selDow = selDate.getDay(); // 0 dom .. 6 sab
+  const daysFromMonday = selDow === 0 ? 6 : selDow - 1;
+  const monday = new Date(selDate);
+  monday.setDate(selDate.getDate() - daysFromMonday);
+  monday.setHours(0, 0, 0, 0);
+
+  // 7 días lunes a domingo
   const pills = [];
-  const visibleIsos = [];
   for (let i = 0; i < 7; i++) {
-    const d = new Date(baseDate);
-    d.setDate(d.getDate() + i);
+    const d = new Date(monday);
+    d.setDate(monday.getDate() + i);
     const iso = dateToIsoLocal(d);
-    visibleIsos.push(iso);
     const isToday = iso === todayIso;
     const isActive = iso === STATE.instDayDate;
     pills.push(`
       <div class="inst-day-pill ${isActive ? 'is-active' : ''} ${isToday && !isActive ? 'is-today' : ''}" onclick="instructorSetDateIso('${iso}')">
         <div class="dow">${dowLabels[d.getDay()]}</div>
         <div class="num">${d.getDate()}</div>
+        ${isToday ? '<div class="today-dot"></div>' : ''}
       </div>
     `);
   }
-  // Botón "Otra fecha"
-  const selectedOutsideStrip = STATE.instDayDate && !visibleIsos.includes(STATE.instDayDate);
-  pills.push(`<div class="inst-day-pill is-other ${selectedOutsideStrip ? 'is-active' : ''}" onclick="instructorOpenDatePicker()">Otra<br/>fecha</div>`);
 
-  // Banner superior con fecha seleccionada (siempre visible para claridad)
-  const selDate = new Date(STATE.instDayDate + 'T12:00:00');
+  // Etiqueta de la semana visible
+  const sunday = new Date(monday);
+  sunday.setDate(monday.getDate() + 6);
+  const sameMonth = monday.getMonth() === sunday.getMonth();
+  const weekLabel = sameMonth
+    ? `Sem. del ${monday.getDate()} al ${sunday.getDate()} ${monthLabels[monday.getMonth()]}`
+    : `${monday.getDate()} ${monthLabels[monday.getMonth()]} – ${sunday.getDate()} ${monthLabels[sunday.getMonth()]}`;
+
+  // Banner: fecha seleccionada con "ir a hoy" si aplica
   const isToday = STATE.instDayDate === todayIso;
+  const isInCurrentWeek = todayIso >= dateToIsoLocal(monday) && todayIso <= dateToIsoLocal(sunday);
   const banner = `
-    <div style="font-size: 12px; color: var(--ink-mute); margin-bottom: 8px; display: flex; align-items: center; gap: 8px;">
+    <div style="font-size: 12px; color: var(--ink-mute); margin-bottom: 6px; display: flex; align-items: center; gap: 8px;">
       <span style="text-transform: uppercase; letter-spacing: 1px; font-size: 10px;">Viendo</span>
       <span style="font-weight: 500; color: ${isToday ? 'var(--fit-purple)' : 'var(--ink)'};">
-        ${isToday ? 'Hoy · ' : ''}${dowLabels[selDate.getDay()]} ${selDate.getDate()} ${monthLabels[selDate.getMonth()]}
+        ${isToday ? 'Hoy · ' : ''}${dowLabelsCap[selDate.getDay()]} ${selDate.getDate()} ${monthLabels[selDate.getMonth()]}
       </span>
       ${!isToday ? `<button onclick="instructorSetDateIso('${todayIso}')" style="margin-left: auto; padding: 3px 10px; background: var(--fit-lavender-pale); color: var(--fit-purple); border: 1px solid var(--fit-lavender); border-radius: 999px; font-size: 11px; cursor: pointer; font-family: var(--body);">ir a hoy</button>` : ''}
     </div>
   `;
 
+  // Barra de navegación: flecha ‹ + label semana + flecha › + 📅 picker
+  const navBar = `
+    <div class="inst-week-nav">
+      <button class="inst-week-nav-btn" onclick="instructorNavWeek(-1)" title="Semana anterior">‹</button>
+      <div class="inst-week-label">${weekLabel}</div>
+      <button class="inst-week-nav-btn" onclick="instructorNavWeek(1)" title="Semana siguiente">›</button>
+      <button class="inst-week-nav-btn is-picker" onclick="instructorOpenDatePicker()" title="Elegir fecha">📅</button>
+    </div>
+  `;
+
   block.innerHTML = `
     ${banner}
+    ${navBar}
     <div class="inst-day-strip">${pills.join('')}</div>
     <input type="date" id="inst-date-picker" onchange="instructorSetCustomDate(this.value)" value="${STATE.instDayDate}" style="display:none;" />
   `;
+}
+
+// Navegar a la semana anterior o siguiente (mantiene mismo día de la semana cuando se puede)
+function instructorNavWeek(direction) {
+  const selDate = new Date(STATE.instDayDate + 'T12:00:00');
+  selDate.setDate(selDate.getDate() + direction * 7);
+  instructorSetDateIso(dateToIsoLocal(selDate));
 }
 
 function renderInstructorNextClassBlock(classes) {
@@ -7255,7 +7428,37 @@ function renderInstructorClassesBlock(classes) {
     }
   }
 
+  // Determinar cuál es la "clase próxima/actual" para que esté expandida por default
+  // (el resto arrancan colapsadas)
+  if (!STATE.instCollapsedSet || STATE.instCollapsedSetDate !== STATE.instDayDate) {
+    STATE.instCollapsedSet = new Set();
+    STATE.instCollapsedSetDate = STATE.instDayDate;
+    if (isViewingToday) {
+      // Próxima: la primera clase con hour >= currentHour (o currentHour-1 con margen)
+      const sortedHours = visibleClasses.map(c => c.hour).sort((a,b) => a-b);
+      let nextHour = sortedHours.find(h => h >= currentHour || (h === currentHour - 1 && currentMin < 50));
+      if (nextHour == null && sortedHours.length > 0) nextHour = sortedHours[sortedHours.length - 1];
+      visibleClasses.forEach(c => {
+        if (c.hour !== nextHour) STATE.instCollapsedSet.add(c.hour);
+      });
+    } else {
+      // Fechas que no son hoy: primera clase expandida, resto colapsadas
+      const sorted = [...visibleClasses].sort((a,b) => a.hour - b.hour);
+      sorted.slice(1).forEach(c => STATE.instCollapsedSet.add(c.hour));
+    }
+  }
+
   block.innerHTML = visibleClasses.map(c => renderInstructorClassCard(c, { isViewingToday, currentHour, currentMin })).join('');
+}
+
+// Toggle colapsar / expandir un bloque de hora
+function instructorToggleHour(hour) {
+  if (!STATE.instCollapsedSet) STATE.instCollapsedSet = new Set();
+  if (STATE.instCollapsedSet.has(hour)) STATE.instCollapsedSet.delete(hour);
+  else STATE.instCollapsedSet.add(hour);
+  // Re-render solo el bloque de clases (es rápido)
+  const cached = (STATE.instClassesCache || {})[STATE.instDayDate];
+  if (cached) renderInstructorClassesBlock(cached);
 }
 
 function instructorTogglePast() {
@@ -7468,9 +7671,14 @@ function renderInstructorClassCard(c, ctx) {
        </div>`
     : '';
 
+  // ¿Esta hora está colapsada?
+  const isCollapsed = (STATE.instCollapsedSet || new Set()).has(c.hour);
+  const caret = isCollapsed ? '▶' : '▼';
+
   return `
-    <div class="${cardClass}">
-      <div class="inst-hour-head">
+    <div class="${cardClass} ${isCollapsed ? 'is-collapsed' : ''}">
+      <div class="inst-hour-head" onclick="instructorToggleHour(${c.hour})" style="cursor: pointer;">
+        <span class="inst-hour-caret">${caret}</span>
         <div class="inst-hour-time">${formatHour(c.hour)}</div>
         <div class="inst-hour-meta">
           <div class="label">${studentsCount} alumno${studentsCount === 1 ? '' : 's'}${subLabel ? ` · ${subLabel}` : ''}</div>
@@ -7478,8 +7686,8 @@ function renderInstructorClassCard(c, ctx) {
         </div>
         <div class="inst-hour-count ${studentsCount === 0 ? 'is-empty' : ''}">${studentsCount}/${c.capacity}</div>
       </div>
-      ${studentsCount > 0 || (!isCancelled && !isNotDelivered) ? `<div class="inst-hour-students">${studentsHtml}</div>` : ''}
-      ${markDeliveredBtn}
+      ${isCollapsed ? '' : `${studentsCount > 0 || (!isCancelled && !isNotDelivered) ? `<div class="inst-hour-students">${studentsHtml}</div>` : ''}
+      ${markDeliveredBtn}`}
     </div>
   `;
 }
@@ -7507,7 +7715,7 @@ function renderInstructorStudentRow(item, classCtx) {
     ? '<span class="inst-stud-tag is-flex">Flex</span>'
     : (s.modality === 'fixed' ? '<span class="inst-stud-tag">Fijo</span>' : '');
 
-  // Status / meta
+  // Status / meta (solo se muestra si tiene marca; si "sin marcar" no se muestra texto repetitivo)
   let statusLine = '';
   if (st) {
     let statusClass = '';
@@ -7515,9 +7723,14 @@ function renderInstructorStudentRow(item, classCtx) {
     else if (status === 'recoverable') statusClass = 'is-warn';
     else if (status === 'lost' || status === 'no_show') statusClass = 'is-danger';
     statusLine = `<div class="inst-stud-status ${statusClass}">● ${st.label}</div>`;
-  } else {
-    statusLine = `<div class="inst-stud-meta">Sin marcar · tap nombre para opciones</div>`;
   }
+
+  // ¿Tiene notas de salud guardadas? (health_tags con al menos 1 tag, o medical_notes con texto)
+  const hasHealthTags = s.health_tags && Array.isArray(s.health_tags.tags) && s.health_tags.tags.length > 0;
+  const hasMedicalNotes = !!(s.medical_notes && s.medical_notes.trim());
+  const hasNotesIcon = (hasHealthTags || hasMedicalNotes)
+    ? '<span class="inst-stud-notes-flag" title="Tiene notas de salud">⚠</span>'
+    : '';
 
   // El check inline solo se muestra si NO está ya marcada como attended
   const isAttended = status === 'attended';
@@ -7535,6 +7748,7 @@ function renderInstructorStudentRow(item, classCtx) {
             ${tag}
             ${isTrial ? '<span class="inst-stud-tag" style="background:#EEEDFE; color:#3C3489;">Invitada</span>' : ''}
             ${isPending ? '<span class="inst-stud-tag" style="background:var(--warn-soft); color:#633806;">Pendiente pago</span>' : ''}
+            ${hasNotesIcon}
           </div>
           ${statusLine}
         </div>
@@ -7619,9 +7833,245 @@ function openInstructorStudentSheet(studentId, dateIso, hour, locationId, curren
           </button>
         ` : ''}
       </div>
+      ${renderHealthNotesSection(stud)}
     </div>
   `;
   document.body.appendChild(backdrop);
+}
+
+// Renderiza la sección "Notas y molestias" dentro del sheet del alumno (lectura)
+// Usada por el profesor (y replicable por la coordinadora si se quiere).
+function renderHealthNotesSection(stud) {
+  const ht = stud.health_tags || {};
+  const tags = Array.isArray(ht.tags) ? ht.tags : [];
+  const details = ht.details || {};
+  const freeText = (stud.medical_notes || '').trim();
+  const hasContent = tags.length > 0 || freeText.length > 0;
+
+  // Chips de tags conocidos (los desconocidos los ignoramos por seguridad)
+  const chipsHTML = tags.map(tid => {
+    const meta = HEALTH_TAG_MAP[tid];
+    if (!meta) return '';
+    let detailLabel = '';
+    const d = details[tid];
+    if (d) {
+      if (meta.detail === 'weeks' && d.weeks) detailLabel = ` · ${d.weeks} sem`;
+      else if (meta.detail === 'months' && d.months) detailLabel = ` · ${d.months} mes`;
+      else if (meta.detail === 'grade' && d.grade) detailLabel = ` · grado ${d.grade}`;
+      else if (meta.detail === 'what_when') {
+        const parts = [];
+        if (d.what) parts.push(escape(d.what));
+        if (d.date) parts.push(_fmtShortDate(d.date));
+        if (parts.length) detailLabel = ` · ${parts.join(', ')}`;
+      }
+    }
+    const klass = (meta.category === 'generales' && ['embarazo','postparto'].includes(tid))
+      ? 'is-info'
+      : 'is-warn';
+    return `<span class="inst-health-chip ${klass}">⚠ ${escape(meta.label)}${detailLabel}</span>`;
+  }).filter(Boolean).join('');
+
+  const freeTextHTML = freeText
+    ? `<div class="inst-health-free">"${escape(freeText)}"</div>`
+    : '';
+
+  const emptyHTML = !hasContent
+    ? `<div class="inst-health-empty">Sin notas registradas. Tap "Editar" para agregar.</div>`
+    : '';
+
+  return `
+    <div class="inst-health-section">
+      <div class="inst-health-head">
+        <span class="inst-health-title">⚕️ Notas y molestias</span>
+        <button class="inst-health-edit-btn" onclick="openHealthNotesEditor('${stud.id}')">✎ Editar</button>
+      </div>
+      ${chipsHTML ? `<div class="inst-health-chips">${chipsHTML}</div>` : ''}
+      ${freeTextHTML}
+      ${emptyHTML}
+    </div>
+  `;
+}
+
+// Helper: formatear fecha ISO corta a "12 dic 2025"
+function _fmtShortDate(iso) {
+  if (!iso) return '';
+  const months = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+  const [y, m, d] = iso.split('-').map(Number);
+  if (!y) return iso;
+  return `${d} ${months[m-1]} ${y}`;
+}
+
+// ============================================
+// EDITOR DE NOTAS Y MOLESTIAS
+// Modal con tags categorizados + detalles + notas libres.
+// Lo abre tanto el profesor (desde el sheet) como la coordinadora (desde el perfil).
+// ============================================
+
+// State efímero del editor (se rellena al abrir, se persiste al guardar)
+let HEALTH_EDITOR_STATE = null;
+
+function openHealthNotesEditor(studentId) {
+  const stud = STATE.students.find(s => s.id === studentId);
+  if (!stud) { showToast('Alumno no encontrado', 'error'); return; }
+
+  // Cargar estado desde el alumno
+  const existing = stud.health_tags || {};
+  HEALTH_EDITOR_STATE = {
+    studentId,
+    student: stud,
+    selectedTags: new Set(Array.isArray(existing.tags) ? existing.tags : []),
+    details: { ...(existing.details || {}) },
+    freeText: stud.medical_notes || '',
+  };
+
+  document.getElementById('health-notes-sub').textContent = `${stud.first_name || ''} ${stud.last_name || ''}`.trim();
+  document.getElementById('health-notes-modal').classList.add('is-open');
+  renderHealthNotesEditor();
+}
+
+function renderHealthNotesEditor() {
+  const ed = HEALTH_EDITOR_STATE;
+  if (!ed) return;
+  const body = document.getElementById('health-notes-body');
+
+  const categoriesHTML = HEALTH_CATEGORIES.map(cat => {
+    const tagsHTML = cat.tags.map(t => {
+      const isSelected = ed.selectedTags.has(t.id);
+      const detailInputHTML = (isSelected && t.detail) ? _renderHealthDetailInput(t) : '';
+      return `
+        <div class="hn-tag-row">
+          <button class="hn-tag ${isSelected ? 'is-selected' : ''}" onclick="toggleHealthTag('${t.id}')">${escape(t.label)}</button>
+          ${detailInputHTML}
+        </div>`;
+    }).join('');
+    return `
+      <div class="hn-cat">
+        <div class="hn-cat-label">${escape(cat.label)}</div>
+        <div class="hn-tags-row">${tagsHTML}</div>
+      </div>`;
+  }).join('');
+
+  body.innerHTML = `
+    <div style="padding: 14px 22px 4px; font-size: 12px; color: var(--ink-mute); line-height: 1.5;">
+      Lo que marques queda visible para todos los profesores y la coordinadora.
+    </div>
+    <div style="padding: 6px 22px 8px;">
+      <div style="font-size: 10.5px; color: var(--ink-mute); text-transform: uppercase; letter-spacing: 0.14em; font-weight: 600; margin: 8px 0 10px;">⚕️ Condiciones y molestias</div>
+      ${categoriesHTML}
+    </div>
+    <div style="padding: 14px 22px 18px;">
+      <div style="font-size: 10.5px; color: var(--ink-mute); text-transform: uppercase; letter-spacing: 0.14em; font-weight: 600; margin-bottom: 8px;">📝 Notas libres</div>
+      <textarea id="hn-free-text" placeholder="Cualquier información extra del alumno (estilo de clase preferida, observaciones, etc.)" style="width: 100%; min-height: 90px; padding: 11px 14px; border: 1px solid var(--line); border-radius: 10px; font-family: var(--body); font-size: 13px; line-height: 1.5; color: var(--ink); background: var(--fit-cream); resize: vertical;">${escape(ed.freeText)}</textarea>
+    </div>
+  `;
+
+  // Bind textarea
+  const ta = document.getElementById('hn-free-text');
+  if (ta) ta.addEventListener('input', e => { HEALTH_EDITOR_STATE.freeText = e.target.value; });
+}
+
+// Helper: input extra según el tipo de detail
+function _renderHealthDetailInput(tag) {
+  const ed = HEALTH_EDITOR_STATE;
+  if (!ed) return '';
+  const d = ed.details[tag.id] || {};
+  if (tag.detail === 'weeks') {
+    return `<input type="number" min="1" max="42" value="${d.weeks || ''}" placeholder="semanas" oninput="updateHealthDetail('${tag.id}', 'weeks', this.value)" class="hn-detail-input" />`;
+  }
+  if (tag.detail === 'months') {
+    return `<input type="number" min="0" max="24" value="${d.months || ''}" placeholder="meses" oninput="updateHealthDetail('${tag.id}', 'months', this.value)" class="hn-detail-input" />`;
+  }
+  if (tag.detail === 'grade') {
+    return `
+      <select oninput="updateHealthDetail('${tag.id}', 'grade', this.value)" class="hn-detail-input" style="width: 90px;">
+        <option value="">Grado</option>
+        <option value="1" ${d.grade==='1'?'selected':''}>Grado 1</option>
+        <option value="2" ${d.grade==='2'?'selected':''}>Grado 2</option>
+        <option value="3" ${d.grade==='3'?'selected':''}>Grado 3</option>
+      </select>`;
+  }
+  if (tag.detail === 'what_when') {
+    return `
+      <div class="hn-detail-pair">
+        <input type="text" value="${escape(d.what || '')}" placeholder="qué" oninput="updateHealthDetail('${tag.id}', 'what', this.value)" class="hn-detail-input" />
+        <input type="date" value="${escape(d.date || '')}" oninput="updateHealthDetail('${tag.id}', 'date', this.value)" class="hn-detail-input" style="width: 140px;" />
+      </div>`;
+  }
+  return '';
+}
+
+function toggleHealthTag(tagId) {
+  const ed = HEALTH_EDITOR_STATE;
+  if (!ed) return;
+  if (ed.selectedTags.has(tagId)) {
+    ed.selectedTags.delete(tagId);
+    delete ed.details[tagId];
+  } else {
+    ed.selectedTags.add(tagId);
+  }
+  renderHealthNotesEditor();
+}
+
+function updateHealthDetail(tagId, field, value) {
+  const ed = HEALTH_EDITOR_STATE;
+  if (!ed) return;
+  if (!ed.details[tagId]) ed.details[tagId] = {};
+  if (value === '' || value === null) delete ed.details[tagId][field];
+  else ed.details[tagId][field] = value;
+  // No re-render para no perder el foco del input
+}
+
+async function saveHealthNotes() {
+  const ed = HEALTH_EDITOR_STATE;
+  if (!ed) return;
+  if (!isOnline) { showToast('Necesitas conexión', 'error'); return; }
+
+  // Construir el JSONB
+  const tags = Array.from(ed.selectedTags);
+  // Solo guardamos detalles de tags que están seleccionados
+  const details = {};
+  tags.forEach(t => { if (ed.details[t] && Object.keys(ed.details[t]).length > 0) details[t] = ed.details[t]; });
+
+  const userId = CURRENT_USER?.authUser?.id || null;
+  const healthTags = tags.length > 0 || Object.keys(details).length > 0
+    ? { tags, details, updated_at: new Date().toISOString(), updated_by: userId }
+    : null;
+
+  const payload = {
+    health_tags: healthTags,
+    medical_notes: ed.freeText.trim() || null,
+  };
+
+  const { error } = await sb.from('students').update(payload).eq('id', ed.studentId);
+  if (error) { showToast('Error: ' + error.message, 'error'); console.error(error); return; }
+
+  // Actualizar el alumno en STATE local
+  const stud = STATE.students.find(s => s.id === ed.studentId);
+  if (stud) {
+    stud.health_tags = healthTags;
+    stud.medical_notes = payload.medical_notes;
+  }
+
+  showToast('✓ Notas guardadas', 'success');
+  closeModals();
+  HEALTH_EDITOR_STATE = null;
+
+  // Re-renderizar el sheet abierto si existe
+  const sheetEl = document.getElementById('inst-student-sheet');
+  if (sheetEl) {
+    // Re-leer ctx desde algún data attr — más simple: cerrar y reabrir si está abierto
+    // (alternativa segura: usar invalidación del cache y forzar refresh de la vista actual)
+    instructorInvalidateCache(STATE.instDayDate);
+  }
+  // Re-render la fila del alumno en la vista principal
+  if (CURRENT_USER && CURRENT_USER.role === 'instructor') {
+    const cached = (STATE.instClassesCache || {})[STATE.instDayDate];
+    if (cached) renderInstructorClassesBlock(cached);
+  }
+  // Si la coordinadora tiene abierto el detalle del alumno, refrescar también
+  if (STATE.studentDetailId === ed.studentId && typeof renderStudentDetail === 'function') {
+    try { renderStudentDetail(); } catch(e) {}
+  }
 }
 
 function closeInstructorStudentSheet() {
@@ -7656,10 +8106,38 @@ async function instructorSetDateIso(iso) {
   STATE.instShowPast = false;
   // Re-render todo lo que cambia con la fecha
   renderInstructorDayStrip();
+  // Si tenemos cache para esta fecha, pinta de inmediato sin esperar
+  const cached = (STATE.instClassesCache || {})[iso];
+  if (cached) {
+    renderInstructorNextClassBlock(cached);
+    renderInstructorClassesBlock(cached);
+  } else {
+    // Sin cache: mostrar loading inline en la sección de clases
+    const block = document.querySelector('[data-inst-classes]');
+    const headerBlock = document.querySelector('[data-inst-classes-header]');
+    const pastToggleBlock = document.querySelector('[data-inst-past-toggle]');
+    const nextBlock = document.querySelector('[data-inst-next]');
+    if (nextBlock) nextBlock.innerHTML = '';
+    if (headerBlock) headerBlock.innerHTML = '';
+    if (pastToggleBlock) pastToggleBlock.innerHTML = '';
+    if (block) {
+      block.innerHTML = `<div class="inst-loading"><span class="spinner"></span> Cargando clases del día...</div>`;
+    }
+  }
   const inst = CURRENT_USER.record;
   const classes = await loadInstructorClassesForDate(inst, STATE.instDayDate);
+  // Guardar en cache
+  STATE.instClassesCache = STATE.instClassesCache || {};
+  STATE.instClassesCache[iso] = classes;
   renderInstructorNextClassBlock(classes);
   renderInstructorClassesBlock(classes);
+}
+
+// Invalidar cache para una fecha (al hacer cambios que afecten esa fecha)
+function instructorInvalidateCache(iso) {
+  if (STATE.instClassesCache && iso) {
+    delete STATE.instClassesCache[iso];
+  }
 }
 
 // Marca la clase como dictada aunque no haya alumnos (o no marcó a ninguno)
@@ -7941,6 +8419,7 @@ async function instructorWriteAttendance(studentId, dateIso, hour, locationId, s
   };
   showToast(toastMap[status] || 'Marcado', 'success');
   STATE.instMonthStats = null; // invalidar cache para refrescar stats
+  instructorInvalidateCache(dateIso); // invalidar cache de clases para este día
   renderInstructorDay();
 }
 
@@ -7962,36 +8441,102 @@ async function instructorOpenAddStudent(dateIso, hour, locationId) {
 
   const modal = document.getElementById('instructor-add-modal');
   modal.classList.add('is-open');
-  instructorRenderAddSearch('');
-  setTimeout(() => {
-    const input = document.getElementById('inst-add-search');
-    if (input) input.focus();
-  }, 50);
+  instructorRenderAddSearch('', { mode: 'list' });
 }
 
-function instructorRenderAddSearch(query) {
+function instructorRenderAddSearch(query, opts) {
+  // opts.mode: 'list' (default - lista completa, sin keyboard) | 'search' (input activo, teclado abierto)
+  const mode = opts?.mode || 'list';
+  STATE.instAddMode = mode;
   const body = document.getElementById('inst-add-body');
-  body.innerHTML = `
-    <div style="position: sticky; top: 0; background: white; padding-bottom: 12px; z-index: 5;">
-      <input id="inst-add-search" placeholder="Buscar nombre o teléfono..." value="${escape(query)}"
-        style="width: 100%; padding: 12px 16px; font-size: 15px; border: 1.5px solid var(--line); border-radius: var(--radius-sm); box-sizing: border-box; -webkit-appearance: none;" />
-    </div>
-    <div id="inst-add-results"></div>
-  `;
+
+  // Header del modal: en modo search se cambia para mostrar back-arrow + input grande
+  const modalHeader = document.querySelector('#instructor-add-modal .modal-header');
+  if (modalHeader) {
+    if (mode === 'search') {
+      modalHeader.innerHTML = `
+        <button onclick="instructorRenderAddSearch('', { mode: 'list' })" style="width: 32px; height: 32px; border-radius: 50%; background: var(--fit-cream); border: none; color: var(--fit-purple); font-size: 16px; cursor: pointer; display: grid; place-items: center; margin-right: 10px;" title="Volver">←</button>
+        <div style="flex: 1; display: flex; align-items: center; gap: 10px; padding: 8px 12px; background: white; border: 1.5px solid var(--fit-purple); border-radius: 10px;">
+          <span style="color: var(--fit-purple); font-size: 13px;">🔍</span>
+          <input id="inst-add-search" placeholder="Buscar nombre o teléfono..." value="${escape(query || '')}"
+            autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false"
+            style="flex: 1; border: none; outline: none; background: transparent; font-family: var(--body); font-size: 14px; color: var(--ink); -webkit-appearance: none;" />
+          ${query ? '<button onclick="instructorClearSearch()" style="background: var(--fit-cream); border: none; width: 22px; height: 22px; border-radius: 50%; color: var(--ink-mute); font-size: 11px; cursor: pointer;">✕</button>' : ''}
+        </div>
+        <button class="modal-close" onclick="closeModals()" style="margin-left: 8px;">✕</button>
+      `;
+    } else {
+      // Modo lista: header con título + subtítulo
+      modalHeader.innerHTML = `
+        <div>
+          <div class="modal-title">Agregar <em>alumno</em></div>
+          <div id="inst-add-sub" style="font-size: 12px; color: var(--ink-mute); margin-top: 4px;">${escape(STATE.instAddCtx ? _instAddCtxLabel() : '—')}</div>
+        </div>
+        <button class="modal-close" onclick="closeModals()">✕</button>
+      `;
+    }
+  }
+
+  if (mode === 'list') {
+    // Vista lista: trigger pseudo-input arriba + lista completa de alumnas + CTA invitada al fondo
+    body.innerHTML = `
+      <div onclick="instructorRenderAddSearch('', { mode: 'search' })" style="margin: 14px 16px 6px; padding: 12px 16px; background: white; border: 1.5px solid var(--fit-purple-soft); border-radius: 12px; display: flex; align-items: center; gap: 10px; color: var(--ink-mute); font-size: 14px; cursor: pointer; box-shadow: 0 0 0 4px rgba(91, 42, 143, 0.06);">
+        <span style="color: var(--fit-purple-soft);">🔍</span>
+        <span>Buscar nombre o teléfono...</span>
+      </div>
+      <div id="inst-add-results" style="padding: 8px 0 100px;"></div>
+      <div id="inst-add-invitada-cta" style="position: sticky; bottom: 0; background: linear-gradient(180deg, transparent, white 30%); padding: 12px 16px 16px;">
+        <button onclick="instructorRenderInviteForm()" style="width: 100%; background: var(--fit-lavender-pale); border: 1.5px dashed var(--fit-purple-soft); border-radius: 14px; padding: 16px; text-align: left; cursor: pointer; font-family: var(--body); transition: all 0.12s;">
+          <div style="font-size: 14px; font-weight: 600; color: var(--fit-purple); margin-bottom: 4px;">＋ Registrar invitada nueva</div>
+          <div style="font-size: 11.5px; color: var(--ink-mute); line-height: 1.4;">Para alguien que no está en el sistema. Aparecerá en "Por cobrar" del coordinador.</div>
+        </button>
+      </div>
+    `;
+    instructorRenderResults('');
+  } else {
+    // Vista search: input está en el header; aquí solo los resultados + CTA contextual
+    body.innerHTML = `<div id="inst-add-results" style="padding: 8px 0 24px;"></div>`;
+    const input = document.getElementById('inst-add-search');
+    if (input) {
+      input.addEventListener('input', (e) => instructorRenderResults(e.target.value));
+      setTimeout(() => input.focus(), 50);
+    }
+    instructorRenderResults(query || '');
+  }
+}
+
+function instructorClearSearch() {
   const input = document.getElementById('inst-add-search');
-  input.addEventListener('input', (e) => instructorRenderResults(e.target.value));
-  // En mobile, al enfocar el input, scrollear el body del modal hasta arriba
-  input.addEventListener('focus', () => {
-    const card = input.closest('.modal-card');
-    if (card) card.scrollTop = 0;
-  });
-  instructorRenderResults(query);
+  if (input) { input.value = ''; input.focus(); }
+  instructorRenderResults('');
+  // Re-render header para quitar el botón X
+  instructorRenderAddSearch('', { mode: 'search' });
+}
+
+function _instAddCtxLabel() {
+  const ctx = STATE.instAddCtx;
+  if (!ctx) return '';
+  const dateObj = new Date(ctx.dateIso + 'T12:00:00');
+  const dayLabels = ['dom','lun','mar','mié','jue','vie','sáb'];
+  return `${dayLabels[dateObj.getDay()]} ${dateObj.getDate()} · ${formatHour(ctx.hour)} · ${ctx.locationName || ''}`;
 }
 
 function instructorRenderResults(query) {
   const results = document.getElementById('inst-add-results');
   if (!results) return;
   const q = (query || '').toLowerCase().trim();
+  const mode = STATE.instAddMode || 'list';
+
+  // Helper para escapar y resaltar coincidencia
+  const highlight = (text) => {
+    if (!q || !text) return escape(text);
+    const lower = text.toLowerCase();
+    const idx = lower.indexOf(q);
+    if (idx === -1) return escape(text);
+    return escape(text.slice(0, idx))
+      + `<span style="background: linear-gradient(transparent 60%, #FFF3B8 60%);">${escape(text.slice(idx, idx + q.length))}</span>`
+      + escape(text.slice(idx + q.length));
+  };
 
   let matches = STATE.students || [];
   if (q) {
@@ -8001,35 +8546,56 @@ function instructorRenderResults(query) {
       const doc = (s.document_number || '').toLowerCase();
       return name.includes(q) || phone.includes(q) || doc.includes(q);
     });
+  } else {
+    // Sin query: ordenar alfabéticamente
+    matches = [...matches].sort((a, b) => (a.first_name || '').localeCompare(b.first_name || ''));
   }
-  matches = matches.slice(0, 8);
 
-  let html = matches.map(s => {
+  // En modo lista (sin keyboard), mostrar todas. En modo búsqueda, limitar para que quepa con keyboard
+  const limit = mode === 'search' ? 20 : 100;
+  const shown = matches.slice(0, limit);
+
+  let html = shown.map(s => {
     const isTrial = s.student_status === 'trial';
+    const fullName = `${s.first_name || ''} ${s.last_name || ''}`.trim();
+    const phone = s.phone || '';
+    const meta = phone || (s.email || '');
     return `
-      <div onclick="instructorPickStudent('${s.id}')" style="display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--radius-sm); margin-bottom: 6px; cursor: pointer; background: white;">
-        <div class="student-avatar" style="width: 32px; height: 32px; font-size: 11px;">${initials(s)}</div>
+      <div onclick="instructorPickStudent('${s.id}')" style="display: flex; align-items: center; gap: 12px; padding: 12px 16px; cursor: pointer; border-top: 1px solid var(--line);">
+        <div class="student-avatar" style="width: 38px; height: 38px; font-size: 12px; background: var(--fit-lavender); color: var(--fit-purple-deep); flex-shrink: 0;">${initials(s)}</div>
         <div style="flex: 1; min-width: 0;">
-          <div style="font-size: 13px; font-weight: 500;">${escape(s.first_name)} ${escape(s.last_name || '')} ${isTrial ? '<span style="font-size: 9px; padding: 2px 6px; background: #EEEDFE; color: #3C3489; border-radius: 999px; margin-left: 4px;">invitada</span>' : ''}</div>
-          <div style="font-size: 10px; color: var(--ink-mute);">${escape(s.phone || s.email || '')}</div>
+          <div style="font-size: 14px; font-weight: 500; color: var(--ink);">${highlight(fullName)} ${isTrial ? '<span style="font-size: 9px; padding: 2px 6px; background: #EEEDFE; color: #3C3489; border-radius: 999px; margin-left: 4px; font-weight: 600;">invitada</span>' : ''}</div>
+          ${meta ? `<div style="font-size: 11px; color: var(--ink-mute); margin-top: 2px;">${highlight(meta)}</div>` : ''}
         </div>
-        <div style="font-size: 14px; color: var(--ink-mute);">›</div>
+        <div style="font-size: 14px; color: var(--ink-faint); flex-shrink: 0;">›</div>
       </div>
     `;
   }).join('');
 
   if (q && matches.length === 0) {
-    html = `<div style="padding: 14px; text-align: center; color: var(--ink-mute); font-size: 12px; margin-bottom: 8px;">Sin resultados para "${escape(q)}"</div>`;
+    html = `
+      <div style="padding: 30px 20px; text-align: center;">
+        <div style="font-size: 28px; margin-bottom: 8px;">🔍</div>
+        <div style="font-family: var(--display); font-style: italic; font-size: 16px; color: var(--fit-purple-deep); margin-bottom: 4px;">Sin resultados para "${escape(q)}"</div>
+        <div style="font-size: 12px; color: var(--ink-mute);">¿Es alguien nuevo? Regístrala como invitada abajo.</div>
+      </div>
+    `;
   }
 
-  html += `
-    <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line);">
-      <button onclick="instructorRenderInviteForm()" style="width: 100%; padding: 12px 14px; font-size: 13px; background: white; border: 1px dashed var(--fit-purple); color: var(--fit-purple-deep); border-radius: var(--radius-sm); text-align: left; cursor: pointer;">
-        <div style="font-weight: 500;">+ Registrar invitada nueva</div>
-        <div style="font-size: 10px; color: var(--fit-purple); margin-top: 2px;">Para alguien que no está en el sistema. Aparecerá en "Por cobrar" del coordinador.</div>
-      </button>
-    </div>
-  `;
+  // CTA invitada — contextual si hay query, fija si no
+  if (mode === 'search') {
+    const ctaTitle = q
+      ? `＋ Registrar a "${escape(q)}" como invitada`
+      : `＋ Registrar invitada nueva`;
+    html += `
+      <div style="padding: 14px 16px; border-top: 1px solid var(--line); margin-top: 4px;">
+        <button onclick="instructorRenderInviteForm('${escape(q)}')" style="width: 100%; background: var(--fit-lavender-pale); border: 1.5px dashed var(--fit-purple-soft); border-radius: 12px; padding: 14px; text-align: left; cursor: pointer; font-family: var(--body);">
+          <div style="font-size: 13px; font-weight: 600; color: var(--fit-purple); margin-bottom: 3px;">${ctaTitle}</div>
+          <div style="font-size: 11px; color: var(--ink-mute);">Aparecerá en "Por cobrar" del coordinador.</div>
+        </button>
+      </div>
+    `;
+  }
 
   results.innerHTML = html;
 }
@@ -8152,21 +8718,69 @@ async function instructorRenderCase(caseType, stud, pkg) {
   }
 }
 
-function instructorRenderInviteForm() {
+function instructorRenderInviteForm(prefillName) {
+  // Si recibe un prefill (lo que escribió en búsqueda), intentar split "Nombre Apellido"
+  let prefFirst = '', prefLast = '';
+  if (prefillName) {
+    const trimmed = prefillName.trim();
+    const parts = trimmed.split(/\s+/);
+    prefFirst = parts[0] || '';
+    if (parts.length > 1) prefLast = parts.slice(1).join(' ');
+  }
+
+  // Si el header está en modo search, restaurarlo a modo simple para esta pantalla
+  const modalHeader = document.querySelector('#instructor-add-modal .modal-header');
+  if (modalHeader) {
+    modalHeader.innerHTML = `
+      <button onclick="instructorRenderAddSearch('', { mode: 'list' })" style="width: 32px; height: 32px; border-radius: 50%; background: var(--fit-cream); border: none; color: var(--fit-purple); font-size: 16px; cursor: pointer; display: grid; place-items: center; margin-right: 10px;" title="Volver">←</button>
+      <div style="flex: 1;">
+        <div class="modal-title">Nueva <em>invitada</em></div>
+        <div style="font-size: 12px; color: var(--ink-mute); margin-top: 2px;">${escape(_instAddCtxLabel())}</div>
+      </div>
+      <button class="modal-close" onclick="closeModals()">✕</button>
+    `;
+  }
+
   const body = document.getElementById('inst-add-body');
   body.innerHTML = `
-    <button onclick="instructorRenderAddSearch('')" style="background: transparent; border: none; font-size: 12px; color: var(--ink-mute); padding: 0 0 12px; cursor: pointer;">← volver a búsqueda</button>
-    <div style="padding: 14px; background: #EEEDFE; border-radius: var(--radius-sm); margin-bottom: 14px;">
-      <div style="font-size: 12px; font-weight: 500; color: #3C3489; margin-bottom: 4px;">Nueva invitada · clase de prueba</div>
-      <div style="font-size: 11px; color: #534AB7;">Aparecerá en el dashboard del coordinador como pendiente de cobro.</div>
+    <div style="margin: 14px 18px; padding: 12px 14px; background: var(--fit-lavender-pale); border-radius: 10px;">
+      <div style="font-size: 12.5px; font-weight: 600; color: #3C3489; margin-bottom: 3px;">💜 Clase de prueba</div>
+      <div style="font-size: 11px; color: #534AB7; line-height: 1.4;">Aparecerá en el dashboard de la coordinadora como pendiente de cobro.</div>
     </div>
-    <input id="invite-name" placeholder="Nombre completo" autocomplete="off"
-      style="width: 100%; padding: 10px 14px; font-size: 14px; border: 1px solid var(--line); border-radius: var(--radius-sm); margin-bottom: 8px; box-sizing: border-box;" />
-    <input id="invite-phone" placeholder="Teléfono (WhatsApp)" autocomplete="off" inputmode="tel"
-      style="width: 100%; padding: 10px 14px; font-size: 14px; border: 1px solid var(--line); border-radius: var(--radius-sm); margin-bottom: 14px; box-sizing: border-box;" />
-    <button onclick="instructorConfirmInvite()" style="width: 100%; padding: 12px; font-size: 14px; background: var(--fit-purple); color: white; border: none; border-radius: var(--radius-sm); font-weight: 500; cursor: pointer;">Registrar y marcar asistida</button>
+
+    <div style="padding: 0 18px 12px;">
+      <div style="font-size: 11px; color: var(--ink-mute); text-transform: uppercase; letter-spacing: 0.12em; font-weight: 600; margin-bottom: 6px;">Nombre <span style="color: var(--danger);">*</span></div>
+      <input id="invite-first-name" placeholder="Ej. María" autocomplete="off" value="${escape(prefFirst)}"
+        style="width: 100%; padding: 11px 14px; font-size: 14px; border: 1px solid var(--line); border-radius: 10px; box-sizing: border-box; font-family: var(--body); -webkit-appearance: none;" />
+    </div>
+
+    <div style="padding: 0 18px 12px;">
+      <div style="font-size: 11px; color: var(--ink-mute); text-transform: uppercase; letter-spacing: 0.12em; font-weight: 600; margin-bottom: 6px;">Apellido</div>
+      <input id="invite-last-name" placeholder="Ej. Rodríguez" autocomplete="off" value="${escape(prefLast)}"
+        style="width: 100%; padding: 11px 14px; font-size: 14px; border: 1px solid var(--line); border-radius: 10px; box-sizing: border-box; font-family: var(--body); -webkit-appearance: none;" />
+    </div>
+
+    <div style="padding: 0 18px 12px;">
+      <div style="font-size: 11px; color: var(--ink-mute); text-transform: uppercase; letter-spacing: 0.12em; font-weight: 600; margin-bottom: 6px;">Teléfono (WhatsApp) <span style="color: var(--danger);">*</span></div>
+      <input id="invite-phone" placeholder="+51 9XX XXX XXX" autocomplete="off" inputmode="tel"
+        style="width: 100%; padding: 11px 14px; font-size: 14px; border: 1px solid var(--line); border-radius: 10px; box-sizing: border-box; font-family: var(--body); -webkit-appearance: none;" />
+    </div>
+
+    <div style="padding: 0 18px 16px;">
+      <div style="font-size: 11px; color: var(--ink-mute); text-transform: uppercase; letter-spacing: 0.12em; font-weight: 600; margin-bottom: 6px;">Cómo nos conoció <span style="color: var(--ink-faint); text-transform: none; letter-spacing: 0; font-weight: 400;">(opcional)</span></div>
+      <input id="invite-referral" placeholder="Instagram, referida, etc." autocomplete="off"
+        style="width: 100%; padding: 11px 14px; font-size: 14px; border: 1px solid var(--line); border-radius: 10px; box-sizing: border-box; font-family: var(--body); -webkit-appearance: none;" />
+    </div>
+
+    <div style="padding: 0 18px 16px;">
+      <button onclick="instructorConfirmInvite()" style="width: 100%; padding: 13px; font-size: 14px; background: var(--fit-purple); color: white; border: none; border-radius: 12px; font-weight: 500; cursor: pointer; font-family: var(--body);">Registrar y marcar asistida</button>
+    </div>
+
+    <div style="padding: 0 18px 20px; font-size: 11px; color: var(--ink-mute); line-height: 1.5; text-align: center;">
+      Después podrás agendarle clases o convertirla en alumna regular desde su perfil.
+    </div>
   `;
-  setTimeout(() => document.getElementById('invite-name')?.focus(), 50);
+  setTimeout(() => document.getElementById('invite-first-name')?.focus(), 50);
 }
 
 async function instructorEnsureSession(ctx) {
@@ -8328,26 +8942,31 @@ async function instructorConfirmAddCaseC(studentId) {
 
 async function instructorConfirmInvite() {
   if (!isOnline) { showToast('Sin conexión', 'error'); return; }
-  const name = document.getElementById('invite-name').value.trim();
+  const first_name = document.getElementById('invite-first-name').value.trim();
+  const last_name = document.getElementById('invite-last-name').value.trim();
   const phone = document.getElementById('invite-phone').value.trim();
-  if (!name) { showToast('Falta el nombre', 'error'); return; }
+  const referral = document.getElementById('invite-referral').value.trim();
+  if (!first_name) { showToast('Falta el nombre', 'error'); return; }
   if (!phone) { showToast('Falta el teléfono', 'error'); return; }
 
   try {
     const ctx = STATE.instAddCtx;
-    const parts = name.split(/\s+/);
-    const first_name = parts[0];
-    const last_name = parts.slice(1).join(' ') || null;
 
-    // Crear student como trial
-    const { data: stud, error: stErr } = await sb.from('students').insert({
+    // Construir payload — agregar referral_source si existe (a las notas si la columna no existe)
+    const payload = {
       first_name,
-      last_name,
+      last_name: last_name || null,
       phone,
       location_id: ctx.locationId,
       modality: 'flexible',
       student_status: 'trial',
-    }).select().single();
+    };
+    // El "Cómo nos conoció" lo guardamos en notes/medical_notes? Mejor en una columna específica si existe.
+    // Para ser conservador: lo metemos en medical_notes como "Referida por: X" si la coordinadora quiere verlo
+    // (no es ideal pero no requiere migración). Si en el futuro hay una columna referral_source, migramos.
+    if (referral) payload.medical_notes = `Referida por: ${referral}`;
+
+    const { data: stud, error: stErr } = await sb.from('students').insert(payload).select().single();
     if (stErr) throw stErr;
 
     // Cache local
@@ -8361,6 +8980,7 @@ async function instructorConfirmInvite() {
     showToast(`✓ ${first_name} registrada como invitada`, 'success');
     closeModals();
     STATE.instMonthStats = null;
+    instructorInvalidateCache(ctx.dateIso);
     renderInstructorDay();
   } catch (e) {
     console.error(e);
