@@ -9,6 +9,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght,SOFT@9..144,300..900,0..100&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/html2pdf.js@0.10.1/dist/html2pdf.bundle.min.js"></script>
 <style>
   /* ============================================
      DESIGN TOKENS — same brand from mockup
@@ -9426,6 +9427,574 @@ function renewalMessage(name, remaining) {
 }
 
 // ============================================
+// PDF DE DETALLE POR ALUMNA
+// Genera un PDF descargable con el resumen completo del alumno:
+// paquetes, clases tomadas, próximas agendadas, historial de pagos y saldo.
+// Botón en el header del perfil; usa html2pdf.js (jsPDF + html2canvas).
+// ============================================
+
+const PDF_STUDIO_CONTACT = {
+  whatsapp: '+51 999 888 777',
+  instagram: '@fitstudioperu',
+  address: 'Calle Las Camelias 432, Santa Cruz · San Isidro, Lima'
+};
+
+const PDF_PAYMENT_LABELS = {
+  cash: 'Efectivo', yape: 'Yape', plin: 'Plin',
+  transfer: 'Transferencia', pos: 'POS', other: 'Otro'
+};
+
+const PDF_PKG_STATUS = {
+  completed: { dot: '✓', label: 'Completado' },
+  active:    { dot: '●', label: 'Activo' },
+  upcoming:  { dot: '○', label: 'Próximo' },
+  frozen:    { dot: '❄', label: 'Congelado' }
+};
+
+async function generateStudentPDF(studentId) {
+  if (typeof html2pdf === 'undefined') {
+    showToast('La librería de PDF aún no cargó. Intenta de nuevo.', 'error');
+    return;
+  }
+  const stud = STATE.students.find(s => s.id === studentId);
+  if (!stud) { showToast('No se encontró el alumno', 'error'); return; }
+  const data = STATE.studentDetailData;
+  if (!data || !data.packages) {
+    showToast('Datos no cargados. Vuelve a entrar al perfil.', 'error');
+    return;
+  }
+
+  showToast('Generando PDF...', 'success');
+
+  // Esperar a que las fonts terminen de cargar (Fraunces e Outfit)
+  try { if (document.fonts && document.fonts.ready) await document.fonts.ready; } catch (e) {}
+
+  const html = _pdfBuildHTML(stud, data);
+  const container = document.createElement('div');
+  container.style.cssText = 'position:absolute; left:-9999px; top:0; width:210mm; background:white;';
+  container.innerHTML = html;
+  document.body.appendChild(container);
+
+  try {
+    await html2pdf().set({
+      margin: 0,
+      filename: _pdfBuildFilename(stud),
+      image: { type: 'jpeg', quality: 0.98 },
+      html2canvas: { scale: 2, useCORS: true, logging: false, backgroundColor: '#ffffff' },
+      jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+      pagebreak: { mode: ['css', 'legacy'] }
+    }).from(container.firstElementChild).save();
+    showToast('✓ PDF descargado', 'success');
+  } catch (e) {
+    console.error('[generateStudentPDF]', e);
+    showToast('Error generando PDF: ' + e.message, 'error');
+  } finally {
+    container.remove();
+  }
+}
+
+function _pdfBuildFilename(stud) {
+  const slug = `${stud.first_name||''}-${stud.last_name||''}`.toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+  return `detalle-${slug}-${dateToIsoLocal(new Date())}.pdf`;
+}
+
+function _pdfInstructorName(sess) {
+  if (!sess) return '';
+  const id = sess.actual_instructor_id || sess.instructor_id;
+  if (!id) return '';
+  const inst = STATE.instructors.find(i => i.id === id);
+  return inst ? inst.first_name : '';
+}
+
+function _pdfFmtDateShort(iso) {
+  if (!iso) return '';
+  const [y, m, d] = iso.split('-').map(Number);
+  if (!y) return iso;
+  const months = ['ene','feb','mar','abr','may','jun','jul','ago','set','oct','nov','dic'];
+  return `${d} ${months[m - 1]}`;
+}
+
+function _pdfPkgStatusKey(p, activePkgId) {
+  const used = p.classes_used || 0;
+  const total = p.classes_total || 0;
+  if (p.is_frozen) return 'frozen';
+  if (used >= total && total > 0) return 'completed';
+  if (activePkgId && p.id === activePkgId) return 'active';
+  return 'upcoming';
+}
+
+function _pdfBuildHTML(stud, data) {
+  // ============ DATOS DEL ALUMNO ============
+  const loc = STATE.locations.find(l => l.id === stud.location_id);
+  const fullName = `${stud.first_name || ''} ${stud.last_name || ''}`.trim();
+  const modLabel = stud.modality === 'fixed' ? '<span class="modality-star">★</span> Fija'
+    : stud.modality === 'flexible' ? '<span class="modality-star">↻</span> Flexible'
+    : '<span class="modality-star">✦</span> Prueba';
+  const todayIso = dateToIsoLocal(new Date());
+  const todayPretty = new Date().toLocaleDateString('es-PE', { day: 'numeric', month: 'long', year: 'numeric' });
+
+  // ============ PAQUETES ============
+  const allPackages = data.packages || [];
+  const activePkg = getActivePackage(allPackages);
+  const activePkgId = activePkg ? activePkg.id : null;
+  const allPkgsSorted = [...allPackages].sort((a, b) => {
+    const da = a.purchase_date || a.start_date || '1900-01-01';
+    const db = b.purchase_date || b.start_date || '1900-01-01';
+    if (da !== db) return db.localeCompare(da);
+    return (b.created_at || '').localeCompare(a.created_at || '');
+  });
+
+  // Saldo total pendiente (suma de owed de todos los paquetes)
+  let totalOwed = 0;
+  allPkgsSorted.forEach(p => {
+    const price = parseFloat(p.price_paid || p.packages?.price_pen || 0);
+    const paid = (data.payments || [])
+      .filter(pm => pm.student_package_id === p.id)
+      .reduce((s, pm) => s + parseFloat(pm.amount_pen || pm.amount || 0) + parseFloat(pm.discount_amount || 0), 0);
+    totalOwed += Math.max(0, price - paid);
+  });
+
+  const pkgRows = allPkgsSorted.map(p => {
+    const used = p.classes_used || 0;
+    const total = p.classes_total || 0;
+    const remaining = Math.max(0, total - used);
+    const statusKey = _pdfPkgStatusKey(p, activePkgId);
+    const meta = PDF_PKG_STATUS[statusKey];
+    const progressPct = total > 0 ? Math.min(100, (used / total) * 100) : 0;
+    const fillCls = statusKey === 'completed' ? 'progress-fill done' : 'progress-fill';
+    const price = parseFloat(p.price_paid || p.packages?.price_pen || 0);
+    const paid = (data.payments || [])
+      .filter(pm => pm.student_package_id === p.id)
+      .reduce((s, pm) => s + parseFloat(pm.amount_pen || pm.amount || 0) + parseFloat(pm.discount_amount || 0), 0);
+    const owed = Math.max(0, price - paid);
+    const name = escape(p.packages?.name || `Paquete ${total} clases`);
+
+    let statusText = meta.label;
+    if (statusKey === 'active') statusText += ` · ${remaining} restantes`;
+
+    const pkgPaidCell = owed === 0
+      ? `<span class="pkg-amount">S/ ${price.toFixed(2)}</span>`
+      : `<span class="pkg-amount">S/ ${paid.toFixed(2)}</span><div style="font-size:9px;color:#8B8493;margin-top:2px;">debe S/ ${owed.toFixed(2)}</div>`;
+
+    return `
+      <tr>
+        <td class="pkg-name">${name}</td>
+        <td>${formatDate(p.purchase_date)}</td>
+        <td>
+          <span class="pkg-progress">
+            <span class="progress-bar"><span class="${fillCls}" style="width: ${progressPct}%"></span></span>
+            ${used} / ${total}
+          </span>
+        </td>
+        <td class="num">${pkgPaidCell}</td>
+        <td><span class="pkg-status ${statusKey}"><span class="dot">${meta.dot}</span> ${escape(statusText)}</span></td>
+      </tr>
+    `;
+  }).join('');
+
+  // ============ CLASES TOMADAS (consumen cupo: attended | lost | no_show) ============
+  const takenAtts = (data.attendances || []).filter(a => {
+    if (!a.class_sessions) return false;
+    return a.counts_against_package || ['attended', 'lost', 'no_show'].includes(a.status);
+  }).sort((a, b) => {
+    const da = (a.class_sessions.session_date || '') + String(a.class_sessions.hour || 0).padStart(2, '0');
+    const db = (b.class_sessions.session_date || '') + String(b.class_sessions.hour || 0).padStart(2, '0');
+    return da.localeCompare(db); // asc
+  });
+
+  const attendedCount = takenAtts.filter(a => a.status === 'attended').length;
+  const lostCount = takenAtts.filter(a => a.status === 'lost' || a.status === 'no_show').length;
+  let takenSubtitle = `${takenAtts.length} clase${takenAtts.length === 1 ? '' : 's'}`;
+  if (lostCount > 0) {
+    takenSubtitle = `${takenAtts.length} consumida${takenAtts.length === 1 ? '' : 's'} · ${attendedCount} asistida${attendedCount === 1 ? '' : 's'} · ${lostCount} perdida${lostCount === 1 ? '' : 's'}`;
+  }
+
+  const takenRowsHTML = takenAtts.map(a => {
+    const sess = a.class_sessions;
+    const isLost = a.status === 'lost' || a.status === 'no_show';
+    const checkSym = isLost ? '✗' : '✓';
+    const profName = _pdfInstructorName(sess);
+    const profStr = profName ? `Prof. ${escape(profName)}` : '';
+    const rowCls = isLost ? 'class-row lost' : 'class-row';
+    return `
+      <div class="${rowCls}">
+        <span class="class-date">${_pdfFmtDateShort(sess.session_date)}</span>
+        <span class="class-hour">${formatHour(sess.hour)}</span>
+        <span class="class-prof">${profStr}</span>
+        <span class="class-check">${checkSym}</span>
+      </div>
+    `;
+  }).join('');
+
+  const takenRowsCount = Math.max(1, Math.ceil(takenAtts.length / 2));
+  const takenSection = takenAtts.length > 0 ? `
+    <section class="section">
+      <div class="section-head">
+        <h2 class="section-title">Clases tomadas</h2>
+        <span class="section-sub">${escape(takenSubtitle)}</span>
+      </div>
+      <div class="classes-grid" style="grid-template-rows: repeat(${takenRowsCount}, auto);">
+        ${takenRowsHTML}
+      </div>
+    </section>
+  ` : '';
+
+  // ============ PRÓXIMAS CLASES AGENDADAS ============
+  const upcomingBookings = (data.bookings || []).filter(b => {
+    if (!b.class_sessions) return false;
+    if (b.class_sessions.is_cancelled) return false;
+    if (b.cancelled_at) return false;
+    if (b.class_sessions.session_date < todayIso) return false;
+    const hasAtt = (data.attendances || []).some(a =>
+      a.booking_id === b.id && ['attended','lost','no_show'].includes(a.status)
+    );
+    return !hasAtt;
+  }).sort((a, b) => {
+    const da = a.class_sessions.session_date + String(a.class_sessions.hour).padStart(2, '0');
+    const db = b.class_sessions.session_date + String(b.class_sessions.hour).padStart(2, '0');
+    return da.localeCompare(db);
+  });
+
+  const upcomingRowsHTML = upcomingBookings.map(b => {
+    const sess = b.class_sessions;
+    const profName = _pdfInstructorName(sess);
+    const profStr = profName ? `Prof. ${escape(profName)}` : '';
+    return `
+      <div class="class-row upcoming">
+        <span class="class-date">${_pdfFmtDateShort(sess.session_date)}</span>
+        <span class="class-hour">${formatHour(sess.hour)}</span>
+        <span class="class-prof">${profStr}</span>
+        <span class="class-check">agendada</span>
+      </div>
+    `;
+  }).join('');
+
+  const upcomingRowsCount = Math.max(1, Math.ceil(upcomingBookings.length / 2));
+  const upcomingSection = upcomingBookings.length > 0 ? `
+    <section class="section">
+      <div class="section-head">
+        <h2 class="section-title">Próximas clases agendadas</h2>
+        <span class="section-sub">${upcomingBookings.length} reserva${upcomingBookings.length === 1 ? '' : 's'}</span>
+      </div>
+      <div class="classes-grid" style="grid-template-rows: repeat(${upcomingRowsCount}, auto);">
+        ${upcomingRowsHTML}
+      </div>
+    </section>
+  ` : '';
+
+  // ============ PAGOS ============
+  const payments = (data.payments || []).slice().sort((a, b) =>
+    (b.payment_date || '').localeCompare(a.payment_date || '')
+  );
+  const totalPaid = payments.reduce((s, p) => s + parseFloat(p.amount_pen || p.amount || 0), 0);
+
+  const payRows = payments.map(p => {
+    const amount = parseFloat(p.amount_pen || p.amount || 0);
+    const method = PDF_PAYMENT_LABELS[p.method] || p.method || '';
+    const discount = parseFloat(p.discount_amount || 0);
+    const discountPct = parseFloat(p.discount_pct || 0);
+    const ref = p.reference ? `Ref. ${escape(p.reference)}` : (p.notes ? escape(p.notes) : '');
+    const discountChip = discount > 0
+      ? `<span class="pay-discount">${discountPct > 0 ? discountPct + '% desc · ' : ''}−S/ ${discount.toFixed(2)}</span>`
+      : '';
+    return `
+      <tr>
+        <td>${formatDate(p.payment_date)}</td>
+        <td class="num pay-amount">S/ ${amount.toFixed(2)}</td>
+        <td class="pay-method">${escape(method)}</td>
+        <td class="pay-detail">${ref}${discountChip}</td>
+      </tr>
+    `;
+  }).join('');
+
+  const paySection = payments.length > 0 ? `
+    <section class="section">
+      <div class="section-head">
+        <h2 class="section-title">Pagos recibidos</h2>
+        <span class="section-sub">Total · S/ ${totalPaid.toFixed(2)}</span>
+      </div>
+      <table class="pay-table">
+        <thead>
+          <tr>
+            <th style="width: 18%">Fecha</th>
+            <th class="num" style="width: 18%">Monto</th>
+            <th style="width: 22%">Método</th>
+            <th style="width: 42%">Detalle</th>
+          </tr>
+        </thead>
+        <tbody>${payRows}</tbody>
+      </table>
+    </section>
+  ` : '';
+
+  // ============ SALDO ============
+  const balanceHTML = totalOwed > 0 ? `
+    <div class="balance-card owed">
+      <div class="balance-label">Saldo pendiente</div>
+      <div class="balance-amount">S/ ${totalOwed.toFixed(2)}</div>
+      <div class="balance-note warn">Por pagar</div>
+    </div>
+  ` : `
+    <div class="balance-card">
+      <div class="balance-label">Saldo a la fecha</div>
+      <div class="balance-amount">S/ 0.00</div>
+      <div class="balance-note good">✓ Todos tus paquetes están pagados</div>
+    </div>
+  `;
+
+  // ============ DATOS META DE LA ALUMNA (sede, modalidad, teléfono) ============
+  const studentMetaParts = [
+    `<span class="student-meta-item">${modLabel}</span>`,
+    `<span class="student-meta-item">Sede ${escape(loc?.name || '—')}</span>`,
+    stud.phone ? `<span class="student-meta-item">${escape(stud.phone)}</span>` : ''
+  ].filter(Boolean).join('');
+
+  const pkgSection = allPkgsSorted.length > 0 ? `
+    <section class="section">
+      <div class="section-head">
+        <h2 class="section-title">Tus paquetes</h2>
+        <span class="section-sub">${allPkgsSorted.length} registro${allPkgsSorted.length === 1 ? '' : 's'}</span>
+      </div>
+      <table class="pkg-table">
+        <thead>
+          <tr>
+            <th style="width: 24%">Paquete</th>
+            <th style="width: 20%">Compra</th>
+            <th style="width: 24%">Progreso</th>
+            <th class="num" style="width: 14%">Pagado</th>
+            <th style="width: 18%">Estado</th>
+          </tr>
+        </thead>
+        <tbody>${pkgRows}</tbody>
+      </table>
+    </section>
+  ` : '';
+
+  // ============ HTML FINAL ============
+  return `
+    <div class="pdf-page">
+      <style>
+        .pdf-page * { box-sizing: border-box; }
+        .pdf-page {
+          width: 210mm;
+          min-height: 297mm;
+          background: white;
+          padding: 16mm 16mm 14mm 16mm;
+          font-family: 'Outfit', -apple-system, BlinkMacSystemFont, sans-serif;
+          color: #1A1419;
+          -webkit-font-smoothing: antialiased;
+          display: flex;
+          flex-direction: column;
+        }
+        .pdf-page .pdf-header {
+          display: flex; justify-content: space-between; align-items: flex-start;
+          padding-bottom: 14px; border-bottom: 1px solid #EBE5F0;
+        }
+        .pdf-page .brand { display: flex; align-items: center; gap: 12px; }
+        .pdf-page .brand-mark {
+          width: 42px; height: 42px; background: #5B2A8F; border-radius: 50%;
+          display: grid; place-items: center; color: white;
+          font-weight: 800; font-size: 13px; letter-spacing: 0.04em;
+        }
+        .pdf-page .brand-name {
+          font-family: 'Fraunces', Georgia, serif;
+          font-size: 18px; font-weight: 500; font-style: italic;
+          color: #401D6B; line-height: 1;
+        }
+        .pdf-page .brand-sub {
+          font-size: 9.5px; color: #8B8493;
+          text-transform: uppercase; letter-spacing: 0.18em; margin-top: 5px;
+        }
+        .pdf-page .header-meta { text-align: right; }
+        .pdf-page .header-meta-label {
+          font-size: 9.5px; color: #8B8493;
+          text-transform: uppercase; letter-spacing: 0.16em; margin-bottom: 4px;
+        }
+        .pdf-page .header-meta-date {
+          font-family: 'Fraunces', Georgia, serif;
+          font-size: 14px; font-style: italic; color: #4A4350;
+        }
+        .pdf-page .student-block {
+          margin-top: 18px; padding-bottom: 16px;
+          display: flex; justify-content: space-between; align-items: flex-end; gap: 24px;
+        }
+        .pdf-page .student-info { flex: 1; }
+        .pdf-page .student-greet {
+          font-size: 10.5px; color: #8B8493;
+          text-transform: uppercase; letter-spacing: 0.16em; margin-bottom: 6px;
+        }
+        .pdf-page .student-name {
+          font-family: 'Fraunces', Georgia, serif;
+          font-size: 34px; font-weight: 400; font-style: italic;
+          color: #401D6B; line-height: 1.05; margin: 0;
+        }
+        .pdf-page .student-meta {
+          margin-top: 10px; font-size: 12px; color: #4A4350;
+          display: flex; flex-wrap: wrap; gap: 0 14px;
+        }
+        .pdf-page .student-meta-item { display: inline-flex; align-items: center; gap: 6px; }
+        .pdf-page .student-meta-item + .student-meta-item::before {
+          content: "·"; color: #C9C3D1; margin-right: 8px;
+        }
+        .pdf-page .modality-star { color: #5B2A8F; font-size: 14px; line-height: 1; }
+        .pdf-page .balance-card {
+          background: #F4EFFB; border: 1px solid #EBE5F0;
+          border-radius: 14px; padding: 14px 20px; text-align: right; min-width: 200px;
+        }
+        .pdf-page .balance-card.owed { background: #FFF1E8; border-color: #F4D58A; }
+        .pdf-page .balance-label {
+          font-size: 9.5px; color: #8B8493;
+          text-transform: uppercase; letter-spacing: 0.14em; margin-bottom: 4px;
+        }
+        .pdf-page .balance-amount {
+          font-family: 'Fraunces', Georgia, serif;
+          font-size: 28px; font-style: italic; font-weight: 500;
+          color: #401D6B; line-height: 1;
+        }
+        .pdf-page .balance-card.owed .balance-amount { color: #C2410C; }
+        .pdf-page .balance-note { font-size: 10.5px; margin-top: 6px; font-weight: 500; }
+        .pdf-page .balance-note.good { color: #15803D; }
+        .pdf-page .balance-note.warn { color: #C2410C; }
+        .pdf-page .section { margin-top: 22px; page-break-inside: avoid; }
+        .pdf-page .section-head {
+          display: flex; align-items: baseline; justify-content: space-between;
+          margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px solid #EBE5F0;
+        }
+        .pdf-page .section-title {
+          font-family: 'Fraunces', Georgia, serif;
+          font-size: 15px; font-style: italic; font-weight: 500;
+          color: #401D6B; margin: 0;
+        }
+        .pdf-page .section-sub {
+          font-size: 10.5px; color: #8B8493;
+          text-transform: uppercase; letter-spacing: 0.12em;
+        }
+        .pdf-page .pkg-table, .pdf-page .pay-table {
+          width: 100%; border-collapse: collapse; font-size: 11.5px;
+        }
+        .pdf-page .pkg-table thead th, .pdf-page .pay-table thead th {
+          text-align: left; font-size: 9.5px; color: #8B8493;
+          text-transform: uppercase; letter-spacing: 0.12em; font-weight: 600;
+          padding: 0 0 8px 0; border-bottom: 1px solid #EBE5F0;
+        }
+        .pdf-page .pkg-table thead th.num, .pdf-page .pkg-table td.num,
+        .pdf-page .pay-table thead th.num, .pdf-page .pay-table td.num { text-align: right; }
+        .pdf-page .pkg-table tbody td, .pdf-page .pay-table tbody td {
+          padding: 11px 0; border-bottom: 1px solid #EBE5F0; color: #4A4350;
+        }
+        .pdf-page .pkg-table tbody tr:last-child td,
+        .pdf-page .pay-table tbody tr:last-child td { border-bottom: none; }
+        .pdf-page .pkg-name { color: #1A1419; font-weight: 500; }
+        .pdf-page .pkg-amount, .pdf-page .pay-amount {
+          font-family: 'Fraunces', Georgia, serif;
+          font-style: italic; color: #1A1419; font-weight: 500;
+        }
+        .pdf-page .pkg-progress { display: inline-flex; align-items: center; gap: 8px; }
+        .pdf-page .progress-bar {
+          width: 56px; height: 4px; background: #EBE5F0;
+          border-radius: 2px; overflow: hidden;
+        }
+        .pdf-page .progress-fill { height: 100%; background: #5B2A8F; }
+        .pdf-page .progress-fill.done { background: #4A4350; }
+        .pdf-page .pkg-status {
+          display: inline-flex; align-items: center; gap: 5px;
+          font-size: 10.5px; font-weight: 500;
+        }
+        .pdf-page .pkg-status .dot { font-size: 11px; line-height: 1; }
+        .pdf-page .pkg-status.completed,
+        .pdf-page .pkg-status.completed .dot { color: #4A4350; }
+        .pdf-page .pkg-status.active { color: #5B2A8F; font-weight: 600; }
+        .pdf-page .pkg-status.active .dot { color: #5B2A8F; }
+        .pdf-page .pkg-status.upcoming,
+        .pdf-page .pkg-status.upcoming .dot { color: #8B8493; }
+        .pdf-page .pkg-status.frozen,
+        .pdf-page .pkg-status.frozen .dot { color: #1E40AF; }
+        .pdf-page .classes-grid {
+          display: grid; grid-template-columns: 1fr 1fr;
+          grid-auto-flow: column; gap: 0 32px;
+        }
+        .pdf-page .class-row {
+          display: grid; grid-template-columns: 64px 38px 1fr auto;
+          align-items: center; gap: 10px;
+          padding: 7px 0; border-bottom: 1px solid #F2EDF5; font-size: 11.5px;
+        }
+        .pdf-page .class-date { font-weight: 500; color: #1A1419; }
+        .pdf-page .class-hour { color: #8B8493; font-size: 11px; }
+        .pdf-page .class-prof { color: #4A4350; }
+        .pdf-page .class-check { color: #5B2A8F; font-size: 12px; font-weight: 600; }
+        .pdf-page .class-row.lost .class-date,
+        .pdf-page .class-row.lost .class-hour,
+        .pdf-page .class-row.lost .class-prof { color: #8B8493; }
+        .pdf-page .class-row.lost .class-check { color: #8B8493; font-weight: 500; }
+        .pdf-page .class-row.upcoming .class-check {
+          color: #C9C3D1; font-family: 'Fraunces', Georgia, serif;
+          font-style: italic; font-size: 10.5px;
+        }
+        .pdf-page .pay-method { color: #1A1419; }
+        .pdf-page .pay-detail { color: #8B8493; font-size: 10.5px; }
+        .pdf-page .pay-discount {
+          display: inline-block; background: #F4EFFB; color: #401D6B;
+          font-size: 10px; padding: 2px 7px; border-radius: 4px;
+          margin-left: 6px; font-weight: 500;
+        }
+        .pdf-page .pdf-footer {
+          margin-top: auto; padding-top: 18px; border-top: 1px solid #EBE5F0;
+          display: flex; justify-content: space-between; align-items: center;
+          font-size: 10.5px; color: #8B8493;
+        }
+        .pdf-page .footer-contact { display: flex; align-items: center; gap: 14px; }
+        .pdf-page .footer-contact-item { display: inline-flex; align-items: center; gap: 5px; }
+        .pdf-page .footer-contact-item + .footer-contact-item::before {
+          content: "·"; color: #C9C3D1; margin-right: 9px;
+        }
+        .pdf-page .footer-address {
+          font-style: italic; font-family: 'Fraunces', Georgia, serif;
+          font-size: 11px; color: #4A4350;
+        }
+      </style>
+
+      <header class="pdf-header">
+        <div class="brand">
+          <div class="brand-mark">FIT</div>
+          <div>
+            <div class="brand-name">Studio Peru</div>
+            <div class="brand-sub">Pilates Reformer</div>
+          </div>
+        </div>
+        <div class="header-meta">
+          <div class="header-meta-label">Reporte de detalle</div>
+          <div class="header-meta-date">${escape(todayPretty)}</div>
+        </div>
+      </header>
+
+      <section class="student-block">
+        <div class="student-info">
+          <div class="student-greet">Hola,</div>
+          <h1 class="student-name">${escape(fullName) || '—'}</h1>
+          <div class="student-meta">${studentMetaParts}</div>
+        </div>
+        ${balanceHTML}
+      </section>
+
+      ${pkgSection}
+      ${takenSection}
+      ${upcomingSection}
+      ${paySection}
+
+      <footer class="pdf-footer">
+        <div class="footer-contact">
+          <span class="footer-contact-item">WhatsApp ${escape(PDF_STUDIO_CONTACT.whatsapp)}</span>
+          <span class="footer-contact-item">${escape(PDF_STUDIO_CONTACT.instagram)}</span>
+        </div>
+        <div class="footer-address">${escape(PDF_STUDIO_CONTACT.address)}</div>
+      </footer>
+    </div>
+  `;
+}
+
+// ============================================
 // COPIAR LINK DE ACTIVACIÓN (alternativa a email cuando Resend está en sandbox)
 // ============================================
 async function copyActivationLink(type, recordId) {
@@ -9526,7 +10095,7 @@ async function openStudentDetail(id) {
         .order('purchase_date', { ascending: false })
         .then(r => ({ packages: r.data || [] })),
       sb.from('attendance')
-        .select('*, class_sessions!attendance_session_id_fkey(id, session_date, hour, location_id, is_cancelled)')
+        .select('*, class_sessions!attendance_session_id_fkey(id, session_date, hour, location_id, is_cancelled, instructor_id, actual_instructor_id)')
         .eq('student_id', id)
         .order('marked_at', { ascending: false })
         .then(r => ({ attendances: r.data || [] }))
@@ -9542,7 +10111,7 @@ async function openStudentDetail(id) {
       // Recargar attendances y packages después del cleanup
       const [attResp, pkgResp] = await Promise.all([
         sb.from('attendance')
-          .select('*, class_sessions!attendance_session_id_fkey(id, session_date, hour, location_id, is_cancelled)')
+          .select('*, class_sessions!attendance_session_id_fkey(id, session_date, hour, location_id, is_cancelled, instructor_id, actual_instructor_id)')
           .eq('student_id', id)
           .order('marked_at', { ascending: false }),
         sb.from('student_packages')
@@ -9636,6 +10205,7 @@ function renderStudentDetail() {
         </div>
         <div style="display: flex; gap: 8px; flex-wrap: wrap;">
           <button class="btn btn-ghost" onclick="openStudentModal('${stud.id}')" style="padding: 8px 14px; font-size: 12px;">Editar perfil</button>
+          <button class="btn btn-ghost" onclick="generateStudentPDF('${stud.id}')" style="padding: 8px 14px; font-size: 12px;">Generar PDF</button>
           <button class="btn btn-ghost" onclick="${_agendarDisabled ? '' : `openStudentScheduleEditor('${stud.id}')`}" ${_agendarDisabled ? 'disabled' : ''} title="${escape(_agendarTooltip)}" style="padding: 8px 14px; font-size: 12px; ${_agendarDisabled ? 'opacity: 0.45; cursor: not-allowed;' : ''}">Agendar clases</button>
           <button class="btn btn-primary" onclick="openAssignPackageFromDetail('${stud.id}')" style="padding: 8px 14px; font-size: 12px;">${_hasCompletedPkgs && _hasNoActivePkg ? 'Renovar paquete' : 'Asignar paquete'}</button>
         </div>
