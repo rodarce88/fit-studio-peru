@@ -1481,7 +1481,7 @@
         </div>
         <div class="form-row">
           <label>Método <span class="req">*</span></label>
-          <select id="pay-method" required>
+          <select id="pay-method" required onchange="onPaymentMethodChange()">
             <option value="cash">Efectivo</option>
             <option value="yape">Yape</option>
             <option value="plin">Plin</option>
@@ -1489,6 +1489,32 @@
             <option value="pos">POS / tarjeta</option>
             <option value="other">Otro</option>
           </select>
+        </div>
+        <div class="form-row full">
+          <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+            <input type="checkbox" id="pay-discount-enabled" onchange="togglePayDiscount()" style="margin: 0;" />
+            <span>Aplicar descuento</span>
+            <span id="pay-discount-hint" style="font-size: 11px; color: var(--ink-mute); margin-left: auto;"></span>
+          </label>
+          <div id="pay-discount-fields" style="display: none; margin-top: 10px; padding: 12px 14px; background: var(--fit-lavender-pale); border-radius: var(--radius-sm); border: 1px solid var(--fit-lavender);">
+            <div style="display: flex; gap: 12px; align-items: end; flex-wrap: wrap;">
+              <div style="flex: 1; min-width: 120px;">
+                <label style="display: block; font-size: 11px; color: var(--ink-mute); margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.4px;">Porcentaje</label>
+                <div style="position: relative;">
+                  <input type="number" id="pay-discount-pct" step="0.1" min="0" oninput="onDiscountPctInput()" style="width: 100%; padding-right: 28px;" />
+                  <span style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); color: var(--ink-mute); font-size: 13px;">%</span>
+                </div>
+              </div>
+              <div style="flex: 1; min-width: 120px;">
+                <label style="display: block; font-size: 11px; color: var(--ink-mute); margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.4px;">Monto en soles</label>
+                <div style="position: relative;">
+                  <span style="position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: var(--ink-mute); font-size: 13px;">S/</span>
+                  <input type="number" id="pay-discount-amount" step="0.01" min="0" oninput="onDiscountAmountInput()" style="width: 100%; padding-left: 28px;" />
+                </div>
+              </div>
+            </div>
+            <div id="pay-discount-summary" style="margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--fit-lavender); font-size: 12px; line-height: 1.7; color: var(--ink);"></div>
+          </div>
         </div>
         <div class="form-row">
           <label>Fecha</label>
@@ -2003,9 +2029,9 @@ async function loadToPayList() {
     if (price <= 0) continue; // sin precio definido, asumir gratis o no aplica
 
     const { data: pays } = await sb.from('payments')
-      .select('amount_pen')
+      .select('amount_pen, discount_amount')
       .eq('student_package_id', pkg.id);
-    const totalPaid = (pays || []).reduce((s, p) => s + parseFloat(p.amount_pen || 0), 0);
+    const totalPaid = (pays || []).reduce((s, p) => s + parseFloat(p.amount_pen || 0) + parseFloat(p.discount_amount || 0), 0);
 
     if (totalPaid < price) {
       pkgsWithBalance.push({
@@ -6487,7 +6513,7 @@ function toggleUpcomingPkg(pkgId) {
 
   const restantes = (pkg.classes_total || 0) - (pkg.classes_used || 0);
   const price = parseFloat(pkg.price_paid || pkg.packages?.price_pen || 0);
-  const paid = (data.payments || []).filter(pm => pm.student_package_id === pkg.id).reduce((s, pm) => s + parseFloat(pm.amount_pen || pm.amount || 0), 0);
+  const paid = (data.payments || []).filter(pm => pm.student_package_id === pkg.id).reduce((s, pm) => s + parseFloat(pm.amount_pen || pm.amount || 0) + parseFloat(pm.discount_amount || 0), 0);
   const owed = Math.max(0, price - paid);
 
   // Clases asociadas a este paquete
@@ -8794,7 +8820,7 @@ async function saveAssignPackage() {
   setTimeout(() => openPaymentModal(studentId, data.id, price), 200);
 }
 
-function openPaymentModal(studentId, packageId, suggestedAmount) {
+async function openPaymentModal(studentId, packageId, suggestedAmount) {
   const student = STATE.students.find(s => s.id === studentId);
   // Reset a modo "Registrar"
   document.getElementById('pay-id').value = '';
@@ -8815,7 +8841,100 @@ function openPaymentModal(studentId, packageId, suggestedAmount) {
   document.getElementById('pay-notes').value = '';
   document.getElementById('pay-receipt-url').value = '';
   document.getElementById('pay-receipt-preview').innerHTML = '';
+
+  // Reset descuento
+  document.getElementById('pay-discount-enabled').checked = false;
+  document.getElementById('pay-discount-pct').value = '';
+  document.getElementById('pay-discount-amount').value = '';
+  document.getElementById('pay-discount-fields').style.display = 'none';
+
+  // Cargar precio del paquete (para mostrar cálculo del descuento)
+  PAY_MODAL_CTX.packagePrice = 0;
+  PAY_MODAL_CTX.suggestedAmount = parseFloat(suggestedAmount) || 0;
+  if (packageId && isOnline) {
+    const { data: pkg } = await sb.from('student_packages').select('price_paid, packages(price_pen)').eq('id', packageId).maybeSingle();
+    if (pkg) {
+      PAY_MODAL_CTX.packagePrice = parseFloat(pkg.price_paid || pkg.packages?.price_pen || 0);
+    }
+  }
+
+  recalcPaymentSummary();
   document.getElementById('payment-modal').classList.add('is-open');
+}
+
+// Contexto del modal de pago (compartido entre helpers)
+const PAY_MODAL_CTX = { packagePrice: 0, suggestedAmount: 0 };
+
+// Al cambiar método: si es efectivo, activar descuento 10%; otros métodos, no tocar
+function onPaymentMethodChange() {
+  const method = document.getElementById('pay-method').value;
+  const checkbox = document.getElementById('pay-discount-enabled');
+  const hint = document.getElementById('pay-discount-hint');
+  if (method === 'cash' && !checkbox.checked) {
+    checkbox.checked = true;
+    document.getElementById('pay-discount-pct').value = 10;
+    document.getElementById('pay-discount-fields').style.display = 'block';
+    onDiscountPctInput();
+  }
+  hint.textContent = method === 'cash' ? 'Default 10% en efectivo' : '';
+}
+
+function togglePayDiscount() {
+  const enabled = document.getElementById('pay-discount-enabled').checked;
+  document.getElementById('pay-discount-fields').style.display = enabled ? 'block' : 'none';
+  if (!enabled) {
+    document.getElementById('pay-discount-pct').value = '';
+    document.getElementById('pay-discount-amount').value = '';
+  } else if (!document.getElementById('pay-discount-pct').value && !document.getElementById('pay-discount-amount').value) {
+    // Si se activa sin valor previo y es efectivo, sugerir 10%
+    if (document.getElementById('pay-method').value === 'cash') {
+      document.getElementById('pay-discount-pct').value = 10;
+      onDiscountPctInput();
+    }
+  }
+  recalcPaymentSummary();
+}
+
+function onDiscountPctInput() {
+  const pct = parseFloat(document.getElementById('pay-discount-pct').value) || 0;
+  // Base para calcular el descuento: suggestedAmount (lo que se intenta cobrar) o el packagePrice
+  const base = PAY_MODAL_CTX.suggestedAmount > 0 ? PAY_MODAL_CTX.suggestedAmount : PAY_MODAL_CTX.packagePrice;
+  const amount = (base * pct / 100);
+  document.getElementById('pay-discount-amount').value = amount > 0 ? amount.toFixed(2) : '';
+  recalcPaymentSummary();
+}
+
+function onDiscountAmountInput() {
+  const amount = parseFloat(document.getElementById('pay-discount-amount').value) || 0;
+  const base = PAY_MODAL_CTX.suggestedAmount > 0 ? PAY_MODAL_CTX.suggestedAmount : PAY_MODAL_CTX.packagePrice;
+  if (base > 0) {
+    const pct = (amount / base * 100);
+    document.getElementById('pay-discount-pct').value = pct > 0 ? pct.toFixed(1) : '';
+  }
+  recalcPaymentSummary();
+}
+
+function recalcPaymentSummary() {
+  const summary = document.getElementById('pay-discount-summary');
+  const enabled = document.getElementById('pay-discount-enabled').checked;
+  if (!enabled) { summary.innerHTML = ''; return; }
+  const base = PAY_MODAL_CTX.suggestedAmount > 0 ? PAY_MODAL_CTX.suggestedAmount : PAY_MODAL_CTX.packagePrice;
+  const discount = parseFloat(document.getElementById('pay-discount-amount').value) || 0;
+  const pct = parseFloat(document.getElementById('pay-discount-pct').value) || 0;
+  const finalAmount = Math.max(0, base - discount);
+  // Auto-actualizar el campo "Monto" si el usuario no lo ha tocado manualmente
+  const amountInput = document.getElementById('pay-amount');
+  amountInput.value = finalAmount.toFixed(2);
+
+  if (base > 0) {
+    summary.innerHTML = `
+      <div style="display: flex; justify-content: space-between;"><span>Precio original:</span><span>S/ ${base.toFixed(2)}</span></div>
+      <div style="display: flex; justify-content: space-between; color: #92400E;"><span>Descuento (${pct.toFixed(1)}%):</span><span>−S/ ${discount.toFixed(2)}</span></div>
+      <div style="display: flex; justify-content: space-between; font-weight: 600; padding-top: 6px; margin-top: 4px; border-top: 1px solid var(--fit-lavender); color: var(--fit-purple);"><span>Total a cobrar:</span><span>S/ ${finalAmount.toFixed(2)}</span></div>
+    `;
+  } else {
+    summary.innerHTML = `<div style="color: var(--ink-mute); font-style: italic;">El monto descontado se restará del paquete como pagado.</div>`;
+  }
 }
 
 // Modo edición: solo coordinador. Carga el pago y abre el modal con valores precargados.
@@ -8868,6 +8987,24 @@ async function openEditPaymentModal(paymentId) {
     ? `<a href="${escape(pay.receipt_url)}" target="_blank" style="font-size:12px;color:var(--fit-purple);">Ver comprobante actual ↗</a>`
     : '';
 
+  // Cargar descuento existente
+  const existingDiscountAmt = parseFloat(pay.discount_amount) || 0;
+  const existingDiscountPct = parseFloat(pay.discount_pct) || 0;
+  const hasDiscount = existingDiscountAmt > 0 || existingDiscountPct > 0;
+  document.getElementById('pay-discount-enabled').checked = hasDiscount;
+  document.getElementById('pay-discount-pct').value = existingDiscountPct > 0 ? existingDiscountPct : '';
+  document.getElementById('pay-discount-amount').value = existingDiscountAmt > 0 ? existingDiscountAmt.toFixed(2) : '';
+  document.getElementById('pay-discount-fields').style.display = hasDiscount ? 'block' : 'none';
+
+  // Contexto del paquete vinculado (para cálculos)
+  PAY_MODAL_CTX.packagePrice = 0;
+  PAY_MODAL_CTX.suggestedAmount = (parseFloat(pay.amount_pen) || 0) + existingDiscountAmt;
+  if (pay.student_package_id) {
+    const { data: pkgPrice } = await sb.from('student_packages').select('price_paid, packages(price_pen)').eq('id', pay.student_package_id).maybeSingle();
+    if (pkgPrice) PAY_MODAL_CTX.packagePrice = parseFloat(pkgPrice.price_paid || pkgPrice.packages?.price_pen || 0);
+  }
+  recalcPaymentSummary();
+
   // Metadata creado/editado
   const meta = document.getElementById('pay-metadata');
   let lines = [];
@@ -8896,6 +9033,9 @@ async function saveEditPayment(paymentId) {
   const payDate = document.getElementById('pay-date').value;
   const reference = document.getElementById('pay-reference').value.trim() || null;
   const notes = document.getElementById('pay-notes').value.trim() || null;
+  const discountEnabled = document.getElementById('pay-discount-enabled').checked;
+  const discountPct = discountEnabled ? (parseFloat(document.getElementById('pay-discount-pct').value) || 0) : 0;
+  const discountAmount = discountEnabled ? (parseFloat(document.getElementById('pay-discount-amount').value) || 0) : 0;
 
   if (!amount || amount <= 0) { showToast('Ingresa un monto válido', 'error'); return; }
 
@@ -8907,6 +9047,8 @@ async function saveEditPayment(paymentId) {
     payment_date: payDate || dateToIsoLocal(new Date()),
     reference: reference,
     notes: notes,
+    discount_pct: discountPct,
+    discount_amount: discountAmount,
     updated_at: new Date().toISOString(),
     updated_by: CURRENT_USER?.authUser?.id || null,
   }).eq('id', paymentId);
@@ -8998,6 +9140,9 @@ async function saveRegisterPayment() {
   const reference = document.getElementById('pay-reference').value.trim() || null;
   const notes = document.getElementById('pay-notes').value.trim() || null;
   const receiptUrl = document.getElementById('pay-receipt-url').value || null;
+  const discountEnabled = document.getElementById('pay-discount-enabled').checked;
+  const discountPct = discountEnabled ? (parseFloat(document.getElementById('pay-discount-pct').value) || 0) : 0;
+  const discountAmount = discountEnabled ? (parseFloat(document.getElementById('pay-discount-amount').value) || 0) : 0;
 
   if (!amount || amount <= 0) { showToast('Ingresa un monto válido', 'error'); return; }
 
@@ -9014,6 +9159,8 @@ async function saveRegisterPayment() {
     reference: reference,
     notes: notes,
     receipt_url: receiptUrl,
+    discount_pct: discountPct,
+    discount_amount: discountAmount,
     recorded_by: CURRENT_USER?.authUser?.id || null,
   });
 
@@ -9545,7 +9692,7 @@ function renderDetailSummary(stud) {
     activePkgPrice = parseFloat(activePkg.price_paid || activePkg.packages?.price_pen || 0);
     activePkgPaid = (data.payments || [])
       .filter(p => p.student_package_id === activePkg.id)
-      .reduce((sum, p) => sum + parseFloat(p.amount_pen || p.amount || 0), 0);
+      .reduce((sum, p) => sum + parseFloat(p.amount_pen || p.amount || 0) + parseFloat(p.discount_amount || 0), 0);
     activePkgOwed = Math.max(0, activePkgPrice - activePkgPaid);
   }
 
@@ -9602,7 +9749,7 @@ function renderDetailSummary(stud) {
     const price = parseFloat(p.price_paid || p.packages?.price_pen || 0);
     const paid = (data.payments || [])
       .filter(pm => pm.student_package_id === p.id)
-      .reduce((s, pm) => s + parseFloat(pm.amount_pen || pm.amount || 0), 0);
+      .reduce((s, pm) => s + parseFloat(pm.amount_pen || pm.amount || 0) + parseFloat(pm.discount_amount || 0), 0);
     const owed = Math.max(0, price - paid);
     const name = escape(p.packages?.name || `Paquete ${total} clases`);
     const isActive = status.key === 'active';
@@ -9888,7 +10035,7 @@ function renderDetailClasses(stud) {
       const items = bookingsByPkg.get(p.id) || [];
       if (items.length === 0) return;
       const price = parseFloat(p.price_paid || p.packages?.price_pen || 0);
-      const paid = (data.payments || []).filter(pm => pm.student_package_id === p.id).reduce((s, pm) => s + parseFloat(pm.amount_pen || pm.amount || 0), 0);
+      const paid = (data.payments || []).filter(pm => pm.student_package_id === p.id).reduce((s, pm) => s + parseFloat(pm.amount_pen || pm.amount || 0) + parseFloat(pm.discount_amount || 0), 0);
       const owed = Math.max(0, price - paid);
       // Ordenar items por fecha desc dentro del paquete
       items.sort((a, b) => b.b.class_sessions.session_date.localeCompare(a.b.class_sessions.session_date));
@@ -9988,7 +10135,7 @@ function renderDetailClasses(stud) {
       const isActive = p.id === activePkgId;
       const restantes = (p.classes_total || 0) - (p.classes_used || 0);
       const price = parseFloat(p.price_paid || p.packages?.price_pen || 0);
-      const paid = (data.payments || []).filter(pm => pm.student_package_id === p.id).reduce((s, pm) => s + parseFloat(pm.amount_pen || pm.amount || 0), 0);
+      const paid = (data.payments || []).filter(pm => pm.student_package_id === p.id).reduce((s, pm) => s + parseFloat(pm.amount_pen || pm.amount || 0) + parseFloat(pm.discount_amount || 0), 0);
       const owed = Math.max(0, price - paid);
       groupBlocks.push(`
         <details ${isActive ? 'open' : ''} style="margin-bottom: 12px;">
@@ -10082,10 +10229,14 @@ function renderDetailPayments(stud) {
       ${payments.map(p => {
         const canEdit = CURRENT_USER && CURRENT_USER.role === 'coordinator';
         const editBadge = p.updated_at ? '<span style="font-size:9px; padding:2px 6px; background:var(--bg); color:var(--ink-mute); border-radius:4px; margin-left:6px; text-transform:uppercase; letter-spacing:0.5px;">editado</span>' : '';
+        const discountAmt = parseFloat(p.discount_amount || 0);
+        const discountPct = parseFloat(p.discount_pct || 0);
+        const hasDiscount = discountAmt > 0;
+        const discountBadge = hasDiscount ? `<span style="font-size:10px; padding:2px 7px; background:#FEF7E6; color:#8B6F1A; border-radius:999px; margin-left:6px; font-weight:500;">${discountPct.toFixed(1)}% desc · −S/ ${discountAmt.toFixed(2)}</span>` : '';
         return `
         <div ${canEdit ? `onclick="openEditPaymentModal('${p.id}')" style="cursor:pointer;"` : 'style=""'} class="${canEdit ? 'pay-row-editable' : ''}" style="display: flex; align-items: center; justify-content: space-between; padding: 14px 18px; border-bottom: 1px solid var(--line); ${canEdit ? 'cursor:pointer; transition: background 0.15s;' : ''}" ${canEdit ? `onmouseover="this.style.background='var(--fit-lavender-pale)'" onmouseout="this.style.background='white'"` : ''}>
           <div style="flex: 1;">
-            <div style="font-weight: 500;">S/ ${parseFloat(p.amount_pen || p.amount || 0).toFixed(2)} <span style="font-weight: 400; color: var(--ink-mute); font-size: 12px;">· ${escape(methodLabels[p.method] || p.method || '')}</span>${editBadge}</div>
+            <div style="font-weight: 500;">S/ ${parseFloat(p.amount_pen || p.amount || 0).toFixed(2)} <span style="font-weight: 400; color: var(--ink-mute); font-size: 12px;">· ${escape(methodLabels[p.method] || p.method || '')}</span>${discountBadge}${editBadge}</div>
             <div style="font-size: 12px; color: var(--ink-mute); margin-top: 2px;">
               ${formatDate(p.payment_date)}
               ${p.reference ? ' · Ref. ' + escape(p.reference) : ''}
