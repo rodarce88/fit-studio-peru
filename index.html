@@ -8,6 +8,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght,SOFT@9..144,300..900,0..100&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <style>
   /* ============================================
      DESIGN TOKENS — same brand from mockup
@@ -706,6 +707,10 @@
       <span class="nav-icon"><svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="3"/><path d="M6 12h.01M18 12h.01"/></svg></span>
       Pagos profesores
     </button>
+    <button class="nav-item" data-view="reports" onclick="showView('reports', this); renderReportsView();">
+      <span class="nav-icon"><svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="M7 16l4-8 4 6 5-10"/></svg></span>
+      Reportes
+    </button>
   </div>
   <div class="nav-group">
     <div class="nav-group-title">Más</div>
@@ -958,6 +963,11 @@
   <!-- VISTA COORDINADOR: CONFIGURACIÓN DE PAGOS POR PROFESOR -->
   <section class="view" id="view-coord-pay-config">
     <div id="coord-pay-config-container"></div>
+  </section>
+
+  <!-- VISTA COORDINADOR: REPORTES -->
+  <section class="view" id="view-reports">
+    <div id="reports-container"></div>
   </section>
 
   <!-- STUDENT DAY VIEW (vista alumno) -->
@@ -1513,6 +1523,16 @@
                 </div>
               </div>
             </div>
+            <div style="display: flex; gap: 12px; margin-top: 12px; flex-wrap: wrap;">
+              <div style="flex: 1; min-width: 140px;">
+                <label style="display: block; font-size: 11px; color: var(--ink-mute); margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.4px;">Razón <span class="req">*</span></label>
+                <select id="pay-discount-reason" style="width: 100%;"></select>
+              </div>
+              <div style="flex: 1; min-width: 140px;">
+                <label style="display: block; font-size: 11px; color: var(--ink-mute); margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.4px;">Autorizado por</label>
+                <select id="pay-discount-authby" style="width: 100%;"></select>
+              </div>
+            </div>
             <div id="pay-discount-summary" style="margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--fit-lavender); font-size: 12px; line-height: 1.7; color: var(--ink);"></div>
           </div>
         </div>
@@ -1543,6 +1563,20 @@
         <button class="btn btn-ghost" onclick="closeModals()">Cancelar</button>
         <button class="btn btn-primary" id="pay-save-btn" onclick="savePayment()">Guardar pago</button>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- DISCOUNT REASONS CONFIG MODAL -->
+<div class="modal-backdrop" id="discount-reasons-modal" onclick="if(event.target===this) closeModals()">
+  <div class="modal-card" style="width: 460px; max-height: 80vh; display: flex; flex-direction: column;">
+    <div class="modal-header">
+      <div class="modal-title">Razones de <em>descuento</em></div>
+      <button class="modal-close" onclick="closeModals()">✕</button>
+    </div>
+    <div class="modal-body" id="discount-reasons-body" style="overflow-y: auto;"></div>
+    <div class="modal-footer">
+      <button class="btn btn-primary" onclick="closeModals()">Listo</button>
     </div>
   </div>
 </div>
@@ -1683,7 +1717,7 @@ async function loadAll() {
 }
 
 async function loadFromSupabase() {
-  const [locations, students, instructors, packages, fixedBookings, schedules, payConfigs] = await Promise.all([
+  const [locations, students, instructors, packages, fixedBookings, schedules, payConfigs, discountReasons, users] = await Promise.all([
     sb.from('locations').select('*').eq('is_active', true).order('name'),
     sb.from('students').select('*').eq('status', 'active').order('first_name'),
     sb.from('instructors').select('*').eq('is_active', true).order('full_name'),
@@ -1691,6 +1725,8 @@ async function loadFromSupabase() {
     sb.from('fixed_bookings').select('*').eq('is_active', true),
     sb.from('instructor_schedules').select('*').eq('is_active', true),
     sb.from('instructor_pay_config').select('*'),
+    sb.from('discount_reasons').select('*').eq('is_active', true).order('sort_order'),
+    sb.from('users').select('id, full_name, role'),
   ]);
 
   if (locations.error) { showToast('Error cargando sedes: ' + locations.error.message, 'error'); return; }
@@ -1703,7 +1739,9 @@ async function loadFromSupabase() {
   STATE.schedules = schedules.data || [];
   STATE.payConfigs = {};
   (payConfigs.data || []).forEach(c => { STATE.payConfigs[c.instructor_id] = c; });
-  STATE.classOverrides = STATE.classOverrides || {};  // memoria local: cambios puntuales del día
+  STATE.classOverrides = STATE.classOverrides || {};
+  STATE.discountReasons = discountReasons.data || [];
+  STATE.users = users.data || [];
 
   // Default to Santa Cruz if exists, otherwise first
   const sc = STATE.locations.find(l => l.slug === 'santa-cruz');
@@ -8847,6 +8885,7 @@ async function openPaymentModal(studentId, packageId, suggestedAmount) {
   document.getElementById('pay-discount-pct').value = '';
   document.getElementById('pay-discount-amount').value = '';
   document.getElementById('pay-discount-fields').style.display = 'none';
+  populateDiscountSelects(null, CURRENT_USER?.authUser?.id || null);
 
   // Cargar precio del paquete (para mostrar cálculo del descuento)
   PAY_MODAL_CTX.packagePrice = 0;
@@ -8860,6 +8899,25 @@ async function openPaymentModal(studentId, packageId, suggestedAmount) {
 
   recalcPaymentSummary();
   document.getElementById('payment-modal').classList.add('is-open');
+}
+
+// Llenar los dropdowns de razón y autorizado-por
+function populateDiscountSelects(selectedReason, selectedAuthBy) {
+  const reasonSel = document.getElementById('pay-discount-reason');
+  const authSel = document.getElementById('pay-discount-authby');
+  if (reasonSel) {
+    reasonSel.innerHTML = (STATE.discountReasons || []).map(r =>
+      `<option value="${r.key}" ${selectedReason === r.key ? 'selected' : ''}>${escape(r.label)}</option>`
+    ).join('');
+  }
+  if (authSel) {
+    // Lista de users (coordinator + dueños). Si no hay STATE.users, usar lista de instructores como fallback.
+    const users = (STATE.users || []).filter(u => u.role === 'coordinator' || u.role === 'owner' || u.role === 'manager');
+    const candidates = users.length > 0 ? users : (STATE.users || []);
+    authSel.innerHTML = `<option value="">— No registrado —</option>` + candidates.map(u =>
+      `<option value="${u.id}" ${selectedAuthBy === u.id ? 'selected' : ''}>${escape(u.full_name || u.id.slice(0, 8))}</option>`
+    ).join('');
+  }
 }
 
 // Contexto del modal de pago (compartido entre helpers)
@@ -8995,6 +9053,7 @@ async function openEditPaymentModal(paymentId) {
   document.getElementById('pay-discount-pct').value = existingDiscountPct > 0 ? existingDiscountPct : '';
   document.getElementById('pay-discount-amount').value = existingDiscountAmt > 0 ? existingDiscountAmt.toFixed(2) : '';
   document.getElementById('pay-discount-fields').style.display = hasDiscount ? 'block' : 'none';
+  populateDiscountSelects(pay.discount_reason || null, pay.discount_authorized_by || null);
 
   // Contexto del paquete vinculado (para cálculos)
   PAY_MODAL_CTX.packagePrice = 0;
@@ -9036,8 +9095,11 @@ async function saveEditPayment(paymentId) {
   const discountEnabled = document.getElementById('pay-discount-enabled').checked;
   const discountPct = discountEnabled ? (parseFloat(document.getElementById('pay-discount-pct').value) || 0) : 0;
   const discountAmount = discountEnabled ? (parseFloat(document.getElementById('pay-discount-amount').value) || 0) : 0;
+  const discountReason = discountEnabled ? (document.getElementById('pay-discount-reason').value || null) : null;
+  const discountAuthBy = discountEnabled ? (document.getElementById('pay-discount-authby').value || null) : null;
 
   if (!amount || amount <= 0) { showToast('Ingresa un monto válido', 'error'); return; }
+  if (discountEnabled && discountAmount > 0 && !discountReason) { showToast('Selecciona una razón para el descuento', 'error'); return; }
 
   const studentId = document.getElementById('pay-student-id').value;
 
@@ -9049,6 +9111,8 @@ async function saveEditPayment(paymentId) {
     notes: notes,
     discount_pct: discountPct,
     discount_amount: discountAmount,
+    discount_reason: discountReason,
+    discount_authorized_by: discountAuthBy,
     updated_at: new Date().toISOString(),
     updated_by: CURRENT_USER?.authUser?.id || null,
   }).eq('id', paymentId);
@@ -9143,8 +9207,11 @@ async function saveRegisterPayment() {
   const discountEnabled = document.getElementById('pay-discount-enabled').checked;
   const discountPct = discountEnabled ? (parseFloat(document.getElementById('pay-discount-pct').value) || 0) : 0;
   const discountAmount = discountEnabled ? (parseFloat(document.getElementById('pay-discount-amount').value) || 0) : 0;
+  const discountReason = discountEnabled ? (document.getElementById('pay-discount-reason').value || null) : null;
+  const discountAuthBy = discountEnabled ? (document.getElementById('pay-discount-authby').value || null) : null;
 
   if (!amount || amount <= 0) { showToast('Ingresa un monto válido', 'error'); return; }
+  if (discountEnabled && discountAmount > 0 && !discountReason) { showToast('Selecciona una razón para el descuento', 'error'); return; }
 
   const studentRecord = STATE.students.find(s => s.id === studentId);
   const paymentLocationId = studentRecord?.location_id || STATE.currentLocationId;
@@ -9161,6 +9228,8 @@ async function saveRegisterPayment() {
     receipt_url: receiptUrl,
     discount_pct: discountPct,
     discount_amount: discountAmount,
+    discount_reason: discountReason,
+    discount_authorized_by: discountAuthBy,
     recorded_by: CURRENT_USER?.authUser?.id || null,
   });
 
@@ -11317,6 +11386,473 @@ async function saveInstructorPayConfig(instructorId) {
     instructor_id: instructorId, period_frequency: freq, period_close_mode: closeMode, tiers
   };
   showToast('✓ Configuración guardada', 'success');
+}
+
+// ============================================
+// REPORTES
+// ============================================
+
+const REPORTS_STATE = { month: null, year: null, locationId: 'all', data: null };
+
+function initReportsState() {
+  if (REPORTS_STATE.month === null) {
+    const now = new Date();
+    REPORTS_STATE.month = now.getMonth();
+    REPORTS_STATE.year = now.getFullYear();
+  }
+}
+
+async function renderReportsView() {
+  initReportsState();
+  const container = document.getElementById('reports-container');
+  if (!container) return;
+  if (!isOnline) {
+    container.innerHTML = '<div style="padding: 40px; text-align: center; color: var(--ink-mute);">Conexión requerida para ver reportes.</div>';
+    return;
+  }
+  // Loading state
+  container.innerHTML = '<div style="padding: 40px; text-align: center; color: var(--ink-mute);">Cargando reporte...</div>';
+  await loadReportData();
+  renderReportsHTML();
+}
+
+async function loadReportData() {
+  const y = REPORTS_STATE.year, m = REPORTS_STATE.month;
+  const startIso = `${y}-${String(m+1).padStart(2,'0')}-01`;
+  const endDate = new Date(y, m+1, 0);
+  const endIso = `${y}-${String(m+1).padStart(2,'0')}-${String(endDate.getDate()).padStart(2,'0')}`;
+
+  // Cargar pagos del periodo (filtrados por sede si aplica)
+  let payQuery = sb.from('payments')
+    .select('*, student_packages(id, classes_total, price_paid, packages(name, price_pen)), students(first_name, last_name, location_id)')
+    .gte('payment_date', startIso)
+    .lte('payment_date', endIso);
+  if (REPORTS_STATE.locationId && REPORTS_STATE.locationId !== 'all') {
+    payQuery = payQuery.eq('location_id', REPORTS_STATE.locationId);
+  }
+  const { data: payments, error } = await payQuery;
+  if (error) {
+    console.error('Error cargando reporte:', error);
+    REPORTS_STATE.data = { error: error.message, payments: [] };
+    return;
+  }
+
+  // Cargar paquetes creados en el periodo
+  let pkgQuery = sb.from('student_packages')
+    .select('*, packages(name, classes_total, price_pen), students(first_name, last_name, location_id)')
+    .gte('purchase_date', startIso)
+    .lte('purchase_date', endIso);
+  const { data: newPackages } = await pkgQuery;
+
+  // Si filtra por sede, descartar paquetes de otras sedes
+  const filteredPackages = (newPackages || []).filter(p =>
+    REPORTS_STATE.locationId === 'all' || p.students?.location_id === REPORTS_STATE.locationId
+  );
+
+  REPORTS_STATE.data = { payments: payments || [], packages: filteredPackages, startIso, endIso };
+}
+
+function renderReportsHTML() {
+  const container = document.getElementById('reports-container');
+  const data = REPORTS_STATE.data;
+  if (!data) return;
+  const monthLabels = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+
+  const payments = data.payments || [];
+  const newPackages = data.packages || [];
+
+  // === KPIs ===
+  const totalFacturado = payments.reduce((s, p) => s + parseFloat(p.amount_pen || 0), 0);
+  const totalDescuentos = payments.reduce((s, p) => s + parseFloat(p.discount_amount || 0), 0);
+  const totalNominal = totalFacturado + totalDescuentos;
+  const pctPromedio = totalNominal > 0 ? (totalDescuentos / totalNominal * 100) : 0;
+  const paquetesVendidos = newPackages.length;
+
+  // === Paquetes vendidos por tamaño ===
+  // Agrupar paquetes por classes_total
+  const bySize = new Map();
+  newPackages.forEach(p => {
+    const size = p.classes_total || p.packages?.classes_total || 0;
+    if (size === 0) return;
+    const nominal = parseFloat(p.packages?.price_pen || p.price_paid || 0);
+    if (!bySize.has(size)) bySize.set(size, { size, count: 0, nominal: 0, cobrado: 0, descuento: 0 });
+    const e = bySize.get(size);
+    e.count++;
+    e.nominal += nominal;
+    // Pagos asociados (filtrar payments de este paquete)
+    const myPays = payments.filter(pm => pm.student_package_id === p.id);
+    e.cobrado += myPays.reduce((s, pm) => s + parseFloat(pm.amount_pen || 0), 0);
+    e.descuento += myPays.reduce((s, pm) => s + parseFloat(pm.discount_amount || 0), 0);
+  });
+  const sizeRows = [...bySize.values()].sort((a, b) => a.size - b.size);
+
+  // === Descuentos por razón ===
+  const byReason = new Map();
+  const reasonLabels = {};
+  (STATE.discountReasons || []).forEach(r => { reasonLabels[r.key] = r.label; });
+  payments.filter(p => parseFloat(p.discount_amount || 0) > 0).forEach(p => {
+    const key = p.discount_reason || 'unknown';
+    if (!byReason.has(key)) byReason.set(key, { key, count: 0, total: 0 });
+    byReason.get(key).count++;
+    byReason.get(key).total += parseFloat(p.discount_amount || 0);
+  });
+  const reasonRows = [...byReason.values()].sort((a, b) => b.total - a.total);
+
+  // === Cruzado tamaño x razón ===
+  const cross = new Map(); // key: `${size}|${reason}` -> amount
+  payments.filter(p => parseFloat(p.discount_amount || 0) > 0).forEach(p => {
+    const size = p.student_packages?.classes_total || 0;
+    const reason = p.discount_reason || 'unknown';
+    const k = `${size}|${reason}`;
+    cross.set(k, (cross.get(k) || 0) + parseFloat(p.discount_amount || 0));
+  });
+  const sizesInCross = [...new Set([...cross.keys()].map(k => parseInt(k.split('|')[0])))].filter(s => s > 0).sort((a, b) => a - b);
+  const reasonsInCross = [...new Set([...cross.keys()].map(k => k.split('|')[1]))];
+
+  // === Top alumnas con descuento ===
+  const byStudent = new Map();
+  payments.filter(p => parseFloat(p.discount_amount || 0) > 0).forEach(p => {
+    const sid = p.student_id;
+    const name = p.students ? `${p.students.first_name || ''} ${p.students.last_name || ''}`.trim() : 'Sin nombre';
+    if (!byStudent.has(sid)) byStudent.set(sid, { id: sid, name, total: 0, count: 0 });
+    byStudent.get(sid).count++;
+    byStudent.get(sid).total += parseFloat(p.discount_amount || 0);
+  });
+  const topStudents = [...byStudent.values()].sort((a, b) => b.total - a.total).slice(0, 10);
+
+  // === Render ===
+  const monthLabel = `${monthLabels[REPORTS_STATE.month]} ${REPORTS_STATE.year}`;
+
+  // Selector de sede
+  const locOptions = `<option value="all">Todas las sedes</option>` +
+    (STATE.locations || []).map(l => `<option value="${l.id}" ${REPORTS_STATE.locationId === l.id ? 'selected' : ''}>${escape(l.name)}</option>`).join('');
+
+  container.innerHTML = `
+    <div class="page-header" style="margin-bottom: 18px;">
+      <div>
+        <h1 style="font-family: var(--display); font-size: 30px; margin: 0 0 4px; font-weight: 400;">Reportes <em>mensuales</em></h1>
+        <div style="font-size: 13px; color: var(--ink-mute);">Métricas del mes seleccionado</div>
+      </div>
+      <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+        <button class="btn btn-ghost" onclick="shiftReportMonth(-1)" style="padding: 6px 12px; font-size: 13px;">←</button>
+        <div style="font-family: var(--display); font-size: 17px; min-width: 160px; text-align: center;">${monthLabel}</div>
+        <button class="btn btn-ghost" onclick="shiftReportMonth(1)" style="padding: 6px 12px; font-size: 13px;">→</button>
+        <select onchange="setReportLocation(this.value)" style="padding: 6px 10px; font-size: 13px; border-radius: 6px; border: 1px solid var(--line); margin-left: 8px;">${locOptions}</select>
+        <button class="btn btn-ghost" onclick="openDiscountReasonsModal()" style="padding: 6px 12px; font-size: 12px;">⚙ Razones</button>
+        <button class="btn btn-primary" onclick="exportReportToExcel()" style="padding: 7px 14px; font-size: 13px;">⬇ Excel</button>
+      </div>
+    </div>
+
+    <!-- KPIs -->
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 22px;">
+      ${[
+        { label: 'Facturado', value: `S/ ${totalFacturado.toFixed(0)}`, sub: `${payments.length} pago${payments.length === 1 ? '' : 's'}` },
+        { label: 'Descuentos otorgados', value: `S/ ${totalDescuentos.toFixed(0)}`, sub: `${pctPromedio.toFixed(1)}% del nominal` },
+        { label: 'Paquetes vendidos', value: paquetesVendidos, sub: `nuevos este mes` },
+        { label: 'Valor nominal', value: `S/ ${totalNominal.toFixed(0)}`, sub: `facturado + descuentos` },
+      ].map(c => `
+        <div style="background: white; border: 1px solid var(--line); border-radius: var(--radius-md); padding: 16px;">
+          <div style="font-size: 11px; color: var(--ink-mute); text-transform: uppercase; letter-spacing: 0.5px; font-weight: 500;">${c.label}</div>
+          <div style="font-family: var(--display); font-size: 24px; margin-top: 4px; color: var(--fit-purple);">${c.value}</div>
+          <div style="font-size: 11px; color: var(--ink-mute); margin-top: 3px;">${c.sub}</div>
+        </div>
+      `).join('')}
+    </div>
+
+    <!-- Tabla paquetes por tamaño -->
+    <div style="background: white; border: 1px solid var(--line); border-radius: var(--radius-md); padding: 18px; margin-bottom: 18px;">
+      <h3 style="font-family: var(--display); font-size: 18px; margin: 0 0 12px; font-weight: 400;">Paquetes vendidos por tamaño</h3>
+      ${sizeRows.length === 0 ? '<div style="color: var(--ink-mute); font-size: 13px; padding: 10px 0;">No hay paquetes vendidos este mes.</div>' : `
+      <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+        <thead>
+          <tr style="border-bottom: 1px solid var(--line); color: var(--ink-mute); font-size: 11px; text-transform: uppercase; letter-spacing: 0.4px;">
+            <th style="text-align: left; padding: 8px 6px;">Tamaño</th>
+            <th style="text-align: right; padding: 8px 6px;">Cantidad</th>
+            <th style="text-align: right; padding: 8px 6px;">Valor nominal</th>
+            <th style="text-align: right; padding: 8px 6px;">Cobrado</th>
+            <th style="text-align: right; padding: 8px 6px;">Descuento</th>
+            <th style="text-align: right; padding: 8px 6px;">%</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${sizeRows.map(r => `
+            <tr style="border-bottom: 1px solid var(--line);">
+              <td style="padding: 10px 6px;">${r.size} clases</td>
+              <td style="text-align: right; padding: 10px 6px;">${r.count}</td>
+              <td style="text-align: right; padding: 10px 6px;">S/ ${r.nominal.toFixed(2)}</td>
+              <td style="text-align: right; padding: 10px 6px;">S/ ${r.cobrado.toFixed(2)}</td>
+              <td style="text-align: right; padding: 10px 6px; color: #92400E;">S/ ${r.descuento.toFixed(2)}</td>
+              <td style="text-align: right; padding: 10px 6px;">${r.nominal > 0 ? (r.descuento / r.nominal * 100).toFixed(1) : '0.0'}%</td>
+            </tr>
+          `).join('')}
+          <tr style="font-weight: 600;">
+            <td style="padding: 10px 6px;">Total</td>
+            <td style="text-align: right; padding: 10px 6px;">${sizeRows.reduce((s, r) => s + r.count, 0)}</td>
+            <td style="text-align: right; padding: 10px 6px;">S/ ${sizeRows.reduce((s, r) => s + r.nominal, 0).toFixed(2)}</td>
+            <td style="text-align: right; padding: 10px 6px;">S/ ${sizeRows.reduce((s, r) => s + r.cobrado, 0).toFixed(2)}</td>
+            <td style="text-align: right; padding: 10px 6px; color: #92400E;">S/ ${sizeRows.reduce((s, r) => s + r.descuento, 0).toFixed(2)}</td>
+            <td style="text-align: right; padding: 10px 6px;">${pctPromedio.toFixed(1)}%</td>
+          </tr>
+        </tbody>
+      </table>
+      `}
+    </div>
+
+    <!-- Tabla descuentos por razón -->
+    <div style="background: white; border: 1px solid var(--line); border-radius: var(--radius-md); padding: 18px; margin-bottom: 18px;">
+      <h3 style="font-family: var(--display); font-size: 18px; margin: 0 0 12px; font-weight: 400;">Descuentos por razón</h3>
+      ${reasonRows.length === 0 ? '<div style="color: var(--ink-mute); font-size: 13px; padding: 10px 0;">No hay descuentos otorgados este mes.</div>' : `
+      <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+        <thead>
+          <tr style="border-bottom: 1px solid var(--line); color: var(--ink-mute); font-size: 11px; text-transform: uppercase; letter-spacing: 0.4px;">
+            <th style="text-align: left; padding: 8px 6px;">Razón</th>
+            <th style="text-align: right; padding: 8px 6px;">Pagos</th>
+            <th style="text-align: right; padding: 8px 6px;">Total descontado</th>
+            <th style="text-align: right; padding: 8px 6px;">% del facturado</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${reasonRows.map(r => `
+            <tr style="border-bottom: 1px solid var(--line);">
+              <td style="padding: 10px 6px;">${escape(reasonLabels[r.key] || r.key)}</td>
+              <td style="text-align: right; padding: 10px 6px;">${r.count}</td>
+              <td style="text-align: right; padding: 10px 6px; color: #92400E;">S/ ${r.total.toFixed(2)}</td>
+              <td style="text-align: right; padding: 10px 6px;">${totalFacturado > 0 ? (r.total / totalFacturado * 100).toFixed(1) : '0.0'}%</td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+      `}
+    </div>
+
+    ${sizesInCross.length > 0 && reasonsInCross.length > 0 ? `
+    <!-- Cruzado tamaño x razón -->
+    <div style="background: white; border: 1px solid var(--line); border-radius: var(--radius-md); padding: 18px; margin-bottom: 18px;">
+      <h3 style="font-family: var(--display); font-size: 18px; margin: 0 0 12px; font-weight: 400;">Descuentos por tamaño y razón</h3>
+      <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+        <thead>
+          <tr style="border-bottom: 1px solid var(--line); color: var(--ink-mute); font-size: 11px; text-transform: uppercase; letter-spacing: 0.4px;">
+            <th style="text-align: left; padding: 8px 6px;">Razón \\ Tamaño</th>
+            ${sizesInCross.map(s => `<th style="text-align: right; padding: 8px 6px;">${s} clases</th>`).join('')}
+          </tr>
+        </thead>
+        <tbody>
+          ${reasonsInCross.map(r => `
+            <tr style="border-bottom: 1px solid var(--line);">
+              <td style="padding: 10px 6px;">${escape(reasonLabels[r] || r)}</td>
+              ${sizesInCross.map(s => {
+                const v = cross.get(`${s}|${r}`) || 0;
+                return `<td style="text-align: right; padding: 10px 6px; ${v > 0 ? 'color: #92400E;' : 'color: var(--ink-faint);'}">${v > 0 ? `S/ ${v.toFixed(0)}` : '—'}</td>`;
+              }).join('')}
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    </div>
+    ` : ''}
+
+    ${topStudents.length > 0 ? `
+    <!-- Top alumnas con descuento -->
+    <div style="background: white; border: 1px solid var(--line); border-radius: var(--radius-md); padding: 18px;">
+      <h3 style="font-family: var(--display); font-size: 18px; margin: 0 0 12px; font-weight: 400;">Top alumnas con descuento acumulado</h3>
+      <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+        <thead>
+          <tr style="border-bottom: 1px solid var(--line); color: var(--ink-mute); font-size: 11px; text-transform: uppercase; letter-spacing: 0.4px;">
+            <th style="text-align: left; padding: 8px 6px;">Alumna</th>
+            <th style="text-align: right; padding: 8px 6px;">Pagos con descuento</th>
+            <th style="text-align: right; padding: 8px 6px;">Total acumulado</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${topStudents.map(s => `
+            <tr style="border-bottom: 1px solid var(--line);">
+              <td style="padding: 10px 6px;">${escape(s.name)}</td>
+              <td style="text-align: right; padding: 10px 6px;">${s.count}</td>
+              <td style="text-align: right; padding: 10px 6px; color: #92400E;">S/ ${s.total.toFixed(2)}</td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    </div>
+    ` : ''}
+  `;
+}
+
+function shiftReportMonth(delta) {
+  const d = new Date(REPORTS_STATE.year, REPORTS_STATE.month + delta, 1);
+  REPORTS_STATE.month = d.getMonth();
+  REPORTS_STATE.year = d.getFullYear();
+  renderReportsView();
+}
+
+function setReportLocation(locationId) {
+  REPORTS_STATE.locationId = locationId;
+  renderReportsView();
+}
+
+// === EXPORTAR A EXCEL ===
+function exportReportToExcel() {
+  if (typeof XLSX === 'undefined') {
+    showToast('Librería de Excel no cargada. Intenta refrescar la página.', 'error');
+    return;
+  }
+  const data = REPORTS_STATE.data;
+  if (!data) return;
+  const monthLabels = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+  const monthLabel = `${monthLabels[REPORTS_STATE.month]} ${REPORTS_STATE.year}`;
+  const locName = REPORTS_STATE.locationId === 'all' ? 'Todas las sedes' : (STATE.locations.find(l => l.id === REPORTS_STATE.locationId)?.name || '');
+  const reasonLabels = {};
+  (STATE.discountReasons || []).forEach(r => { reasonLabels[r.key] = r.label; });
+
+  const wb = XLSX.utils.book_new();
+
+  // Hoja 1: KPIs
+  const payments = data.payments || [];
+  const newPackages = data.packages || [];
+  const totalFacturado = payments.reduce((s, p) => s + parseFloat(p.amount_pen || 0), 0);
+  const totalDescuentos = payments.reduce((s, p) => s + parseFloat(p.discount_amount || 0), 0);
+  const totalNominal = totalFacturado + totalDescuentos;
+  const pctPromedio = totalNominal > 0 ? (totalDescuentos / totalNominal * 100) : 0;
+
+  const kpis = [
+    ['Reporte', monthLabel],
+    ['Sede', locName],
+    ['Generado', new Date().toLocaleString('es-PE')],
+    [],
+    ['Indicador', 'Valor'],
+    ['Total facturado (S/)', totalFacturado.toFixed(2)],
+    ['Total descuentos (S/)', totalDescuentos.toFixed(2)],
+    ['Valor nominal (S/)', totalNominal.toFixed(2)],
+    ['% descuento promedio', pctPromedio.toFixed(2) + '%'],
+    ['Paquetes vendidos', newPackages.length],
+    ['Total de pagos', payments.length],
+  ];
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(kpis), 'KPIs');
+
+  // Hoja 2: Paquetes por tamaño
+  const bySize = new Map();
+  newPackages.forEach(p => {
+    const size = p.classes_total || p.packages?.classes_total || 0;
+    if (size === 0) return;
+    const nominal = parseFloat(p.packages?.price_pen || p.price_paid || 0);
+    if (!bySize.has(size)) bySize.set(size, { size, count: 0, nominal: 0, cobrado: 0, descuento: 0 });
+    const e = bySize.get(size);
+    e.count++;
+    e.nominal += nominal;
+    const myPays = payments.filter(pm => pm.student_package_id === p.id);
+    e.cobrado += myPays.reduce((s, pm) => s + parseFloat(pm.amount_pen || 0), 0);
+    e.descuento += myPays.reduce((s, pm) => s + parseFloat(pm.discount_amount || 0), 0);
+  });
+  const sizeRows = [...bySize.values()].sort((a, b) => a.size - b.size);
+  const sizesData = [
+    ['Tamaño', 'Cantidad', 'Valor nominal', 'Cobrado', 'Descuento', '% descuento'],
+    ...sizeRows.map(r => [
+      `${r.size} clases`, r.count, r.nominal.toFixed(2), r.cobrado.toFixed(2),
+      r.descuento.toFixed(2), r.nominal > 0 ? (r.descuento / r.nominal * 100).toFixed(2) + '%' : '0%'
+    ])
+  ];
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(sizesData), 'Paquetes por tamaño');
+
+  // Hoja 3: Descuentos por razón
+  const byReason = new Map();
+  payments.filter(p => parseFloat(p.discount_amount || 0) > 0).forEach(p => {
+    const key = p.discount_reason || 'unknown';
+    if (!byReason.has(key)) byReason.set(key, { key, count: 0, total: 0 });
+    byReason.get(key).count++;
+    byReason.get(key).total += parseFloat(p.discount_amount || 0);
+  });
+  const reasonRows = [...byReason.values()].sort((a, b) => b.total - a.total);
+  const reasonsData = [
+    ['Razón', 'Pagos', 'Total descontado', '% del facturado'],
+    ...reasonRows.map(r => [
+      reasonLabels[r.key] || r.key, r.count, r.total.toFixed(2),
+      totalFacturado > 0 ? (r.total / totalFacturado * 100).toFixed(2) + '%' : '0%'
+    ])
+  ];
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(reasonsData), 'Descuentos por razón');
+
+  // Hoja 4: Detalle de pagos
+  const detailHeader = ['Fecha', 'Alumna', 'Método', 'Monto cobrado', 'Descuento', '% desc', 'Razón', 'Autorizado por', 'Paquete', 'Referencia', 'Notas'];
+  const userById = {};
+  (STATE.users || []).forEach(u => { userById[u.id] = u.full_name || u.id.slice(0, 8); });
+  const detailRows = payments.map(p => [
+    p.payment_date,
+    p.students ? `${p.students.first_name || ''} ${p.students.last_name || ''}`.trim() : '',
+    p.method || '',
+    parseFloat(p.amount_pen || 0).toFixed(2),
+    parseFloat(p.discount_amount || 0).toFixed(2),
+    parseFloat(p.discount_pct || 0).toFixed(1) + '%',
+    reasonLabels[p.discount_reason] || p.discount_reason || '',
+    userById[p.discount_authorized_by] || '',
+    p.student_packages?.packages?.name || '',
+    p.reference || '',
+    p.notes || ''
+  ]);
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([detailHeader, ...detailRows]), 'Detalle de pagos');
+
+  const fileName = `reporte-${REPORTS_STATE.year}-${String(REPORTS_STATE.month + 1).padStart(2, '0')}-${REPORTS_STATE.locationId === 'all' ? 'todas' : (STATE.locations.find(l => l.id === REPORTS_STATE.locationId)?.slug || 'sede')}.xlsx`;
+  XLSX.writeFile(wb, fileName);
+  showToast('✓ Excel descargado', 'success');
+}
+
+// === MODAL: CONFIGURAR RAZONES DE DESCUENTO ===
+function openDiscountReasonsModal() {
+  if (!isOnline) { showToast('Conexión requerida', 'error'); return; }
+  renderDiscountReasonsModal();
+  document.getElementById('discount-reasons-modal').classList.add('is-open');
+}
+
+function renderDiscountReasonsModal() {
+  const body = document.getElementById('discount-reasons-body');
+  if (!body) return;
+  const reasons = (STATE.discountReasons || []).slice().sort((a, b) => (a.sort_order || 100) - (b.sort_order || 100));
+  body.innerHTML = `
+    <div style="font-size: 12px; color: var(--ink-mute); margin-bottom: 12px;">Razones disponibles al aplicar descuento. Puedes desactivar las que ya no uses o agregar nuevas.</div>
+    <div id="discount-reasons-list">
+      ${reasons.map(r => `
+        <div style="display: flex; align-items: center; gap: 8px; padding: 8px 0; border-bottom: 1px solid var(--line);">
+          <input type="checkbox" ${r.is_active ? 'checked' : ''} onchange="toggleDiscountReason('${r.id}', this.checked)" />
+          <div style="flex: 1; font-size: 13px;">${escape(r.label)}</div>
+          <div style="font-size: 11px; color: var(--ink-mute); font-family: monospace;">${escape(r.key)}</div>
+        </div>
+      `).join('')}
+    </div>
+    <div style="margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--line);">
+      <div style="font-size: 11px; color: var(--ink-mute); text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 8px;">Agregar nueva razón</div>
+      <div style="display: flex; gap: 8px; align-items: end;">
+        <div style="flex: 1;">
+          <label style="font-size: 11px; color: var(--ink-mute);">Etiqueta visible</label>
+          <input type="text" id="new-reason-label" placeholder="Ej: Promo aniversario" style="width: 100%;" />
+        </div>
+        <button class="btn btn-primary" onclick="addDiscountReason()" style="padding: 7px 14px; font-size: 12px;">+ Agregar</button>
+      </div>
+    </div>
+  `;
+}
+
+async function toggleDiscountReason(id, isActive) {
+  const { error } = await sb.from('discount_reasons').update({ is_active: isActive }).eq('id', id);
+  if (error) { showToast('Error: ' + error.message, 'error'); return; }
+  const r = STATE.discountReasons.find(x => x.id === id);
+  if (r) r.is_active = isActive;
+  // Recargar lista
+  const { data } = await sb.from('discount_reasons').select('*').eq('is_active', true).order('sort_order');
+  STATE.discountReasons = data || [];
+}
+
+async function addDiscountReason() {
+  const label = document.getElementById('new-reason-label').value.trim();
+  if (!label) { showToast('Ingresa una etiqueta', 'error'); return; }
+  const key = label.toLowerCase().replace(/[^a-z0-9]/g, '_').slice(0, 30);
+  const maxOrder = Math.max(...(STATE.discountReasons || []).map(r => r.sort_order || 0), 100);
+  const { data, error } = await sb.from('discount_reasons').insert({
+    key, label, is_active: true, sort_order: maxOrder + 10
+  }).select().single();
+  if (error) { showToast('Error: ' + error.message, 'error'); return; }
+  STATE.discountReasons.push(data);
+  document.getElementById('new-reason-label').value = '';
+  renderDiscountReasonsModal();
+  showToast('✓ Razón agregada', 'success');
 }
 
 </script>
