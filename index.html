@@ -560,14 +560,20 @@
   .pay-pending-icon { width: 28px; height: 28px; background: var(--warn, #C97C2A); color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 600; flex-shrink: 0; }
   .pay-pending-text { font-size: 12px; color: var(--ink); }
   .pay-pending-text strong { color: var(--warn, #C97C2A); }
-  .pay-day-card { background: white; border: 1px solid var(--line); border-radius: 14px; overflow: hidden; margin-bottom: 10px; }
+  .pay-day-card { background: white; border: 1px solid var(--line); border-radius: 14px; overflow: hidden; margin-bottom: 10px; transition: border-color 0.15s; }
   .pay-day-card.is-today { border-color: var(--fit-purple); border-width: 1.5px; }
-  .pay-day-header { display: flex; justify-content: space-between; align-items: center; padding: 14px 16px; cursor: pointer; }
+  .pay-day-card.is-expanded { box-shadow: 0 2px 10px rgba(91, 42, 143, 0.06); }
+  .pay-day-header { display: flex; justify-content: space-between; align-items: center; padding: 14px 16px; cursor: pointer; transition: background 0.12s; }
+  .pay-day-header:hover { background: var(--fit-cream); }
+  .pay-day-caret { color: var(--ink-mute); font-size: 11px; transition: transform 0.18s ease; display: inline-block; }
+  .pay-day-card.is-expanded .pay-day-caret { transform: rotate(180deg); color: var(--fit-purple); }
   .pay-day-num { font-family: var(--display); font-style: italic; font-size: 22px; color: var(--fit-purple-deep); }
   .pay-day-info-day { font-size: 11px; text-transform: uppercase; letter-spacing: 1.2px; color: var(--ink-mute); display: block; line-height: 1.1; }
   .pay-day-info-meta { color: var(--ink-mute); font-size: 11px; }
   .pay-day-pay { font-family: var(--display); font-style: italic; font-size: 18px; color: var(--fit-purple-deep); }
-  .pay-day-expanded { border-top: 1px solid var(--line-soft, #F0EBF5); padding: 4px 0; }
+  .pay-day-expanded { border-top: 1px solid var(--line-soft, #F0EBF5); padding: 4px 0; animation: pay-expand-in 0.22s ease-out; }
+  @keyframes pay-expand-in { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: translateY(0); } }
+  .pay-day-spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid var(--fit-lavender); border-top-color: var(--fit-purple); border-radius: 50%; animation: inst-spin 0.7s linear infinite; vertical-align: middle; margin-right: 6px; }
   .pay-class-row { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; border-bottom: 1px solid var(--line-soft, #F0EBF5); font-size: 13px; cursor: pointer; transition: background 0.15s; }
   .pay-class-row:last-child { border-bottom: none; }
   .pay-class-row:hover { background: var(--fit-lavender-pale); }
@@ -12510,6 +12516,11 @@ async function _renderPayViewFor(inst, container, isCoordinator) {
 
   const report = await calculateInstructorPayReport(inst.id, STATE.payViewPeriodStart, STATE.payViewPeriodEnd);
 
+  // Cachear el report para que togglePayDay pueda expandir/colapsar sin recalcular
+  STATE.payViewReport = report;
+  STATE.payViewReportInstId = inst.id;
+  STATE.payViewReportPeriodKey = `${STATE.payViewPeriodStart}/${STATE.payViewPeriodEnd}`;
+
   const periodFreqLabel = { weekly: 'Semana', biweekly: 'Quincena', monthly: 'Mes' }[config.period_frequency] || 'Periodo';
   const fullName = inst.full_name || `${inst.first_name || ''} ${inst.last_name || ''}`.trim();
   const firstName = inst.first_name || fullName.split(' ')[0];
@@ -12608,7 +12619,7 @@ function renderPayDayCard(day, today, instructorId) {
   const isExpanded = !!STATE[expandedKey];
 
   return `
-    <div class="pay-day-card ${isToday ? 'is-today' : ''}">
+    <div class="pay-day-card ${isToday ? 'is-today' : ''} ${isExpanded ? 'is-expanded' : ''}" data-pay-day="${day.date}">
       <div class="pay-day-header" onclick="togglePayDay('${day.date}', '${instructorId}')">
         <div style="display:flex; gap:12px; align-items:baseline;">
           <div class="pay-day-num"><em>${dayNum}</em></div>
@@ -12617,7 +12628,10 @@ function renderPayDayCard(day, today, instructorId) {
             <span class="pay-day-info-meta">${nonEmptyClasses.length} clase${nonEmptyClasses.length === 1 ? '' : 's'} · ${day.dayStudentsCounted} alumnos${day.dayPending > 0 ? ' · ' + day.dayPending + ' pend.' : ''}</span>
           </div>
         </div>
-        <div class="pay-day-pay">S/ ${day.dayTotal.toFixed(0)}</div>
+        <div style="display:flex; align-items:center; gap:8px;">
+          <div class="pay-day-pay">S/ ${day.dayTotal.toFixed(0)}</div>
+          <span class="pay-day-caret">▼</span>
+        </div>
       </div>
       ${isExpanded ? `
         <div class="pay-day-expanded">
@@ -12630,15 +12644,56 @@ function renderPayDayCard(day, today, instructorId) {
 
 function togglePayDay(dateIso, instructorId) {
   const key = `pay_day_expanded_${dateIso}`;
-  STATE[key] = !STATE[key];
-  // Re-render
-  const inst = STATE.instructors.find(i => i.id === instructorId);
-  if (!inst) return;
-  if (CURRENT_USER && CURRENT_USER.role === 'coordinator') {
-    showInstructorPayDetail(instructorId);
-  } else {
-    renderInstructorPayView();
+  const newState = !STATE[key];
+  STATE[key] = newState;
+
+  // Buscar el card del día en el DOM (sin re-renderear toda la vista)
+  const card = document.querySelector(`[data-pay-day="${dateIso}"]`);
+  if (!card) {
+    // Fallback: si por alguna razón no encuentra el card, hace re-render completo
+    if (CURRENT_USER && CURRENT_USER.role === 'coordinator') showInstructorPayDetail(instructorId);
+    else renderInstructorPayView();
+    return;
   }
+
+  if (!newState) {
+    // Colapsar: quitar el div expanded y la clase visual
+    const existing = card.querySelector('.pay-day-expanded');
+    if (existing) existing.remove();
+    card.classList.remove('is-expanded');
+    return;
+  }
+
+  // Expandir: marcar visualmente y mostrar loading inline
+  card.classList.add('is-expanded');
+  const existing = card.querySelector('.pay-day-expanded');
+  if (existing) return; // ya está expandido
+
+  const loadingHTML = `
+    <div class="pay-day-expanded" data-pay-loading="true">
+      <div style="padding: 18px; text-align: center; color: var(--ink-mute); font-size: 12px;">
+        <span class="pay-day-spinner"></span> Cargando clases...
+      </div>
+    </div>
+  `;
+  card.insertAdjacentHTML('beforeend', loadingHTML);
+
+  // Los datos del día ya están cacheados en STATE.payViewReport. Pintar después de un micro-delay
+  // para que se sienta como una transición suave y no como un flash.
+  setTimeout(() => {
+    const day = (STATE.payViewReport?.days || []).find(d => d.date === dateIso);
+    const expandedEl = card.querySelector('.pay-day-expanded[data-pay-loading="true"]');
+    if (!expandedEl) return; // si el usuario colapsó antes de que termine
+    if (!day) {
+      // No hay datos del día → fallback re-render completo
+      expandedEl.remove();
+      if (CURRENT_USER && CURRENT_USER.role === 'coordinator') showInstructorPayDetail(instructorId);
+      else renderInstructorPayView();
+      return;
+    }
+    expandedEl.removeAttribute('data-pay-loading');
+    expandedEl.innerHTML = day.classes.map(c => renderPayClassRow(c, day.date, instructorId)).join('');
+  }, 180);
 }
 
 function renderPayClassRow(cls, dateIso, instructorId) {
@@ -12690,6 +12745,8 @@ function shiftPayPeriod(delta) {
   STATE.payViewPeriodStart = r.start;
   STATE.payViewPeriodEnd = r.end;
   STATE.payViewPeriodLabel = r.label;
+  // Invalidar cache porque el periodo cambió → hay que re-calcular
+  STATE.payViewReport = null;
   if (CURRENT_USER && CURRENT_USER.role === 'coordinator') {
     showInstructorPayDetail(instId);
   } else {
