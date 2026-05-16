@@ -4051,7 +4051,8 @@ function renderScheduleEditorWeekDetail(week) {
         if (cantSelect) { col = 'var(--ink-faint)'; cursor = 'not-allowed'; }
       }
 
-      const onclick = (oob || isConsumed || isMissed || isFull || cantSelect) ? '' : `toggleScheduleEditorSlot('${k}')`;
+      const ownsCell = isSel || wasOriginal;
+      const onclick = (oob || isConsumed || isMissed || (isFull && !ownsCell) || cantSelect) ? '' : `toggleScheduleEditorSlot('${k}')`;
       h += `<div onclick="${onclick}" style="position: relative; background: ${bg}; color: ${col}; padding: 5px 4px; border-radius: 4px; text-align: center; font-size: 10px; cursor: ${cursor}; ${extra}">${txt}${mark}</div>`;
     });
     h += `</div>`;
