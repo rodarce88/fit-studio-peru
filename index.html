@@ -11441,7 +11441,7 @@ async function loadReportData() {
   // y filtrar en JS usando purchase_date o created_at como fallback.
   // Esto cubre paquetes con purchase_date null y diferencias de zona horaria.
   const { data: allPackages, error: pkgErr } = await sb.from('student_packages')
-    .select('*, packages(name, classes_total, price_pen), students(first_name, last_name, location_id)');
+    .select('*, packages(name, price_pen), students(first_name, last_name, location_id)');
   if (pkgErr) console.error('Error cargando paquetes:', pkgErr);
 
   const filteredPackages = (allPackages || []).filter(p => {
