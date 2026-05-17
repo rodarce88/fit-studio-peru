@@ -734,6 +734,154 @@
     .pay-totals-card { padding: 14px 16px; }
     .pay-totals-value { font-size: 24px; }
   }
+
+  /* ============================================
+     LOGS VIEW (coordinador)
+     ============================================ */
+  .logs-filters {
+    display: flex; flex-wrap: wrap; gap: 8px;
+    margin-bottom: 14px;
+    align-items: center;
+  }
+  .logs-input {
+    flex: 1; min-width: 200px;
+    padding: 9px 13px;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    font-size: 13px;
+    font-family: var(--body);
+    background: white;
+  }
+  .logs-input:focus { outline: 2px solid var(--fit-purple-soft); border-color: transparent; }
+  .logs-select {
+    padding: 8px 12px;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    font-size: 12.5px;
+    font-family: var(--body);
+    background: white;
+    cursor: pointer;
+  }
+  .logs-summary {
+    font-size: 11.5px;
+    color: var(--ink-mute);
+    margin-bottom: 12px;
+    padding-left: 4px;
+  }
+  .logs-count {
+    color: var(--fit-purple);
+    font-weight: 600;
+  }
+  .logs-list {
+    background: white;
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    overflow: hidden;
+  }
+  .log-row + .log-row { border-top: 1px solid var(--line-soft); }
+  .log-row:hover { background: var(--fit-lavender-pale); }
+  .log-row.is-expanded { background: var(--fit-lavender-pale); }
+  .log-head {
+    display: grid;
+    grid-template-columns: 130px 200px 1fr 1fr 24px;
+    gap: 14px;
+    padding: 11px 16px;
+    align-items: center;
+    font-size: 12.5px;
+  }
+  .log-time {
+    font-family: monospace;
+    font-size: 11px;
+    color: var(--ink-mute);
+    white-space: nowrap;
+  }
+  .log-actor {
+    display: flex; align-items: center; gap: 8px;
+    min-width: 0;
+  }
+  .log-actor-name {
+    font-weight: 500;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .log-role {
+    display: inline-block;
+    padding: 1px 6px;
+    border-radius: 4px;
+    font-size: 9px;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    flex-shrink: 0;
+  }
+  .log-role-coord { background: #FEF3C7; color: #92400E; }
+  .log-role-instr { background: var(--fit-lavender-pale); color: var(--fit-purple); }
+  .log-role-stud  { background: #DCFCE7; color: #166534; }
+  .log-role-agent { background: #DBEAFE; color: #1E40AF; }
+  .log-role-sys   { background: #F3F4F6; color: #4B5563; }
+  .log-action {
+    font-size: 12.5px;
+    color: var(--ink);
+  }
+  .log-target {
+    font-size: 12px;
+    color: var(--ink-soft);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .log-chev {
+    color: var(--ink-mute);
+    font-size: 12px;
+    text-align: center;
+  }
+  .log-details {
+    padding: 0 16px 14px 60px;
+    background: var(--fit-lavender-pale);
+  }
+  .log-details pre {
+    background: white;
+    border: 1px solid var(--line);
+    padding: 10px 12px;
+    border-radius: 8px;
+    font-size: 11px;
+    overflow-x: auto;
+    line-height: 1.5;
+    color: var(--ink-soft);
+  }
+
+  /* Mobile responsive: stack vertical */
+  @media (max-width: 800px) {
+    .log-head {
+      grid-template-columns: 1fr 24px;
+      gap: 4px;
+    }
+    .log-time {
+      grid-column: 1 / -1;
+      font-size: 10.5px;
+    }
+    .log-actor {
+      grid-column: 1;
+      grid-row: 2;
+    }
+    .log-chev {
+      grid-column: 2;
+      grid-row: 2;
+    }
+    .log-action {
+      grid-column: 1 / -1;
+      grid-row: 3;
+      font-size: 12px;
+      color: var(--ink-soft);
+    }
+    .log-target {
+      grid-column: 1 / -1;
+      grid-row: 4;
+      font-size: 11.5px;
+      color: var(--ink-mute);
+    }
+    .log-details { padding-left: 16px; }
+  }
 </style>
 </head>
 <body>
@@ -847,11 +995,15 @@
       Reportes
     </button>
   </div>
-  <div class="nav-group">
+  <div class="nav-group" data-coord-only>
     <div class="nav-group-title">Más</div>
     <button class="nav-item" data-view="packages" onclick="showView('packages', this)">
       <span class="nav-icon"><svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="m7.5 4.27 9 5.15"/><path d="M21 8 12 13 3 8"/><path d="M3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8z"/></svg></span>
       Paquetes
+    </button>
+    <button class="nav-item" data-view="logs" onclick="showView('logs', this); renderLogsView();">
+      <span class="nav-icon"><svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><line x1="10" y1="9" x2="8" y2="9"/></svg></span>
+      Logs
     </button>
   </div>
 </aside>
@@ -1103,6 +1255,20 @@
   <!-- VISTA COORDINADOR: REPORTES -->
   <section class="view" id="view-reports">
     <div id="reports-container"></div>
+  </section>
+
+  <!-- LOGS VIEW (coordinador) -->
+  <section class="view" id="view-logs">
+    <div class="page-header">
+      <div>
+        <h1 class="page-title">Registro de <em>actividad</em></h1>
+        <div class="page-sub">Quién hizo qué y cuándo en el sistema.</div>
+      </div>
+      <div class="page-actions">
+        <button class="btn btn-ghost" onclick="renderLogsView()">↻ Actualizar</button>
+      </div>
+    </div>
+    <div id="logs-container"></div>
   </section>
 
   <!-- STUDENT DAY VIEW (vista alumno) -->
@@ -5341,6 +5507,17 @@ async function saveStudent() {
     } else {
       STATE.students.push(result.data);
     }
+
+    // Log de actividad
+    try {
+      const r = result.data;
+      const studName = `${r.first_name || ''} ${r.last_name || ''}`.trim();
+      logActivity(isEdit ? 'student.update' : 'student.create', {
+        table: 'students',
+        id: r.id,
+        label: studName
+      }, isEdit ? { fields_changed: Object.keys(data) } : { modality: r.modality, status: r.student_status });
+    } catch(e) { /* never block */ }
   } else {
     if (isEdit) {
       const idx = STATE.students.findIndex(s => s.id === id);
@@ -5363,6 +5540,12 @@ async function deactivateStudent() {
   if (isOnline) {
     const { error } = await sb.from('students').update({ status: 'inactive' }).eq('id', id);
     if (error) { showToast('Error: ' + error.message, 'error'); return; }
+    // Log
+    try {
+      const stud = STATE.students.find(s => s.id === id);
+      const studName = stud ? `${stud.first_name || ''} ${stud.last_name || ''}`.trim() : id;
+      logActivity('student.deactivate', { table: 'students', id, label: studName }, null);
+    } catch(e) {}
   }
   STATE.students = STATE.students.filter(s => s.id !== id);
   if (!isOnline) localStorage.setItem('mock_students', JSON.stringify(STATE.students));
@@ -7246,6 +7429,56 @@ function escape(s) {
   return div.innerHTML;
 }
 
+// ============================================
+// ACTIVITY LOG — registra acciones del usuario
+// ============================================
+// Uso: logActivity('attendance.mark', { table: 'attendance', id: bookingId, label: 'María R · Lun 6am' }, { status: 'attended' });
+// Es fire-and-forget — nunca rompe el flujo principal si falla.
+async function logActivity(action, target, details) {
+  try {
+    if (!sb || !isOnline) return;
+    if (!CURRENT_USER || !CURRENT_USER.authUser) return;
+    const actorName = (() => {
+      try {
+        if (CURRENT_USER.role === 'instructor') {
+          const r = CURRENT_USER.record || {};
+          return [r.first_name, r.last_name].filter(Boolean).join(' ').trim() || r.full_name || CURRENT_USER.authUser.email || 'Profesor';
+        }
+        if (CURRENT_USER.role === 'student') {
+          const r = CURRENT_USER.record || {};
+          return [r.first_name, r.last_name].filter(Boolean).join(' ').trim() || CURRENT_USER.authUser.email || 'Alumno';
+        }
+        return CURRENT_USER.authUser.email || 'Coordinador';
+      } catch (e) { return 'desconocido'; }
+    })();
+    const row = {
+      actor_user_id: CURRENT_USER.authUser.id,
+      actor_name: actorName,
+      actor_role: CURRENT_USER.role || null,
+      action: String(action || '').slice(0, 120),
+      target_table: target?.table || null,
+      target_id: target?.id != null ? String(target.id) : null,
+      target_label: target?.label || null,
+      details: details || null,
+      user_agent: (navigator.userAgent || '').slice(0, 240),
+    };
+    // Fire and forget — no await
+    sb.from('activity_log').insert([row]).then(({ error }) => {
+      if (error) console.warn('[activity_log] insert error:', error.message);
+    });
+  } catch (e) {
+    console.warn('[activity_log] caught error:', e);
+  }
+}
+
+// Ocultar/mostrar items del sidebar según rol
+function applyRoleVisibility() {
+  const role = CURRENT_USER?.role;
+  document.querySelectorAll('[data-coord-only]').forEach(el => {
+    el.style.display = (role === 'coordinator') ? '' : 'none';
+  });
+}
+
 // Mostrar modal con detalle de un paquete (próximo o completado) y sus clases
 function toggleUpcomingPkg(pkgId) {
   const data = STATE.studentDetailData || {};
@@ -7462,12 +7695,20 @@ async function loginWithPassword() {
 }
 
 async function logout() {
+  // Log de logout antes de signOut (porque después de signOut no hay user)
+  try { await logActivity('auth.logout', null, null); } catch(e) {}
   if (sb) await sb.auth.signOut();
   window.location.reload();
 }
 
 async function initForRole() {
   const role = CURRENT_USER.role;
+
+  // Aplicar visibility del sidebar según rol (oculta entradas data-coord-only para no-coords)
+  applyRoleVisibility();
+
+  // Loguear el login (fire and forget)
+  logActivity('auth.login', null, { role });
 
   // User pill
   const userPill = document.querySelector('.topbar-user');
@@ -8762,6 +9003,16 @@ async function saveHealthNotes() {
     stud.medical_notes = payload.medical_notes;
   }
 
+  // Log de actividad
+  try {
+    const studName = stud ? `${stud.first_name || ''} ${stud.last_name || ''}`.trim() : ed.studentId;
+    logActivity('student.health_update', {
+      table: 'students',
+      id: ed.studentId,
+      label: studName
+    }, { tags_count: tags.length, has_notes: !!payload.medical_notes });
+  } catch(e) { /* never block */ }
+
   showToast('✓ Notas guardadas', 'success');
   closeModals();
   HEALTH_EDITOR_STATE = null;
@@ -9127,6 +9378,17 @@ async function instructorWriteAttendance(studentId, dateIso, hour, locationId, s
   }
 
   await recalcPackageCounters(studentId);
+
+  // Log de actividad
+  try {
+    const stud = STATE.students.find(s => s.id === studentId);
+    const studName = stud ? `${stud.first_name || ''} ${stud.last_name || ''}`.trim() : studentId;
+    logActivity('attendance.mark', {
+      table: 'attendance',
+      id: existing?.id || booking.id,
+      label: `${studName} · ${session.session_date} ${formatHour(session.hour)}`
+    }, { status, is_recoverable: isRecoverable, counts_against_package: countsAgainst });
+  } catch(e) { /* never block */ }
 
   // Si la marca cuenta como "se dictó" (attended/recoverable/lost/no_show), marcar clase como delivered
   if (['attended','recoverable','lost','no_show'].includes(status)) {
@@ -9596,6 +9858,17 @@ async function instructorMarkAttendedDirect(sessionId, studentId, opts) {
     const { error } = await sb.from('attendance').insert(payload);
     if (error) throw error;
   }
+
+  // Log de actividad
+  try {
+    const stud = STATE.students.find(s => s.id === studentId);
+    const studName = stud ? `${stud.first_name || ''} ${stud.last_name || ''}`.trim() : studentId;
+    logActivity('attendance.mark_direct', {
+      table: 'attendance',
+      id: existing?.id || null,
+      label: studName
+    }, { status: 'attended', pending_payment: !!opts?.pendingPayment });
+  } catch(e) { /* never block */ }
 }
 
 async function instructorConfirmAddCaseA(studentId) {
@@ -13914,6 +14187,175 @@ function initReportsState() {
     REPORTS_STATE.year = now.getFullYear();
   }
 }
+
+// ============================================
+// LOGS VIEW (solo coordinador)
+// ============================================
+const LOGS_STATE = {
+  rows: [],
+  filter: { role: '', action: '', text: '', days: 7 },
+  expanded: new Set(),
+  loading: false,
+};
+
+async function renderLogsView() {
+  const container = document.getElementById('logs-container');
+  if (!container) return;
+  if (!CURRENT_USER || CURRENT_USER.role !== 'coordinator') {
+    container.innerHTML = '<div style="padding: 40px; text-align: center; color: var(--ink-mute);">Solo coordinación puede ver los logs.</div>';
+    return;
+  }
+  if (!isOnline) {
+    container.innerHTML = '<div style="padding: 40px; text-align: center; color: var(--ink-mute);">Conexión requerida.</div>';
+    return;
+  }
+  container.innerHTML = '<div style="padding: 40px; text-align: center; color: var(--ink-mute);">Cargando logs...</div>';
+  await loadLogsData();
+  renderLogsHTML();
+}
+
+async function loadLogsData() {
+  LOGS_STATE.loading = true;
+  const sinceDate = new Date();
+  sinceDate.setDate(sinceDate.getDate() - (LOGS_STATE.filter.days || 7));
+  try {
+    let q = sb.from('activity_log').select('*').order('created_at', { ascending: false }).limit(500);
+    q = q.gte('created_at', sinceDate.toISOString());
+    if (LOGS_STATE.filter.role) q = q.eq('actor_role', LOGS_STATE.filter.role);
+    if (LOGS_STATE.filter.action) q = q.ilike('action', `%${LOGS_STATE.filter.action}%`);
+    const { data, error } = await q;
+    if (error) { console.error('loadLogs', error); LOGS_STATE.rows = []; }
+    else LOGS_STATE.rows = data || [];
+  } catch (e) { console.error('loadLogs', e); LOGS_STATE.rows = []; }
+  LOGS_STATE.loading = false;
+}
+
+function renderLogsHTML() {
+  const container = document.getElementById('logs-container');
+  if (!container) return;
+  const rows = LOGS_STATE.rows;
+  const text = (LOGS_STATE.filter.text || '').trim().toLowerCase();
+  const filtered = !text ? rows : rows.filter(r =>
+    (r.actor_name || '').toLowerCase().includes(text) ||
+    (r.target_label || '').toLowerCase().includes(text) ||
+    (r.action || '').toLowerCase().includes(text)
+  );
+
+  // Filtros
+  const filtersHtml = `
+    <div class="logs-filters">
+      <input type="text" class="logs-input" placeholder="Buscar por nombre, acción, target…"
+        value="${escape(LOGS_STATE.filter.text || '')}"
+        oninput="LOGS_STATE.filter.text = this.value; renderLogsHTML();" />
+      <select class="logs-select" onchange="LOGS_STATE.filter.role = this.value; renderLogsView();">
+        <option value="">Todos los roles</option>
+        <option value="coordinator" ${LOGS_STATE.filter.role === 'coordinator' ? 'selected':''}>Coordinador</option>
+        <option value="instructor" ${LOGS_STATE.filter.role === 'instructor' ? 'selected':''}>Profesor</option>
+        <option value="student" ${LOGS_STATE.filter.role === 'student' ? 'selected':''}>Alumno</option>
+        <option value="agent" ${LOGS_STATE.filter.role === 'agent' ? 'selected':''}>Agente IA</option>
+      </select>
+      <select class="logs-select" onchange="LOGS_STATE.filter.action = this.value; renderLogsView();">
+        <option value="">Todas las acciones</option>
+        <option value="auth" ${LOGS_STATE.filter.action === 'auth' ? 'selected':''}>Login / Logout</option>
+        <option value="attendance" ${LOGS_STATE.filter.action === 'attendance' ? 'selected':''}>Asistencia</option>
+        <option value="student" ${LOGS_STATE.filter.action === 'student' ? 'selected':''}>Alumnos</option>
+        <option value="payment" ${LOGS_STATE.filter.action === 'payment' ? 'selected':''}>Pagos</option>
+        <option value="package" ${LOGS_STATE.filter.action === 'package' ? 'selected':''}>Paquetes</option>
+        <option value="session" ${LOGS_STATE.filter.action === 'session' ? 'selected':''}>Clases</option>
+      </select>
+      <select class="logs-select" onchange="LOGS_STATE.filter.days = parseInt(this.value, 10); renderLogsView();">
+        <option value="1" ${LOGS_STATE.filter.days === 1 ? 'selected':''}>Hoy</option>
+        <option value="7" ${LOGS_STATE.filter.days === 7 ? 'selected':''}>Últimos 7 días</option>
+        <option value="30" ${LOGS_STATE.filter.days === 30 ? 'selected':''}>Últimos 30 días</option>
+        <option value="90" ${LOGS_STATE.filter.days === 90 ? 'selected':''}>Últimos 90 días</option>
+      </select>
+    </div>
+    <div class="logs-summary">
+      <span class="logs-count">${filtered.length}</span>
+      ${filtered.length === 1 ? 'registro' : 'registros'} · últimos ${LOGS_STATE.filter.days} ${LOGS_STATE.filter.days === 1 ? 'día' : 'días'}
+    </div>
+  `;
+
+  if (filtered.length === 0) {
+    container.innerHTML = filtersHtml + '<div class="empty-state" style="padding:60px 20px;">Sin registros para los filtros aplicados.</div>';
+    return;
+  }
+
+  const itemsHtml = filtered.map(r => renderLogRow(r)).join('');
+  container.innerHTML = filtersHtml + `<div class="logs-list">${itemsHtml}</div>`;
+}
+
+function renderLogRow(r) {
+  const date = r.created_at ? new Date(r.created_at) : new Date();
+  const today = new Date();
+  const isToday = date.toDateString() === today.toDateString();
+  const yest = new Date(today); yest.setDate(today.getDate() - 1);
+  const isYest = date.toDateString() === yest.toDateString();
+  const timeStr = date.toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit', hour12: true });
+  const dateStr = isToday ? `hoy ${timeStr}` : isYest ? `ayer ${timeStr}` : date.toLocaleDateString('es-PE', { day: '2-digit', month: 'short' }) + ' ' + timeStr;
+  const roleBadge = (() => {
+    const role = r.actor_role || '';
+    const map = {
+      coordinator: { txt: 'COORD', cls: 'coord' },
+      instructor:  { txt: 'PROF',  cls: 'instr' },
+      student:     { txt: 'ALUMN', cls: 'stud' },
+      agent:       { txt: 'AGENTE',cls: 'agent' },
+      system:      { txt: 'SISTEMA',cls: 'sys' },
+    };
+    const m = map[role] || { txt: role.toUpperCase(), cls: 'sys' };
+    return `<span class="log-role log-role-${m.cls}">${m.txt}</span>`;
+  })();
+  const actionLabel = humanizeAction(r.action);
+  const isExpanded = LOGS_STATE.expanded.has(r.id);
+  const hasDetails = r.details && Object.keys(r.details).length > 0;
+  return `
+    <div class="log-row ${isExpanded ? 'is-expanded' : ''}">
+      <div class="log-head" ${hasDetails ? `onclick="toggleLogRow('${r.id}')"` : ''} style="${hasDetails ? 'cursor:pointer;' : ''}">
+        <div class="log-time">${dateStr}</div>
+        <div class="log-actor">
+          ${roleBadge}
+          <span class="log-actor-name">${escape(r.actor_name || '—')}</span>
+        </div>
+        <div class="log-action">${actionLabel}</div>
+        <div class="log-target">${escape(r.target_label || '—')}</div>
+        ${hasDetails ? `<div class="log-chev">${isExpanded ? '▾' : '▸'}</div>` : '<div></div>'}
+      </div>
+      ${isExpanded && hasDetails ? `
+        <div class="log-details">
+          <pre>${escape(JSON.stringify(r.details, null, 2))}</pre>
+        </div>
+      ` : ''}
+    </div>
+  `;
+}
+
+function toggleLogRow(id) {
+  if (LOGS_STATE.expanded.has(id)) LOGS_STATE.expanded.delete(id);
+  else LOGS_STATE.expanded.add(id);
+  renderLogsHTML();
+}
+
+function humanizeAction(action) {
+  const map = {
+    'auth.login': '🔓 Inició sesión',
+    'auth.logout': '🔒 Cerró sesión',
+    'attendance.mark': '✓ Marcó asistencia',
+    'attendance.mark_direct': '✓ Asistencia directa',
+    'student.create': '➕ Creó alumno',
+    'student.update': '✎ Editó alumno',
+    'student.deactivate': '⊘ Desactivó alumno',
+    'student.health_update': '⚠ Editó notas de salud',
+    'payment.create': '$ Registró pago',
+    'payment.update': '✎ Editó pago',
+    'student_package.create': '📦 Creó paquete',
+    'session.cancel': '✗ Canceló clase',
+    'session_booking.create': '📅 Agendó booking',
+    'session_booking.cancel': '✗ Canceló booking',
+    'session_note.create': '📝 Nota de sesión',
+  };
+  return map[action] || `<code style="font-family:monospace;font-size:11px;color:var(--ink-soft);">${escape(action || '')}</code>`;
+}
+
 
 async function renderReportsView() {
   initReportsState();
