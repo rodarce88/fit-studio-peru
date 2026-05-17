@@ -573,6 +573,7 @@
   .pay-day-pay { font-family: var(--display); font-style: italic; font-size: 18px; color: var(--fit-purple-deep); }
   .pay-day-expanded { border-top: 1px solid var(--line-soft, #F0EBF5); padding: 4px 0; animation: pay-expand-in 0.22s ease-out; }
   @keyframes pay-expand-in { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: translateY(0); } }
+  @keyframes cell-drawer-in { from { opacity: 0; transform: translateY(-6px); max-height: 0; } to { opacity: 1; transform: translateY(0); max-height: 800px; } }
   .pay-day-spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid var(--fit-lavender); border-top-color: var(--fit-purple); border-radius: 50%; animation: inst-spin 0.7s linear infinite; vertical-align: middle; margin-right: 6px; }
   .pay-class-row { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; border-bottom: 1px solid var(--line-soft, #F0EBF5); font-size: 13px; cursor: pointer; transition: background 0.15s; }
   .pay-class-row:last-child { border-bottom: none; }
@@ -2984,11 +2985,12 @@ function countCellOccupancy(locationId, date, hour) {
   const session = (STATE.scheduleWeekSessions || []).find(s =>
     s.location_id === locationId && s.session_date === dateIso && s.hour === hour
   );
-  if (session && session.is_cancelled) return { count: 0, cancelled: true };
+  if (session && session.is_cancelled) return { count: 0, cancelled: true, confirmed: 0 };
 
   const studentIds = new Set();
+  const confirmedStudentIds = new Set();
 
-  // Fixed bookings
+  // Fixed bookings (sin booking concreto → no pueden estar "confirmadas" hasta que se cree el booking puntual)
   (STATE.fixedBookings || []).filter(b =>
     b.location_id === locationId && b.day_of_week === dow && b.hour === hour
   ).forEach(b => studentIds.add(b.student_id));
@@ -2997,10 +2999,13 @@ function countCellOccupancy(locationId, date, hour) {
   if (session) {
     (STATE.scheduleWeekBookings || []).filter(b =>
       b.session_id === session.id && !b.cancelled_at
-    ).forEach(b => studentIds.add(b.student_id));
+    ).forEach(b => {
+      studentIds.add(b.student_id);
+      if (b.confirmed_at) confirmedStudentIds.add(b.student_id);
+    });
   }
 
-  return { count: studentIds.size, cancelled: false };
+  return { count: studentIds.size, cancelled: false, confirmed: confirmedStudentIds.size };
 }
 
 function getCellStudents(locationId, date, hour) {
@@ -3010,14 +3015,14 @@ function getCellStudents(locationId, date, hour) {
     s.location_id === locationId && s.session_date === dateIso && s.hour === hour
   );
 
-  const studentMap = new Map(); // studentId -> { student, type, label, bookingId }
+  const studentMap = new Map(); // studentId -> { student, type, label, bookingId, confirmedAt }
 
   // Fixed bookings de esta celda
   (STATE.fixedBookings || []).filter(b =>
     b.location_id === locationId && b.day_of_week === dow && b.hour === hour
   ).forEach(b => {
     const student = STATE.students.find(s => s.id === b.student_id);
-    if (student) studentMap.set(b.student_id, { student, type: 'fixed', label: 'Fija', bookingId: null });
+    if (student) studentMap.set(b.student_id, { student, type: 'fixed', label: 'Fija', bookingId: null, confirmedAt: null });
   });
 
   // Session bookings puntuales (sobreescriben fixed si tienen un source distinto)
@@ -3033,12 +3038,52 @@ function getCellStudents(locationId, date, hour) {
       // Si ya estaba como fija y el booking concreto la confirma, mantener "Fija" como label.
       // Si vino como flexible/makeup, esa label gana.
       if (!existing || (b.source && b.source !== 'fixed')) {
-        studentMap.set(b.student_id, { student, type: b.source || 'session', label, bookingId: b.id });
+        studentMap.set(b.student_id, { student, type: b.source || 'session', label, bookingId: b.id, confirmedAt: b.confirmed_at || null });
+      } else {
+        // Existe como 'fixed' y este booking también es fixed → preservar bookingId y confirmedAt
+        existing.bookingId = b.id;
+        existing.confirmedAt = b.confirmed_at || null;
       }
     });
   }
 
   return Array.from(studentMap.values());
+}
+
+// Construye el mensaje de WhatsApp para confirmar UNA clase puntual.
+// Reusa la plantilla global guardada en localStorage por el feature "Confirmar clases" del perfil.
+function _buildConfirmMessageForCell(student, dateIso, hour, locationName) {
+  const tpl = _confirmGetTemplate();
+  const lineFmt = _confirmGetLineFormat();
+  const d = new Date(dateIso + 'T12:00:00');
+  const dayName = CONFIRM_DAY_NAMES[d.getDay()];
+  const fecha = `${d.getDate()} ${CONFIRM_MONTH_SHORT[d.getMonth()]}`;
+  const horaTxt = formatHour(hour);
+  const line = lineFmt
+    .replace('{dia}', dayName)
+    .replace('{fecha}', fecha)
+    .replace('{hora}', horaTxt);
+  return tpl
+    .replace(/\{nombre\}/g, student.first_name || '')
+    .replace(/\{coordinadora\}/g, _confirmGetCoordName())
+    .replace(/\{sede\}/g, locationName || '')
+    .replace(/\{clases\}/g, line);
+}
+
+// Helper: formatear "hace X" en español (para meta de confirmaciones)
+function _fmtAgoEs(isoTs) {
+  if (!isoTs) return '';
+  const ms = Date.now() - new Date(isoTs).getTime();
+  if (ms < 0) return 'hace un momento';
+  const mins = Math.floor(ms / 60000);
+  if (mins < 1) return 'hace un momento';
+  if (mins < 60) return `hace ${mins} min`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `hace ${hrs}h`;
+  const days = Math.floor(hrs / 24);
+  if (days === 1) return 'ayer';
+  if (days < 7) return `hace ${days} días`;
+  return _fmtShortDate ? _fmtShortDate(isoTs.slice(0, 10)) : isoTs.slice(0, 10);
 }
 
 function renderSchedule() {
@@ -3051,7 +3096,7 @@ function renderSchedule() {
   const end = new Date(start);
   end.setDate(end.getDate() + 6);
 
-  document.getElementById('schedule-sub').textContent = `Sede ${loc.name} · capacidad ${loc.capacity} alumnos por clase · click en una celda para ver detalle o asignar`;
+  document.getElementById('schedule-sub').textContent = `Sede ${loc.name} · capacidad ${loc.capacity} alumnos por clase · click en una celda para confirmar alumnos`;
   const monthLabels = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
   document.getElementById('schedule-week-label').innerHTML = `${start.getDate()} ${monthLabels[start.getMonth()]} – ${end.getDate()} ${monthLabels[end.getMonth()]} ${end.getFullYear()}`;
 
@@ -3064,6 +3109,9 @@ function renderSchedule() {
   const dayLabels = ['LUN', 'MAR', 'MIÉ', 'JUE', 'VIE', 'SÁB', 'DOM'];
   const hours = [6, 7, 8, 9, 10, 11, 16, 17, 18, 19, 20];
   const todayIso = dateToIsoLocal(new Date());
+
+  // Estado del drawer expandido (celda actualmente abierta inline, si la hay)
+  const expanded = STATE.scheduleExpandedCell;
 
   // Header row
   let html = `<div style="display: grid; grid-template-columns: 70px repeat(7, 1fr); gap: 6px;">`;
@@ -3083,10 +3131,12 @@ function renderSchedule() {
       const occ = countCellOccupancy(loc.id, d, h);
       const cap = loc.capacity;
       const count = occ.count;
+      const confirmed = occ.confirmed || 0;
       const pct = Math.min(100, (count / cap) * 100);
       const isPast = dateToIsoLocal(d) < todayIso;
       const isFull = count >= cap;
       const dateIso = dateToIsoLocal(d);
+      const isExpanded = expanded && expanded.dateIso === dateIso && expanded.hour === h;
 
       let bgColor = 'var(--fit-cream)';
       let countColor = 'var(--ink-faint)';
@@ -3104,24 +3154,291 @@ function renderSchedule() {
       }
 
       const cellOpacity = isPast ? '0.55' : '1';
+      const expandedBorder = isExpanded ? 'box-shadow: inset 0 0 0 2px var(--fit-purple); background: white;' : '';
 
-      html += `<div onclick="openScheduleCellModal('${loc.id}', '${dateIso}', ${h})"
-        style="background: ${bgColor}; border-radius: 8px; padding: 10px 8px; min-height: 56px; cursor: pointer; opacity: ${cellOpacity}; transition: background 0.15s, transform 0.1s; text-align: center;"
-        onmouseover="this.style.background='${hoverBg}'; this.style.transform='scale(1.04)'"
-        onmouseout="this.style.background='${bgColor}'; this.style.transform=''">
+      // Indicador de confirmaciones (X/Y o "sin confirmar")
+      let confirmMini = '';
+      if (count > 0 && !occ.cancelled && !isPast) {
+        if (confirmed === count) {
+          confirmMini = `<div style="margin-top: 4px; font-size: 9.5px; color: #15803d; font-weight: 600;">✓ ${confirmed}/${count}</div>`;
+        } else if (confirmed > 0) {
+          confirmMini = `<div style="margin-top: 4px; font-size: 9.5px; color: #B8860B; font-weight: 600;">✓ ${confirmed}/${count}</div>`;
+        } else {
+          confirmMini = `<div style="margin-top: 4px; font-size: 9.5px; color: var(--ink-faint);">— sin confirmar</div>`;
+        }
+      }
+
+      html += `<div onclick="toggleScheduleCellDrawer('${loc.id}', '${dateIso}', ${h})"
+        style="background: ${bgColor}; ${expandedBorder} border-radius: 8px; padding: 10px 8px; min-height: 56px; cursor: pointer; opacity: ${cellOpacity}; transition: background 0.15s, transform 0.1s; text-align: center;"
+        ${isExpanded ? '' : `onmouseover="this.style.background='${hoverBg}'; this.style.transform='scale(1.04)'" onmouseout="this.style.background='${bgColor}'; this.style.transform=''"`}>
         ${occ.cancelled
           ? `<div style="font-size: 11px; color: #b00; font-weight: 500; padding: 8px 0;">Cancelada</div>`
           : `<div style="font-family: var(--display); font-size: 18px; color: ${countColor};">${count}<span style="font-size: 11px; color: var(--ink-mute);">/${cap}</span></div>
-             <div style="height: 3px; background: rgba(0,0,0,0.05); border-radius: 2px; margin-top: 6px; overflow: hidden;"><div style="height: 100%; width: ${pct}%; background: ${dotColor};"></div></div>`}
+             <div style="height: 3px; background: rgba(0,0,0,0.05); border-radius: 2px; margin-top: 6px; overflow: hidden;"><div style="height: 100%; width: ${pct}%; background: ${dotColor};"></div></div>
+             ${confirmMini}`}
       </div>`;
     });
+
+    // Si el drawer está expandido y corresponde a esta hora, insertarlo como fila completa
+    if (expanded && expanded.hour === h) {
+      const dateIso = expanded.dateIso;
+      const expDate = new Date(dateIso + 'T12:00:00');
+      // Verificar que la fecha del drawer está en la semana visible (sino, no renderear)
+      const isInWeek = dates.some(d => dateToIsoLocal(d) === dateIso);
+      if (isInWeek) {
+        html += `<div style="grid-column: 1 / -1;">${renderScheduleCellDrawer(loc.id, dateIso, h)}</div>`;
+      }
+    }
   });
 
   html += `</div>`;
   grid.innerHTML = html;
 }
 
-// Cell detail modal: lista alumnos agendados + botón "Asignar"
+// Toggle del drawer inline para una celda específica del calendario
+function toggleScheduleCellDrawer(locationId, dateIso, hour) {
+  const cur = STATE.scheduleExpandedCell;
+  if (cur && cur.locationId === locationId && cur.dateIso === dateIso && cur.hour === hour) {
+    // Click en la misma celda → cerrar
+    STATE.scheduleExpandedCell = null;
+  } else {
+    // Abrir nueva (o cambiar a otra celda)
+    STATE.scheduleExpandedCell = { locationId, dateIso, hour };
+  }
+  // Preservar scroll position al re-renderear
+  const scrollY = window.scrollY;
+  renderSchedule();
+  window.scrollTo(0, scrollY);
+
+  // Si abrimos un drawer y la celda está fuera del viewport, scroll suave hacia él
+  if (STATE.scheduleExpandedCell) {
+    requestAnimationFrame(() => {
+      const drawer = document.querySelector('#schedule-grid [data-cell-drawer]');
+      if (drawer) {
+        const rect = drawer.getBoundingClientRect();
+        if (rect.top < 80 || rect.bottom > window.innerHeight) {
+          drawer.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      }
+    });
+  }
+}
+
+// Cerrar el drawer abierto (si lo hay)
+function closeScheduleCellDrawer() {
+  if (!STATE.scheduleExpandedCell) return;
+  STATE.scheduleExpandedCell = null;
+  const scrollY = window.scrollY;
+  renderSchedule();
+  window.scrollTo(0, scrollY);
+}
+
+// Render del drawer inline con la lista de alumnos + checks de confirmación + WhatsApp/copiar
+function renderScheduleCellDrawer(locationId, dateIso, hour) {
+  const loc = STATE.locations.find(l => l.id === locationId);
+  const date = new Date(dateIso + 'T12:00:00');
+  const cap = loc?.capacity || 9;
+  const students = getCellStudents(locationId, date, hour);
+  const session = (STATE.scheduleWeekSessions || []).find(s =>
+    s.location_id === locationId && s.session_date === dateIso && s.hour === hour
+  );
+  const isCancelled = session?.is_cancelled;
+  const isPast = dateIso < dateToIsoLocal(new Date());
+  const confirmedCount = students.filter(s => s.confirmedAt).length;
+  const monthLabelsShort = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+  const dayLabelsCap = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
+
+  let progressColor = 'var(--ink-mute)';
+  let progressBg = 'var(--fit-cream)';
+  if (students.length > 0) {
+    if (confirmedCount === students.length) { progressColor = '#15803d'; progressBg = '#dcfce7'; }
+    else if (confirmedCount > 0) { progressColor = '#B8860B'; progressBg = '#FEF3C7'; }
+  }
+
+  let body = `
+    <div data-cell-drawer style="margin: 4px 0 10px; background: var(--fit-cream); border: 1.5px solid var(--fit-purple); border-radius: 14px; overflow: hidden; animation: cell-drawer-in 0.22s ease-out;">
+      <div style="padding: 14px 20px 12px; display: flex; align-items: center; justify-content: space-between; gap: 14px; background: white; border-bottom: 1px solid var(--line); flex-wrap: wrap;">
+        <div>
+          <div style="font-family: var(--display); font-style: italic; font-size: 18px; color: var(--fit-purple-deep);">${dayLabelsCap[date.getDay()]} ${date.getDate()} ${monthLabelsShort[date.getMonth()]} · ${formatHour(hour)}</div>
+          <div style="font-size: 11px; color: var(--ink-mute); margin-top: 2px;">${escape(loc?.name || '')} · ${students.length} de ${cap} alumnas asignadas${isCancelled ? ' · CLASE CANCELADA' : ''}${isPast ? ' · clase pasada' : ''}</div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 12px;">
+          ${students.length > 0 ? `
+            <div style="font-size: 12px; color: ${progressColor}; font-weight: 500; padding: 5px 13px; background: ${progressBg}; border-radius: 999px;">
+              <strong style="font-family: var(--display); font-size: 15px; font-style: italic;">${confirmedCount}</strong>/${students.length} confirmadas
+            </div>
+          ` : ''}
+          <button onclick="closeScheduleCellDrawer()" style="border: none; background: transparent; width: 30px; height: 30px; border-radius: 50%; cursor: pointer; color: var(--ink-mute); font-size: 15px;" title="Cerrar">✕</button>
+        </div>
+      </div>`;
+
+  if (students.length === 0) {
+    body += `
+      <div style="padding: 28px 20px; text-align: center; color: var(--ink-mute); font-size: 13px;">
+        Aún no hay alumnas agendadas en esta clase.
+        <div style="font-size: 11px; margin-top: 6px;">Para asignar nuevas, usa "Agendar clases" desde el perfil de la alumna.</div>
+      </div>
+    </div>`;
+    return body;
+  }
+
+  body += `<div style="padding: 6px 20px 14px;">`;
+
+  students.forEach(({ student, label, bookingId, confirmedAt, type }) => {
+    const initialsStr = initials(student);
+    const labelBg = type === 'flexible' ? 'background: #fef3c7; color: #92400e;'
+      : type === 'makeup' ? 'background: #dbeafe; color: #1e40af;'
+      : type === 'fixed' ? 'background: var(--fit-lavender-pale); color: var(--fit-purple-deep);'
+      : 'background: var(--line); color: var(--ink-soft);';
+    const phone = student.phone || '';
+    const isConfirmed = !!confirmedAt;
+    const phoneClean = phone.replace(/[^0-9+]/g, '');
+    const hasPhone = phoneClean.length > 5;
+
+    const metaParts = [];
+    if (phone) metaParts.push(escape(phone));
+    if (isConfirmed) metaParts.push(`confirmada ${_fmtAgoEs(confirmedAt)}`);
+    else if (hasPhone) metaParts.push('sin confirmar');
+    else metaParts.push('sin teléfono');
+
+    body += `
+      <div style="display: flex; align-items: center; gap: 12px; padding: 11px 0; border-bottom: 1px solid var(--line-soft);">
+        <div class="student-avatar" style="width: 36px; height: 36px; font-size: 12px; flex-shrink: 0;">${initialsStr}</div>
+        <div style="flex: 1; min-width: 0;">
+          <div style="font-weight: 500; font-size: 14px; display: flex; align-items: center; gap: 8px;">
+            ${escape(student.first_name)} ${escape(student.last_name || '')}
+            <span style="font-size: 10px; padding: 2px 8px; border-radius: 999px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.4px; ${labelBg}">${label}</span>
+          </div>
+          <div style="font-size: 11px; color: var(--ink-mute); margin-top: 2px;">${metaParts.join(' · ')}</div>
+        </div>
+        ${hasPhone ? `
+          <button onclick="copyConfirmMessageForCell('${student.id}', '${dateIso}', ${hour}, '${locationId}')" title="Copiar mensaje al portapapeles" style="background: white; border: 1px solid var(--line); border-radius: 8px; padding: 6px 11px; font-size: 11.5px; cursor: pointer; color: var(--ink-soft); font-family: var(--body); font-weight: 500; display: inline-flex; align-items: center; gap: 5px;">📋 Copiar</button>
+          <button onclick="openWhatsAppForCell('${student.id}', '${dateIso}', ${hour}, '${locationId}')" title="Abrir WhatsApp con mensaje" style="background: white; border: 1px solid var(--line); border-radius: 8px; padding: 6px 11px; font-size: 11.5px; cursor: pointer; color: #25D366; font-family: var(--body); font-weight: 500; display: inline-flex; align-items: center; gap: 5px;">💬 WhatsApp</button>
+        ` : ''}
+        <button onclick="toggleConfirmedForCell('${student.id}', '${dateIso}', ${hour}, '${locationId}')" data-confirm-btn="${student.id}"
+          style="background: ${isConfirmed ? '#dcfce7' : 'white'}; border: 1.5px solid ${isConfirmed ? '#15803d' : 'var(--line)'}; color: ${isConfirmed ? '#15803d' : 'var(--ink-mute)'}; padding: 7px 14px; border-radius: 999px; font-size: 12px; cursor: pointer; font-family: var(--body); font-weight: ${isConfirmed ? '600' : '500'}; display: inline-flex; align-items: center; gap: 6px; min-width: 150px; justify-content: center;"
+          ${isPast ? 'disabled' : ''}>
+          <span style="width: 16px; height: 16px; border-radius: 50%; border: 1.5px solid ${isConfirmed ? '#15803d' : 'var(--ink-faint)'}; background: ${isConfirmed ? '#15803d' : 'white'}; color: ${isConfirmed ? 'white' : 'transparent'}; display: grid; place-items: center; font-size: 10px;">${isConfirmed ? '✓' : ''}</span>
+          ${isConfirmed ? 'Confirmada' : 'Marcar confirmada'}
+        </button>
+      </div>
+    `;
+  });
+
+  body += `</div></div>`;
+  return body;
+}
+
+// ============================================
+// Confirmación de bookings desde el calendario semanal
+// ============================================
+
+// Toggle del estado "confirmed_at" de un booking.
+// Si el alumno es 'fixed' sin booking puntual aún, primero crea el booking concreto.
+async function toggleConfirmedForCell(studentId, dateIso, hour, locationId) {
+  if (!isOnline) { showToast('Necesita conexión', 'error'); return; }
+  const btn = document.querySelector(`[data-confirm-btn="${studentId}"]`);
+  if (btn) btn.disabled = true;
+
+  try {
+    // Buscar booking existente
+    let session = (STATE.scheduleWeekSessions || []).find(s =>
+      s.location_id === locationId && s.session_date === dateIso && s.hour === hour
+    );
+    // Si no hay session todavía → crearla (para que el booking pueda apuntar a ella)
+    if (!session) {
+      const { data: newSession, error: sErr } = await sb.from('class_sessions').insert({
+        location_id: locationId,
+        session_date: dateIso,
+        hour: hour,
+      }).select().single();
+      if (sErr) throw sErr;
+      session = newSession;
+      STATE.scheduleWeekSessions = STATE.scheduleWeekSessions || [];
+      STATE.scheduleWeekSessions.push(session);
+    }
+
+    // Buscar booking activo para este alumno en esta sesión
+    let booking = (STATE.scheduleWeekBookings || []).find(b =>
+      b.session_id === session.id && b.student_id === studentId && !b.cancelled_at
+    );
+
+    if (!booking) {
+      // Es una alumna fija sin booking puntual creado todavía → crear booking
+      const { data: newBooking, error: bErr } = await sb.from('session_bookings').insert({
+        session_id: session.id,
+        student_id: studentId,
+        source: 'fixed',
+        confirmed_at: new Date().toISOString(),
+      }).select().single();
+      if (bErr) throw bErr;
+      booking = newBooking;
+      STATE.scheduleWeekBookings = STATE.scheduleWeekBookings || [];
+      STATE.scheduleWeekBookings.push(booking);
+      showToast('✓ Confirmada', 'success');
+    } else if (booking.confirmed_at) {
+      // Ya está confirmada → desmarcar
+      const { error } = await sb.from('session_bookings').update({ confirmed_at: null }).eq('id', booking.id);
+      if (error) throw error;
+      booking.confirmed_at = null;
+      showToast('Confirmación quitada');
+    } else {
+      // Existe pero no está confirmada → marcar
+      const nowIso = new Date().toISOString();
+      const { error } = await sb.from('session_bookings').update({ confirmed_at: nowIso }).eq('id', booking.id);
+      if (error) throw error;
+      booking.confirmed_at = nowIso;
+      showToast('✓ Confirmada', 'success');
+    }
+
+    // Re-render preservando scroll y manteniendo el drawer abierto
+    const scrollY = window.scrollY;
+    renderSchedule();
+    window.scrollTo(0, scrollY);
+  } catch (err) {
+    console.error('toggleConfirmedForCell:', err);
+    showToast('Error: ' + (err.message || 'desconocido'), 'error');
+    if (btn) btn.disabled = false;
+  }
+}
+
+// Copia el mensaje de confirmación al portapapeles
+async function copyConfirmMessageForCell(studentId, dateIso, hour, locationId) {
+  const student = STATE.students.find(s => s.id === studentId);
+  if (!student) return;
+  const loc = STATE.locations.find(l => l.id === locationId);
+  const msg = _buildConfirmMessageForCell(student, dateIso, hour, loc?.name || '');
+  try {
+    await navigator.clipboard.writeText(msg);
+    showToast(`✓ Mensaje copiado · ${student.first_name}`, 'success');
+  } catch (err) {
+    // Fallback para browsers sin clipboard API
+    const ta = document.createElement('textarea');
+    ta.value = msg;
+    ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    try { document.execCommand('copy'); showToast(`✓ Mensaje copiado · ${student.first_name}`, 'success'); }
+    catch { showToast('No se pudo copiar', 'error'); }
+    document.body.removeChild(ta);
+  }
+}
+
+// Abre WhatsApp Web/App con el mensaje pre-cargado
+function openWhatsAppForCell(studentId, dateIso, hour, locationId) {
+  const student = STATE.students.find(s => s.id === studentId);
+  if (!student) return;
+  const loc = STATE.locations.find(l => l.id === locationId);
+  const msg = _buildConfirmMessageForCell(student, dateIso, hour, loc?.name || '');
+  const phoneRaw = (student.phone || '').replace(/[^0-9]/g, '');
+  if (!phoneRaw) { showToast('Sin teléfono registrado', 'error'); return; }
+  // Si no empieza con código país, asumir Perú (+51)
+  const phone = phoneRaw.startsWith('51') && phoneRaw.length >= 11 ? phoneRaw : ('51' + phoneRaw.replace(/^0+/, ''));
+  const url = `https://wa.me/${phone}?text=${encodeURIComponent(msg)}`;
+  window.open(url, '_blank', 'noopener');
+}
+
+// Cell detail modal: legacy (mantener por si hay otros entry points, pero ya no se llama desde renderSchedule)
 function openScheduleCellModal(locationId, dateIso, hour) {
   const date = new Date(dateIso + 'T00:00:00');
   STATE.cellModalCtx = { locationId, date, hour };
