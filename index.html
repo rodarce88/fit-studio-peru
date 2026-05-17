@@ -63,54 +63,108 @@
   input, select, textarea { font-family: inherit; font-size: inherit; color: inherit; }
   h1, h2, h3, h4 { margin: 0; font-weight: 500; letter-spacing: -0.01em; }
 
-  /* TOPBAR */
+  /* ============================================
+     TOPBAR — minimalista, responsive
+     ============================================ */
   .topbar {
     position: fixed; top: 0; left: 0; right: 0; height: var(--topbar-h);
-    background: white; border-bottom: 1px solid var(--line); z-index: 100;
-    display: flex; align-items: center; padding: 0 28px; gap: 28px;
+    background: rgba(255, 255, 255, 0.92);
+    backdrop-filter: saturate(180%) blur(14px);
+    -webkit-backdrop-filter: saturate(180%) blur(14px);
+    border-bottom: 1px solid var(--line);
+    z-index: 100;
+    display: flex; align-items: center; padding: 0 20px; gap: 16px;
   }
-  .topbar-logo { display: flex; align-items: center; gap: 12px; width: calc(var(--sidebar-w) - 28px); }
+  .topbar-logo { display: flex; align-items: center; gap: 10px; width: calc(var(--sidebar-w) - 28px); flex-shrink: 0; }
   .logo-mark {
-    width: 40px; height: 40px; background: var(--fit-purple); border-radius: 50%;
-    display: grid; place-items: center; color: white; font-weight: 800; font-size: 14px;
-    box-shadow: var(--shadow-purple);
+    width: 34px; height: 34px; background: var(--fit-purple); border-radius: 50%;
+    display: grid; place-items: center; color: white; font-weight: 800; font-size: 12px;
+    box-shadow: var(--shadow-purple); letter-spacing: 0.04em;
   }
   .logo-text { display: flex; flex-direction: column; line-height: 1; }
-  .logo-text-1 { font-family: var(--display); font-size: 17px; font-weight: 500; }
-  .logo-text-2 { font-size: 11px; color: var(--ink-mute); text-transform: uppercase; letter-spacing: 0.12em; margin-top: 3px; }
-  .topbar-center { flex: 1; display: flex; align-items: center; gap: 20px; }
+  .logo-text-1 { font-family: var(--display); font-size: 15px; font-weight: 500; letter-spacing: -0.01em; }
+  .logo-text-2 { font-size: 10px; color: var(--ink-mute); text-transform: uppercase; letter-spacing: 0.14em; margin-top: 3px; }
+  .topbar-center { flex: 1; min-width: 0; display: flex; align-items: center; gap: 12px; }
 
+  /* Location switcher — compacto, elegante, con línea de conexión debajo */
   .location-switcher {
-    display: flex; align-items: center; gap: 12px; padding: 8px 16px 8px 10px;
-    background: var(--fit-lavender-pale); border-radius: var(--radius-pill);
-    border: 1px solid transparent; transition: all 0.2s; cursor: pointer;
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 7px 12px 8px; background: transparent;
+    border: 1px solid var(--line); border-radius: 10px;
+    transition: all 0.18s; cursor: pointer;
+    position: relative; overflow: hidden;
+    font-family: inherit; color: var(--ink);
+    max-width: 240px;
   }
-  .location-switcher:hover { background: var(--fit-lavender); border-color: var(--fit-purple-soft); }
-  .location-pin { width: 28px; height: 28px; background: var(--fit-purple); color: white; border-radius: 50%; display: grid; place-items: center; font-size: 13px; }
-  .location-info { line-height: 1.15; }
-  .location-label { font-size: 10px; color: var(--ink-mute); text-transform: uppercase; letter-spacing: 0.1em; }
-  .location-name { font-size: 14px; font-weight: 500; }
-  .location-caret { color: var(--fit-purple); margin-left: 4px; }
-
-  .conn-status {
-    display: flex; align-items: center; gap: 8px; padding: 6px 14px;
-    border: 1px solid var(--line); border-radius: var(--radius-pill); font-size: 11px; color: var(--ink-mute);
+  .location-switcher:hover { border-color: var(--fit-purple-soft); background: var(--fit-lavender-pale); }
+  .location-name {
+    font-size: 13px; font-weight: 500; letter-spacing: -0.005em;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   }
-  .conn-dot { width: 8px; height: 8px; border-radius: 50%; }
-  .conn-online .conn-dot { background: var(--good); box-shadow: 0 0 0 3px rgba(21, 128, 61, 0.15); }
-  .conn-offline .conn-dot { background: var(--warn); }
-  .conn-error .conn-dot { background: var(--danger); }
+  .location-caret { color: var(--ink-mute); flex-shrink: 0; opacity: 0.7; transition: transform 0.15s; }
+  .location-switcher:hover .location-caret { color: var(--fit-purple); }
 
-  .date-display { margin-left: auto; text-align: right; line-height: 1.15; }
-  .date-display-day { font-family: var(--display); font-size: 20px; font-style: italic; color: var(--fit-purple); font-weight: 400; }
-  .date-display-full { font-size: 12px; color: var(--ink-mute); margin-top: 1px; }
+  /* Línea sutil de conexión debajo del location-switcher */
+  .location-conn-line {
+    position: absolute; bottom: 0; left: 10%; right: 10%; height: 2px;
+    background: var(--good);
+    border-radius: 2px 2px 0 0;
+    transition: background 0.3s, opacity 0.3s;
+    opacity: 0.85;
+  }
+  /* Estado de conexión: se aplica via clase en #conn-status (location-conn-line) */
+  .location-conn-line.conn-offline { background: #C9C3D1; opacity: 0.5; }
+  .location-conn-line.conn-error { background: var(--danger); opacity: 0.85; animation: conn-pulse 2s ease-in-out infinite; }
+  @keyframes conn-pulse { 0%,100% { opacity: 0.85; } 50% { opacity: 0.3; } }
 
-  .topbar-user { display: flex; align-items: center; gap: 12px; padding: 6px 14px 6px 6px; border: 1px solid var(--line); border-radius: var(--radius-pill); cursor: pointer; transition: all 0.2s; }
+  /* Fecha (centro-derecha) — compacta */
+  .date-display { margin-left: auto; text-align: right; line-height: 1.15; flex-shrink: 0; }
+  .date-display-day { font-family: var(--display); font-size: 18px; font-style: italic; color: var(--fit-purple); font-weight: 400; }
+  .date-display-full { font-size: 11px; color: var(--ink-mute); margin-top: 1px; letter-spacing: 0.02em; }
+
+  /* Avatar/usuario (derecha) — chip discreto */
+  .topbar-user {
+    display: flex; align-items: center; gap: 10px; padding: 5px 12px 5px 5px;
+    border: 1px solid var(--line); border-radius: 999px;
+    cursor: pointer; transition: all 0.18s;
+    background: transparent; flex-shrink: 0;
+  }
   .topbar-user:hover { border-color: var(--fit-purple-soft); background: var(--fit-lavender-pale); }
-  .user-avatar { width: 32px; height: 32px; background: linear-gradient(135deg, var(--fit-purple), var(--fit-purple-soft)); color: white; border-radius: 50%; display: grid; place-items: center; font-weight: 600; font-size: 12px; }
-  .user-info { line-height: 1.15; }
-  .user-name { font-size: 13px; font-weight: 500; }
-  .user-role { font-size: 11px; color: var(--ink-mute); }
+  .user-avatar {
+    width: 30px; height: 30px;
+    background: linear-gradient(135deg, var(--fit-purple), var(--fit-purple-soft));
+    color: white; border-radius: 50%; display: grid; place-items: center;
+    font-weight: 600; font-size: 11px; letter-spacing: 0.02em;
+    flex-shrink: 0;
+  }
+  .user-info { line-height: 1.15; text-align: left; }
+  .user-name { font-size: 12.5px; font-weight: 500; }
+  .user-role { font-size: 10.5px; color: var(--ink-mute); }
+
+  /* ============================================
+     TOPBAR responsive — mobile
+     ============================================ */
+  @media (max-width: 720px) {
+    .topbar { padding: 0 12px; gap: 10px; height: 56px; }
+    .topbar-logo { width: auto; gap: 8px; }
+    .logo-mark { width: 30px; height: 30px; font-size: 11px; }
+    .logo-text { display: none; } /* Logo solo el círculo */
+    .topbar-center { gap: 8px; }
+    .location-switcher { padding: 6px 10px 7px; max-width: 160px; }
+    .location-name { font-size: 12px; }
+    .date-display { display: none; } /* Fecha se oculta en mobile, se muestra el día solo arriba en el saludo */
+    .topbar-user { padding: 3px; border: none; gap: 0; background: transparent; }
+    .topbar-user:hover { background: transparent; border: none; }
+    .user-info { display: none; }
+    .user-avatar { width: 32px; height: 32px; font-size: 11px; }
+  }
+
+  /* Más estrecho: ocultar el ":hover" trail de location-switcher */
+  @media (max-width: 380px) {
+    .location-switcher { padding: 5px 8px 6px; max-width: 130px; }
+    .location-name { font-size: 11.5px; }
+    .location-caret { width: 9px; height: 9px; }
+  }
 
   /* SIDEBAR */
   .sidebar {
@@ -344,10 +398,6 @@
     :root { --sidebar-w: 0px; }
     .sidebar { display: none; }
     .main { padding: 24px 18px 80px; }
-    .topbar { padding: 0 18px; gap: 14px; }
-    .topbar-logo { width: auto; }
-    .logo-text, .date-display-full { display: none; }
-    .topbar-user .user-info, .conn-status span:not(.conn-dot) { display: none; }
     .page-title { font-size: 30px; }
     .form-grid { grid-template-columns: 1fr; }
     .class-header { grid-template-columns: 60px 1fr auto; }
@@ -738,20 +788,11 @@
     </div>
   </div>
   <div class="topbar-center">
-    <button class="location-switcher" onclick="openLocationModal()">
-      <div class="location-pin">
-        <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
-      </div>
-      <div class="location-info">
-        <div class="location-label">Sede</div>
-        <div class="location-name" id="current-location-name">Cargando...</div>
-      </div>
-      <svg class="location-caret" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg>
+    <button class="location-switcher" id="location-switcher-btn" onclick="openLocationModal()">
+      <span class="location-name" id="current-location-name">Cargando...</span>
+      <svg class="location-caret" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg>
+      <span class="location-conn-line" id="conn-status" title="Sin conexión"></span>
     </button>
-    <div id="conn-status" class="conn-status conn-offline">
-      <div class="conn-dot"></div>
-      <span id="conn-text">Sin conexión</span>
-    </div>
   </div>
   <div class="date-display">
     <div class="date-display-day" id="date-day">—</div>
@@ -1891,20 +1932,23 @@ const STATE = {
 // ============================================
 async function checkConnection() {
   const statusEl = document.getElementById('conn-status');
-  const textEl = document.getElementById('conn-text');
   const roleEl = document.getElementById('user-role-text');
+  // Helper: aplicar estado al elemento (la línea sutil debajo de la sede)
+  const setStatus = (klass, title) => {
+    if (statusEl) {
+      statusEl.className = 'location-conn-line ' + klass;
+      statusEl.setAttribute('title', title);
+    }
+  };
   if (!supabase) {
-    if (statusEl) statusEl.className = 'conn-status conn-offline';
-    if (textEl) textEl.textContent = 'Modo demo';
+    setStatus('conn-offline', 'Modo demo');
     if (roleEl) roleEl.textContent = 'Modo demo';
     return false;
   }
   try {
     const { error } = await sb.from('locations').select('id').limit(1);
     if (error) throw error;
-    if (statusEl) statusEl.className = 'conn-status conn-online';
-    if (textEl) textEl.textContent = 'Conectado';
-    // Solo sobrescribe el rol cuando es coordinador (instructor/alumno tienen su propio texto)
+    setStatus('', 'Conectado');
     if (roleEl && (!CURRENT_USER || CURRENT_USER.role === 'coordinator')) {
       roleEl.textContent = 'Coordinador · Online';
     }
@@ -1912,8 +1956,7 @@ async function checkConnection() {
     return true;
   } catch (e) {
     console.error('Supabase error:', e);
-    if (statusEl) statusEl.className = 'conn-status conn-error';
-    if (textEl) textEl.textContent = 'Error de conexión';
+    setStatus('conn-error', 'Error de conexión');
     return false;
   }
 }
