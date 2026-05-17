@@ -3311,8 +3311,8 @@ function renderScheduleCellDrawer(locationId, dateIso, hour) {
           </div>
           <div style="font-size: 11px; color: var(--ink-mute); margin-top: 2px;">${metaParts.join(' · ')}</div>
         </div>
+        <button onclick="copyConfirmMessageForCell('${student.id}', '${dateIso}', ${hour}, '${locationId}')" title="Copiar mensaje al portapapeles" style="background: white; border: 1px solid var(--line); border-radius: 8px; padding: 6px 11px; font-size: 11.5px; cursor: pointer; color: var(--ink-soft); font-family: var(--body); font-weight: 500; display: inline-flex; align-items: center; gap: 5px;">📋 Copiar</button>
         ${hasPhone ? `
-          <button onclick="copyConfirmMessageForCell('${student.id}', '${dateIso}', ${hour}, '${locationId}')" title="Copiar mensaje al portapapeles" style="background: white; border: 1px solid var(--line); border-radius: 8px; padding: 6px 11px; font-size: 11.5px; cursor: pointer; color: var(--ink-soft); font-family: var(--body); font-weight: 500; display: inline-flex; align-items: center; gap: 5px;">📋 Copiar</button>
           <button onclick="openWhatsAppForCell('${student.id}', '${dateIso}', ${hour}, '${locationId}')" title="Abrir WhatsApp con mensaje" style="background: white; border: 1px solid var(--line); border-radius: 8px; padding: 6px 11px; font-size: 11.5px; cursor: pointer; color: #25D366; font-family: var(--body); font-weight: 500; display: inline-flex; align-items: center; gap: 5px;">💬 WhatsApp</button>
         ` : ''}
         <button onclick="toggleConfirmedForCell('${student.id}', '${dateIso}', ${hour}, '${locationId}')" data-confirm-btn="${student.id}"
