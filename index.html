@@ -12013,21 +12013,50 @@ function renderDetailClasses(stud) {
 
     listHTML = groupBlocks.join('') || '<p style="color: var(--ink-mute); font-size: 13px; padding: 20px 0;">No hay clases próximas.</p>';
   } else {
+    // Filtros 'week' y 'month': usar la attendance para el badge
     listHTML = classes.map(b => {
       const sess = b.class_sessions;
       const lc = STATE.locations.find(l => l.id === sess.location_id);
       const inst = STATE.instructors.find(i => i.id === sess.instructor_id);
       const isPast = sess.session_date < todayIso;
-      const statusBadge = b.status === 'cancelled'
-        ? '<span style="font-size: 11px; padding: 2px 8px; background: #fee; color: #b00; border-radius: 999px;">Cancelada</span>'
-        : (b.status === 'asistio' ? '<span style="font-size: 11px; padding: 2px 8px; background: #d4f4d4; color: #1a5e1a; border-radius: 999px;">✓ Asistió</span>'
-        : (b.status === 'recoverable' ? '<span style="font-size: 11px; padding: 2px 8px; background: var(--warn-soft); color: #412402; border-radius: 999px;">Recuperable</span>'
-        : (b.status === 'no_show' ? '<span style="font-size: 11px; padding: 2px 8px; background: #fee; color: #b00; border-radius: 999px;">No asistió</span>' : '')));
+
+      // Buscar attendance para mostrar el badge correcto
+      const att = _attForBooking(b);
+      const attStatus = att?.status;
+      let statusBadge;
+      let sourceLabel = b.source === 'flexible' ? 'Flexible' : (b.source === 'makeup' ? 'Recuperación' : 'Asignada');
+      if (attStatus === 'attended') {
+        statusBadge = '<span style="font-size: 11px; padding: 3px 9px; background: #d4f4d4; color: #1a5e1a; border-radius: 999px;">✓ Asistió</span>';
+        sourceLabel = null; // si ya está marcada, no repetir "Asignada/Flexible"
+      } else if (attStatus === 'recoverable') {
+        statusBadge = '<span style="font-size: 11px; padding: 3px 9px; background: var(--warn-soft); color: #412402; border-radius: 999px;">⊙ Falta justificada</span>';
+        sourceLabel = null;
+      } else if (attStatus === 'lost') {
+        statusBadge = '<span style="font-size: 11px; padding: 3px 9px; background: #fee; color: #b00; border-radius: 999px;">⚠ Cancelación tardía</span>';
+        sourceLabel = null;
+      } else if (attStatus === 'no_show') {
+        statusBadge = '<span style="font-size: 11px; padding: 3px 9px; background: #fee; color: #b00; border-radius: 999px;">✗ No vino</span>';
+        sourceLabel = null;
+      } else if (b.status === 'cancelled') {
+        statusBadge = '<span style="font-size: 11px; padding: 3px 9px; background: #fee; color: #b00; border-radius: 999px;">Cancelada</span>';
+        sourceLabel = null;
+      } else {
+        // Sin attendance procesada: mostrar badge "Asignada" tipo neutro
+        statusBadge = '<span style="font-size: 11px; padding: 3px 9px; background: var(--fit-lavender-pale); color: var(--fit-purple); border-radius: 999px;">Asignada</span>';
+        sourceLabel = null; // no duplicar
+      }
+
+      const metaParts = [
+        escape(lc?.name || ''),
+        inst ? 'Prof. ' + escape(inst.first_name) : null,
+        sourceLabel,
+      ].filter(Boolean);
+
       return `
-        <div style="background: white; border: 1px solid var(--line); border-radius: var(--radius-md); padding: 14px 18px; margin-bottom: 8px; display: flex; align-items: center; justify-content: space-between; ${isPast && b.status !== 'asistio' ? 'opacity: 0.85;' : ''}">
+        <div style="background: white; border: 1px solid var(--line); border-radius: var(--radius-md); padding: 14px 18px; margin-bottom: 8px; display: flex; align-items: center; justify-content: space-between; ${isPast && attStatus !== 'attended' ? 'opacity: 0.85;' : ''}">
           <div>
             <div style="font-weight: 500;">${formatDate(sess.session_date)} · ${formatHour(sess.hour)}</div>
-            <div style="font-size: 12px; color: var(--ink-mute); margin-top: 2px;">${escape(lc?.name || '')}${inst ? ' · Prof. ' + escape(inst.first_name) : ''} · ${b.source === 'flexible' ? 'Flexible' : (b.source === 'makeup' ? 'Recuperación' : 'Asignada')}</div>
+            <div style="font-size: 12px; color: var(--ink-mute); margin-top: 2px;">${metaParts.join(' · ')}</div>
           </div>
           ${statusBadge}
         </div>
