@@ -4170,13 +4170,21 @@ async function loadScheduleEditorOccupancy() {
   console.log('[schedEditor] occupancy range:', startIso, '→', endIso, 'loc:', ed.locationId);
 
   const sessResp = await sb.from('class_sessions')
-    .select('id, session_date, hour, is_cancelled')
+    .select('id, session_date, hour, is_cancelled, instructor_id')
     .eq('location_id', ed.locationId)
     .gte('session_date', startIso)
     .lte('session_date', endIso);
   if (sessResp.error) throw new Error('Sessions: ' + sessResp.error.message);
   const sessions = sessResp.data || [];
   console.log('[schedEditor] sessions found:', sessions.length);
+
+  // Set de slots (dateIso|hour) que YA tienen sesión activa con instructor_id explícito.
+  // Esto cubre overrides manuales donde la coordinadora puso un profesor para esa clase.
+  ed.sessionsWithInstructor = new Set();
+  sessions.forEach(s => {
+    if (s.is_cancelled) return;
+    if (s.instructor_id) ed.sessionsWithInstructor.add(`${s.session_date}|${s.hour}`);
+  });
 
   const sessionIds = sessions.filter(s => !s.is_cancelled).map(s => s.id);
   let bookingsBySession = new Map();
@@ -4356,6 +4364,7 @@ function _renderScheduleEditorImpl() {
         <span style="display: flex; align-items: center; gap: 5px;"><span style="display: inline-block; width: 12px; height: 12px; border-radius: 3px; background: #DDF3DC;"></span>Buena disp.</span>
         <span style="display: flex; align-items: center; gap: 5px;"><span style="display: inline-block; width: 12px; height: 12px; border-radius: 3px; background: #F5E9CC;"></span>Casi lleno</span>
         <span style="display: flex; align-items: center; gap: 5px;"><span style="display: inline-block; width: 12px; height: 12px; border-radius: 3px; background: #F8D9D9;"></span>Lleno</span>
+        <span style="display: flex; align-items: center; gap: 5px;"><span style="display: inline-block; width: 12px; height: 12px; border-radius: 3px; background: #F5F2EF; border: 1px solid var(--line);"></span>Sin profesor</span>
       </div>
     </div>
 
@@ -4482,6 +4491,26 @@ function renderScheduleEditorDayCell(d) {
 function renderScheduleEditorWeekDetail(week) {
   const ed = STATE.scheduleEditor;
   const todayIso = dateToIsoLocal(new Date());
+
+  // Helper: ¿hay profesor cubriendo este slot? (para mostrar bloqueada en celdas sin cobertura)
+  // Slot cubierto si:
+  //  1) Hay class_sessions activa con instructor_id explícito (override manual)
+  //  2) Hay instructor_schedules activo + vigente que cubra ese día_de_semana + hora + sede
+  const hasInstructorForSlot = (dateIso, hour) => {
+    if (ed.sessionsWithInstructor && ed.sessionsWithInstructor.has(`${dateIso}|${hour}`)) return true;
+    const date = new Date(dateIso + 'T12:00:00');
+    const dow = date.getDay();
+    return (STATE.schedules || []).some(s => {
+      if (!s.is_active) return false;
+      if (s.location_id !== ed.locationId) return false;
+      if (s.day_of_week !== dow) return false;
+      if (s.hour !== hour) return false;
+      if (s.effective_from && dateIso < s.effective_from) return false;
+      if (s.effective_to && dateIso > s.effective_to) return false;
+      return true;
+    });
+  };
+
   // Usar el paquete target (el que la coordinadora eligió en el selector)
   const targetPkg = ed.targetPackageId
     ? (ed.allPackages || []).find(p => p.id === ed.targetPackageId)
@@ -4522,11 +4551,19 @@ function renderScheduleEditorWeekDetail(week) {
       const occCount = ed.occupancyByKey.get(k) || 0;
       const isFull = occCount >= ed.capacity;
       const cantSelect = !isSel && selectedForTarget >= max && max > 0;
+      // Bloqueado: no hay profesor cubriendo este slot (ni schedule activo ni override manual)
+      // Solo bloqueamos si la celda está VACÍA — si ya hay alumnas agendadas o consumidas,
+      // dejamos pasar para no romper datos existentes; pero igual mostramos un indicador.
+      const noInstructor = !oob && !isConsumed && !isMissed && !hasInstructorForSlot(d.iso, hour);
+      const blocked = noInstructor && !wasOriginal && occCount === 0;
 
       let bg = '#fff', col = 'var(--ink)', txt = '', cursor = 'pointer', extra = '', mark = '';
 
       if (oob) {
         bg = '#EFEBE0'; col = 'var(--ink-faint)'; txt = '—'; cursor = 'not-allowed';
+      } else if (blocked) {
+        // Sin profesor disponible para este horario en este día
+        bg = '#F5F2EF'; col = 'var(--ink-faint)'; txt = 'sin prof.'; cursor = 'not-allowed'; extra = 'font-size: 10px; font-style: italic;';
       } else if (isConsumed) {
         bg = '#4F7A4D'; col = 'white'; txt = `${occCount}/${ed.capacity}`; cursor = 'not-allowed'; extra = 'font-weight: 600; font-size: 12px;';
         mark = `<span style="position: absolute; top: 3px; right: 5px; font-size: 11px; color: white;">✓</span>`;
@@ -4560,7 +4597,7 @@ function renderScheduleEditorWeekDetail(week) {
       }
 
       const ownsCell = isSel || wasOriginal;
-      const onclick = (oob || isConsumed || isMissed || (isFull && !ownsCell) || cantSelect) ? '' : `toggleScheduleEditorSlot('${k}')`;
+      const onclick = (oob || blocked || isConsumed || isMissed || (isFull && !ownsCell) || cantSelect) ? '' : `toggleScheduleEditorSlot('${k}')`;
       h += `<div onclick="${onclick}" style="position: relative; background: ${bg}; color: ${col}; padding: 10px 6px; border-radius: 7px; text-align: center; cursor: ${cursor}; min-height: 36px; display: flex; align-items: center; justify-content: center; ${extra}">${txt}${mark}</div>`;
     });
     h += `</div>`;
