@@ -3916,9 +3916,19 @@ async function loadScheduleEditorOccupancy() {
 
 function renderScheduleEditor() {
   console.log('[schedEditor] render START');
+  // Preservar scroll position antes de re-renderear
+  const scrollWrap = document.getElementById('schedule-editor-month-grid-wrap');
+  const savedScroll = scrollWrap ? scrollWrap.scrollTop : 0;
   try {
     _renderScheduleEditorImpl();
     console.log('[schedEditor] render OK');
+    // Restaurar scroll
+    if (savedScroll > 0) {
+      requestAnimationFrame(() => {
+        const newWrap = document.getElementById('schedule-editor-month-grid-wrap');
+        if (newWrap) newWrap.scrollTop = savedScroll;
+      });
+    }
   } catch (err) {
     console.error('[schedEditor] RENDER ERROR:', err);
     document.getElementById('schedule-editor-body').innerHTML = `
@@ -3968,58 +3978,44 @@ function _renderScheduleEditorImpl() {
   // Selector de paquete (siempre que haya al menos 1 paquete vivo, para que la coordinadora vea explícitamente a cuál asigna)
   const livePkgs = ed.livePackages || [];
   const hasAnyLivePackage = livePkgs.length >= 1;
-  const pkgOptionsHtml = hasAnyLivePackage ? `
-    <div style="padding: 10px 28px; background: var(--fit-lavender-pale); display: flex; align-items: center; gap: 12px;">
-      <div style="font-size: 11px; color: var(--ink-mute); text-transform: uppercase; letter-spacing: 0.6px; font-weight: 600; white-space: nowrap;">Asignar a:</div>
-      <select onchange="changeScheduleEditorTargetPackage(this.value)" style="flex: 1; padding: 7px 12px; border: 1px solid var(--line); border-radius: 7px; font-size: 13px; background: white; color: var(--ink); font-family: inherit; cursor: pointer;">
-        ${livePkgs.map((p, idx) => {
-          const restantes = (p.classes_total || 0) - (p.classes_used || 0);
-          const isActive = idx === 0;
-          const label = `${escape(p.packages?.name || `Paquete ${p.classes_total}`)} · ${restantes} libre${restantes === 1 ? '' : 's'} · compra ${formatDate(p.purchase_date)}${isActive ? ' · ACTIVO' : ''}`;
-          return `<option value="${p.id}" ${p.id === ed.targetPackageId ? 'selected' : ''}>${label}</option>`;
-        }).join('')}
-      </select>
-    </div>
-  ` : '';
 
   const pkgInfoLine = targetPkg
     ? `Paquete ${targetPkg.classes_total} · ${remaining} restantes${recoverable > 0 ? ` + ${recoverable} recuperable${recoverable === 1 ? '' : 's'}` : ''}`
     : 'Sin paquete activo';
 
   document.getElementById('schedule-editor-body').innerHTML = `
-    <!-- ZONA 1: STICKY TOP — info del alumno + selector paquete + nav mes -->
+    <!-- ZONA 1: STICKY TOP — 2 líneas con toda la info -->
     <div style="flex-shrink: 0; background: white; border-bottom: 1px solid var(--line);">
-      <!-- Fila 1: avatar + nombre + paquete info + contador -->
-      <div style="padding: 12px 28px; display: flex; align-items: center; justify-content: space-between; gap: 18px;">
-        <div style="flex: 1; display: flex; align-items: center; gap: 12px; min-width: 0;">
+      <!-- Fila 1: avatar + nombre + paquete + sede + pill sin agendar + contador -->
+      <div style="padding: 12px 28px; display: flex; align-items: center; gap: 18px;">
+        <div style="display: flex; align-items: center; gap: 11px; min-width: 0; flex: 1;">
           <div class="student-avatar" style="width: 40px; height: 40px; font-size: 13px; flex-shrink: 0;">${initials(stud)}</div>
           <div style="min-width: 0;">
             <div style="font-family: var(--display); font-style: italic; font-size: 19px; color: var(--ink); line-height: 1.1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${escape(stud.first_name)} ${escape(stud.last_name || '')}</div>
-            <div style="font-size: 12px; color: var(--ink-mute); margin-top: 2px;">${pkgInfoLine}</div>
+            <div style="font-size: 12px; color: var(--ink-mute); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${pkgInfoLine}</div>
           </div>
         </div>
-        <div style="display: flex; align-items: center; gap: 10px; flex-shrink: 0;">
-          ${pending > 0 ? `<div style="font-size: 11px; color: #8B6F1A; padding: 5px 11px; background: #FCEBA8; border-radius: 999px; font-weight: 500;">${pending} sin agendar</div>` : ''}
-          <div style="padding: 6px 18px; background: var(--fit-cream); border-radius: 12px; min-width: 100px; text-align: center;">
-            <div style="font-family: var(--display); font-size: 28px; font-weight: 400; color: var(--fit-purple); line-height: 1;">${selectedForTarget.size}<span style="color: var(--ink-faint); font-size: 20px; font-style: italic;">/${max}</span></div>
-            <div style="font-size: 9px; color: var(--ink-mute); text-transform: uppercase; letter-spacing: 1px; margin-top: 2px;">agendadas</div>
-          </div>
+        <div style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.7px; color: var(--ink-mute); font-weight: 600; flex-shrink: 0; white-space: nowrap;">Sede ${escape(loc.name)}</div>
+        ${pending > 0 ? `<div style="font-size: 11px; color: #8B6F1A; padding: 5px 11px; background: #FCEBA8; border-radius: 999px; font-weight: 500; flex-shrink: 0; white-space: nowrap;">${pending} sin agendar</div>` : ''}
+        <div style="padding: 6px 18px; background: var(--fit-cream); border-radius: 12px; min-width: 100px; text-align: center; flex-shrink: 0;">
+          <div style="font-family: var(--display); font-size: 28px; font-weight: 400; color: var(--fit-purple); line-height: 1;">${selectedForTarget.size}<span style="color: var(--ink-faint); font-size: 20px; font-style: italic;">/${max}</span></div>
+          <div style="font-size: 9px; color: var(--ink-mute); text-transform: uppercase; letter-spacing: 1px; margin-top: 2px;">agendadas</div>
         </div>
       </div>
 
-      <!-- Fila 2: selector de paquete (si aplica) -->
-      ${pkgOptionsHtml}
-
-      <!-- Fila 3: sede + nav mes + cambios sin guardar -->
-      <div style="padding: 10px 28px; display: flex; align-items: center; justify-content: space-between; background: var(--fit-cream); gap: 16px; flex-wrap: wrap;">
-        <div style="display: flex; align-items: center; gap: 14px; flex: 1; min-width: 0;">
-          <div style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.7px; color: var(--ink-mute); font-weight: 600;">Sede ${escape(loc.name)}</div>
-          ${hasChanges ? `
-            <div style="font-size: 12px; color: var(--fit-purple); padding: 4px 12px; background: var(--fit-lavender-pale); border-radius: 999px;">
-              ${toAdd.length > 0 ? `<strong>+${toAdd.length}</strong> nueva${toAdd.length === 1 ? '' : 's'}` : ''}${(toAdd.length > 0 && toCancel.length > 0) ? ' · ' : ''}${toCancel.length > 0 ? `<strong>−${toCancel.length}</strong> cancelada${toCancel.length === 1 ? '' : 's'}` : ''}
-            </div>
-          ` : ''}
-        </div>
+      <!-- Fila 2: selector de paquete + nav mes -->
+      <div style="padding: 10px 28px; background: var(--fit-lavender-pale); display: flex; align-items: center; gap: 14px;">
+        ${hasAnyLivePackage ? `
+          <div style="font-size: 11px; color: var(--ink-mute); text-transform: uppercase; letter-spacing: 0.6px; font-weight: 600; white-space: nowrap; flex-shrink: 0;">Asignar a:</div>
+          <select onchange="changeScheduleEditorTargetPackage(this.value)" style="flex: 1; padding: 7px 12px; border: 1px solid var(--line); border-radius: 7px; font-size: 13px; background: white; color: var(--ink); font-family: inherit; cursor: pointer; min-width: 0;">
+            ${livePkgs.map((p, idx) => {
+              const restantes = (p.classes_total || 0) - (p.classes_used || 0);
+              const isActive = idx === 0;
+              const label = `${escape(p.packages?.name || `Paquete ${p.classes_total}`)} · ${restantes} libre${restantes === 1 ? '' : 's'} · compra ${formatDate(p.purchase_date)}${isActive ? ' · ACTIVO' : ''}`;
+              return `<option value="${p.id}" ${p.id === ed.targetPackageId ? 'selected' : ''}>${label}</option>`;
+            }).join('')}
+          </select>
+        ` : '<div style="flex: 1;"></div>'}
         <div style="display: flex; align-items: center; gap: 10px; flex-shrink: 0;">
           <button onclick="navScheduleEditorMonth(-1)" style="background: white; border: 1px solid var(--line); border-radius: 8px; padding: 5px 12px; cursor: pointer; font-size: 13px; color: var(--fit-purple); font-family: var(--body);">←</button>
           <div style="font-family: var(--display); font-style: italic; font-size: 17px; color: var(--fit-purple-deep); min-width: 140px; text-align: center;">${monthLabel}</div>
@@ -4046,9 +4042,16 @@ function _renderScheduleEditorImpl() {
       </div>
     </div>
 
-    <!-- ZONA 3: STICKY FOOTER — botones -->
-    <div style="flex-shrink: 0; padding: 14px 28px; display: flex; justify-content: space-between; gap: 12px; border-top: 1px solid var(--line); background: white;">
-      <button class="btn btn-ghost" id="sched-editor-cancel-btn" onclick="if(!STATE.scheduleEditor?.saving) closeModals()" style="padding: 11px 22px; font-size: 14px;">Cerrar</button>
+    <!-- ZONA 3: STICKY FOOTER — botones (con pill de cambios sin guardar a la izquierda) -->
+    <div style="flex-shrink: 0; padding: 14px 28px; display: flex; justify-content: space-between; align-items: center; gap: 12px; border-top: 1px solid var(--line); background: white;">
+      <div style="display: flex; align-items: center; gap: 10px;">
+        <button class="btn btn-ghost" id="sched-editor-cancel-btn" onclick="if(!STATE.scheduleEditor?.saving) closeModals()" style="padding: 11px 22px; font-size: 14px;">Cerrar</button>
+        ${hasChanges ? `
+          <div style="font-size: 12px; color: var(--fit-purple); padding: 5px 12px; background: var(--fit-lavender-pale); border-radius: 999px;">
+            ${toAdd.length > 0 ? `<strong>+${toAdd.length}</strong> nueva${toAdd.length === 1 ? '' : 's'}` : ''}${(toAdd.length > 0 && toCancel.length > 0) ? ' · ' : ''}${toCancel.length > 0 ? `<strong>−${toCancel.length}</strong> cancelada${toCancel.length === 1 ? '' : 's'}` : ''}
+          </div>
+        ` : ''}
+      </div>
       <button class="btn btn-primary" id="sched-editor-save-btn" onclick="confirmScheduleEditorChanges()" ${!hasChanges ? 'disabled style="opacity: 0.5; cursor: not-allowed; padding: 11px 28px; font-size: 14px;"' : 'style="padding: 11px 28px; font-size: 14px; min-width: 180px;"'}>
         Guardar cambios
       </button>
