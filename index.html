@@ -11715,6 +11715,18 @@ function renderDetailClasses(stud) {
     return att || null;
   };
 
+  // Helper común: devuelve el HTML del badge según el status de attendance / booking
+  // Usa display: inline-flex para garantizar render visible y consistente
+  const _renderAttBadge = (attStatus, bStatus) => {
+    const base = 'display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 500; padding: 4px 10px; border-radius: 999px; white-space: nowrap; flex-shrink: 0;';
+    if (attStatus === 'attended') return `<span style="${base} background: #d4f4d4; color: #1a5e1a;">✓ Asistió</span>`;
+    if (attStatus === 'recoverable') return `<span style="${base} background: #FBE9C7; color: #6B4F0A;">⊙ Falta justificada</span>`;
+    if (attStatus === 'lost') return `<span style="${base} background: #FBE5E5; color: #8A2A2A;">⚠ Cancelación tardía</span>`;
+    if (attStatus === 'no_show') return `<span style="${base} background: #FBE5E5; color: #8A2A2A;">✗ No vino</span>`;
+    if (bStatus === 'cancelled') return `<span style="${base} background: #FBE5E5; color: #8A2A2A;">Cancelada</span>`;
+    return `<span style="${base} background: #EEEDFE; color: #3C3489;">Asignada</span>`;
+  };
+
   // Filtrado correcto de clases del alumno:
   // - Excluir si la session está cancelada
   // - Incluir si el booking está activo (cancelled_at IS NULL)
@@ -11838,18 +11850,10 @@ function renderDetailClasses(stud) {
       const lc = STATE.locations.find(l => l.id === sess.location_id);
       const inst = STATE.instructors.find(i => i.id === sess.instructor_id);
       const status = att?.status || b.status;
-      const statusBadges = {
-        attended:    '<span style="font-size: 11px; padding: 2px 8px; background: #d4f4d4; color: #1a5e1a; border-radius: 999px;">✓ Asistió</span>',
-        recoverable: '<span style="font-size: 11px; padding: 2px 8px; background: var(--warn-soft); color: #412402; border-radius: 999px;">⊙ Falta justificada</span>',
-        lost:        '<span style="font-size: 11px; padding: 2px 8px; background: #fee; color: #b00; border-radius: 999px;">⚠ Cancelación tardía</span>',
-        no_show:     '<span style="font-size: 11px; padding: 2px 8px; background: #fee; color: #b00; border-radius: 999px;">✗ No vino</span>',
-        pending:     '<span style="font-size: 11px; padding: 2px 8px; background: var(--fit-cream); color: var(--ink-mute); border-radius: 999px;">? Pendiente</span>',
-        cancelled:   '<span style="font-size: 11px; padding: 2px 8px; background: #fee; color: #b00; border-radius: 999px;">Cancelada</span>',
-      };
-      const statusBadge = statusBadges[status] || '';
+      const statusBadge = _renderAttBadge(status, b.status);
       return `
-        <div style="background: white; border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 10px 14px; margin-bottom: 6px; display: flex; align-items: center; justify-content: space-between;">
-          <div>
+        <div style="background: white; border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 10px 14px; margin-bottom: 6px; display: flex; align-items: center; justify-content: space-between; gap: 12px;">
+          <div style="min-width: 0;">
             <div style="font-weight: 500; font-size: 13px;">${formatDate(sess.session_date)} · ${formatHour(sess.hour)}</div>
             <div style="font-size: 11px; color: var(--ink-mute); margin-top: 2px;">${escape(lc?.name || '')}${inst ? ' · Prof. ' + escape(inst.first_name) : ''}</div>
           </div>
@@ -11943,26 +11947,11 @@ function renderDetailClasses(stud) {
       const sess = b.class_sessions;
       const lc = STATE.locations.find(l => l.id === sess.location_id);
       const inst = STATE.instructors.find(i => i.id === sess.instructor_id);
-      // Si la attendance ya está marcada, mostrar el badge correcto en lugar de "Asignada"
       const att = _attForBooking(b);
-      const attStatus = att?.status;
-      let statusBadge;
-      if (attStatus === 'attended') {
-        statusBadge = '<span style="font-size: 11px; padding: 2px 8px; background: #d4f4d4; color: #1a5e1a; border-radius: 999px;">✓ Asistió</span>';
-      } else if (attStatus === 'recoverable') {
-        statusBadge = '<span style="font-size: 11px; padding: 2px 8px; background: var(--warn-soft); color: #412402; border-radius: 999px;">⊙ Falta justificada</span>';
-      } else if (attStatus === 'lost') {
-        statusBadge = '<span style="font-size: 11px; padding: 2px 8px; background: #fee; color: #b00; border-radius: 999px;">⚠ Cancelación tardía</span>';
-      } else if (attStatus === 'no_show') {
-        statusBadge = '<span style="font-size: 11px; padding: 2px 8px; background: #fee; color: #b00; border-radius: 999px;">✗ No vino</span>';
-      } else if (b.status === 'cancelled') {
-        statusBadge = '<span style="font-size: 11px; padding: 2px 8px; background: #fee; color: #b00; border-radius: 999px;">Cancelada</span>';
-      } else {
-        statusBadge = '<span style="font-size: 11px; padding: 2px 8px; background: var(--fit-lavender-pale); color: var(--fit-purple); border-radius: 999px;">Asignada</span>';
-      }
+      const statusBadge = _renderAttBadge(att?.status, b.status);
       return `
-        <div style="background: white; border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 10px 14px; margin-bottom: 6px; display: flex; align-items: center; justify-content: space-between;">
-          <div>
+        <div style="background: white; border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 10px 14px; margin-bottom: 6px; display: flex; align-items: center; justify-content: space-between; gap: 12px;">
+          <div style="min-width: 0;">
             <div style="font-weight: 500; font-size: 13px;">${formatDate(sess.session_date)} · ${formatHour(sess.hour)}</div>
             <div style="font-size: 11px; color: var(--ink-mute); margin-top: 2px;">${escape(lc?.name || '')}${inst ? ' · Prof. ' + escape(inst.first_name) : ''}</div>
           </div>
@@ -12019,42 +12008,17 @@ function renderDetailClasses(stud) {
       const lc = STATE.locations.find(l => l.id === sess.location_id);
       const inst = STATE.instructors.find(i => i.id === sess.instructor_id);
       const isPast = sess.session_date < todayIso;
-
-      // Buscar attendance para mostrar el badge correcto
       const att = _attForBooking(b);
-      const attStatus = att?.status;
-      let statusBadge;
-      let sourceLabel = b.source === 'flexible' ? 'Flexible' : (b.source === 'makeup' ? 'Recuperación' : 'Asignada');
-      if (attStatus === 'attended') {
-        statusBadge = '<span style="font-size: 11px; padding: 3px 9px; background: #d4f4d4; color: #1a5e1a; border-radius: 999px;">✓ Asistió</span>';
-        sourceLabel = null; // si ya está marcada, no repetir "Asignada/Flexible"
-      } else if (attStatus === 'recoverable') {
-        statusBadge = '<span style="font-size: 11px; padding: 3px 9px; background: var(--warn-soft); color: #412402; border-radius: 999px;">⊙ Falta justificada</span>';
-        sourceLabel = null;
-      } else if (attStatus === 'lost') {
-        statusBadge = '<span style="font-size: 11px; padding: 3px 9px; background: #fee; color: #b00; border-radius: 999px;">⚠ Cancelación tardía</span>';
-        sourceLabel = null;
-      } else if (attStatus === 'no_show') {
-        statusBadge = '<span style="font-size: 11px; padding: 3px 9px; background: #fee; color: #b00; border-radius: 999px;">✗ No vino</span>';
-        sourceLabel = null;
-      } else if (b.status === 'cancelled') {
-        statusBadge = '<span style="font-size: 11px; padding: 3px 9px; background: #fee; color: #b00; border-radius: 999px;">Cancelada</span>';
-        sourceLabel = null;
-      } else {
-        // Sin attendance procesada: mostrar badge "Asignada" tipo neutro
-        statusBadge = '<span style="font-size: 11px; padding: 3px 9px; background: var(--fit-lavender-pale); color: var(--fit-purple); border-radius: 999px;">Asignada</span>';
-        sourceLabel = null; // no duplicar
-      }
+      const statusBadge = _renderAttBadge(att?.status, b.status);
 
       const metaParts = [
         escape(lc?.name || ''),
         inst ? 'Prof. ' + escape(inst.first_name) : null,
-        sourceLabel,
       ].filter(Boolean);
 
       return `
-        <div style="background: white; border: 1px solid var(--line); border-radius: var(--radius-md); padding: 14px 18px; margin-bottom: 8px; display: flex; align-items: center; justify-content: space-between; ${isPast && attStatus !== 'attended' ? 'opacity: 0.85;' : ''}">
-          <div>
+        <div style="background: white; border: 1px solid var(--line); border-radius: var(--radius-md); padding: 14px 18px; margin-bottom: 8px; display: flex; align-items: center; justify-content: space-between; gap: 12px; ${isPast && att?.status !== 'attended' ? 'opacity: 0.85;' : ''}">
+          <div style="min-width: 0;">
             <div style="font-weight: 500;">${formatDate(sess.session_date)} · ${formatHour(sess.hour)}</div>
             <div style="font-size: 12px; color: var(--ink-mute); margin-top: 2px;">${metaParts.join(' · ')}</div>
           </div>
