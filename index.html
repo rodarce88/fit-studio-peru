@@ -1163,11 +1163,11 @@
 <!-- STUDENT SCHEDULE EDITOR MODAL (calendar full view) -->
 <div class="modal-backdrop" id="schedule-editor-modal" onclick="if(event.target===this && !STATE.scheduleEditor?.saving) closeModals()">
   <div class="modal-card" style="width: 96vw; max-width: 1280px; max-height: 94vh; overflow: hidden; display: flex; flex-direction: column;">
-    <div class="modal-header" style="padding: 18px 28px;">
-      <div class="modal-title" style="font-size: 26px;">Agendar <em>clases</em></div>
+    <div class="modal-header" style="padding: 14px 28px; flex-shrink: 0;">
+      <div class="modal-title" style="font-size: 22px;">Agendar <em>clases</em></div>
       <button class="modal-close" id="sched-editor-close-btn" onclick="if(!STATE.scheduleEditor?.saving) closeModals()">✕</button>
     </div>
-    <div id="schedule-editor-body" style="padding-top: 0; overflow-y: auto; flex: 1;"></div>
+    <div id="schedule-editor-body" style="overflow: hidden; flex: 1; display: flex; flex-direction: column;"></div>
   </div>
 </div>
 
@@ -3969,9 +3969,9 @@ function _renderScheduleEditorImpl() {
   const livePkgs = ed.livePackages || [];
   const hasAnyLivePackage = livePkgs.length >= 1;
   const pkgOptionsHtml = hasAnyLivePackage ? `
-    <div style="padding: 14px 28px; background: var(--fit-lavender-pale); border-bottom: 1px solid var(--line);">
-      <div style="font-size: 11px; color: var(--ink-mute); margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.8px; font-weight: 600;">Estás añadiendo clases al paquete:</div>
-      <select onchange="changeScheduleEditorTargetPackage(this.value)" style="width: 100%; padding: 11px 14px; border: 1px solid var(--line); border-radius: 8px; font-size: 14px; background: white; color: var(--ink); font-family: inherit; cursor: pointer;">
+    <div style="padding: 10px 28px; background: var(--fit-lavender-pale); display: flex; align-items: center; gap: 12px;">
+      <div style="font-size: 11px; color: var(--ink-mute); text-transform: uppercase; letter-spacing: 0.6px; font-weight: 600; white-space: nowrap;">Asignar a:</div>
+      <select onchange="changeScheduleEditorTargetPackage(this.value)" style="flex: 1; padding: 7px 12px; border: 1px solid var(--line); border-radius: 7px; font-size: 13px; background: white; color: var(--ink); font-family: inherit; cursor: pointer;">
         ${livePkgs.map((p, idx) => {
           const restantes = (p.classes_total || 0) - (p.classes_used || 0);
           const isActive = idx === 0;
@@ -3987,55 +3987,67 @@ function _renderScheduleEditorImpl() {
     : 'Sin paquete activo';
 
   document.getElementById('schedule-editor-body').innerHTML = `
-    <div style="padding: 18px 28px 16px; border-bottom: 1px solid var(--line); display: flex; align-items: center; justify-content: space-between; gap: 20px;">
-      <div style="flex: 1; display: flex; align-items: center; gap: 14px;">
-        <div class="student-avatar" style="width: 48px; height: 48px; font-size: 16px;">${initials(stud)}</div>
-        <div>
-          <div style="font-family: var(--display); font-style: italic; font-size: 22px; color: var(--ink); line-height: 1.1;">${escape(stud.first_name)} ${escape(stud.last_name || '')}</div>
-          <div style="font-size: 13px; color: var(--ink-mute); margin-top: 4px;">${pkgInfoLine}</div>
+    <!-- ZONA 1: STICKY TOP — info del alumno + selector paquete + nav mes -->
+    <div style="flex-shrink: 0; background: white; border-bottom: 1px solid var(--line);">
+      <!-- Fila 1: avatar + nombre + paquete info + contador -->
+      <div style="padding: 12px 28px; display: flex; align-items: center; justify-content: space-between; gap: 18px;">
+        <div style="flex: 1; display: flex; align-items: center; gap: 12px; min-width: 0;">
+          <div class="student-avatar" style="width: 40px; height: 40px; font-size: 13px; flex-shrink: 0;">${initials(stud)}</div>
+          <div style="min-width: 0;">
+            <div style="font-family: var(--display); font-style: italic; font-size: 19px; color: var(--ink); line-height: 1.1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${escape(stud.first_name)} ${escape(stud.last_name || '')}</div>
+            <div style="font-size: 12px; color: var(--ink-mute); margin-top: 2px;">${pkgInfoLine}</div>
+          </div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 10px; flex-shrink: 0;">
+          ${pending > 0 ? `<div style="font-size: 11px; color: #8B6F1A; padding: 5px 11px; background: #FCEBA8; border-radius: 999px; font-weight: 500;">${pending} sin agendar</div>` : ''}
+          <div style="padding: 6px 18px; background: var(--fit-cream); border-radius: 12px; min-width: 100px; text-align: center;">
+            <div style="font-family: var(--display); font-size: 28px; font-weight: 400; color: var(--fit-purple); line-height: 1;">${selectedForTarget.size}<span style="color: var(--ink-faint); font-size: 20px; font-style: italic;">/${max}</span></div>
+            <div style="font-size: 9px; color: var(--ink-mute); text-transform: uppercase; letter-spacing: 1px; margin-top: 2px;">agendadas</div>
+          </div>
         </div>
       </div>
-      <div style="text-align: right; display: flex; align-items: center; gap: 12px;">
-        <div style="padding: 10px 22px; background: var(--fit-cream); border-radius: 14px; min-width: 120px; text-align: center;">
-          <div style="font-family: var(--display); font-size: 36px; font-weight: 400; color: var(--fit-purple); line-height: 1;">${selectedForTarget.size}<span style="color: var(--ink-faint); font-size: 24px; font-style: italic;">/${max}</span></div>
-          <div style="font-size: 10px; color: var(--ink-mute); text-transform: uppercase; letter-spacing: 1px; margin-top: 4px;">agendadas</div>
+
+      <!-- Fila 2: selector de paquete (si aplica) -->
+      ${pkgOptionsHtml}
+
+      <!-- Fila 3: sede + nav mes + cambios sin guardar -->
+      <div style="padding: 10px 28px; display: flex; align-items: center; justify-content: space-between; background: var(--fit-cream); gap: 16px; flex-wrap: wrap;">
+        <div style="display: flex; align-items: center; gap: 14px; flex: 1; min-width: 0;">
+          <div style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.7px; color: var(--ink-mute); font-weight: 600;">Sede ${escape(loc.name)}</div>
+          ${hasChanges ? `
+            <div style="font-size: 12px; color: var(--fit-purple); padding: 4px 12px; background: var(--fit-lavender-pale); border-radius: 999px;">
+              ${toAdd.length > 0 ? `<strong>+${toAdd.length}</strong> nueva${toAdd.length === 1 ? '' : 's'}` : ''}${(toAdd.length > 0 && toCancel.length > 0) ? ' · ' : ''}${toCancel.length > 0 ? `<strong>−${toCancel.length}</strong> cancelada${toCancel.length === 1 ? '' : 's'}` : ''}
+            </div>
+          ` : ''}
         </div>
-        ${pending > 0 ? `<div style="font-size: 11px; color: #8B6F1A; padding: 6px 12px; background: #FCEBA8; border-radius: 999px; font-weight: 500;">${pending} sin agendar</div>` : ''}
+        <div style="display: flex; align-items: center; gap: 10px; flex-shrink: 0;">
+          <button onclick="navScheduleEditorMonth(-1)" style="background: white; border: 1px solid var(--line); border-radius: 8px; padding: 5px 12px; cursor: pointer; font-size: 13px; color: var(--fit-purple); font-family: var(--body);">←</button>
+          <div style="font-family: var(--display); font-style: italic; font-size: 17px; color: var(--fit-purple-deep); min-width: 140px; text-align: center;">${monthLabel}</div>
+          <button onclick="navScheduleEditorMonth(1)" style="background: white; border: 1px solid var(--line); border-radius: 8px; padding: 5px 12px; cursor: pointer; font-size: 13px; color: var(--fit-purple); font-family: var(--body);">→</button>
+        </div>
       </div>
     </div>
 
-    ${pkgOptionsHtml}
-
-    ${hasChanges ? `
-      <div style="padding: 10px 28px; background: var(--fit-lavender-pale); font-size: 13px; color: var(--fit-purple); border-bottom: 1px solid var(--line);">
-        Cambios sin guardar: ${toAdd.length > 0 ? `<strong>+${toAdd.length}</strong> nueva${toAdd.length === 1 ? '' : 's'}` : ''}${(toAdd.length > 0 && toCancel.length > 0) ? ' · ' : ''}${toCancel.length > 0 ? `<strong>−${toCancel.length}</strong> cancelada${toCancel.length === 1 ? '' : 's'}` : ''}
+    <!-- ZONA 2: SCROLL MIDDLE — calendario -->
+    <div style="flex: 1; overflow-y: auto; padding: 16px 28px 8px;" id="schedule-editor-month-grid-wrap">
+      <div id="schedule-editor-month-grid">
+        ${renderScheduleEditorMonthGrid()}
       </div>
-    ` : ''}
 
-    <div style="padding: 14px 28px; display: flex; align-items: center; justify-content: space-between; background: var(--fit-cream);">
-      <div style="font-size: 12px; text-transform: uppercase; letter-spacing: 0.8px; color: var(--ink-mute); font-weight: 600;">Sede ${escape(loc.name)}</div>
-      <div style="display: flex; align-items: center; gap: 12px;">
-        <button onclick="navScheduleEditorMonth(-1)" style="background: white; border: 1px solid var(--line); border-radius: 8px; padding: 6px 14px; cursor: pointer; font-size: 14px; color: var(--fit-purple); font-family: var(--body);">←</button>
-        <div style="font-family: var(--display); font-style: italic; font-size: 20px; color: var(--fit-purple-deep); min-width: 160px; text-align: center;">${monthLabel}</div>
-        <button onclick="navScheduleEditorMonth(1)" style="background: white; border: 1px solid var(--line); border-radius: 8px; padding: 6px 14px; cursor: pointer; font-size: 14px; color: var(--fit-purple); font-family: var(--body);">→</button>
+      <!-- Leyenda dentro del scroll, al fondo -->
+      <div style="padding: 14px 0 4px; display: flex; flex-wrap: wrap; gap: 14px; font-size: 11px; color: var(--ink-soft); border-top: 1px solid var(--line-soft); margin-top: 12px;">
+        <span style="display: flex; align-items: center; gap: 5px;"><span style="display: inline-block; width: 12px; height: 12px; border-radius: 3px; background: var(--fit-purple);"></span>Agendada</span>
+        <span style="display: flex; align-items: center; gap: 5px;"><span style="display: inline-block; width: 12px; height: 12px; border-radius: 3px; background: #4F7A4D;"></span>Ya tomada</span>
+        <span style="display: flex; align-items: center; gap: 5px;"><span style="display: inline-block; width: 12px; height: 12px; border-radius: 3px; background: #90B58D;"></span>Pasada (atendió ⏱)</span>
+        <span style="display: flex; align-items: center; gap: 5px;"><span style="display: inline-block; width: 12px; height: 12px; border-radius: 3px; background: #B8A88A;"></span>No asistió</span>
+        <span style="display: flex; align-items: center; gap: 5px;"><span style="display: inline-block; width: 12px; height: 12px; border-radius: 3px; background: #DDF3DC;"></span>Buena disp.</span>
+        <span style="display: flex; align-items: center; gap: 5px;"><span style="display: inline-block; width: 12px; height: 12px; border-radius: 3px; background: #F5E9CC;"></span>Casi lleno</span>
+        <span style="display: flex; align-items: center; gap: 5px;"><span style="display: inline-block; width: 12px; height: 12px; border-radius: 3px; background: #F8D9D9;"></span>Lleno</span>
       </div>
     </div>
 
-    <div style="padding: 16px 28px 22px;" id="schedule-editor-month-grid">
-      ${renderScheduleEditorMonthGrid()}
-    </div>
-
-    <div style="padding: 14px 28px; border-top: 1px solid var(--line); background: var(--fit-cream); display: flex; flex-wrap: wrap; gap: 16px; font-size: 12px; color: var(--ink-soft);">
-      <span style="display: flex; align-items: center; gap: 6px;"><span style="display: inline-block; width: 14px; height: 14px; border-radius: 4px; background: var(--fit-purple);"></span>Agendada</span>
-      <span style="display: flex; align-items: center; gap: 6px;"><span style="display: inline-block; width: 14px; height: 14px; border-radius: 4px; background: #4F7A4D;"></span>Ya tomada</span>
-      <span style="display: flex; align-items: center; gap: 6px;"><span style="display: inline-block; width: 14px; height: 14px; border-radius: 4px; background: #90B58D;"></span>Pasada (atendió ⏱)</span>
-      <span style="display: flex; align-items: center; gap: 6px;"><span style="display: inline-block; width: 14px; height: 14px; border-radius: 4px; background: #B8A88A;"></span>No asistió</span>
-      <span style="display: flex; align-items: center; gap: 6px;"><span style="display: inline-block; width: 14px; height: 14px; border-radius: 4px; background: #DDF3DC;"></span>Buena disp.</span>
-      <span style="display: flex; align-items: center; gap: 6px;"><span style="display: inline-block; width: 14px; height: 14px; border-radius: 4px; background: #F5E9CC;"></span>Casi lleno</span>
-      <span style="display: flex; align-items: center; gap: 6px;"><span style="display: inline-block; width: 14px; height: 14px; border-radius: 4px; background: #F8D9D9;"></span>Lleno</span>
-    </div>
-
-    <div style="padding: 16px 28px 18px; display: flex; justify-content: space-between; gap: 12px; border-top: 1px solid var(--line); background: white;">
+    <!-- ZONA 3: STICKY FOOTER — botones -->
+    <div style="flex-shrink: 0; padding: 14px 28px; display: flex; justify-content: space-between; gap: 12px; border-top: 1px solid var(--line); background: white;">
       <button class="btn btn-ghost" id="sched-editor-cancel-btn" onclick="if(!STATE.scheduleEditor?.saving) closeModals()" style="padding: 11px 22px; font-size: 14px;">Cerrar</button>
       <button class="btn btn-primary" id="sched-editor-save-btn" onclick="confirmScheduleEditorChanges()" ${!hasChanges ? 'disabled style="opacity: 0.5; cursor: not-allowed; padding: 11px 28px; font-size: 14px;"' : 'style="padding: 11px 28px; font-size: 14px; min-width: 180px;"'}>
         Guardar cambios
@@ -4074,14 +4086,14 @@ function renderScheduleEditorMonthGrid() {
     weeks.push(days);
   }
 
-  let html = `<div style="display: grid; grid-template-columns: 28px repeat(7, 1fr); gap: 6px; margin-bottom: 8px; font-size: 12px; color: var(--ink-mute); text-align: center; text-transform: uppercase; letter-spacing: 0.8px; font-weight: 600;">
+  let html = `<div style="display: grid; grid-template-columns: 56px repeat(7, 1fr); gap: 6px; margin-bottom: 8px; font-size: 12px; color: var(--ink-mute); text-align: center; text-transform: uppercase; letter-spacing: 0.8px; font-weight: 600;">
     <div></div><div>L</div><div>M</div><div>M</div><div>J</div><div>V</div><div>S</div><div>D</div>
   </div>`;
 
   weeks.forEach((week, wIdx) => {
     const isExp = ed.expandedWeek === wIdx;
-    html += `<div style="display: grid; grid-template-columns: 28px repeat(7, 1fr); gap: 6px; margin-bottom: 6px;">`;
-    html += `<div onclick="toggleScheduleEditorWeek(${wIdx})" style="display: flex; align-items: center; justify-content: center; cursor: pointer; color: var(--fit-purple); font-size: 14px; transform: ${isExp ? 'rotate(90deg)' : 'rotate(0deg)'}; transition: transform 0.15s;">▶</div>`;
+    html += `<div style="display: grid; grid-template-columns: 56px repeat(7, 1fr); gap: 6px; margin-bottom: 6px;">`;
+    html += `<div onclick="toggleScheduleEditorWeek(${wIdx})" style="display: flex; align-items: center; justify-content: center; cursor: pointer; color: var(--fit-purple); font-size: 16px; transform: ${isExp ? 'rotate(90deg)' : 'rotate(0deg)'}; transition: transform 0.15s;">▶</div>`;
 
     week.forEach(d => {
       html += renderScheduleEditorDayCell(d);
@@ -4167,8 +4179,8 @@ function renderScheduleEditorWeekDetail(week) {
 
   const formatHourLocal = h => h < 12 ? `${h}am` : (h === 12 ? '12pm' : `${h - 12}pm`);
 
-  let h = `<div style="margin: 8px 0 14px; padding: 16px; background: var(--fit-cream); border-radius: 12px;">
-    <div style="display: grid; grid-template-columns: 56px repeat(7, 1fr); gap: 5px; margin-bottom: 10px; font-size: 12px; color: var(--ink-mute); text-align: center;">
+  let h = `<div style="margin: 6px 0 14px; padding: 14px 0; background: var(--fit-cream); border-radius: 12px; border: 1px solid var(--line);">
+    <div style="display: grid; grid-template-columns: 56px repeat(7, 1fr); gap: 6px; margin-bottom: 10px; padding: 0 14px 0 0; font-size: 12px; color: var(--ink-mute); text-align: center;">
       <div></div>`;
   week.forEach((d, i) => {
     h += `<div style="font-weight: 600; color: ${d.inMonth ? 'var(--fit-purple)' : 'var(--ink-faint)'};">${dayLabels[i]} ${d.day}<span style="color: var(--ink-faint); font-weight: 400; font-size: 11px;"> ${monthLabels[d.month - 1]}</span></div>`;
@@ -4176,8 +4188,8 @@ function renderScheduleEditorWeekDetail(week) {
   h += `</div>`;
 
   SCHED_HOURS.forEach(hour => {
-    h += `<div style="display: grid; grid-template-columns: 56px repeat(7, 1fr); gap: 5px; margin-bottom: 5px;">
-      <div style="display: flex; align-items: center; justify-content: flex-end; padding-right: 8px; font-size: 13px; color: var(--ink-mute); font-weight: 500; font-family: var(--display); font-style: italic;">${formatHourLocal(hour)}</div>`;
+    h += `<div style="display: grid; grid-template-columns: 56px repeat(7, 1fr); gap: 6px; margin-bottom: 5px; padding: 0 14px 0 0;">
+      <div style="display: flex; align-items: center; justify-content: center; font-size: 13px; color: var(--ink-mute); font-weight: 500; font-family: var(--display); font-style: italic;">${formatHourLocal(hour)}</div>`;
 
     week.forEach(d => {
       const past = d.iso < todayIso;
