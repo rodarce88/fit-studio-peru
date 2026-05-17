@@ -1799,6 +1799,23 @@ const HEALTH_TAG_MAP = (() => {
   return m;
 })();
 
+// Statuses de attendance que representan "la asistencia ya se procesó"
+// (alumno apareció, faltó, o canceló — pero la clase SÍ se dictó para él).
+// Estos casos hacen que el booking deba seguir visible en historiales y agendas
+// aunque el booking esté `cancelled_at` (porque ese cancel fue producto de la marca,
+// no porque el alumno se retiró antes de tiempo).
+const ATTENDANCE_PROCESSED = ['attended', 'lost', 'no_show', 'recoverable'];
+
+// Decide si un booking debe ser visible en historiales y vistas del día.
+// Acepta tanto un booking solo (sin attendance) como booking + attendance.
+function bookingShouldBeVisible(booking, attendance) {
+  if (!booking) return false;
+  if (!booking.cancelled_at) return true; // booking activo, siempre visible
+  // booking cancelado: solo visible si ya se marcó la asistencia
+  if (attendance && ATTENDANCE_PROCESSED.includes(attendance.status)) return true;
+  return false;
+}
+
 const STATE = {
   locations: [],
   currentLocationId: null,
@@ -2490,12 +2507,20 @@ function renderTimeline() {
 
     // session_bookings de esta clase (incluye flexibles agregados y movidos)
     const liveBookings = sessionId ? STATE.sessionBookings.filter(b => b.session_id === sessionId) : [];
-    // IDs de fijos que se movieron afuera (cancelled_at + source fixed)
+    // Helper: encontrar la attendance del student_id en esta sesión
+    const _attFor = (sid) => sessionId ? (STATE.attendances || []).find(a => a.session_id === sessionId && a.student_id === sid) : null;
+    // IDs de fijos que se movieron afuera DE VERDAD:
+    // (cancelled_at + source fixed) PERO solo si NO tienen attendance procesada
+    // (si tienen attendance, fueron marcados — siguen visibles)
     const movedOutIds = new Set(
-      liveBookings.filter(b => b.cancelled_at && b.source === 'fixed').map(b => b.student_id)
+      liveBookings
+        .filter(b => b.cancelled_at && b.source === 'fixed' && !ATTENDANCE_PROCESSED.includes(_attFor(b.student_id)?.status))
+        .map(b => b.student_id)
     );
-    // IDs agregados (flexible o rescheduled, sin cancelled_at)
-    const addedIds = liveBookings.filter(b => !b.cancelled_at).map(b => b.student_id);
+    // IDs visibles del booking: activos OR cancelados con attendance procesada (no_show/lost/etc)
+    const addedIds = liveBookings
+      .filter(b => bookingShouldBeVisible(b, _attFor(b.student_id)))
+      .map(b => b.student_id);
 
     // Combinar: fijos que NO se movieron + agregados, sin duplicar
     const finalIds = new Set([
@@ -7558,11 +7583,20 @@ async function loadInstructorClassesForDate(inst, dateIso) {
     let attendances = [];
     if (session) {
       const [bRes, aRes] = await Promise.all([
-        sb.from('session_bookings').select('*').eq('session_id', session.id).is('cancelled_at', null),
+        // Traemos TODOS los bookings (no filtramos cancelled_at en SQL).
+        // El filtro se aplica en JS combinando con attendance:
+        // un booking cancelado SIGUE siendo visible si tiene attendance procesada
+        // (attended/lost/no_show/recoverable), porque ese cancel fue producto de la marca.
+        sb.from('session_bookings').select('*').eq('session_id', session.id),
         sb.from('attendance').select('*').eq('session_id', session.id),
       ]);
-      bookings = bRes.data || [];
+      const allBookings = bRes.data || [];
       attendances = aRes.data || [];
+      // Filtrar bookings visibles según la regla unificada
+      bookings = allBookings.filter(b => {
+        const att = attendances.find(a => a.student_id === b.student_id);
+        return bookingShouldBeVisible(b, att);
+      });
     }
 
     // Alumnos fijos: aparecen automáticamente si no hay session_booking explícito
@@ -11668,7 +11702,28 @@ function renderDetailClasses(stud) {
   const startOfMonthIso = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0,10);
   const endOfMonthIso = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().slice(0,10);
 
-  let classes = (data.bookings || []).filter(b => b.class_sessions && !b.class_sessions.is_cancelled && !b.cancelled_at);
+  // Helper: encontrar attendance de un booking (puede venir indexada por booking_id o student_id)
+  const _attForBooking = (b) => {
+    if (!data.attendances) return null;
+    // Preferimos match por booking_id (más preciso)
+    let att = data.attendances.find(a => a.booking_id === b.id);
+    if (att) return att;
+    // Fallback: match por session_id + student_id
+    if (b.session_id && b.student_id) {
+      att = data.attendances.find(a => a.session_id === b.session_id && a.student_id === b.student_id);
+    }
+    return att || null;
+  };
+
+  // Filtrado correcto de clases del alumno:
+  // - Excluir si la session está cancelada
+  // - Incluir si el booking está activo (cancelled_at IS NULL)
+  // - Incluir TAMBIÉN si el booking está cancelado pero tiene attendance procesada
+  //   (attended/lost/no_show/recoverable) — la clase SÍ ocurrió para el alumno
+  let classes = (data.bookings || []).filter(b => {
+    if (!b.class_sessions || b.class_sessions.is_cancelled) return false;
+    return bookingShouldBeVisible(b, _attForBooking(b));
+  });
 
   if (filter === 'upcoming') {
     classes = classes.filter(b => b.class_sessions.session_date >= todayIso);
@@ -12302,14 +12357,21 @@ async function loadInstructorClassesInRange(instructorId, startIso, endIso) {
   const sessionIds = sessions.map(s => s.id);
   const [attRes, bookRes] = await Promise.all([
     sb.from('attendance').select('session_id, student_id, status').in('session_id', sessionIds),
-    sb.from('session_bookings').select('session_id, student_id, cancelled_at').in('session_id', sessionIds).is('cancelled_at', null),
+    // Traemos TODOS los bookings; el filtro de visibilidad se aplica en JS combinando con attendance.
+    sb.from('session_bookings').select('session_id, student_id, cancelled_at').in('session_id', sessionIds),
   ]);
 
-  const sessionsExtended = sessions.map(s => ({
-    ...s,
-    attendance: (attRes.data || []).filter(a => a.session_id === s.id),
-    bookings: (bookRes.data || []).filter(b => b.session_id === s.id),
-  }));
+  const allAttendance = attRes.data || [];
+  const allBookings = bookRes.data || [];
+
+  const sessionsExtended = sessions.map(s => {
+    const sAtts = allAttendance.filter(a => a.session_id === s.id);
+    const sBookings = allBookings.filter(b => b.session_id === s.id).filter(b => {
+      const att = sAtts.find(a => a.student_id === b.student_id);
+      return bookingShouldBeVisible(b, att);
+    });
+    return { ...s, attendance: sAtts, bookings: sBookings };
+  });
 
   return generateSyntheticClassesFromSchedule(instructorId, startIso, endIso, sessionsExtended);
 }
