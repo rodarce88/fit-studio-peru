@@ -743,11 +743,327 @@
   .pay-x-btn { color: var(--ink-faint); cursor: pointer; font-size: 16px; background: none; border: none; }
   .pay-x-btn:hover { color: var(--danger, #E8694A); }
   @media (max-width: 600px) {
-    .pay-config-grid { grid-template-columns: 1fr; }
-    .pay-teachers-table { display: block; overflow-x: auto; font-size: 12px; }
-    .pay-totals-card { padding: 14px 16px; }
-    .pay-totals-value { font-size: 24px; }
+  /* ============================================
+     SESSION NOTES — bloque de ingreso e historial
+     ============================================ */
+
+  /* Bloque dentro de hour-card */
+  .inst-note-block {
+    margin: 0 14px 14px;
+    background: white;
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    overflow: hidden;
+    transition: all 0.2s;
   }
+  .inst-note-block.is-saved {
+    background: var(--good-soft);
+    border-color: var(--good);
+  }
+  .inst-note-block.is-expanded {
+    border-color: var(--fit-purple-soft);
+    box-shadow: 0 4px 14px rgba(91, 42, 143, 0.06);
+  }
+  .inst-note-head {
+    padding: 11px 13px;
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    cursor: pointer;
+  }
+  .inst-note-icon {
+    width: 30px;
+    height: 30px;
+    background: var(--fit-lavender-pale);
+    color: var(--fit-purple);
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    font-size: 13px;
+    flex-shrink: 0;
+  }
+  .inst-note-block.is-saved .inst-note-icon {
+    background: var(--good);
+    color: white;
+  }
+  .inst-note-head-text { flex: 1; min-width: 0; }
+  .inst-note-head-title { font-size: 12.5px; font-weight: 600; }
+  .inst-note-head-sub { font-size: 10.5px; color: var(--ink-mute); margin-top: 1px; }
+  .inst-note-chev { color: var(--ink-mute); font-size: 12px; flex-shrink: 0; }
+
+  .inst-note-body {
+    padding: 0 13px 13px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .inst-note-textarea {
+    width: 100%;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 11px 12px;
+    font-family: var(--body);
+    font-size: 13px;
+    resize: none;
+    background: var(--fit-cream);
+    min-height: 80px;
+    color: var(--ink);
+    line-height: 1.4;
+  }
+  .inst-note-textarea:focus {
+    outline: 2px solid var(--fit-purple-soft);
+    outline-offset: 1px;
+    border-color: transparent;
+    background: white;
+  }
+  .inst-note-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+  }
+  .inst-note-chips .chip {
+    padding: 4px 9px;
+    border-radius: 999px;
+    background: var(--fit-lavender-pale);
+    color: var(--fit-purple);
+    font-size: 10.5px;
+    font-weight: 500;
+    border: 1px solid var(--fit-lavender);
+    cursor: pointer;
+    transition: all 0.12s;
+  }
+  .inst-note-chips .chip:hover {
+    background: var(--fit-lavender);
+  }
+  .inst-note-chips .chip:active {
+    transform: scale(0.95);
+  }
+  .chip-label {
+    font-size: 9.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    color: var(--ink-mute);
+    margin-bottom: 4px;
+    font-weight: 500;
+  }
+  .inst-note-apply {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 11px;
+    background: var(--fit-lavender-pale);
+    border-radius: 10px;
+    font-size: 11.5px;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  .inst-note-apply:hover {
+    background: var(--fit-lavender);
+  }
+  .toggle-switch {
+    width: 32px;
+    height: 18px;
+    background: var(--line);
+    border-radius: 999px;
+    position: relative;
+    flex-shrink: 0;
+    transition: background 0.18s;
+  }
+  .toggle-switch.is-on {
+    background: var(--fit-purple);
+  }
+  .toggle-switch::after {
+    content: '';
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 14px;
+    height: 14px;
+    background: white;
+    border-radius: 50%;
+    transition: left 0.18s;
+  }
+  .toggle-switch.is-on::after {
+    left: 16px;
+  }
+  .toggle-text { flex: 1; min-width: 0; }
+  .toggle-text .strong { font-weight: 600; font-size: 11.5px; }
+  .toggle-text .faded {
+    color: var(--ink-mute);
+    font-size: 10.5px;
+    margin-top: 1px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .inst-note-students {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 10px;
+    background: var(--fit-cream);
+    border-radius: 10px;
+    border: 1px solid var(--line);
+  }
+  .inst-note-stud {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    padding: 7px 9px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 12.5px;
+    transition: background 0.12s;
+  }
+  .inst-note-stud:hover { background: white; }
+  .inst-note-stud.is-on { background: white; }
+  .inst-note-stud-check {
+    width: 18px; height: 18px;
+    border-radius: 4px;
+    border: 1.5px solid var(--line);
+    display: grid; place-items: center;
+    font-size: 11px;
+    color: white;
+    flex-shrink: 0;
+  }
+  .inst-note-stud.is-on .inst-note-stud-check {
+    background: var(--fit-purple);
+    border-color: var(--fit-purple);
+  }
+
+  .inst-note-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 2px;
+  }
+  .btn-note-cancel {
+    padding: 10px 14px;
+    background: white;
+    color: var(--ink-soft);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    font-family: var(--body);
+    font-size: 12.5px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .btn-note-cancel:hover { border-color: var(--ink-mute); }
+  .btn-note-cancel:disabled { opacity: 0.5; cursor: not-allowed; }
+  .btn-note-save {
+    flex: 1;
+    padding: 10px;
+    background: var(--fit-purple);
+    color: white;
+    border: none;
+    border-radius: 10px;
+    font-family: var(--body);
+    font-size: 12.5px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .btn-note-save:hover { background: var(--fit-purple-deep); }
+  .btn-note-save:disabled { opacity: 0.7; cursor: not-allowed; }
+
+  /* ============================================
+     HISTORIAL DE SESIONES (en student sheet)
+     ============================================ */
+  .inst-notes-section {
+    margin: 14px;
+    padding: 14px;
+    background: white;
+    border: 1px solid var(--line);
+    border-radius: 14px;
+  }
+  .inst-notes-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 10px;
+  }
+  .inst-notes-title {
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--ink-mute);
+    font-weight: 500;
+  }
+  .inst-notes-count {
+    background: var(--fit-lavender-pale);
+    color: var(--fit-purple);
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-size: 10.5px;
+    font-weight: 500;
+  }
+  .inst-notes-loading {
+    font-size: 11px;
+    color: var(--ink-mute);
+    font-style: italic;
+  }
+  .inst-notes-empty {
+    padding: 14px;
+    text-align: center;
+    font-size: 12px;
+    color: var(--ink-mute);
+    background: var(--fit-cream);
+    border-radius: 10px;
+  }
+  .inst-notes-list {
+    display: flex;
+    flex-direction: column;
+    border-radius: 10px;
+    border: 1px solid var(--line);
+    overflow: hidden;
+  }
+  .inst-note-item {
+    padding: 11px 13px;
+    border-top: 1px solid var(--line-soft);
+  }
+  .inst-note-item:first-child { border-top: 0; }
+  .inst-note-item.is-recent {
+    background: var(--fit-lavender-pale);
+  }
+  .inst-note-meta {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 10.5px;
+    color: var(--ink-mute);
+    margin-bottom: 5px;
+  }
+  .inst-note-date {
+    color: var(--fit-purple);
+    font-weight: 600;
+  }
+  .inst-note-dot {
+    width: 3px; height: 3px;
+    background: var(--ink-faint);
+    border-radius: 50%;
+  }
+  .inst-note-instructor {
+    font-weight: 500;
+    color: var(--ink-soft);
+  }
+  .inst-note-content {
+    font-size: 12.5px;
+    color: var(--ink);
+    line-height: 1.45;
+  }
+  .inst-notes-more {
+    padding: 11px;
+    text-align: center;
+    font-size: 11.5px;
+    color: var(--fit-purple);
+    font-weight: 500;
+    cursor: pointer;
+    border-top: 1px solid var(--line-soft);
+    background: var(--fit-cream);
+  }
+  .inst-notes-more:hover { background: var(--fit-lavender-pale); }
+  .inst-notes-hidden { display: flex; flex-direction: column; }
+  .inst-notes-hidden .inst-note-item { border-top: 1px solid var(--line-soft); }
 
   /* ============================================
      LOGS VIEW (coordinador)
@@ -2092,6 +2408,8 @@ const STATE = {
   classSessions: [],      // class_sessions del día actual (cargadas desde Supabase)
   sessionBookings: [],    // session_bookings del día (incluye flexibles agregados)
   attendances: [],        // registros de asistencia del día actual
+  sessionNotes: {},       // notas de sesión cacheadas por session_id: { [sessionId]: { drafts, openKey, savedAt, applyAll, deselectedStudents:Set } }
+  studentNotesHistory: {},// historial de notas por student_id: { [studentId]: { rows, loadedAt } }
   currentDate: new Date(),
   currentFilter: 'all',
   studentBookingsCache: [],     // session_bookings + class_sessions del alumno logueado
@@ -8551,6 +8869,279 @@ function _renderInstructorDonut(filled, total, size) {
   `;
 }
 
+// ============================================
+// SESSION NOTES — helpers de notas de sesión
+// ============================================
+
+// Obtiene/inicializa el state local para una sesión específica
+function getSessionNoteState(sessionId) {
+  if (!sessionId) return null;
+  if (!STATE.sessionNotes[sessionId]) {
+    STATE.sessionNotes[sessionId] = {
+      draft: '',
+      isOpen: false,
+      saving: false,
+      applyAll: true,
+      deselected: new Set(),
+      lastSavedCount: null, // numero de alumnas a las que se les guardó
+      lastSavedAt: null,
+    };
+  }
+  return STATE.sessionNotes[sessionId];
+}
+
+// Toggle el bloque expandido/colapsado
+function toggleSessionNoteBlock(sessionId) {
+  const ns = getSessionNoteState(sessionId);
+  if (!ns) return;
+  ns.isOpen = !ns.isOpen;
+  // Re-render solo este card (encuentra el block y actualiza)
+  renderInstructorDay();
+}
+
+// Sincroniza el textarea con el draft del state (sin re-render)
+function onSessionNoteInput(sessionId, value) {
+  const ns = getSessionNoteState(sessionId);
+  if (ns) ns.draft = value;
+}
+
+// Inserta un chip al final del textarea
+function insertSessionNoteChip(sessionId, chipText) {
+  const ns = getSessionNoteState(sessionId);
+  if (!ns) return;
+  const ta = document.querySelector(`textarea[data-note-session="${sessionId}"]`);
+  if (!ta) return;
+  const sep = ns.draft.trim().length > 0 ? ', ' : '';
+  const newVal = (ns.draft || '') + sep + chipText;
+  ns.draft = newVal;
+  ta.value = newVal;
+  ta.focus();
+}
+
+// Toggle aplicar a todas vs individual
+function toggleNoteApplyAll(sessionId) {
+  const ns = getSessionNoteState(sessionId);
+  if (!ns) return;
+  ns.applyAll = !ns.applyAll;
+  if (ns.applyAll) ns.deselected.clear();
+  renderInstructorDay();
+}
+
+// Toggle deselección individual de una alumna en el modo "elegir"
+function toggleNoteStudent(sessionId, studentId) {
+  const ns = getSessionNoteState(sessionId);
+  if (!ns) return;
+  if (ns.deselected.has(studentId)) ns.deselected.delete(studentId);
+  else ns.deselected.add(studentId);
+  renderInstructorDay();
+}
+
+// Guarda la nota — crea N filas en session_notes
+async function saveSessionNote(sessionId, classCtx) {
+  const ns = getSessionNoteState(sessionId);
+  if (!ns) return;
+  const content = (ns.draft || '').trim();
+  if (!content) { showToast('Escribe algo primero', 'error'); return; }
+  if (!isOnline) { showToast('Necesitas conexión', 'error'); return; }
+  if (!CURRENT_USER || CURRENT_USER.role !== 'instructor') { showToast('Solo el profesor puede guardar notas', 'error'); return; }
+
+  // Determinar a qué alumnas se aplica
+  const attendedStudents = (classCtx.students || []).filter(s => s.attendance?.status === 'attended');
+  if (attendedStudents.length === 0) {
+    showToast('No hay alumnas marcadas como asistidas aún', 'error');
+    return;
+  }
+  const targets = ns.applyAll
+    ? attendedStudents
+    : attendedStudents.filter(s => !ns.deselected.has(s.student.id));
+  if (targets.length === 0) {
+    showToast('Selecciona al menos una alumna', 'error');
+    return;
+  }
+
+  ns.saving = true;
+  renderInstructorDay();
+
+  try {
+    const isGroup = targets.length > 1;
+    const rows = targets.map(t => ({
+      session_id: sessionId,
+      student_id: t.student.id,
+      instructor_id: CURRENT_USER.record.id,
+      content,
+      is_group_note: isGroup,
+    }));
+    const { error } = await sb.from('session_notes').insert(rows);
+    if (error) throw error;
+
+    // Log
+    try {
+      logActivity('session_note.create', {
+        table: 'session_notes',
+        id: sessionId,
+        label: `${classCtx.dateIso} ${formatHour(classCtx.hour)} · ${targets.length} alumnas`
+      }, { student_count: targets.length, is_group: isGroup, content_length: content.length });
+    } catch(e) {}
+
+    // Invalidar cache de historial de cada alumna afectada
+    for (const t of targets) {
+      delete STATE.studentNotesHistory[t.student.id];
+    }
+
+    // Limpiar draft, marcar guardado
+    ns.draft = '';
+    ns.lastSavedCount = targets.length;
+    ns.lastSavedAt = new Date().toISOString();
+    ns.isOpen = false; // colapsar después de guardar
+    ns.saving = false;
+
+    showToast(`✓ Nota guardada para ${targets.length} alumna${targets.length === 1 ? '' : 's'}`, 'success');
+    renderInstructorDay();
+  } catch (err) {
+    console.error('saveSessionNote:', err);
+    ns.saving = false;
+    showToast('Error: ' + (err.message || 'no se pudo guardar'), 'error');
+    renderInstructorDay();
+  }
+}
+
+// Cancela el bloque y limpia draft
+function cancelSessionNote(sessionId) {
+  const ns = getSessionNoteState(sessionId);
+  if (!ns) return;
+  ns.draft = '';
+  ns.isOpen = false;
+  renderInstructorDay();
+}
+
+// Carga el historial de notas de una alumna (cache: 60s)
+async function loadStudentNotesHistory(studentId) {
+  const cached = STATE.studentNotesHistory[studentId];
+  if (cached && (Date.now() - cached.loadedAt) < 60000) return cached.rows;
+  if (!isOnline || !studentId) return [];
+  try {
+    const { data, error } = await sb.from('session_notes')
+      .select('id, content, created_at, is_group_note, instructor_id, session_id, class_sessions(session_date, hour), instructors(first_name, last_name)')
+      .eq('student_id', studentId)
+      .is('deleted_at', null)
+      .order('created_at', { ascending: false })
+      .limit(30);
+    if (error) { console.warn('loadStudentNotesHistory:', error); return []; }
+    const rows = data || [];
+    STATE.studentNotesHistory[studentId] = { rows, loadedAt: Date.now() };
+    return rows;
+  } catch (e) { console.warn(e); return []; }
+}
+
+// Render del bloque "Nota de la sesión" que va dentro de un hour-card
+function renderSessionNoteBlock(c) {
+  // No se muestra para clases de otros profes ni sesiones vacías o canceladas
+  if (c.isOtherInstructor) return '';
+  if (!c.session) return ''; // requiere sesión existente (debe haber al menos 1 asistencia)
+  const attendedCount = (c.students || []).filter(s => s.attendance?.status === 'attended').length;
+  if (attendedCount === 0) return ''; // sin asistencias marcadas no aplica
+
+  const sessionId = c.session.id;
+  const ns = getSessionNoteState(sessionId);
+  const isOpen = !!ns?.isOpen;
+  const draft = ns?.draft || '';
+  const saving = !!ns?.saving;
+  const justSaved = ns?.lastSavedAt && (Date.now() - new Date(ns.lastSavedAt).getTime()) < 30000;
+
+  const headTitle = justSaved
+    ? `✓ Nota guardada para ${ns.lastSavedCount} alumna${ns.lastSavedCount === 1 ? '' : 's'}`
+    : 'Nota de la sesión';
+  const headSub = justSaved
+    ? 'Visible en la ficha de cada alumna'
+    : `¿Qué se trabajó hoy? · opcional`;
+
+  if (!isOpen) {
+    return `
+      <div class="inst-note-block ${justSaved ? 'is-saved' : ''}">
+        <div class="inst-note-head" onclick="toggleSessionNoteBlock('${sessionId}')">
+          <div class="inst-note-icon">${justSaved ? '✓' : '✎'}</div>
+          <div class="inst-note-head-text">
+            <div class="inst-note-head-title">${headTitle}</div>
+            <div class="inst-note-head-sub">${headSub}</div>
+          </div>
+          <div class="inst-note-chev">▾</div>
+        </div>
+      </div>
+    `;
+  }
+
+  // Expandido
+  const attendedStudents = (c.students || []).filter(s => s.attendance?.status === 'attended');
+  const applyAll = ns.applyAll !== false;
+  const deselected = ns.deselected || new Set();
+  const targetCount = applyAll
+    ? attendedStudents.length
+    : attendedStudents.filter(s => !deselected.has(s.student.id)).length;
+
+  const chips = ['zona media', 'espalda baja', 'flexibilidad', 'principiantes', 'intensidad alta', 'rehabilitación'];
+
+  let studentChecklist = '';
+  if (!applyAll) {
+    studentChecklist = `
+      <div class="inst-note-students">
+        <div class="chip-label">Elige a quiénes aplicar</div>
+        ${attendedStudents.map(s => {
+          const isOn = !deselected.has(s.student.id);
+          return `
+            <div class="inst-note-stud ${isOn ? 'is-on' : ''}" onclick="toggleNoteStudent('${sessionId}', '${s.student.id}')">
+              <div class="inst-note-stud-check">${isOn ? '✓' : ''}</div>
+              <span>${escape(s.student.first_name || '')} ${escape(s.student.last_name || '')}</span>
+            </div>
+          `;
+        }).join('')}
+      </div>
+    `;
+  }
+
+  return `
+    <div class="inst-note-block is-expanded">
+      <div class="inst-note-head" onclick="toggleSessionNoteBlock('${sessionId}')">
+        <div class="inst-note-icon">✎</div>
+        <div class="inst-note-head-text">
+          <div class="inst-note-head-title">Nota de la sesión</div>
+          <div class="inst-note-head-sub">¿Qué se trabajó hoy? · opcional</div>
+        </div>
+        <div class="inst-note-chev">▴</div>
+      </div>
+      <div class="inst-note-body">
+        <textarea
+          class="inst-note-textarea"
+          data-note-session="${sessionId}"
+          placeholder="Ej: trabajamos zona media con intensidad, foco en hundred y rolling..."
+          oninput="onSessionNoteInput('${sessionId}', this.value)"
+          ${saving ? 'disabled' : ''}
+        >${escape(draft)}</textarea>
+
+        <div>
+          <div class="chip-label">Sugerencias rápidas</div>
+          <div class="inst-note-chips">
+            ${chips.map(t => `<div class="chip" onclick="insertSessionNoteChip('${sessionId}', '${t}')">${t}</div>`).join('')}
+          </div>
+        </div>
+
+        <div class="inst-note-apply" onclick="toggleNoteApplyAll('${sessionId}')">
+          <div class="toggle-switch ${applyAll ? 'is-on' : ''}"></div>
+          <div class="toggle-text">
+            <div class="strong">${applyAll ? `Aplicar a las ${attendedStudents.length} alumna${attendedStudents.length === 1 ? '' : 's'} que asistieron` : `Aplicar a ${targetCount} de ${attendedStudents.length} seleccionada${targetCount === 1 ? '' : 's'}`}</div>
+            <div class="faded">${applyAll ? attendedStudents.map(s => s.student.first_name).join(', ') : 'Toca para volver a aplicar a todas'}</div>
+          </div>
+        </div>
+        ${studentChecklist}
+
+        <div class="inst-note-actions">
+          <button class="btn-note-cancel" onclick="cancelSessionNote('${sessionId}')" ${saving ? 'disabled' : ''}>Cancelar</button>
+          <button class="btn-note-save" onclick='saveSessionNote("${sessionId}", ${JSON.stringify({dateIso: c.dateIso, hour: c.hour, students: c.students.map(s => ({student: {id: s.student.id, first_name: s.student.first_name, last_name: s.student.last_name}, attendance: s.attendance ? {status: s.attendance.status} : null}))}).replace(/'/g, "&#39;")})' ${saving ? 'disabled' : ''}>${saving ? 'Guardando…' : 'Guardar nota'}</button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
 function renderInstructorClassCard(c, ctx) {
   const todayIso = dateToIsoLocal(new Date());
   const isToday = c.dateIso === todayIso;
@@ -8648,7 +9239,8 @@ function renderInstructorClassCard(c, ctx) {
         ${donut}
       </div>
       ${c.isOtherInstructor || isCollapsed ? '' : `${studentsCount > 0 || (!isCancelled && !isNotDelivered) ? `<div class="inst-hour-students">${studentsHtml}</div>` : ''}
-      ${markDeliveredBtn}`}
+      ${markDeliveredBtn}
+      ${renderSessionNoteBlock(c)}`}
     </div>
   `;
 }
@@ -8799,9 +9391,96 @@ function openInstructorStudentSheet(studentId, dateIso, hour, locationId, curren
         ` : ''}
       </div>
       ${renderHealthNotesSection(stud)}
+      <div id="inst-sheet-notes-history" data-student-id="${studentId}">
+        <div class="inst-notes-section">
+          <div class="inst-notes-head">
+            <span class="inst-notes-title">📝 Historial de sesiones</span>
+            <span class="inst-notes-loading">Cargando...</span>
+          </div>
+        </div>
+      </div>
     </div>
   `;
   document.body.appendChild(backdrop);
+
+  // Cargar historial de notas en background y actualizar el bloque
+  loadAndRenderStudentNotesHistory(studentId);
+}
+
+// Carga las notas de una alumna y renderiza el historial en el sheet abierto
+async function loadAndRenderStudentNotesHistory(studentId) {
+  const rows = await loadStudentNotesHistory(studentId);
+  const container = document.getElementById('inst-sheet-notes-history');
+  if (!container || container.dataset.studentId !== studentId) return; // sheet cerrado o cambiado
+  container.innerHTML = renderStudentNotesHistoryHTML(rows);
+}
+
+function renderStudentNotesHistoryHTML(rows) {
+  if (!rows || rows.length === 0) {
+    return `
+      <div class="inst-notes-section">
+        <div class="inst-notes-head">
+          <span class="inst-notes-title">📝 Historial de sesiones</span>
+        </div>
+        <div class="inst-notes-empty">Aún no hay notas previas para esta alumna.</div>
+      </div>
+    `;
+  }
+  // Mostrar primeras 3 visibles + el resto en "ver más" (state JS)
+  const visible = rows.slice(0, 3);
+  const hidden = rows.slice(3);
+  return `
+    <div class="inst-notes-section">
+      <div class="inst-notes-head">
+        <span class="inst-notes-title">📝 Historial de sesiones</span>
+        <span class="inst-notes-count">${rows.length} nota${rows.length === 1 ? '' : 's'}</span>
+      </div>
+      <div class="inst-notes-list">
+        ${visible.map((r, i) => renderNoteItem(r, i === 0)).join('')}
+        ${hidden.length > 0 ? `
+          <div class="inst-notes-hidden" id="inst-notes-hidden" style="display:none;">
+            ${hidden.map(r => renderNoteItem(r, false)).join('')}
+          </div>
+          <div class="inst-notes-more" onclick="toggleNotesHistoryMore(this)">Ver historial completo (${hidden.length} más) →</div>
+        ` : ''}
+      </div>
+    </div>
+  `;
+}
+
+function toggleNotesHistoryMore(btnEl) {
+  const hidden = document.getElementById('inst-notes-hidden');
+  if (!hidden) return;
+  const isShown = hidden.style.display !== 'none';
+  hidden.style.display = isShown ? 'none' : '';
+  btnEl.textContent = isShown
+    ? `Ver historial completo (${hidden.children.length} más) →`
+    : `Ocultar historial ↑`;
+}
+
+function renderNoteItem(r, isRecent) {
+  const cs = r.class_sessions || {};
+  const inst = r.instructors || {};
+  const date = cs.session_date ? new Date(cs.session_date + 'T12:00:00') : null;
+  const dayLabels = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
+  const monthLabels = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+  const dateLabel = date
+    ? `${dayLabels[date.getDay()]} ${date.getDate()} ${monthLabels[date.getMonth()]}`
+    : 'sin fecha';
+  const hourLabel = cs.hour != null ? ` · ${formatHour(cs.hour)}` : '';
+  const instName = (inst.first_name || inst.last_name)
+    ? `${inst.first_name || ''} ${inst.last_name || ''}`.trim()
+    : '—';
+  return `
+    <div class="inst-note-item ${isRecent ? 'is-recent' : ''}">
+      <div class="inst-note-meta">
+        <span class="inst-note-date">${dateLabel}${hourLabel}</span>
+        <span class="inst-note-dot"></span>
+        <span class="inst-note-instructor">${escape(instName)}</span>
+      </div>
+      <div class="inst-note-content">${escape(r.content || '')}</div>
+    </div>
+  `;
 }
 
 // Renderiza la sección "Notas y molestias" dentro del sheet del alumno (lectura)
