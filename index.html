@@ -565,9 +565,23 @@
   .inst-stud-status.is-danger { color: #791F1F; }
 
   /* Check button inline */
-  .inst-check-btn { width: 36px; height: 36px; border-radius: 50%; border: 1.5px solid var(--line); background: white; display: flex; align-items: center; justify-content: center; font-size: 14px; color: var(--ink-mute); cursor: pointer; flex-shrink: 0; transition: all 0.15s; }
+  .inst-check-btn { width: 36px; height: 36px; border-radius: 50%; border: 1.5px solid var(--line); background: white; display: flex; align-items: center; justify-content: center; font-size: 14px; color: var(--ink-mute); cursor: pointer; flex-shrink: 0; transition: all 0.15s; position: relative; }
   .inst-check-btn:hover { border-color: var(--good); color: var(--good); }
+  .inst-check-btn:active { transform: scale(0.92); }
   .inst-check-btn.is-attended { background: var(--good); border-color: var(--good); color: white; }
+  .inst-check-btn.is-saving { pointer-events: none; opacity: 0.85; }
+  .inst-check-btn.is-saving::after {
+    content: '';
+    position: absolute;
+    inset: -2px;
+    border-radius: 50%;
+    border: 2px solid transparent;
+    border-top-color: var(--fit-purple);
+    border-right-color: var(--fit-purple);
+    animation: check-spin 0.6s linear infinite;
+  }
+  .inst-check-btn.is-saving.is-attended::after { border-top-color: white; border-right-color: white; }
+  @keyframes check-spin { to { transform: rotate(360deg); } }
 
   /* Empty slot */
   .inst-empty-slot { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-top: 1px dashed var(--line); color: var(--ink-mute); font-size: 12px; cursor: pointer; transition: all 0.15s; }
@@ -9286,130 +9300,169 @@ function instructorOpenMoveModal(studentId, dateIso, hour, locationId) {
 async function instructorWriteAttendance(studentId, dateIso, hour, locationId, status) {
   if (!isOnline) { showToast('Necesitas conexión', 'error'); return; }
 
-  // Asegurar session
-  let { data: session } = await sb.from('class_sessions')
-    .select('*')
-    .eq('location_id', locationId)
-    .eq('session_date', dateIso)
-    .eq('hour', hour)
-    .maybeSingle();
-  if (!session) {
-    const { data: created, error } = await sb.from('class_sessions').insert({
-      location_id: locationId, session_date: dateIso, hour: hour,
-      instructor_id: CURRENT_USER.record.id,
-    }).select().single();
-    if (error) { showToast('Error: ' + error.message, 'error'); return; }
-    session = created;
-  }
+  // 1. OPTIMISTIC UI — Pintar loading instantáneo en el botón check del alumno
+  // Buscamos cualquier botón del DOM relacionado a este alumno
+  const checkBtn = document.querySelector(
+    `.inst-stud-row [onclick*="${studentId}"][onclick*="${dateIso}"][onclick*="${hour}"][onclick*="${locationId}"]`
+  );
+  const studRow = checkBtn ? checkBtn.closest('.inst-stud-row') : null;
+  if (checkBtn) checkBtn.classList.add('is-saving');
 
-  // Asegurar booking (re-activar si está cancelled)
-  let { data: booking } = await sb.from('session_bookings')
-    .select('id, cancelled_at')
-    .eq('session_id', session.id)
-    .eq('student_id', studentId)
-    .maybeSingle();
-
-  if (!booking) {
-    const stud = STATE.students.find(s => s.id === studentId);
-    const source = stud?.modality === 'flexible' ? 'flexible' : 'fixed';
-    const { data: newB, error } = await sb.from('session_bookings').insert({
-      session_id: session.id, student_id: studentId, source,
-    }).select().single();
-    if (error) { showToast('Error: ' + error.message, 'error'); return; }
-    booking = newB;
-  }
-
-  // Liberar/re-activar slot según status
-  const releaseSlot = ['recoverable','lost','no_show'].includes(status);
-  const reactivateBooking = (status === 'attended' || status === 'pending');
-  const stamp = new Date().toLocaleString('es-PE', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
-  const actor = `profesor (${CURRENT_USER.record.first_name || ''})`;
-  const reasonMap = { recoverable: 'falta justificada', lost: 'cancelación tardía', no_show: 'no vino sin avisar' };
-
-  if (releaseSlot && !booking.cancelled_at) {
-    await sb.from('session_bookings').update({
-      cancelled_at: new Date().toISOString(),
-      cancelled_reason: `[${stamp}] ${reasonMap[status]} · marcado por ${actor}`,
-    }).eq('id', booking.id);
-  } else if (reactivateBooking && booking.cancelled_at) {
-    await sb.from('session_bookings').update({
-      cancelled_at: null, cancelled_reason: null,
-    }).eq('id', booking.id);
-  }
-
-  // SELECT + UPDATE/INSERT en attendance (no upsert porque puede no existir constraint)
-  const labelMap = { attended: 'asistió', recoverable: 'falta justificada (recuperable)', lost: 'cancelación tardía', no_show: 'no vino sin avisar', pending: 'pendiente' };
-  const noteLine = `[${stamp}] ${labelMap[status] || status} · marcado por ${actor}`;
-  const isRecoverable = (status === 'recoverable');
-  const countsAgainst = ['attended','lost','no_show'].includes(status);
-
-  // Si la asistencia cuenta contra el paquete, obtener/auto-crear paquete activo (FIFO)
-  // Esto también funciona cuando el profesor marca asistencia sin coordinadora en turno
-  let pkgId = null;
-  if (countsAgainst) {
-    pkgId = await getOrCreateActivePackageId(studentId);
-  }
-
-  const payload = {
-    booking_id: booking.id,
-    session_id: session.id,
-    student_id: studentId,
-    status,
-    is_recoverable: isRecoverable,
-    counts_against_package: countsAgainst,
-    notes: noteLine,
-    marked_at: new Date().toISOString(),
-    student_package_id: pkgId,
-    // marked_by omitido: el FK apunta a users y el profesor no está ahí; la auditoría queda en notes
-  };
-
-  const { data: existing } = await sb.from('attendance')
-    .select('id')
-    .eq('session_id', session.id)
-    .eq('student_id', studentId)
-    .maybeSingle();
-
-  if (existing) {
-    const { error } = await sb.from('attendance').update(payload).eq('id', existing.id);
-    if (error) { showToast('Error: ' + error.message, 'error'); console.error(error); return; }
-  } else {
-    const { error } = await sb.from('attendance').insert(payload);
-    if (error) { showToast('Error: ' + error.message, 'error'); console.error(error); return; }
-  }
-
-  await recalcPackageCounters(studentId);
-
-  // Log de actividad
+  // Capturar status PREVIO para el log (saber si está marcando o revirtiendo)
+  let prevStatus = null;
   try {
-    const stud = STATE.students.find(s => s.id === studentId);
-    const studName = stud ? `${stud.first_name || ''} ${stud.last_name || ''}`.trim() : studentId;
-    logActivity('attendance.mark', {
-      table: 'attendance',
-      id: existing?.id || booking.id,
-      label: `${studName} · ${session.session_date} ${formatHour(session.hour)}`
-    }, { status, is_recoverable: isRecoverable, counts_against_package: countsAgainst });
-  } catch(e) { /* never block */ }
+    // Buscar sesión y attendance previos en STATE cache si disponible
+    const cached = STATE.instCachedClasses?.[dateIso];
+    if (cached) {
+      for (const c of cached) {
+        if (c.hour === hour && c.location?.id === locationId) {
+          const cs = c.students?.find(x => x.student.id === studentId);
+          if (cs?.attendance) prevStatus = cs.attendance.status;
+          break;
+        }
+      }
+    }
+  } catch(e) {}
 
-  // Si la marca cuenta como "se dictó" (attended/recoverable/lost/no_show), marcar clase como delivered
-  if (['attended','recoverable','lost','no_show'].includes(status)) {
-    await sb.from('class_sessions').update({
-      class_status: 'delivered',
-      status_changed_at: new Date().toISOString(),
-      status_changed_by_instructor: CURRENT_USER.record.id,
-    }).eq('id', session.id);
+  try {
+    // Asegurar session
+    let { data: session } = await sb.from('class_sessions')
+      .select('*')
+      .eq('location_id', locationId)
+      .eq('session_date', dateIso)
+      .eq('hour', hour)
+      .maybeSingle();
+    if (!session) {
+      const { data: created, error } = await sb.from('class_sessions').insert({
+        location_id: locationId, session_date: dateIso, hour: hour,
+        instructor_id: CURRENT_USER.record.id,
+      }).select().single();
+      if (error) throw error;
+      session = created;
+    }
+
+    // Asegurar booking (re-activar si está cancelled)
+    let { data: booking } = await sb.from('session_bookings')
+      .select('id, cancelled_at')
+      .eq('session_id', session.id)
+      .eq('student_id', studentId)
+      .maybeSingle();
+
+    if (!booking) {
+      const stud = STATE.students.find(s => s.id === studentId);
+      const source = stud?.modality === 'flexible' ? 'flexible' : 'fixed';
+      const { data: newB, error } = await sb.from('session_bookings').insert({
+        session_id: session.id, student_id: studentId, source,
+      }).select().single();
+      if (error) throw error;
+      booking = newB;
+    }
+
+    // Liberar/re-activar slot según status
+    const releaseSlot = ['recoverable','lost','no_show'].includes(status);
+    const reactivateBooking = (status === 'attended' || status === 'pending');
+    const stamp = new Date().toLocaleString('es-PE', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+    const actor = `profesor (${CURRENT_USER.record.first_name || ''})`;
+    const reasonMap = { recoverable: 'falta justificada', lost: 'cancelación tardía', no_show: 'no vino sin avisar' };
+
+    const labelMap = { attended: 'asistió', recoverable: 'falta justificada (recuperable)', lost: 'cancelación tardía', no_show: 'no vino sin avisar', pending: 'pendiente' };
+    const noteLine = `[${stamp}] ${labelMap[status] || status} · marcado por ${actor}`;
+    const isRecoverable = (status === 'recoverable');
+    const countsAgainst = ['attended','lost','no_show'].includes(status);
+
+    // Paralelo: obtener paquete activo + buscar attendance existente
+    const [pkgId, existingAttRes] = await Promise.all([
+      countsAgainst ? getOrCreateActivePackageId(studentId) : Promise.resolve(null),
+      sb.from('attendance').select('id').eq('session_id', session.id).eq('student_id', studentId).maybeSingle(),
+    ]);
+    const existing = existingAttRes?.data;
+
+    const payload = {
+      booking_id: booking.id,
+      session_id: session.id,
+      student_id: studentId,
+      status,
+      is_recoverable: isRecoverable,
+      counts_against_package: countsAgainst,
+      notes: noteLine,
+      marked_at: new Date().toISOString(),
+      student_package_id: pkgId,
+    };
+
+    // Operaciones en PARALELO: attendance upsert + booking cancel/reactivate + class delivered
+    const ops = [];
+    // attendance
+    if (existing) {
+      ops.push(sb.from('attendance').update(payload).eq('id', existing.id));
+    } else {
+      ops.push(sb.from('attendance').insert(payload));
+    }
+    // booking
+    if (releaseSlot && !booking.cancelled_at) {
+      ops.push(sb.from('session_bookings').update({
+        cancelled_at: new Date().toISOString(),
+        cancelled_reason: `[${stamp}] ${reasonMap[status]} · marcado por ${actor}`,
+      }).eq('id', booking.id));
+    } else if (reactivateBooking && booking.cancelled_at) {
+      ops.push(sb.from('session_bookings').update({
+        cancelled_at: null, cancelled_reason: null,
+      }).eq('id', booking.id));
+    }
+    // class delivered
+    if (['attended','recoverable','lost','no_show'].includes(status)) {
+      ops.push(sb.from('class_sessions').update({
+        class_status: 'delivered',
+        status_changed_at: new Date().toISOString(),
+        status_changed_by_instructor: CURRENT_USER.record.id,
+      }).eq('id', session.id));
+    }
+
+    const results = await Promise.all(ops);
+    for (const r of results) {
+      if (r?.error) throw r.error;
+    }
+
+    // En BACKGROUND (sin await): recalc paquete counters
+    recalcPackageCounters(studentId).catch(e => console.warn('recalc bg:', e));
+
+    // Log diferenciado según transición
+    try {
+      const stud = STATE.students.find(s => s.id === studentId);
+      const studName = stud ? `${stud.first_name || ''} ${stud.last_name || ''}`.trim() : studentId;
+      let action = 'attendance.mark';
+      if (status === 'pending') action = 'attendance.unmark';
+      else if (status === 'attended') action = 'attendance.mark';
+      else if (['recoverable','lost','no_show'].includes(status)) action = 'attendance.absence';
+      logActivity(action, {
+        table: 'attendance',
+        id: existing?.id || booking.id,
+        label: `${studName} · ${session.session_date} ${formatHour(session.hour)}`
+      }, { status, prev_status: prevStatus, is_recoverable: isRecoverable, counts_against_package: countsAgainst });
+    } catch(e) { /* never block */ }
+
+    // Quitar loading
+    if (checkBtn) checkBtn.classList.remove('is-saving');
+
+    // Toast
+    const toastMap = {
+      attended: '✓ Asistió',
+      recoverable: '⊙ Falta justificada · cupo liberado',
+      lost: '⚠ Cancelación tardía · cupo liberado',
+      no_show: '✕ No vino · cupo liberado',
+      pending: '○ Asistencia revertida',
+    };
+    showToast(toastMap[status] || 'Marcado', 'success');
+
+    STATE.instMonthStats = null;
+    instructorInvalidateCache(dateIso);
+    renderInstructorDay();
+
+  } catch (err) {
+    // Revertir loading
+    if (checkBtn) checkBtn.classList.remove('is-saving');
+    console.error('writeAttendance error', err);
+    showToast('Error: ' + (err.message || 'no se pudo guardar'), 'error');
   }
-
-  const toastMap = {
-    attended: '✓ Asistió',
-    recoverable: '⊙ Falta justificada · cupo liberado',
-    lost: '⚠ Cancelación tardía · cupo liberado',
-    no_show: '✕ No vino · cupo liberado',
-    pending: '○ Asistencia revertida',
-  };
-  showToast(toastMap[status] || 'Marcado', 'success');
-  STATE.instMonthStats = null; // invalidar cache para refrescar stats
-  instructorInvalidateCache(dateIso); // invalidar cache de clases para este día
-  renderInstructorDay();
 }
 
 // ============================================
@@ -14340,6 +14393,8 @@ function humanizeAction(action) {
     'auth.login': '🔓 Inició sesión',
     'auth.logout': '🔒 Cerró sesión',
     'attendance.mark': '✓ Marcó asistencia',
+    'attendance.unmark': '↩ Revirtió asistencia',
+    'attendance.absence': '⊙ Marcó falta',
     'attendance.mark_direct': '✓ Asistencia directa',
     'student.create': '➕ Creó alumno',
     'student.update': '✎ Editó alumno',
