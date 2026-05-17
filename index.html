@@ -386,12 +386,54 @@
   /* ==============================================================
      VISTA PROFESOR — REDISEÑO MOBILE (mockup A)
      ============================================================== */
-  .inst-greet { padding: 8px 0 18px; }
+  .inst-greet { padding: 8px 0 18px; flex: 1; min-width: 0; }
   .inst-greet-tag { font-size: 11px; text-transform: uppercase; letter-spacing: 1.2px; color: var(--ink-mute); }
   .inst-greet-title { font-family: var(--display); font-style: italic; font-size: 24px; color: var(--fit-purple-deep); margin-top: 2px; line-height: 1.15; word-break: break-word; }
   @media (max-width: 600px) {
-    .inst-greet-title { font-size: 22px; }
+    .inst-greet-title { font-size: 20px; }
   }
+
+  /* Greet row: saludo a la izquierda + tabs inline a la derecha */
+  .inst-greet-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+  .inst-tabs-inline { display: flex; gap: 5px; flex-shrink: 0; padding-top: 10px; }
+  .inst-tab-pill { padding: 5px 12px; border-radius: 999px; background: white; border: 1px solid var(--line); font-size: 11.5px; font-weight: 500; color: var(--ink-soft); cursor: pointer; white-space: nowrap; font-family: var(--body); transition: all 0.12s; }
+  .inst-tab-pill:hover { border-color: var(--fit-purple-soft); }
+  .inst-tab-pill.is-active { background: var(--fit-purple); color: white; border-color: var(--fit-purple); }
+  @media (max-width: 380px) {
+    .inst-tab-pill { padding: 4px 9px; font-size: 11px; }
+  }
+
+  /* Carrusel de fechas: scrolleable horizontal */
+  .inst-day-strip-wrap { margin: 0 -16px 16px; }
+  .inst-day-strip-scroll { display: flex; gap: 8px; padding: 4px 16px 10px; overflow-x: auto; scroll-snap-type: x mandatory; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+  .inst-day-strip-scroll::-webkit-scrollbar { display: none; }
+  .inst-day-strip-scroll .inst-day-pill { flex-shrink: 0; width: 58px; padding: 9px 0 11px; scroll-snap-align: center; }
+  .inst-day-strip-scroll .inst-day-pill .num { font-size: 20px; }
+
+  /* Donut chart para cada hora */
+  .inst-donut { position: relative; width: 44px; height: 44px; flex-shrink: 0; }
+  .inst-donut svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+  .inst-donut .track { fill: none; stroke: #F1ECF7; stroke-width: 4; }
+  .inst-donut .fill { fill: none; stroke-width: 4; stroke-linecap: round; transition: stroke-dasharray 0.4s ease; }
+  .inst-donut .lbl { position: absolute; inset: 0; display: grid; place-items: center; font-size: 11px; font-family: var(--body); font-weight: 600; color: var(--ink); line-height: 1; }
+  .inst-donut .lbl .of { font-size: 9px; color: var(--ink-mute); font-weight: 500; }
+  .inst-donut.is-empty .lbl { color: var(--ink-faint); }
+  .inst-donut.is-sm { width: 38px; height: 38px; }
+  .inst-donut.is-sm .track, .inst-donut.is-sm .fill { stroke-width: 3.5; }
+  .inst-donut.is-sm .lbl { font-size: 10px; }
+
+  /* Variante: hora de OTRO profesor (no expandible) */
+  .inst-hour-card.is-other { background: #FAFAFA; border-color: var(--line-soft); border-style: dashed; opacity: 0.85; }
+  .inst-hour-card.is-other .inst-hour-head { cursor: default; }
+  .inst-hour-card.is-other .inst-hour-head:hover { background: #FAFAFA; }
+  .inst-hour-card.is-other .inst-hour-time { color: var(--ink-mute); font-size: 19px; }
+  .inst-hour-instructor-tag { flex: 1; font-size: 11.5px; color: var(--ink-mute); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+  .inst-hour-instructor-tag .you { color: var(--fit-purple); font-weight: 600; }
+
+  /* Iconos de alerta inline en alumnos (en lugar del tag Fijo) */
+  .inst-stud-alert { display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; border-radius: 50%; font-size: 10px; flex-shrink: 0; line-height: 1; }
+  .inst-stud-alert.is-health { background: #FEF3C7; color: #92400E; }
+  .inst-stud-alert.is-note { background: var(--fit-lavender-pale); color: var(--fit-purple); }
 
   .inst-day-strip { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; margin-bottom: 16px; }
   .inst-day-strip::-webkit-scrollbar { display: none; }
@@ -7464,18 +7506,16 @@ async function renderInstructorDay() {
   if (isFirstRender) {
     container.innerHTML = `
       <div data-inst-shell>
-        <div class="pay-tabs">
-          <button class="pay-tab is-active" onclick="switchInstructorTab('day', this)">Mi día</button>
-          <button class="pay-tab" onclick="switchInstructorTab('pay', this)">Mis pagos</button>
-        </div>
         <div data-inst-greet></div>
-        <div data-inst-daystrip></div>
-        <div data-inst-pending-banner></div>
-        <div data-inst-next style="margin-bottom: 18px;"></div>
-        <div data-inst-classes-header></div>
-        <div data-inst-past-toggle></div>
-        <div data-inst-classes style="display: flex; flex-direction: column; gap: 0; min-height: 100px;"></div>
-        <div data-inst-stats></div>
+        <div data-inst-tab-content data-tab="day">
+          <div data-inst-daystrip></div>
+          <div data-inst-pending-banner></div>
+          <div data-inst-next style="margin-bottom: 18px;"></div>
+          <div data-inst-classes-header></div>
+          <div data-inst-past-toggle></div>
+          <div data-inst-classes style="display: flex; flex-direction: column; gap: 0; min-height: 100px;"></div>
+          <div data-inst-stats></div>
+        </div>
       </div>
     `;
   }
@@ -7604,11 +7644,20 @@ function renderInstructorGreetBlock() {
   // Sede actualmente seleccionada en el switcher (no la primera del array)
   const loc = getCurrentLocation();
   const locName = loc ? loc.name : '';
+  // Tab activo (default 'day')
+  if (!STATE.instTab) STATE.instTab = 'day';
+  const activeTab = STATE.instTab;
 
   block.innerHTML = `
-    <div class="inst-greet">
-      <div class="inst-greet-tag">${greet}, ${escape(firstName)}${hh >= 6 ? ` · ${hh > 12 ? hh-12 : (hh === 0 ? 12 : hh)}:${now.getMinutes().toString().padStart(2,'0')} ${hh >= 12 ? 'pm' : 'am'}` : ''}</div>
-      <div class="inst-greet-title">Tu día${locName ? ` en <em>${escape(locName)}</em>` : ''}</div>
+    <div class="inst-greet-row">
+      <div class="inst-greet">
+        <div class="inst-greet-tag">${greet}, ${escape(firstName)}${hh >= 6 ? ` · ${hh > 12 ? hh-12 : (hh === 0 ? 12 : hh)}:${now.getMinutes().toString().padStart(2,'0')} ${hh >= 12 ? 'pm' : 'am'}` : ''}</div>
+        <div class="inst-greet-title">Tu día${locName ? ` en <em>${escape(locName)}</em>` : ''}</div>
+      </div>
+      <div class="inst-tabs-inline">
+        <button class="inst-tab-pill ${activeTab === 'day' ? 'is-active' : ''}" onclick="switchInstructorTab('day', this)">Mi día</button>
+        <button class="inst-tab-pill ${activeTab === 'pay' ? 'is-active' : ''}" onclick="switchInstructorTab('pay', this)">Dashboard</button>
+      </div>
     </div>
   `;
 }
@@ -7629,16 +7678,18 @@ function renderInstructorDayStrip() {
   monday.setDate(selDate.getDate() - daysFromMonday);
   monday.setHours(0, 0, 0, 0);
 
-  // 7 días lunes a domingo
+  // 21 días: 7 antes + 7 actuales + 7 después (para que se pueda swipe en ambas direcciones)
   const pills = [];
-  for (let i = 0; i < 7; i++) {
+  let activePillIdx = -1;
+  for (let i = -7; i < 14; i++) {
     const d = new Date(monday);
     d.setDate(monday.getDate() + i);
     const iso = dateToIsoLocal(d);
     const isToday = iso === todayIso;
     const isActive = iso === STATE.instDayDate;
+    if (isActive) activePillIdx = pills.length;
     pills.push(`
-      <div class="inst-day-pill ${isActive ? 'is-active' : ''} ${isToday && !isActive ? 'is-today' : ''}" onclick="instructorSetDateIso('${iso}')">
+      <div class="inst-day-pill ${isActive ? 'is-active' : ''} ${isToday && !isActive ? 'is-today' : ''}" data-pill-iso="${iso}" onclick="instructorSetDateIso('${iso}')">
         <div class="dow">${dowLabels[d.getDay()]}</div>
         <div class="num">${d.getDate()}</div>
         ${isToday ? '<div class="today-dot"></div>' : ''}
@@ -7656,7 +7707,6 @@ function renderInstructorDayStrip() {
 
   // Banner: fecha seleccionada con "ir a hoy" si aplica
   const isToday = STATE.instDayDate === todayIso;
-  const isInCurrentWeek = todayIso >= dateToIsoLocal(monday) && todayIso <= dateToIsoLocal(sunday);
   const banner = `
     <div style="font-size: 12px; color: var(--ink-mute); margin-bottom: 6px; display: flex; align-items: center; gap: 8px;">
       <span style="text-transform: uppercase; letter-spacing: 1px; font-size: 10px;">Viendo</span>
@@ -7673,16 +7723,29 @@ function renderInstructorDayStrip() {
       <button class="inst-week-nav-btn" onclick="instructorNavWeek(-1)" title="Semana anterior">‹</button>
       <div class="inst-week-label">${weekLabel}</div>
       <button class="inst-week-nav-btn" onclick="instructorNavWeek(1)" title="Semana siguiente">›</button>
-      <button class="inst-week-nav-btn is-picker" onclick="instructorOpenDatePicker()" title="Elegir fecha">📅</button>
+      <button class="inst-week-nav-btn is-picker" onclick="instructorOpenDatePicker(event)" title="Elegir fecha">📅</button>
     </div>
   `;
 
   block.innerHTML = `
     ${banner}
     ${navBar}
-    <div class="inst-day-strip">${pills.join('')}</div>
-    <input type="date" id="inst-date-picker" onchange="instructorSetCustomDate(this.value)" value="${STATE.instDayDate}" style="display:none;" />
+    <div class="inst-day-strip-wrap">
+      <div class="inst-day-strip-scroll" id="inst-day-strip-scroll">${pills.join('')}</div>
+    </div>
+    <input type="date" id="inst-date-picker" onchange="instructorSetCustomDate(this.value)" value="${STATE.instDayDate}" style="position: absolute; opacity: 0; pointer-events: none; width: 1px; height: 1px;" />
   `;
+
+  // Auto-scroll para centrar la fecha activa
+  requestAnimationFrame(() => {
+    const scroll = document.getElementById('inst-day-strip-scroll');
+    if (!scroll) return;
+    const activePill = scroll.querySelector('.inst-day-pill.is-active');
+    if (activePill) {
+      const scrollLeft = activePill.offsetLeft - (scroll.clientWidth / 2) + (activePill.clientWidth / 2);
+      scroll.scrollTo({ left: Math.max(0, scrollLeft), behavior: 'instant' });
+    }
+  });
 }
 
 // Navegar a la semana anterior o siguiente (mantiene mismo día de la semana cuando se puede)
@@ -7837,11 +7900,13 @@ function renderInstructorClassesBlock(classes) {
 
   // Header con label "Tu día" o equivalente
   if (headerBlock) {
-    const visibleCount = visibleClasses.length;
+    const myVisibleCount = visibleClasses.filter(c => !c.isOtherInstructor).length;
+    const totalVisible = visibleClasses.length;
+    const otherCount = totalVisible - myVisibleCount;
     headerBlock.innerHTML = `
       <div class="inst-section-title">
-        <span>${isViewingToday ? 'Resto del día' : 'Clases'}</span>
-        <span class="pill">${visibleCount} ${visibleCount === 1 ? 'clase' : 'clases'}</span>
+        <span>${isViewingToday ? 'Resto del día' : 'Clases del día'}</span>
+        <span class="pill">${totalVisible} ${totalVisible === 1 ? 'hora' : 'horas'}${otherCount > 0 ? ` · ${myVisibleCount} tuya${myVisibleCount === 1 ? '' : 's'}` : ''}</span>
       </div>
     `;
   }
@@ -7871,21 +7936,20 @@ function renderInstructorClassesBlock(classes) {
   }
 
   // Determinar cuál es la "clase próxima/actual" para que esté expandida por default
-  // (el resto arrancan colapsadas)
+  // (el resto arrancan colapsadas). Solo se considera entre las clases propias.
   if (!STATE.instCollapsedSet || STATE.instCollapsedSetDate !== STATE.instDayDate) {
     STATE.instCollapsedSet = new Set();
     STATE.instCollapsedSetDate = STATE.instDayDate;
+    const ownClasses = visibleClasses.filter(c => !c.isOtherInstructor);
     if (isViewingToday) {
-      // Próxima: la primera clase con hour >= currentHour (o currentHour-1 con margen)
-      const sortedHours = visibleClasses.map(c => c.hour).sort((a,b) => a-b);
+      const sortedHours = ownClasses.map(c => c.hour).sort((a,b) => a-b);
       let nextHour = sortedHours.find(h => h >= currentHour || (h === currentHour - 1 && currentMin < 50));
       if (nextHour == null && sortedHours.length > 0) nextHour = sortedHours[sortedHours.length - 1];
-      visibleClasses.forEach(c => {
+      ownClasses.forEach(c => {
         if (c.hour !== nextHour) STATE.instCollapsedSet.add(c.hour);
       });
     } else {
-      // Fechas que no son hoy: primera clase expandida, resto colapsadas
-      const sorted = [...visibleClasses].sort((a,b) => a.hour - b.hour);
+      const sorted = [...ownClasses].sort((a,b) => a.hour - b.hour);
       sorted.slice(1).forEach(c => STATE.instCollapsedSet.add(c.hour));
     }
   }
@@ -8048,7 +8112,145 @@ async function loadInstructorClassesForDate(inst, dateIso) {
     });
   }
 
+  // ============================================
+  // Agregar clases de OTROS profesores en las mismas sedes
+  // (no expandibles, solo informativas)
+  // ============================================
+  const ownLocationIds = [...new Set(result.map(r => r.location?.id).filter(Boolean))];
+  // Si el profe no tiene clases hoy, igual mostrar las de su(s) sede(s) habituales
+  if (ownLocationIds.length === 0) {
+    const myLocs = [...new Set((STATE.schedules || []).filter(s => s.instructor_id === inst.id).map(s => s.location_id))];
+    ownLocationIds.push(...myLocs);
+  }
+
+  const ownSlotKeys = new Set(result.map(r => `${r.location.id}|${r.hour}`));
+  const otherSchedules = (STATE.schedules || []).filter(s =>
+    s.is_active &&
+    s.day_of_week === dow &&
+    s.instructor_id !== inst.id &&
+    ownLocationIds.includes(s.location_id) &&
+    (!s.effective_from || dateIso >= s.effective_from) &&
+    (!s.effective_to || dateIso <= s.effective_to)
+  );
+
+  // Deduplicar por location+hour (varios profes podrían cubrir el mismo slot — tomamos el primero)
+  const otherSlotMap = new Map();
+  for (const s of otherSchedules) {
+    const key = `${s.location_id}|${s.hour}`;
+    if (ownSlotKeys.has(key)) continue; // ya está como propio
+    if (!otherSlotMap.has(key)) otherSlotMap.set(key, s);
+  }
+
+  // Si hay sesiones puntuales asignadas a otros profes (overrides), agregarlas también
+  if (ownLocationIds.length > 0) {
+    const { data: otherSessions } = await sb.from('class_sessions')
+      .select('*, instructors(id, first_name, last_name)')
+      .in('location_id', ownLocationIds)
+      .eq('session_date', dateIso)
+      .neq('instructor_id', inst.id)
+      .not('instructor_id', 'is', null);
+    for (const sess of (otherSessions || [])) {
+      const key = `${sess.location_id}|${sess.hour}`;
+      if (ownSlotKeys.has(key)) continue;
+      // Override manual: pisa el schedule por dow
+      otherSlotMap.set(key, { location_id: sess.location_id, hour: sess.hour, instructor_id: sess.instructor_id, _instructor: sess.instructors, _session: sess });
+    }
+  }
+
+  // Para cada slot "otro profesor", cargar count de ocupación
+  for (const [key, slot] of otherSlotMap) {
+    const loc = STATE.locations.find(l => l.id === slot.location_id);
+    if (!loc) continue;
+
+    // Buscar nombre del profe
+    let otherInst = slot._instructor;
+    if (!otherInst) {
+      otherInst = (STATE.instructors || []).find(i => i.id === slot.instructor_id);
+    }
+    const otherName = otherInst
+      ? (otherInst.first_name + (otherInst.last_name ? ' ' + otherInst.last_name : ''))
+      : '—';
+
+    // Contar ocupación: fixed bookings + session bookings activos
+    let session = slot._session;
+    if (!session) {
+      const { data: sess } = await sb.from('class_sessions')
+        .select('*')
+        .eq('location_id', slot.location_id)
+        .eq('session_date', dateIso)
+        .eq('hour', slot.hour)
+        .maybeSingle();
+      session = sess;
+    }
+    if (session?.is_cancelled) continue; // no mostrar canceladas
+
+    const studentIds = new Set();
+    (STATE.fixedBookings || []).filter(b =>
+      b.is_active && b.location_id === slot.location_id && b.day_of_week === dow && b.hour === slot.hour
+    ).forEach(b => studentIds.add(b.student_id));
+
+    if (session) {
+      const [bRes, aRes] = await Promise.all([
+        sb.from('session_bookings').select('*').eq('session_id', session.id),
+        sb.from('attendance').select('*').eq('session_id', session.id),
+      ]);
+      const allBookings = bRes.data || [];
+      const attendances = aRes.data || [];
+      allBookings.forEach(b => {
+        const att = attendances.find(a => a.student_id === b.student_id);
+        if (bookingShouldBeVisible(b, att)) studentIds.add(b.student_id);
+      });
+    }
+
+    result.push({
+      slot, location: loc, session, dateIso, hour: slot.hour, capacity: loc.capacity || 9,
+      students: [],
+      marked: 0,
+      isOtherInstructor: true,
+      otherInstructorName: otherName,
+      otherStudentsCount: studentIds.size,
+    });
+  }
+
+  // Re-sort por hora
+  result.sort((a, b) => a.hour - b.hour);
+
   return result;
+}
+
+// Render del donut chart de ocupación.
+// filled: cantidad ocupada, total: capacidad
+// size: 'normal' (44px) o 'sm' (38px)
+function _renderInstructorDonut(filled, total, size) {
+  const isSm = size === 'sm';
+  const isEmpty = filled === 0;
+  const radius = isSm ? 13 : 15.5;
+  const circumference = 2 * Math.PI * radius; // ~97.39 para r=15.5
+  // Color en degradé HSL: rojo (hue 0) → verde elegante (hue 140)
+  // Saturación más alta para extremos, lightness consistente
+  let strokeColor = '#D4D4D4'; // por default gris (vacío)
+  if (!isEmpty) {
+    const pct = filled / total;
+    const hue = pct * 140;
+    // Saturación y lightness ajustadas según zona
+    let sat, light;
+    if (pct >= 0.85) { sat = 72; light = 42; } // verde elegante
+    else if (pct >= 0.65) { sat = 65; light = 45; } // verde-amarillo
+    else if (pct >= 0.5) { sat = 80; light = 48; } // amarillo
+    else if (pct >= 0.3) { sat = 90; light = 52; } // naranja
+    else { sat = 80; light = 50; } // rojo
+    strokeColor = `hsl(${hue}, ${sat}%, ${light}%)`;
+  }
+  const dashArray = isEmpty ? '0 999' : `${(filled / total) * circumference} ${circumference}`;
+  return `
+    <div class="inst-donut ${isSm ? 'is-sm' : ''} ${isEmpty ? 'is-empty' : ''}">
+      <svg viewBox="0 0 36 36">
+        <circle class="track" cx="18" cy="18" r="${radius}"/>
+        ${!isEmpty ? `<circle class="fill" cx="18" cy="18" r="${radius}" stroke="${strokeColor}" stroke-dasharray="${dashArray}"/>` : ''}
+      </svg>
+      <div class="lbl">${filled}<span class="of">/${total}</span></div>
+    </div>
+  `;
 }
 
 function renderInstructorClassCard(c, ctx) {
@@ -8083,7 +8285,7 @@ function renderInstructorClassCard(c, ctx) {
   else if (isToday && c.hour > currentHour) { subLabel = 'próxima'; }
   else if (!isToday) { subLabel = ''; }
 
-  const studentsCount = c.students.length;
+  const studentsCount = c.isOtherInstructor ? (c.otherStudentsCount || 0) : c.students.length;
   const markedCount = c.marked || 0;
 
   // Sub-info
@@ -8126,18 +8328,28 @@ function renderInstructorClassCard(c, ctx) {
   const isCollapsed = (STATE.instCollapsedSet || new Set()).has(c.hour);
   const caret = isCollapsed ? '▶' : '▼';
 
+  // Tag de instructor para la hora: "Tu clase" en morado (si es propia) o "Prof. X" en gris
+  let instTag = '';
+  if (c.isOtherInstructor) {
+    instTag = `<div class="inst-hour-instructor-tag">Prof. ${escape(c.otherInstructorName || '—')}</div>`;
+  } else {
+    // Combinar "Tu clase" con el sub-estado en una sola línea
+    const youParts = ['Tu clase'];
+    if (subLabel) youParts.push(subLabel);
+    instTag = `<div class="inst-hour-instructor-tag"><span class="you">${youParts.join(' · ')}</span></div>`;
+  }
+
+  const donut = _renderInstructorDonut(studentsCount, c.capacity, c.isOtherInstructor ? 'sm' : 'normal');
+
   return `
-    <div class="${cardClass} ${isCollapsed ? 'is-collapsed' : ''}">
-      <div class="inst-hour-head" onclick="instructorToggleHour(${c.hour})" style="cursor: pointer;">
-        <span class="inst-hour-caret">${caret}</span>
+    <div class="${cardClass} ${isCollapsed ? 'is-collapsed' : ''} ${c.isOtherInstructor ? 'is-other' : ''}">
+      <div class="inst-hour-head" ${c.isOtherInstructor ? '' : `onclick="instructorToggleHour(${c.hour})"`} style="${c.isOtherInstructor ? '' : 'cursor: pointer;'}">
+        ${c.isOtherInstructor ? `<span style="width:12px; flex-shrink:0;"></span>` : `<span class="inst-hour-caret">${caret}</span>`}
         <div class="inst-hour-time">${formatHour(c.hour)}</div>
-        <div class="inst-hour-meta">
-          <div class="label">${studentsCount} alumno${studentsCount === 1 ? '' : 's'}${subLabel ? ` · ${subLabel}` : ''}</div>
-          ${markedCount > 0 && !isDelivered ? `<div class="sub">${markedCount} marcado${markedCount === 1 ? '' : 's'} de ${studentsCount}</div>` : ''}
-        </div>
-        <div class="inst-hour-count ${studentsCount === 0 ? 'is-empty' : ''}">${studentsCount}/${c.capacity}</div>
+        ${instTag}
+        ${donut}
       </div>
-      ${isCollapsed ? '' : `${studentsCount > 0 || (!isCancelled && !isNotDelivered) ? `<div class="inst-hour-students">${studentsHtml}</div>` : ''}
+      ${c.isOtherInstructor || isCollapsed ? '' : `${studentsCount > 0 || (!isCancelled && !isNotDelivered) ? `<div class="inst-hour-students">${studentsHtml}</div>` : ''}
       ${markDeliveredBtn}`}
     </div>
   `;
@@ -8179,9 +8391,16 @@ function renderInstructorStudentRow(item, classCtx) {
   // ¿Tiene notas de salud guardadas? (health_tags con al menos 1 tag, o medical_notes con texto)
   const hasHealthTags = s.health_tags && Array.isArray(s.health_tags.tags) && s.health_tags.tags.length > 0;
   const hasMedicalNotes = !!(s.medical_notes && s.medical_notes.trim());
-  const hasNotesIcon = (hasHealthTags || hasMedicalNotes)
-    ? '<span class="inst-stud-notes-flag" title="Tiene notas de salud">⚠</span>'
-    : '';
+  const hasHealthAlert = hasHealthTags || hasMedicalNotes;
+  // ¿Tiene nota interna del coordinador?
+  const hasCoordNote = !!(s.coord_note && s.coord_note.trim());
+
+  const alertIcons = [
+    hasHealthAlert ? '<span class="inst-stud-alert is-health" title="Tiene notas de salud">⚠</span>' : '',
+    hasCoordNote ? '<span class="inst-stud-alert is-note" title="Tiene nota del coordinador">📝</span>' : '',
+    isTrial ? '<span class="inst-stud-alert is-note" title="Alumna invitada / trial" style="background:#EEEDFE; color:#3C3489;">★</span>' : '',
+    isPending ? '<span class="inst-stud-alert is-note" title="Pago pendiente" style="background:var(--warn-soft); color:#633806;">$</span>' : '',
+  ].filter(Boolean).join('');
 
   // El check inline solo se muestra si NO está ya marcada como attended
   const isAttended = status === 'attended';
@@ -8196,10 +8415,7 @@ function renderInstructorStudentRow(item, classCtx) {
         <div class="inst-stud-info">
           <div class="inst-stud-name">
             ${escape(s.first_name)} ${escape(s.last_name || '')}
-            ${tag}
-            ${isTrial ? '<span class="inst-stud-tag" style="background:#EEEDFE; color:#3C3489;">Invitada</span>' : ''}
-            ${isPending ? '<span class="inst-stud-tag" style="background:var(--warn-soft); color:#633806;">Pendiente pago</span>' : ''}
-            ${hasNotesIcon}
+            ${alertIcons}
           </div>
           ${statusLine}
         </div>
@@ -8638,13 +8854,30 @@ async function instructorSetDate(filter) {
   renderInstructorClassesBlock(classes);
 }
 
-function instructorOpenDatePicker() {
-  STATE.instDayFilter = 'other';
-  renderInstructorFiltersBlock();
-  setTimeout(() => {
-    const picker = document.getElementById('inst-date-picker');
-    if (picker) picker.showPicker?.();
-  }, 50);
+function instructorOpenDatePicker(event) {
+  if (event) { event.preventDefault?.(); event.stopPropagation?.(); }
+  const picker = document.getElementById('inst-date-picker');
+  if (!picker) return;
+  // iOS Safari requiere que el input sea "visible" (al menos parcialmente) y reciba foco real
+  picker.style.opacity = '0';
+  picker.style.position = 'fixed';
+  picker.style.top = (event?.clientY || 100) + 'px';
+  picker.style.left = (event?.clientX || 100) + 'px';
+  picker.style.pointerEvents = 'auto';
+  picker.style.width = '1px';
+  picker.style.height = '1px';
+  // Tratar showPicker primero (moderno), fallback a focus + click
+  try {
+    if (typeof picker.showPicker === 'function') {
+      picker.showPicker();
+    } else {
+      picker.focus();
+      picker.click();
+    }
+  } catch (e) {
+    picker.focus();
+    picker.click();
+  }
 }
 
 async function instructorSetCustomDate(dateIso) {
@@ -12968,9 +13201,10 @@ async function calculateInstructorPayReport(instructorId, startIso, endIso) {
   };
 }
 
-// Switch entre Mi día y Mis pagos (solo profesor)
+// Switch entre Mi día y Dashboard (solo profesor)
 function switchInstructorTab(tab, btn) {
-  document.querySelectorAll('.pay-tab').forEach(t => t.classList.remove('is-active'));
+  STATE.instTab = tab;
+  document.querySelectorAll('.pay-tab, .inst-tab-pill').forEach(t => t.classList.remove('is-active'));
   if (btn) btn.classList.add('is-active');
   if (tab === 'pay') {
     showView('instructor-pay', null);
@@ -13036,7 +13270,7 @@ async function _renderPayViewFor(inst, container, isCoordinator) {
     ` : `
       <div class="pay-tabs">
         <button class="pay-tab" onclick="switchInstructorTab('day', this)">← Mi día</button>
-        <button class="pay-tab is-active" onclick="switchInstructorTab('pay', this)">Mis pagos</button>
+        <button class="pay-tab is-active" onclick="switchInstructorTab('pay', this)">Dashboard</button>
       </div>
     `}
 
