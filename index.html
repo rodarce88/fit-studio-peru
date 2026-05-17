@@ -11726,7 +11726,17 @@ function renderDetailClasses(stud) {
   });
 
   if (filter === 'upcoming') {
-    classes = classes.filter(b => b.class_sessions.session_date >= todayIso);
+    // Próximas: clases futuras O las de hoy que aún no se procesaron
+    const currentHour = now.getHours();
+    classes = classes.filter(b => {
+      const date = b.class_sessions.session_date;
+      if (date > todayIso) return true;
+      if (date < todayIso) return false;
+      // date === todayIso → futura si NO tiene attendance procesada y la hora no ha pasado
+      const att = _attForBooking(b);
+      if (att && ATTENDANCE_PROCESSED.includes(att.status)) return false;
+      return b.class_sessions.hour >= currentHour;
+    });
     classes.sort((a,b) => a.class_sessions.session_date.localeCompare(b.class_sessions.session_date) || a.class_sessions.hour - b.class_sessions.hour);
   } else if (filter === 'week') {
     classes = classes.filter(b => b.class_sessions.session_date >= startOfWeekIso && b.class_sessions.session_date <= endOfWeekIso);
@@ -11735,7 +11745,17 @@ function renderDetailClasses(stud) {
     classes = classes.filter(b => b.class_sessions.session_date >= startOfMonthIso && b.class_sessions.session_date <= endOfMonthIso);
     classes.sort((a,b) => a.class_sessions.session_date.localeCompare(b.class_sessions.session_date) || a.class_sessions.hour - b.class_sessions.hour);
   } else if (filter === 'past') {
-    classes = classes.filter(b => b.class_sessions.session_date < todayIso);
+    // Pasadas: clases con fecha anterior a hoy O las de hoy que ya se procesaron (o cuya hora pasó)
+    const currentHour = now.getHours();
+    classes = classes.filter(b => {
+      const date = b.class_sessions.session_date;
+      if (date < todayIso) return true;
+      if (date > todayIso) return false;
+      // date === todayIso → pasada si attendance ya procesada o la hora ya pasó
+      const att = _attForBooking(b);
+      if (att && ATTENDANCE_PROCESSED.includes(att.status)) return true;
+      return b.class_sessions.hour < currentHour;
+    });
     classes.sort((a,b) => b.class_sessions.session_date.localeCompare(a.class_sessions.session_date) || b.class_sessions.hour - a.class_sessions.hour);
   }
 
@@ -11923,9 +11943,23 @@ function renderDetailClasses(stud) {
       const sess = b.class_sessions;
       const lc = STATE.locations.find(l => l.id === sess.location_id);
       const inst = STATE.instructors.find(i => i.id === sess.instructor_id);
-      const statusBadge = b.status === 'cancelled'
-        ? '<span style="font-size: 11px; padding: 2px 8px; background: #fee; color: #b00; border-radius: 999px;">Cancelada</span>'
-        : '<span style="font-size: 11px; padding: 2px 8px; background: var(--fit-lavender-pale); color: var(--fit-purple); border-radius: 999px;">Asignada</span>';
+      // Si la attendance ya está marcada, mostrar el badge correcto en lugar de "Asignada"
+      const att = _attForBooking(b);
+      const attStatus = att?.status;
+      let statusBadge;
+      if (attStatus === 'attended') {
+        statusBadge = '<span style="font-size: 11px; padding: 2px 8px; background: #d4f4d4; color: #1a5e1a; border-radius: 999px;">✓ Asistió</span>';
+      } else if (attStatus === 'recoverable') {
+        statusBadge = '<span style="font-size: 11px; padding: 2px 8px; background: var(--warn-soft); color: #412402; border-radius: 999px;">⊙ Falta justificada</span>';
+      } else if (attStatus === 'lost') {
+        statusBadge = '<span style="font-size: 11px; padding: 2px 8px; background: #fee; color: #b00; border-radius: 999px;">⚠ Cancelación tardía</span>';
+      } else if (attStatus === 'no_show') {
+        statusBadge = '<span style="font-size: 11px; padding: 2px 8px; background: #fee; color: #b00; border-radius: 999px;">✗ No vino</span>';
+      } else if (b.status === 'cancelled') {
+        statusBadge = '<span style="font-size: 11px; padding: 2px 8px; background: #fee; color: #b00; border-radius: 999px;">Cancelada</span>';
+      } else {
+        statusBadge = '<span style="font-size: 11px; padding: 2px 8px; background: var(--fit-lavender-pale); color: var(--fit-purple); border-radius: 999px;">Asignada</span>';
+      }
       return `
         <div style="background: white; border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 10px 14px; margin-bottom: 6px; display: flex; align-items: center; justify-content: space-between;">
           <div>
