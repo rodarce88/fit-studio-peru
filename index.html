@@ -1407,6 +1407,47 @@
   }
 
   /* ============================================
+     PHONE FIELD — código país + número
+     ============================================ */
+  .phone-field {
+    display: flex;
+    gap: 8px;
+    align-items: stretch;
+    width: 100%;
+  }
+  .phone-code {
+    flex: 0 0 auto;
+    width: 96px;
+    padding: 11px 8px;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    font-size: 13px;
+    background: white;
+    font-family: var(--body);
+    box-sizing: border-box;
+    -webkit-appearance: none;
+    appearance: none;
+    cursor: pointer;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%23999' fill='none' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 10px center;
+    padding-right: 26px;
+  }
+  .phone-code:focus { outline: none; border-color: var(--fit-purple); }
+  .phone-num {
+    flex: 1;
+    min-width: 0;
+    padding: 11px 14px;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    font-size: 14px;
+    font-family: var(--body);
+    box-sizing: border-box;
+    -webkit-appearance: none;
+  }
+  .phone-num:focus { outline: none; border-color: var(--fit-purple); }
+
+  /* ============================================
      PANEL HEADER CLICKEABLE + "Ver todos"
      ============================================ */
   .panel-header.is-clickable {
@@ -2248,7 +2289,7 @@
           </div>
           <div class="form-row">
             <label>Celular</label>
-            <input type="tel" id="f-phone" placeholder="+51 9..." />
+            <div id="f-phone-wrap"></div>
           </div>
           <div class="form-row">
             <label>Tipo de documento</label>
@@ -6599,7 +6640,9 @@ function openStudentModal(id) {
   f('f-first-name').value = s?.first_name || '';
   f('f-last-name').value = s?.last_name || '';
   f('f-email').value = s?.email || '';
-  f('f-phone').value = s?.phone || '';
+  // Phone con código de país (renderiza el componente con el valor actual)
+  const phoneWrap = document.getElementById('f-phone-wrap');
+  if (phoneWrap) phoneWrap.innerHTML = renderPhoneFieldHtml('f', s?.phone || '', { placeholder: '999 999 999' });
   f('f-doc-type').value = s?.document_type || '';
   f('f-doc-num').value = s?.document_number || '';
   f('f-birth-date').value = s?.birth_date || '';
@@ -6861,7 +6904,7 @@ async function saveStudent() {
     first_name: f('f-first-name').value.trim(),
     last_name: f('f-last-name').value.trim() || null,
     email: f('f-email').value.trim() || null,
-    phone: f('f-phone').value.trim() || null,
+    phone: readPhoneFieldValue('f'),
     document_type: f('f-doc-type').value || null,
     document_number: f('f-doc-num').value.trim() || null,
     birth_date: f('f-birth-date').value || null,
@@ -11642,8 +11685,10 @@ function instructorRenderInviteForm(prefillName) {
 
     <div style="padding: 0 18px 12px;">
       <div style="font-size: 11px; color: var(--ink-mute); text-transform: uppercase; letter-spacing: 0.12em; font-weight: 600; margin-bottom: 6px;">Teléfono (WhatsApp) <span style="color: var(--danger);">*</span></div>
-      <input id="invite-phone" placeholder="+51 9XX XXX XXX" autocomplete="off" inputmode="tel"
-        style="width: 100%; padding: 11px 14px; font-size: 14px; border: 1px solid var(--line); border-radius: 10px; box-sizing: border-box; font-family: var(--body); -webkit-appearance: none;" />
+      ${renderPhoneFieldHtml('invite', '', { placeholder: '999 999 999' })}
+      <div style="font-size: 10.5px; color: var(--ink-mute); margin-top: 4px; line-height: 1.4;">
+        💡 Si pegas un número con código (ej. +51 947 519 295), el país se detecta automático.
+      </div>
     </div>
 
     <div style="padding: 0 18px 16px;">
@@ -11835,7 +11880,7 @@ async function instructorConfirmInvite() {
   if (!isOnline) { showToast('Sin conexión', 'error'); return; }
   const first_name = document.getElementById('invite-first-name').value.trim();
   const last_name = document.getElementById('invite-last-name').value.trim();
-  const phone = document.getElementById('invite-phone').value.trim();
+  const phone = readPhoneFieldValue('invite');
   const referral = document.getElementById('invite-referral').value.trim();
   if (!first_name) { showToast('Falta el nombre', 'error'); return; }
   if (!phone) { showToast('Falta el teléfono', 'error'); return; }
@@ -13000,6 +13045,106 @@ function normalizePhone(phone) {
 function whatsappLink(phone, message) {
   const p = normalizePhone(phone);
   return `https://wa.me/${p}?text=${encodeURIComponent(message)}`;
+}
+
+// ============================================
+// PHONE FIELD — componente con código de país + auto-detect al pegar
+// ============================================
+// Soluciona dos problemas:
+// 1) Alumnos extranjeros: ahora se selecciona el código del país explícitamente.
+// 2) UX: al pegar un número desde WhatsApp (ej "+51 947 519 295" o con caracteres
+//    Unicode invisibles que pone iOS), el componente auto-detecta el código
+//    y separa el número solo. El usuario solo pega y listo.
+// ============================================
+
+const PHONE_COUNTRIES = [
+  { code: '+51',  flag: '🇵🇪', name: 'Perú' },
+  { code: '+1',   flag: '🇺🇸', name: 'USA/Canadá' },
+  { code: '+52',  flag: '🇲🇽', name: 'México' },
+  { code: '+57',  flag: '🇨🇴', name: 'Colombia' },
+  { code: '+56',  flag: '🇨🇱', name: 'Chile' },
+  { code: '+54',  flag: '🇦🇷', name: 'Argentina' },
+  { code: '+593', flag: '🇪🇨', name: 'Ecuador' },
+  { code: '+591', flag: '🇧🇴', name: 'Bolivia' },
+  { code: '+55',  flag: '🇧🇷', name: 'Brasil' },
+  { code: '+58',  flag: '🇻🇪', name: 'Venezuela' },
+  { code: '+598', flag: '🇺🇾', name: 'Uruguay' },
+  { code: '+595', flag: '🇵🇾', name: 'Paraguay' },
+  { code: '+34',  flag: '🇪🇸', name: 'España' },
+  { code: '+44',  flag: '🇬🇧', name: 'UK' },
+  { code: '+33',  flag: '🇫🇷', name: 'Francia' },
+];
+
+// Parsea un teléfono combinado (ej "+51 947 519 295" o "947519295") a { code, number }
+function parseCombinedPhone(text) {
+  if (!text || typeof text !== 'string') return { code: '+51', number: '' };
+  // Limpiar caracteres invisibles Unicode (LRE/PDF/BOM/etc — los pone iOS al copiar de WhatsApp)
+  let s = text.replace(/[\u200B-\u200F\u2028-\u202E\u2060-\u206F\uFEFF]/g, '').trim();
+  if (s.startsWith('+')) {
+    const digitsOnly = s.replace(/\D/g, '');
+    // Probar códigos por longitud descendente (+593 antes que +5, etc)
+    const sorted = [...PHONE_COUNTRIES].sort((a, b) => b.code.length - a.code.length);
+    for (const c of sorted) {
+      const codeDigits = c.code.replace('+', '');
+      if (digitsOnly.startsWith(codeDigits)) {
+        return { code: c.code, number: digitsOnly.slice(codeDigits.length) };
+      }
+    }
+    return { code: '+51', number: digitsOnly };
+  }
+  // Sin +, default Perú
+  return { code: '+51', number: s.replace(/\D/g, '') };
+}
+
+// Genera el HTML del componente. prefix es un identificador único (ej "invite", "f")
+function renderPhoneFieldHtml(prefix, currentValue, opts) {
+  opts = opts || {};
+  const parsed = parseCombinedPhone(currentValue || '');
+  const optionsHtml = PHONE_COUNTRIES.map(c =>
+    `<option value="${c.code}" ${c.code === parsed.code ? 'selected' : ''}>${c.flag} ${c.code}</option>`
+  ).join('');
+  return `
+    <div class="phone-field">
+      <select id="${prefix}-phone-code" class="phone-code">${optionsHtml}</select>
+      <input id="${prefix}-phone-num" class="phone-num" type="tel" inputmode="tel"
+        placeholder="${opts.placeholder || '999 999 999'}" autocomplete="off"
+        value="${escape(parsed.number)}"
+        onpaste="handlePhoneFieldPaste(event, '${prefix}')" />
+    </div>
+  `;
+}
+
+// Lee el valor combinado de un phone-field. Retorna "+51 947519295" o null si está vacío
+function readPhoneFieldValue(prefix) {
+  const code = document.getElementById(`${prefix}-phone-code`)?.value || '+51';
+  const num = (document.getElementById(`${prefix}-phone-num`)?.value || '').replace(/\D/g, '').trim();
+  if (!num) return null;
+  return `${code} ${num}`;
+}
+
+// Setea el valor de un phone-field desde un string combinado
+function setPhoneFieldValue(prefix, value) {
+  const parsed = parseCombinedPhone(value || '');
+  const codeSel = document.getElementById(`${prefix}-phone-code`);
+  const numInp = document.getElementById(`${prefix}-phone-num`);
+  if (codeSel) codeSel.value = parsed.code;
+  if (numInp) numInp.value = parsed.number;
+}
+
+// Handler de paste — detecta si el texto pegado trae código de país y separa
+function handlePhoneFieldPaste(event, prefix) {
+  const cb = event.clipboardData || window.clipboardData;
+  if (!cb) return;
+  const text = cb.getData('text');
+  if (!text) return;
+  const clean = text.replace(/[\u200B-\u200F\u2028-\u202E\u2060-\u206F\uFEFF\s\-\(\)\.]/g, '');
+  // Si tiene + al inicio o tiene más dígitos de los que entrarían en un número local, parsear
+  const hasCountry = clean.startsWith('+');
+  const digits = clean.replace(/\D/g, '');
+  if (hasCountry || digits.length > 9) {
+    event.preventDefault();
+    setPhoneFieldValue(prefix, text);
+  }
 }
 
 function recoveryMessage(name, daysLeft) {
