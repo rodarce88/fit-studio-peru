@@ -2,8 +2,23 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
 <title>FIT Studio Peru — Sistema</title>
+
+<!-- PWA Manifest + theme color -->
+<link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#5B2A8F">
+
+<!-- iOS PWA: comportarse como app en home screen -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="FIT Studio">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="apple-touch-icon" sizes="167x167" href="/apple-touch-icon-167.png">
+
+<!-- Favicon -->
+<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
+
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght,SOFT@9..144,300..900,0..100&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -2305,6 +2320,30 @@
      APPLICATION LOGIC
      ============================================ -->
 <script>
+
+// ============================================
+// SERVICE WORKER — registro para PWA
+// ============================================
+// Registra el SW al cargar. Si hay nueva versión, se actualiza solo
+// en la siguiente apertura. No interrumpe al usuario.
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/service-worker.js')
+      .then((reg) => {
+        // Si se detecta una versión nueva, actualizar sin recargar (toma efecto en próxima apertura)
+        reg.addEventListener('updatefound', () => {
+          const sw = reg.installing;
+          if (!sw) return;
+          sw.addEventListener('statechange', () => {
+            if (sw.state === 'activated') {
+              console.log('[SW] Versión nueva activa. Próxima apertura cargará lo nuevo.');
+            }
+          });
+        });
+      })
+      .catch((err) => console.warn('[SW] No se pudo registrar:', err));
+  });
+}
 
 // ============================================
 // SUPABASE CONFIG — paste your credentials here
