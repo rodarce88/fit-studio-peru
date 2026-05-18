@@ -3030,24 +3030,12 @@ async function renderScheduleAlertsBanner() {
     return;
   }
 
-  // Mientras carga
-  if (!SCHEDULE_ALERTS_CACHE.data) {
-    wrap.innerHTML = `<div class="alerts-banner is-loading">Revisando horarios...</div>`;
-  }
-
+  // Si no hay cache previa, esperamos en silencio (no mostramos "cargando")
   const alerts = await detectScheduleAlerts();
   const { critical, upcoming } = alerts;
 
   if (critical.length === 0 && upcoming.length === 0) {
-    wrap.innerHTML = `
-      <div class="alerts-banner is-ok">
-        <div class="alerts-icon">✓</div>
-        <div class="alerts-content">
-          <div class="alerts-title">Horarios al día</div>
-          <div class="alerts-sub">Sin slots sin profesor en lo que queda del mes y el siguiente.</div>
-        </div>
-      </div>
-    `;
+    wrap.innerHTML = '';
     return;
   }
 
