@@ -757,7 +757,7 @@
   .pay-add-tier { margin-top: 10px; padding: 7px 14px; background: white; border: 1px dashed var(--fit-purple); color: var(--fit-purple); border-radius: 999px; font-size: 12px; cursor: pointer; font-family: var(--body); }
   .pay-x-btn { color: var(--ink-faint); cursor: pointer; font-size: 16px; background: none; border: none; }
   .pay-x-btn:hover { color: var(--danger, #E8694A); }
-  @media (max-width: 600px) {
+
   /* ============================================
      SESSION NOTES — bloque de ingreso e historial
      ============================================ */
@@ -1385,6 +1385,14 @@
     .alerts-banner-head { padding: 12px 14px; }
     .alerts-section { padding: 8px 14px 12px; }
     .alerts-item-main { font-size: 12px; }
+  }
+
+  /* Reglas mobile de pagos a profesores (restauradas) */
+  @media (max-width: 600px) {
+    .pay-config-grid { grid-template-columns: 1fr; }
+    .pay-teachers-table { display: block; overflow-x: auto; font-size: 12px; }
+    .pay-totals-card { padding: 14px 16px; }
+    .pay-totals-value { font-size: 24px; }
   }
 </style>
 </head>
