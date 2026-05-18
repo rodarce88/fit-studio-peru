@@ -1227,6 +1227,165 @@
     }
     .log-details { padding-left: 16px; }
   }
+
+  /* ============================================
+     SCHEDULE ALERTS BANNER (dashboard coordinador)
+     ============================================ */
+  #schedule-alerts-banner { margin-bottom: 20px; }
+  #schedule-alerts-banner:empty { display: none; }
+
+  .alerts-banner {
+    border-radius: 14px;
+    overflow: hidden;
+    border: 1px solid var(--line);
+    background: white;
+  }
+  .alerts-banner.is-loading {
+    padding: 14px 18px;
+    font-size: 12.5px;
+    color: var(--ink-mute);
+    font-style: italic;
+  }
+  .alerts-banner.is-ok {
+    border-color: var(--good);
+    background: var(--good-soft);
+    padding: 14px 18px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .alerts-banner.is-ok .alerts-icon {
+    width: 32px; height: 32px;
+    background: var(--good);
+    color: white;
+    border-radius: 50%;
+    display: grid; place-items: center;
+    font-size: 16px;
+    flex-shrink: 0;
+  }
+  .alerts-banner.is-ok .alerts-title { font-weight: 600; font-size: 13px; }
+  .alerts-banner.is-ok .alerts-sub { font-size: 11.5px; color: var(--ink-soft); margin-top: 2px; }
+
+  .alerts-banner.is-critical { border-color: var(--bad); }
+  .alerts-banner.is-warn { border-color: #F59E0B; }
+
+  .alerts-banner-head {
+    display: flex; align-items: center; gap: 13px;
+    padding: 14px 18px;
+    background: var(--bad-soft);
+  }
+  .alerts-banner.is-warn .alerts-banner-head { background: #FFFBEB; }
+
+  .alerts-banner-head .alerts-icon {
+    width: 32px; height: 32px;
+    background: var(--bad);
+    color: white;
+    border-radius: 50%;
+    display: grid; place-items: center;
+    font-size: 16px;
+    flex-shrink: 0;
+  }
+  .alerts-banner.is-warn .alerts-banner-head .alerts-icon {
+    background: #F59E0B;
+  }
+
+  .alerts-banner-text { flex: 1; }
+  .alerts-banner-text .alerts-title { font-weight: 600; font-size: 14px; }
+  .alerts-banner-text .alerts-sub { font-size: 11.5px; color: var(--ink-soft); margin-top: 2px; }
+
+  .alerts-refresh-btn {
+    background: white;
+    border: 1px solid var(--line);
+    border-radius: 50%;
+    width: 28px; height: 28px;
+    display: grid; place-items: center;
+    cursor: pointer;
+    font-size: 14px;
+    color: var(--ink-soft);
+    transition: all 0.15s;
+  }
+  .alerts-refresh-btn:hover {
+    color: var(--ink);
+    border-color: var(--ink-mute);
+  }
+
+  .alerts-section {
+    padding: 10px 18px 14px;
+    border-top: 1px solid var(--line-soft);
+  }
+  .alerts-section.is-critical { background: white; }
+  .alerts-section.is-warn { background: #FFFEF8; }
+  .alerts-banner.is-warn .alerts-section.is-warn {
+    background: transparent;
+    border-top: 0;
+  }
+
+  .alerts-section-head {
+    display: flex; align-items: center; gap: 8px;
+    padding: 6px 0 10px;
+    font-size: 10.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    color: var(--ink-mute);
+    font-weight: 600;
+  }
+  .alerts-section-icon {
+    font-size: 13px;
+  }
+  .alerts-section.is-critical .alerts-section-icon { color: var(--bad); }
+  .alerts-section.is-warn .alerts-section-icon { color: #B45309; }
+
+  .alerts-items {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .alerts-item {
+    padding: 9px 12px;
+    background: white;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .alerts-item:hover {
+    border-color: var(--fit-purple);
+    background: var(--fit-lavender-pale);
+    transform: translateX(2px);
+  }
+  .alerts-item-main {
+    font-size: 12.5px;
+    display: flex; align-items: center; gap: 6px;
+    flex-wrap: wrap;
+  }
+  .alerts-item-date { font-weight: 600; color: var(--fit-purple); }
+  .alerts-item-time { font-family: monospace; color: var(--ink-soft); }
+  .alerts-item-loc { color: var(--ink-soft); }
+  .alerts-item-dot { color: var(--ink-faint); font-size: 10px; }
+  .alerts-item-sub {
+    font-size: 11px;
+    color: var(--ink-mute);
+    margin-top: 3px;
+  }
+  .alerts-section.is-critical .alerts-item-sub {
+    color: var(--bad);
+    font-weight: 500;
+  }
+  .alerts-more {
+    padding: 9px 12px;
+    text-align: center;
+    font-size: 11.5px;
+    color: var(--fit-purple);
+    cursor: pointer;
+    border-radius: 10px;
+  }
+  .alerts-more:hover { background: var(--fit-lavender-pale); }
+
+  @media (max-width: 700px) {
+    .alerts-banner-head { padding: 12px 14px; }
+    .alerts-section { padding: 8px 14px 12px; }
+    .alerts-item-main { font-size: 12px; }
+  }
 </style>
 </head>
 <body>
@@ -1370,6 +1529,9 @@
         </button>
       </div>
     </div>
+
+    <!-- Banner de alertas de horarios (solo coordinador) -->
+    <div id="schedule-alerts-banner" data-coord-only></div>
 
     <div class="dash-search-wrap" style="position: relative; margin-bottom: 24px;">
       <div style="position: relative;">
@@ -2688,10 +2850,314 @@ function switchLocation(id) {
   renderAll();
 }
 
+// ============================================
+// SCHEDULE ALERTS — Detección de slots sin profesor vigente
+// ============================================
+// Detecta dos categorías:
+//   - CRÍTICAS: slots con alumnas agendadas y sin profe vigente
+//   - PROGRAMAR: vigencias que vencen en los próximos 7 días
+// Alcance: hoy hasta fin del mes siguiente.
+// Cache: 5 minutos para no re-querear constantemente.
+// ============================================
+
+const SCHEDULE_ALERTS_CACHE = { data: null, loadedAt: 0 };
+
+async function detectScheduleAlerts(force) {
+  // Cache de 5 minutos
+  if (!force && SCHEDULE_ALERTS_CACHE.data && (Date.now() - SCHEDULE_ALERTS_CACHE.loadedAt) < 300000) {
+    return SCHEDULE_ALERTS_CACHE.data;
+  }
+  if (!isOnline) return { critical: [], upcoming: [] };
+
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const todayIso = dateToIsoLocal(today);
+  // Fin del mes siguiente
+  const endDate = new Date(today.getFullYear(), today.getMonth() + 2, 0);
+  endDate.setHours(23, 59, 59, 0);
+  const endIso = dateToIsoLocal(endDate);
+
+  const critical = [];
+  const upcoming = [];
+
+  try {
+    // 1. CRÍTICAS: class_sessions futuras con bookings activos y sin instructor vigente
+    // Necesitamos sesiones del rango con sus bookings activos
+    const { data: sessions, error } = await sb.from('class_sessions')
+      .select('id, session_date, hour, location_id, instructor_id, is_cancelled')
+      .gte('session_date', todayIso)
+      .lte('session_date', endIso)
+      .eq('is_cancelled', false);
+    if (error) console.warn('detectScheduleAlerts sessions:', error);
+
+    // Bookings activos del mismo rango (para saber qué sesiones tienen alumnas)
+    const { data: bookings } = await sb.from('session_bookings')
+      .select('session_id, student_id, cancelled_at')
+      .is('cancelled_at', null);
+    const bookingsBySession = {};
+    (bookings || []).forEach(b => {
+      if (!bookingsBySession[b.session_id]) bookingsBySession[b.session_id] = 0;
+      bookingsBySession[b.session_id]++;
+    });
+
+    // También necesitamos los fixed_bookings — alumnas fijas que automáticamente van a un slot
+    // (un slot puede no tener class_session aún, pero sí tener alumnas fijas esperando)
+    // STATE.fixedBookings ya está cargado.
+
+    // Construir mapa de sesiones existentes por (date, location, hour)
+    const sessionsByKey = {};
+    (sessions || []).forEach(s => {
+      const key = `${s.session_date}_${s.location_id}_${s.hour}`;
+      sessionsByKey[key] = s;
+    });
+
+    // Recorrer cada día del rango y verificar slots con alumnas
+    const cursor = new Date(today);
+    while (cursor <= endDate) {
+      const dateIso = dateToIsoLocal(cursor);
+      const dow = cursor.getDay();
+      // Para cada sede × cada hora típica
+      STATE.locations.forEach(loc => {
+        // Horas que tienen schedule histórico (de cualquier profe) en este día de la semana
+        const slotsWithSchedule = new Set();
+        STATE.schedules.forEach(s => {
+          if (s.location_id === loc.id && s.day_of_week === dow) {
+            slotsWithSchedule.add(s.hour);
+          }
+        });
+        // También las horas donde hay class_session ya creada o fixed_bookings
+        STATE.fixedBookings.forEach(fb => {
+          if (fb.location_id === loc.id && fb.day_of_week === dow) {
+            slotsWithSchedule.add(fb.hour);
+          }
+        });
+
+        slotsWithSchedule.forEach(hour => {
+          const sessionKey = `${dateIso}_${loc.id}_${hour}`;
+          const session = sessionsByKey[sessionKey];
+
+          // ¿Cuántas alumnas estarían en este slot?
+          let studentCount = 0;
+          if (session) {
+            studentCount = bookingsBySession[session.id] || 0;
+          }
+          // Alumnas fijas con fixed_booking para este día/hora/sede (que sin sesión cancelada)
+          const isCancelled = session && session.is_cancelled;
+          if (!isCancelled) {
+            const fixedCount = STATE.fixedBookings.filter(fb =>
+              fb.location_id === loc.id &&
+              fb.day_of_week === dow &&
+              fb.hour === hour &&
+              (!fb.effective_from || fb.effective_from <= dateIso) &&
+              (!fb.effective_to || fb.effective_to >= dateIso)
+            ).length;
+            studentCount = Math.max(studentCount, fixedCount);
+          }
+
+          if (studentCount === 0) return; // no hay alumnas, no es crítico
+
+          // ¿Hay profesor vigente?
+          const inst = resolveInstructor(loc.id, cursor, dow, hour);
+          if (inst._isUnassigned && !inst._isCancelled) {
+            critical.push({
+              dateIso,
+              hour,
+              location_id: loc.id,
+              location_name: loc.name,
+              studentCount,
+              dow,
+            });
+          }
+        });
+      });
+      cursor.setDate(cursor.getDate() + 1);
+    }
+
+    // 2. PROGRAMAR: vigencias que vencen en los próximos 7 días
+    const sevenDaysFromNow = new Date(today);
+    sevenDaysFromNow.setDate(today.getDate() + 7);
+    const sevenDaysIso = dateToIsoLocal(sevenDaysFromNow);
+
+    // Agrupar por (instructor, location) para evitar mostrar 30 schedules del mismo profe
+    const expiringByInstLoc = {};
+    STATE.schedules.forEach(s => {
+      if (!s.effective_to) return;
+      if (s.effective_to < todayIso) return; // ya vencido (cae en críticas si tiene alumnas)
+      if (s.effective_to > sevenDaysIso) return; // vence después de 7 días
+
+      const key = `${s.instructor_id}_${s.location_id}`;
+      if (!expiringByInstLoc[key] || s.effective_to < expiringByInstLoc[key].effective_to) {
+        expiringByInstLoc[key] = {
+          instructor_id: s.instructor_id,
+          location_id: s.location_id,
+          effective_to: s.effective_to,
+        };
+      }
+    });
+    Object.values(expiringByInstLoc).forEach(e => {
+      const inst = STATE.instructors.find(i => i.id === e.instructor_id);
+      const loc = STATE.locations.find(l => l.id === e.location_id);
+      if (inst && loc) {
+        upcoming.push({
+          instructor_id: e.instructor_id,
+          instructor_name: inst.full_name,
+          location_id: e.location_id,
+          location_name: loc.name,
+          effective_to: e.effective_to,
+        });
+      }
+    });
+
+  } catch (err) {
+    console.error('detectScheduleAlerts:', err);
+  }
+
+  // Ordenar
+  critical.sort((a, b) => (a.dateIso + a.hour).localeCompare(b.dateIso + b.hour));
+  upcoming.sort((a, b) => a.effective_to.localeCompare(b.effective_to));
+
+  const result = { critical, upcoming };
+  SCHEDULE_ALERTS_CACHE.data = result;
+  SCHEDULE_ALERTS_CACHE.loadedAt = Date.now();
+  return result;
+}
+
+// Renderiza el banner de alertas en el dashboard (solo coordinador)
+async function renderScheduleAlertsBanner() {
+  const wrap = document.getElementById('schedule-alerts-banner');
+  if (!wrap) return;
+  if (!CURRENT_USER || CURRENT_USER.role !== 'coordinator') {
+    wrap.innerHTML = '';
+    return;
+  }
+
+  // Mientras carga
+  if (!SCHEDULE_ALERTS_CACHE.data) {
+    wrap.innerHTML = `<div class="alerts-banner is-loading">Revisando horarios...</div>`;
+  }
+
+  const alerts = await detectScheduleAlerts();
+  const { critical, upcoming } = alerts;
+
+  if (critical.length === 0 && upcoming.length === 0) {
+    wrap.innerHTML = `
+      <div class="alerts-banner is-ok">
+        <div class="alerts-icon">✓</div>
+        <div class="alerts-content">
+          <div class="alerts-title">Horarios al día</div>
+          <div class="alerts-sub">Sin slots sin profesor en lo que queda del mes y el siguiente.</div>
+        </div>
+      </div>
+    `;
+    return;
+  }
+
+  const dayLabels = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
+  const monthLabels = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+  const fmtDate = (iso) => {
+    const d = new Date(iso + 'T12:00:00');
+    return `${dayLabels[d.getDay()]} ${d.getDate()} ${monthLabels[d.getMonth()]}`;
+  };
+
+  // Críticas: mostrar primeras 6
+  const criticalShown = critical.slice(0, 6);
+  const criticalHidden = critical.length - criticalShown.length;
+  const criticalHtml = critical.length > 0 ? `
+    <div class="alerts-section is-critical">
+      <div class="alerts-section-head">
+        <span class="alerts-section-icon">⚠</span>
+        <span class="alerts-section-title">${critical.length} ${critical.length === 1 ? 'slot' : 'slots'} sin profesor con alumnas agendadas</span>
+      </div>
+      <div class="alerts-items">
+        ${criticalShown.map(a => `
+          <div class="alerts-item" onclick="goToScheduleAlert('${a.dateIso}', ${a.hour}, '${a.location_id}')">
+            <div class="alerts-item-main">
+              <span class="alerts-item-date">${fmtDate(a.dateIso)}</span>
+              <span class="alerts-item-dot">·</span>
+              <span class="alerts-item-time">${formatHour(a.hour)}</span>
+              <span class="alerts-item-dot">·</span>
+              <span class="alerts-item-loc">${escape(a.location_name)}</span>
+            </div>
+            <div class="alerts-item-sub">${a.studentCount} alumna${a.studentCount === 1 ? '' : 's'} agendada${a.studentCount === 1 ? '' : 's'}</div>
+          </div>
+        `).join('')}
+        ${criticalHidden > 0 ? `<div class="alerts-more" onclick="goToScheduleAlert()">+ ${criticalHidden} más en el calendario →</div>` : ''}
+      </div>
+    </div>
+  ` : '';
+
+  const upcomingHtml = upcoming.length > 0 ? `
+    <div class="alerts-section is-warn">
+      <div class="alerts-section-head">
+        <span class="alerts-section-icon">◷</span>
+        <span class="alerts-section-title">${upcoming.length} ${upcoming.length === 1 ? 'vigencia' : 'vigencias'} por vencer en 7 días</span>
+      </div>
+      <div class="alerts-items">
+        ${upcoming.map(a => `
+          <div class="alerts-item" onclick="goToInstructorProfile('${a.instructor_id}')">
+            <div class="alerts-item-main">
+              <span class="alerts-item-date">${escape(a.instructor_name)}</span>
+              <span class="alerts-item-dot">·</span>
+              <span class="alerts-item-loc">${escape(a.location_name)}</span>
+            </div>
+            <div class="alerts-item-sub">vence ${fmtDate(a.effective_to)}</div>
+          </div>
+        `).join('')}
+      </div>
+    </div>
+  ` : '';
+
+  wrap.innerHTML = `
+    <div class="alerts-banner ${critical.length > 0 ? 'is-critical' : 'is-warn'}">
+      <div class="alerts-banner-head">
+        <div class="alerts-icon">${critical.length > 0 ? '⚠' : '◷'}</div>
+        <div class="alerts-banner-text">
+          <div class="alerts-title">${critical.length + upcoming.length} ${(critical.length + upcoming.length) === 1 ? 'alerta de horario' : 'alertas de horarios'}</div>
+          <div class="alerts-sub">Mes en curso y el siguiente</div>
+        </div>
+        <button class="alerts-refresh-btn" onclick="event.stopPropagation(); refreshScheduleAlerts();" title="Actualizar">↻</button>
+      </div>
+      ${criticalHtml}
+      ${upcomingHtml}
+    </div>
+  `;
+}
+
+async function refreshScheduleAlerts() {
+  SCHEDULE_ALERTS_CACHE.data = null;
+  await renderScheduleAlertsBanner();
+}
+
+// Click en alerta → navega al calendario en esa semana, slot resaltado
+function goToScheduleAlert(dateIso, hour, locationId) {
+  if (dateIso) {
+    const d = new Date(dateIso + 'T12:00:00');
+    STATE.scheduleWeekStart = getWeekStart(d);
+    if (locationId) STATE.currentLocationId = locationId;
+    STATE.scheduleHighlight = { dateIso, hour, locationId }; // para resaltar el slot al llegar
+  }
+  // Click en el nav-item "Calendario" para activar la vista
+  const navBtn = document.querySelector('.nav-item[data-view="schedule"]');
+  if (navBtn) navBtn.click();
+  else showView('schedule', null);
+}
+
+// Click en vigencia por vencer → ir al perfil del instructor en módulo Profesores
+function goToInstructorProfile(instructorId) {
+  showView('instructors', null);
+  // Si hay una función para abrir un instructor específico, llamarla
+  setTimeout(() => {
+    const card = document.querySelector(`[data-instructor-id="${instructorId}"]`);
+    if (card) card.click();
+  }, 200);
+}
+
 function renderDashboard() {
   const loc = getCurrentLocation();
   if (!loc) return;
   document.getElementById('dash-loc-name').textContent = loc.name;
+
+  // Banner de alertas de horarios (fire-and-forget, se renderiza async)
+  renderScheduleAlertsBanner();
 
   const locStudents = STATE.students.filter(s => s.location_id === loc.id);
   const fixedStudents = locStudents.filter(s => s.modality === 'fixed').length;
@@ -6320,12 +6786,37 @@ function openChangeInstructorModal(hour, dow) {
     <span style="color: var(--ink-mute);">Profesor actual:</span> <strong>${escape(currentInst.full_name)}</strong>
   `;
 
-  // Llenar selector de profesores
+  // Llenar selector de profesores agrupado por relevancia a la sede actual
   const sel = document.getElementById('change-new-instructor');
-  sel.innerHTML = STATE.instructors
-    .filter(i => i.id !== currentInst.id)
-    .map(i => `<option value="${i.id}">${escape(i.full_name)} (${escape(i.initials)})</option>`)
-    .join('');
+  const today = dateToIsoLocal(new Date());
+
+  // Set de instructor_ids que tienen schedules activos en esta sede (en cualquier momento del mes)
+  const inThisLocation = new Set();
+  STATE.schedules.forEach(s => {
+    if (s.location_id === loc.id && (!s.effective_to || s.effective_to >= today)) {
+      inThisLocation.add(s.instructor_id);
+    }
+  });
+
+  const candidates = STATE.instructors
+    .filter(i => i.is_active !== false && i.id !== currentInst.id)
+    .sort((a, b) => (a.full_name || '').localeCompare(b.full_name || ''));
+
+  const inSede = candidates.filter(i => inThisLocation.has(i.id));
+  const otros  = candidates.filter(i => !inThisLocation.has(i.id));
+
+  const opt = (i) => `<option value="${i.id}">${escape(i.full_name)} (${escape(i.initials)})</option>`;
+  let html = '';
+  if (inSede.length > 0) {
+    html += `<optgroup label="Profesores en ${escape(loc.name)}">${inSede.map(opt).join('')}</optgroup>`;
+  }
+  if (otros.length > 0) {
+    html += `<optgroup label="Otros profesores activos">${otros.map(opt).join('')}</optgroup>`;
+  }
+  if (!html) {
+    html = '<option value="" disabled>No hay otros profesores disponibles</option>';
+  }
+  sel.innerHTML = html;
 
   document.getElementById('change-scope').value = 'single';
   document.getElementById('change-reason').value = '';
@@ -7967,6 +8458,7 @@ const COORDINATOR_EMAILS = [
   'rodrigo.arce.valdez@gmail.com',
   'anahi.fitstudio@gmail.com',
   'anahi@fitstudioperu.com',
+  'santacruz.reformerfitstudio@gmail.com',
 ];
 
 async function checkAuthAndRoute() {
