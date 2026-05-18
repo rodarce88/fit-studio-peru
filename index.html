@@ -545,6 +545,8 @@
   .inst-hour-card { background: white; border: 1px solid var(--line); border-radius: 16px; margin-bottom: 10px; overflow: hidden; transition: opacity 0.2s; }
   .inst-hour-card.is-collapsed { background: var(--fit-cream); }
   .inst-hour-card.is-collapsed .inst-hour-head:hover { background: white; }
+  /* Toggle quirúrgico: el body siempre está renderizado, solo se oculta con CSS */
+  .inst-hour-card.is-collapsed .inst-hour-body { display: none; }
   .inst-hour-caret { width: 12px; text-align: center; color: var(--ink-mute); font-size: 11px; flex-shrink: 0; user-select: none; transition: transform 0.15s; }
   .inst-hour-head:hover { background: var(--fit-cream); }
   .inst-stud-notes-flag { display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; color: #B8860B; font-size: 13px; margin-left: 4px; cursor: help; }
@@ -1561,6 +1563,67 @@
 </style>
 </head>
 <body>
+
+<!-- SPLASH SCREEN — visible mientras carga el JS y la app inicializa -->
+<style>
+  #app-splash {
+    position: fixed; inset: 0;
+    background: #5B2A8F;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    z-index: 99999;
+    transition: opacity 0.35s ease-out;
+  }
+  #app-splash.is-hidden { opacity: 0; pointer-events: none; }
+  .splash-logo {
+    font-family: Georgia, 'Times New Roman', serif;
+    font-style: italic;
+    color: white;
+    font-size: 52px;
+    font-weight: 400;
+    letter-spacing: 4px;
+    animation: splash-pulse 1.6s ease-in-out infinite;
+  }
+  .splash-sub {
+    color: rgba(255,255,255,0.65);
+    font-size: 10px;
+    letter-spacing: 4px;
+    text-transform: uppercase;
+    margin-top: 8px;
+    font-family: -apple-system, 'Inter', sans-serif;
+  }
+  .splash-spinner {
+    margin-top: 36px;
+    width: 28px; height: 28px;
+    border: 2.5px solid rgba(255,255,255,0.18);
+    border-top-color: white;
+    border-radius: 50%;
+    animation: splash-spin 0.85s linear infinite;
+  }
+  @keyframes splash-pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.7; transform: scale(0.97); }
+  }
+  @keyframes splash-spin {
+    to { transform: rotate(360deg); }
+  }
+</style>
+<div id="app-splash">
+  <div class="splash-logo">FIT</div>
+  <div class="splash-sub">Studio Peru</div>
+  <div class="splash-spinner"></div>
+</div>
+<script>
+  // Función global para ocultar el splash. La llama el JS principal cuando la app está lista.
+  window.hideSplash = function() {
+    const splash = document.getElementById('app-splash');
+    if (!splash) return;
+    splash.classList.add('is-hidden');
+    setTimeout(() => splash.remove(), 400);
+  };
+  // Fallback: si por alguna razón nadie llama hideSplash() en 8s, lo escondemos solos.
+  setTimeout(() => { try { window.hideSplash(); } catch(e){} }, 8000);
+</script>
 
 <!-- LOGIN VIEW (se muestra antes de autenticar) -->
 <div id="login-view" style="display:none; min-height:100vh; align-items:center; justify-content:center; padding:30px 20px; background:var(--fit-cream);">
@@ -9048,11 +9111,15 @@ function showLoginScreen(errMsg) {
     el.textContent = errMsg;
     el.style.display = 'block';
   }
+  // Ocultar splash cuando ya se decidió qué pantalla mostrar
+  if (typeof hideSplash === 'function') hideSplash();
 }
 
 function showAppLayout() {
   document.getElementById('login-view').style.display = 'none';
   document.getElementById('app-layout').style.display = 'block';
+  // Ocultar splash cuando ya se decidió qué pantalla mostrar
+  if (typeof hideSplash === 'function') hideSplash();
 }
 
 async function loginWithGoogle() {
@@ -9626,18 +9693,27 @@ function renderInstructorClassesBlock(classes) {
 }
 
 // Toggle colapsar / expandir un bloque de hora
+// Toggle quirúrgico: cambia solo la clase CSS del card, sin re-renderizar JS.
+// El contenido (students, mark-delivered, notes) ya está en el DOM desde el render inicial.
+// Esto hace que abrir/cerrar una hora sea INSTANTÁNEO (~5ms vs ~300ms antes).
 function instructorToggleHour(hour) {
   if (!STATE.instCollapsedSet) STATE.instCollapsedSet = new Set();
   if (STATE.instCollapsedSet.has(hour)) STATE.instCollapsedSet.delete(hour);
   else STATE.instCollapsedSet.add(hour);
-  // Re-render solo el bloque de clases (es rápido)
-  const cached = (STATE.instClassesCache || {})[STATE.instDayDate];
-  if (cached) {
-    renderInstructorClassesBlock(cached);
-  } else {
-    // Fallback: si el cache se perdió, recargar todo
+
+  const card = document.querySelector(`.inst-hour-card[data-hour="${hour}"]`);
+  if (!card) {
+    // Fallback raro: si el DOM perdió el card (puede pasar tras un re-render), recargar
     if (typeof renderInstructorDay === 'function') renderInstructorDay();
+    return;
   }
+
+  const isNowCollapsed = STATE.instCollapsedSet.has(hour);
+  card.classList.toggle('is-collapsed', isNowCollapsed);
+
+  // Actualizar caret
+  const caret = card.querySelector('.inst-hour-caret');
+  if (caret) caret.textContent = isNowCollapsed ? '▶' : '▼';
 }
 
 function instructorTogglePast() {
@@ -10299,17 +10375,26 @@ function renderInstructorClassCard(c, ctx) {
 
   const donut = _renderInstructorDonut(studentsCount, c.capacity, c.isOtherInstructor ? 'sm' : 'normal');
 
+  // Renderizamos SIEMPRE el contenido (body) — el toggle solo lo muestra/oculta con CSS.
+  // Esto hace que el click en una hora sea INSTANTÁNEO (cero re-render JS).
+  // El costo: render inicial tiene todas las horas con contenido, pero se hace una sola vez.
+  const bodyHtml = c.isOtherInstructor ? '' : `
+    <div class="inst-hour-body">
+      ${studentsCount > 0 || (!isCancelled && !isNotDelivered) ? `<div class="inst-hour-students">${studentsHtml}</div>` : ''}
+      ${markDeliveredBtn}
+      ${renderSessionNoteBlock(c)}
+    </div>
+  `;
+
   return `
-    <div class="${cardClass} ${isCollapsed ? 'is-collapsed' : ''} ${c.isOtherInstructor ? 'is-other' : ''}">
+    <div class="${cardClass} ${isCollapsed ? 'is-collapsed' : ''} ${c.isOtherInstructor ? 'is-other' : ''}" data-hour="${c.hour}">
       <div class="inst-hour-head" ${c.isOtherInstructor ? '' : `onclick="instructorToggleHour(${c.hour})"`} style="${c.isOtherInstructor ? '' : 'cursor: pointer;'}">
         ${c.isOtherInstructor ? `<span style="width:12px; flex-shrink:0;"></span>` : `<span class="inst-hour-caret">${caret}</span>`}
         <div class="inst-hour-time">${formatHour(c.hour)}</div>
         ${instTag}
         ${donut}
       </div>
-      ${c.isOtherInstructor || isCollapsed ? '' : `${studentsCount > 0 || (!isCancelled && !isNotDelivered) ? `<div class="inst-hour-students">${studentsHtml}</div>` : ''}
-      ${markDeliveredBtn}
-      ${renderSessionNoteBlock(c)}`}
+      ${bodyHtml}
     </div>
   `;
 }

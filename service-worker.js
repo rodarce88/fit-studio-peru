@@ -14,7 +14,7 @@
 // cierre todas las pestañas.
 // ============================================================
 
-const VERSION = 'v1';
+const VERSION = 'v2';
 const CACHE_NAME = `fit-studio-${VERSION}`;
 
 const PRECACHE_ASSETS = [
