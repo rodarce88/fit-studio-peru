@@ -1394,6 +1394,161 @@
     .pay-totals-card { padding: 14px 16px; }
     .pay-totals-value { font-size: 24px; }
   }
+
+  /* ============================================
+     PANEL HEADER CLICKEABLE + "Ver todos"
+     ============================================ */
+  .panel-header.is-clickable {
+    cursor: pointer;
+    transition: background 0.15s;
+    position: relative;
+  }
+  .panel-header.is-clickable:hover {
+    background: var(--fit-lavender-pale);
+  }
+  .panel-go {
+    color: var(--fit-purple);
+    font-size: 14px;
+    font-weight: 600;
+    margin-left: 6px;
+    opacity: 0.6;
+    transition: opacity 0.15s, transform 0.15s;
+  }
+  .panel-header.is-clickable:hover .panel-go {
+    opacity: 1;
+    transform: translateX(2px);
+  }
+  .panel-more {
+    padding: 11px 14px;
+    text-align: center;
+    font-size: 12px;
+    color: var(--fit-purple);
+    font-weight: 500;
+    cursor: pointer;
+    border-top: 1px solid var(--line-soft);
+    transition: background 0.15s;
+  }
+  .panel-more:hover { background: var(--fit-lavender-pale); }
+
+  /* ============================================
+     VISTAS COMPLETAS — Por re-agendar / Por cobrar
+     ============================================ */
+  .full-section { margin-bottom: 24px; }
+  .full-section-head {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    padding: 4px 4px 10px;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--ink-mute);
+    font-weight: 500;
+  }
+  .full-section.is-today .full-section-head {
+    color: var(--fit-purple);
+  }
+  .full-section-icon { font-size: 13px; }
+  .full-section-count {
+    background: var(--fit-lavender-pale);
+    color: var(--fit-purple);
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-size: 10.5px;
+    font-weight: 600;
+    letter-spacing: 0;
+  }
+  .full-section.is-today .full-section-count {
+    background: var(--fit-purple);
+    color: white;
+  }
+  .full-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .full-row {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 13px 16px;
+    background: white;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .full-row:hover {
+    border-color: var(--fit-purple);
+    transform: translateX(2px);
+    box-shadow: 0 2px 8px rgba(91, 42, 143, 0.05);
+  }
+  .full-section.is-today .full-row {
+    border-color: var(--fit-lavender);
+    background: var(--fit-lavender-pale);
+  }
+  .full-section.is-today .full-row:hover {
+    border-color: var(--fit-purple);
+    background: white;
+  }
+  .full-row-main { flex: 1; min-width: 0; }
+  .full-row-name {
+    font-size: 13.5px;
+    font-weight: 500;
+    color: var(--ink);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+  .full-row-sub {
+    font-size: 11.5px;
+    color: var(--ink-mute);
+    margin-top: 3px;
+  }
+  .full-row-badge {
+    display: inline-block;
+    padding: 2px 7px;
+    border-radius: 999px;
+    background: var(--bg);
+    color: var(--ink-mute);
+    font-size: 9.5px;
+    font-weight: 500;
+    text-transform: lowercase;
+  }
+  .full-row-badge.is-trial {
+    background: #EEEDFE;
+    color: #3C3489;
+  }
+  .full-row-btn {
+    padding: 7px 14px;
+    background: var(--fit-purple);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-family: var(--body);
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: background 0.15s;
+  }
+  .full-row:hover .full-row-btn { background: var(--fit-purple-deep); }
+  .full-empty {
+    padding: 40px 20px;
+    text-align: center;
+    color: var(--ink-mute);
+    font-size: 12.5px;
+    background: var(--fit-cream);
+    border-radius: 12px;
+    border: 1px solid var(--line);
+  }
+
+  @media (max-width: 600px) {
+    .full-row { padding: 11px 13px; gap: 10px; }
+    .full-row-name { font-size: 13px; }
+    .full-row-btn { padding: 6px 11px; font-size: 11.5px; }
+  }
 </style>
 </head>
 <body>
@@ -1635,17 +1790,19 @@
         </div>
 
         <div class="panel">
-          <div class="panel-header">
+          <div class="panel-header is-clickable" onclick="showView('full-reschedule', null); renderFullRescheduleView();">
             <div class="panel-title">Por <em>re-agendar</em></div>
             <span class="panel-count warn" id="reschedule-count">—</span>
+            <span class="panel-go">→</span>
           </div>
           <div class="panel-body" id="reschedule-list"></div>
         </div>
 
         <div class="panel">
-          <div class="panel-header">
+          <div class="panel-header is-clickable" onclick="showView('full-payment', null); renderFullPaymentView();">
             <div class="panel-title">Por <em>cobrar</em></div>
             <span class="panel-count warn" id="topay-count">—</span>
+            <span class="panel-go">→</span>
           </div>
           <div class="panel-body" id="topay-list"></div>
         </div>
@@ -1851,6 +2008,34 @@
         <tbody id="renewals-tbody"></tbody>
       </table>
     </div>
+  </section>
+
+  <!-- POR RE-AGENDAR — vista completa (coordinador) -->
+  <section class="view" id="view-full-reschedule">
+    <div class="page-header">
+      <div>
+        <h1 class="page-title">Por <em>re-agendar</em></h1>
+        <div class="page-sub">Alumnas con clases del paquete sin agendar</div>
+      </div>
+      <div class="page-actions">
+        <button class="btn btn-ghost" onclick="renderFullRescheduleView()">↻ Actualizar</button>
+      </div>
+    </div>
+    <div id="full-reschedule-content"></div>
+  </section>
+
+  <!-- POR COBRAR — vista completa (coordinador) -->
+  <section class="view" id="view-full-payment">
+    <div class="page-header">
+      <div>
+        <h1 class="page-title">Por <em>cobrar</em></h1>
+        <div class="page-sub">Alumnas con saldo pendiente o clases sin pago</div>
+      </div>
+      <div class="page-actions">
+        <button class="btn btn-ghost" onclick="renderFullPaymentView()">↻ Actualizar</button>
+      </div>
+    </div>
+    <div id="full-payment-content"></div>
   </section>
 
   <!-- STUDENT DETAIL VIEW (coordinador) -->
@@ -3199,6 +3384,258 @@ function renderDashboard() {
   loadToPayList();
 }
 
+// ============================================
+// VISTAS COMPLETAS — Por re-agendar / Por cobrar
+// ============================================
+// Cuando la coordinadora clickea "+X más" o el header del widget, abre
+// la vista completa con TODA la lista, agrupada por:
+//   1. Con clase hoy (al inicio, para cobrar/agendar antes de su clase)
+//   2. Resto
+// ============================================
+
+// Calcula qué alumnas tienen una sesión agendada para HOY (no cancelada)
+async function getStudentsWithClassToday() {
+  if (!isOnline) return new Set();
+  const todayIso = dateToIsoLocal(new Date());
+  const result = new Set();
+  try {
+    // Sesiones de hoy
+    const { data: sessions } = await sb.from('class_sessions')
+      .select('id, is_cancelled')
+      .eq('session_date', todayIso);
+    if (!sessions || sessions.length === 0) return result;
+    const sessionIds = sessions.filter(s => !s.is_cancelled).map(s => s.id);
+    if (sessionIds.length === 0) return result;
+    // Bookings activos de esas sesiones
+    const { data: bookings } = await sb.from('session_bookings')
+      .select('student_id, cancelled_at')
+      .in('session_id', sessionIds)
+      .is('cancelled_at', null);
+    (bookings || []).forEach(b => result.add(b.student_id));
+  } catch (e) {
+    console.warn('getStudentsWithClassToday:', e);
+  }
+  return result;
+}
+
+async function renderFullRescheduleView() {
+  const wrap = document.getElementById('full-reschedule-content');
+  if (!wrap) return;
+  if (!isOnline) {
+    wrap.innerHTML = '<div class="full-empty">Conexión requerida.</div>';
+    return;
+  }
+  wrap.innerHTML = '<div class="full-empty">Cargando...</div>';
+
+  const todayIso = dateToIsoLocal(new Date());
+  // 1. Paquetes vivos
+  const { data: pkgs } = await sb.from('student_packages')
+    .select('id, student_id, classes_total, classes_used, classes_recoverable')
+    .eq('is_frozen', false);
+  if (!pkgs || pkgs.length === 0) {
+    wrap.innerHTML = '<div class="full-empty">Sin pendientes ✓</div>';
+    return;
+  }
+
+  // 2. Bookings futuros no cancelados de esos alumnos
+  const studentIds = pkgs.map(p => p.student_id);
+  const { data: bookings } = await sb.from('session_bookings')
+    .select('student_id, cancelled_at, class_sessions(session_date, is_cancelled)')
+    .in('student_id', studentIds);
+
+  const futureCountByStudent = new Map();
+  (bookings || []).forEach(b => {
+    if (b.cancelled_at) return;
+    if (!b.class_sessions || b.class_sessions.is_cancelled) return;
+    if (b.class_sessions.session_date < todayIso) return;
+    futureCountByStudent.set(b.student_id, (futureCountByStudent.get(b.student_id) || 0) + 1);
+  });
+
+  // 3. Pendientes
+  const items = pkgs.map(p => {
+    const max = Math.max(0, (p.classes_total || 0) - (p.classes_used || 0));
+    const current = futureCountByStudent.get(p.student_id) || 0;
+    const pending = max - current;
+    const stud = STATE.students.find(s => s.id === p.student_id);
+    return { stud, pending, max, current, recoverable: p.classes_recoverable || 0 };
+  }).filter(item => item.stud && item.pending > 0);
+
+  if (items.length === 0) {
+    wrap.innerHTML = '<div class="full-empty">Sin pendientes ✓</div>';
+    return;
+  }
+
+  // 4. Marcar quienes tienen clase HOY
+  const withToday = await getStudentsWithClassToday();
+  const todayItems = items.filter(x => withToday.has(x.stud.id));
+  const restItems  = items.filter(x => !withToday.has(x.stud.id));
+
+  // Ordenar cada grupo por recuperables DESC, luego por pending DESC
+  const sortFn = (a, b) => {
+    if (a.recoverable !== b.recoverable) return b.recoverable - a.recoverable;
+    return b.pending - a.pending;
+  };
+  todayItems.sort(sortFn);
+  restItems.sort(sortFn);
+
+  const renderItem = (item) => {
+    const s = item.stud;
+    const recoverHint = item.recoverable > 0
+      ? `${item.recoverable} recuperable${item.recoverable === 1 ? '' : 's'}`
+      : 'Sin agendar todavía';
+    return `<div class="full-row" onclick="openStudentScheduleEditor('${s.id}')">
+      <div class="full-row-main">
+        <div class="full-row-name">${escape(s.first_name || '')} ${escape(s.last_name || '')}</div>
+        <div class="full-row-sub">${item.pending} clase${item.pending === 1 ? '' : 's'} · ${recoverHint}</div>
+      </div>
+      <button class="full-row-btn">Agendar</button>
+    </div>`;
+  };
+
+  let html = '';
+  if (todayItems.length > 0) {
+    html += `
+      <div class="full-section is-today">
+        <div class="full-section-head">
+          <span class="full-section-icon">📍</span>
+          <span class="full-section-title">Con clase hoy</span>
+          <span class="full-section-count">${todayItems.length}</span>
+        </div>
+        <div class="full-list">${todayItems.map(renderItem).join('')}</div>
+      </div>
+    `;
+  }
+  html += `
+    <div class="full-section">
+      <div class="full-section-head">
+        <span class="full-section-title">${todayItems.length > 0 ? 'Resto' : 'Todas'}</span>
+        <span class="full-section-count">${restItems.length}</span>
+      </div>
+      <div class="full-list">${restItems.length > 0 ? restItems.map(renderItem).join('') : '<div class="full-empty">Sin más pendientes.</div>'}</div>
+    </div>
+  `;
+  wrap.innerHTML = html;
+}
+
+async function renderFullPaymentView() {
+  const wrap = document.getElementById('full-payment-content');
+  if (!wrap) return;
+  if (!isOnline) {
+    wrap.innerHTML = '<div class="full-empty">Conexión requerida.</div>';
+    return;
+  }
+  wrap.innerHTML = '<div class="full-empty">Cargando...</div>';
+
+  // 1. Attendance con pending_payment_at (caso invitadas/sin paquete que asistieron)
+  const { data: pending } = await sb.from('attendance')
+    .select('id, student_id, status, pending_payment_at')
+    .not('pending_payment_at', 'is', null)
+    .order('pending_payment_at', { ascending: false });
+
+  // 2. Paquetes con saldo pendiente
+  const { data: allPkgs } = await sb.from('student_packages')
+    .select('id, student_id, price_paid, classes_total, is_frozen');
+
+  const pkgsWithBalance = [];
+  for (const pkg of (allPkgs || [])) {
+    if (pkg.is_frozen === true) continue;
+    const price = parseFloat(pkg.price_paid || 0);
+    if (price <= 0) continue;
+    const { data: pays } = await sb.from('payments')
+      .select('amount_pen, discount_amount')
+      .eq('student_package_id', pkg.id);
+    const totalPaid = (pays || []).reduce((s, p) => s + parseFloat(p.amount_pen || 0) + parseFloat(p.discount_amount || 0), 0);
+    if (totalPaid < price) {
+      pkgsWithBalance.push({
+        student_id: pkg.student_id,
+        package_id: pkg.id,
+        owed: price - totalPaid,
+        price, paid: totalPaid,
+      });
+    }
+  }
+
+  // 3. Combinar por alumno
+  const byStudent = new Map();
+  for (const p of (pending || [])) {
+    if (!byStudent.has(p.student_id)) byStudent.set(p.student_id, { atts: [], pkgs: [] });
+    byStudent.get(p.student_id).atts.push(p);
+  }
+  for (const pkg of pkgsWithBalance) {
+    if (!byStudent.has(pkg.student_id)) byStudent.set(pkg.student_id, { atts: [], pkgs: [] });
+    byStudent.get(pkg.student_id).pkgs.push(pkg);
+  }
+
+  if (byStudent.size === 0) {
+    wrap.innerHTML = '<div class="full-empty">Sin pendientes de cobro 🎉</div>';
+    return;
+  }
+
+  const items = [];
+  for (const [studentId, info] of byStudent.entries()) {
+    const stud = STATE.students.find(s => s.id === studentId);
+    if (!stud) continue;
+    const totalOwed = info.pkgs.reduce((s, p) => s + p.owed, 0);
+    items.push({ stud, atts: info.atts, pkgs: info.pkgs, attCount: info.atts.length, totalOwed });
+  }
+
+  // 4. Marcar quienes tienen clase HOY
+  const withToday = await getStudentsWithClassToday();
+  const todayItems = items.filter(x => withToday.has(x.stud.id));
+  const restItems  = items.filter(x => !withToday.has(x.stud.id));
+
+  const sortFn = (a, b) => b.totalOwed - a.totalOwed;
+  todayItems.sort(sortFn);
+  restItems.sort(sortFn);
+
+  const renderItem = (item) => {
+    const s = item.stud;
+    const isTrial = s.student_status === 'trial';
+    const badge = isTrial
+      ? '<span class="full-row-badge is-trial">invitada</span>'
+      : '<span class="full-row-badge">alumna</span>';
+    const parts = [];
+    if (item.attCount > 0) parts.push(`${item.attCount} clase${item.attCount === 1 ? '' : 's'} pendiente${item.attCount === 1 ? '' : 's'}`);
+    if (item.totalOwed > 0) parts.push(`saldo S/ ${item.totalOwed.toFixed(0)}`);
+    const desc = parts.join(' · ');
+    const contact = escape(s.phone || s.email || 'sin contacto');
+    const clickHandler = item.pkgs.length > 0
+      ? `openPaymentModal('${s.id}', '${item.pkgs[0].package_id}', ${item.pkgs[0].owed})`
+      : `openAssignPackageWithPending('${s.id}')`;
+    return `<div class="full-row" onclick="${clickHandler}">
+      <div class="full-row-main">
+        <div class="full-row-name">${escape(s.first_name || '')} ${escape(s.last_name || '')} ${badge}</div>
+        <div class="full-row-sub">${desc} · ${contact}</div>
+      </div>
+      <button class="full-row-btn">Cobrar</button>
+    </div>`;
+  };
+
+  let html = '';
+  if (todayItems.length > 0) {
+    html += `
+      <div class="full-section is-today">
+        <div class="full-section-head">
+          <span class="full-section-icon">📍</span>
+          <span class="full-section-title">Con clase hoy</span>
+          <span class="full-section-count">${todayItems.length}</span>
+        </div>
+        <div class="full-list">${todayItems.map(renderItem).join('')}</div>
+      </div>
+    `;
+  }
+  html += `
+    <div class="full-section">
+      <div class="full-section-head">
+        <span class="full-section-title">${todayItems.length > 0 ? 'Resto' : 'Todas'}</span>
+        <span class="full-section-count">${restItems.length}</span>
+      </div>
+      <div class="full-list">${restItems.length > 0 ? restItems.map(renderItem).join('') : '<div class="full-empty">Sin más pendientes.</div>'}</div>
+    </div>
+  `;
+  wrap.innerHTML = html;
+}
+
 // Carga alumnos con clases pendientes por re-agendar (paquete activo, capacidad disponible).
 // Esto incluye tanto recuperables marcadas como clases que nunca se agendaron.
 async function loadRescheduleList() {
@@ -3289,7 +3726,7 @@ async function loadRescheduleList() {
       <span class="alert-action">Agendar</span>
     </div>`;
   }).join('') + (pendingItems.length > 6
-    ? `<div style="padding: 12px; text-align: center; font-size: 12px; color: var(--ink-mute);">+${pendingItems.length - 6} más</div>`
+    ? `<div class="panel-more" onclick="showView('full-reschedule', null); renderFullRescheduleView();">Ver los ${pendingItems.length} pendientes →</div>`
     : '');
 }
 
@@ -3406,7 +3843,7 @@ async function loadToPayList() {
       <span class="alert-action">Cobrar</span>
     </div>`;
   }).join('') + (items.length > 6
-    ? `<div style="padding: 12px; text-align: center; font-size: 12px; color: var(--ink-mute);">+${items.length - 6} más</div>`
+    ? `<div class="panel-more" onclick="showView('full-payment', null); renderFullPaymentView();">Ver los ${items.length} pendientes →</div>`
     : '');
 }
 
