@@ -2701,6 +2701,26 @@ if ('serviceWorker' in navigator) {
 }
 
 // ============================================
+// AUTO-REFRESH al volver al foco después de inactividad
+// ============================================
+// Si el usuario deja la app en background y vuelve después de 5+ min,
+// recargamos para asegurar versión nueva y data fresca de Supabase.
+// Si solo cambia de pestaña por unos segundos, no recarga.
+let __lastBlurAt = Date.now();
+const __INACTIVITY_RELOAD_MS = 5 * 60 * 1000; // 5 minutos
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden') {
+    __lastBlurAt = Date.now();
+  } else if (document.visibilityState === 'visible') {
+    const elapsed = Date.now() - __lastBlurAt;
+    if (elapsed > __INACTIVITY_RELOAD_MS) {
+      console.log(`[autoreload] inactivo ${Math.round(elapsed/1000)}s, recargando...`);
+      window.location.reload();
+    }
+  }
+});
+
+// ============================================
 // SUPABASE CONFIG — paste your credentials here
 // ============================================
 const SUPABASE_URL = 'https://jcvizioahuqvmhwfnbop.supabase.co';
@@ -9603,7 +9623,12 @@ function instructorToggleHour(hour) {
   else STATE.instCollapsedSet.add(hour);
   // Re-render solo el bloque de clases (es rápido)
   const cached = (STATE.instClassesCache || {})[STATE.instDayDate];
-  if (cached) renderInstructorClassesBlock(cached);
+  if (cached) {
+    renderInstructorClassesBlock(cached);
+  } else {
+    // Fallback: si el cache se perdió, recargar todo
+    if (typeof renderInstructorDay === 'function') renderInstructorDay();
+  }
 }
 
 function instructorTogglePast() {
