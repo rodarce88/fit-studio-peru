@@ -562,11 +562,19 @@
   .inst-hour-students { border-top: 1px solid var(--line); }
 
   /* Student row */
-  .inst-stud-row { display: flex; align-items: center; gap: 12px; padding: 12px 16px; transition: background 0.15s; }
+  .inst-stud-row { display: flex; align-items: center; gap: 12px; padding: 12px 16px; transition: background 0.15s; position: relative; }
   .inst-stud-row + .inst-stud-row { border-top: 1px solid var(--fit-lavender-pale); }
   .inst-stud-row.is-attended { background: var(--good-soft); }
   .inst-stud-row.is-recoverable { background: var(--warn-soft); }
   .inst-stud-row.is-lost, .inst-stud-row.is-no_show { background: #FCEBEB; }
+  .inst-stud-row.is-confirmed { background: rgba(86, 161, 96, 0.05); }
+  .inst-stud-row.is-confirmed::before {
+    content: '';
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+    width: 3px;
+    background: var(--good);
+  }
   .inst-stud-tap { display: flex; flex: 1; min-width: 0; align-items: center; gap: 12px; cursor: pointer; }
   .inst-stud-tap:hover { opacity: 0.85; }
   .inst-stud-avatar { width: 36px; height: 36px; border-radius: 50%; background: var(--fit-lavender-pale); color: var(--fit-purple); display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 500; flex-shrink: 0; }
@@ -578,6 +586,7 @@
   .inst-stud-status { font-size: 11px; color: var(--good); margin-top: 2px; font-weight: 500; }
   .inst-stud-status.is-warn { color: #633806; }
   .inst-stud-status.is-danger { color: #791F1F; }
+  .inst-stud-status.is-confirmed { color: var(--good); font-weight: 600; }
 
   /* Check button inline */
   .inst-check-btn { width: 36px; height: 36px; border-radius: 50%; border: 1.5px solid var(--line); background: white; display: flex; align-items: center; justify-content: center; font-size: 14px; color: var(--ink-mute); cursor: pointer; flex-shrink: 0; transition: all 0.15s; position: relative; }
@@ -9748,7 +9757,13 @@ async function loadInstructorClassesForDate(inst, dateIso) {
       const stud = STATE.students.find(s => s.id === b.student_id);
       if (stud) {
         const att = attendances.find(a => a.student_id === b.student_id);
-        studentsInClass.push({ student: stud, source: b.source || 'fixed', attendance: att, bookingId: b.id });
+        studentsInClass.push({
+          student: stud,
+          source: b.source || 'fixed',
+          attendance: att,
+          bookingId: b.id,
+          bookingConfirmedAt: b.confirmed_at || null,
+        });
       }
     }
     for (const f of fixed) {
@@ -9756,7 +9771,13 @@ async function loadInstructorClassesForDate(inst, dateIso) {
       const stud = STATE.students.find(s => s.id === f.student_id);
       if (stud) {
         const att = attendances.find(a => a.student_id === f.student_id);
-        studentsInClass.push({ student: stud, source: 'fixed', attendance: att, bookingId: null });
+        studentsInClass.push({
+          student: stud,
+          source: 'fixed',
+          attendance: att,
+          bookingId: null,
+          bookingConfirmedAt: null,
+        });
       }
     }
 
@@ -10305,7 +10326,9 @@ function renderInstructorStudentRow(item, classCtx) {
     no_show:     { label: 'No vino sin avisar', klass: 'is-no_show' },
   };
   const st = (status && STATES[status]) ? STATES[status] : null;
-  const rowKlass = st ? st.klass : '';
+  // Si hay un estado de asistencia ya marcado, eso prevalece. Si no, ver si fue confirmada por coord.
+  const isConfirmedByCoord = !st && !!item.bookingConfirmedAt;
+  const rowKlass = st ? st.klass : (isConfirmedByCoord ? 'is-confirmed' : '');
 
   const isPending = att?.pending_payment_at;
   const isTrial = s.student_status === 'trial';
@@ -10324,6 +10347,8 @@ function renderInstructorStudentRow(item, classCtx) {
     else if (status === 'recoverable') statusClass = 'is-warn';
     else if (status === 'lost' || status === 'no_show') statusClass = 'is-danger';
     statusLine = `<div class="inst-stud-status ${statusClass}">● ${st.label}</div>`;
+  } else if (isConfirmedByCoord) {
+    statusLine = `<div class="inst-stud-status is-confirmed">✓ Confirmada</div>`;
   }
 
   // ¿Tiene notas de salud guardadas? (health_tags con al menos 1 tag, o medical_notes con texto)
