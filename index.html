@@ -4587,9 +4587,23 @@ function openScheduleCellModal(locationId, dateIso, hour) {
 async function removeBookingFromCell(bookingId) {
   if (!confirm('¿Quitar a este alumno de la clase?')) return;
   if (!isOnline) { showToast('Conexión requerida', 'error'); return; }
+
+  // Capturar info ANTES de borrar para el log
+  const booking = STATE.scheduleWeekBookings.find(b => b.id === bookingId);
+  const stud = booking ? STATE.students.find(s => s.id === booking.student_id) : null;
+  const studName = stud ? `${stud.first_name || ''} ${stud.last_name || ''}`.trim() : (booking?.student_id || '');
+
   const { error } = await sb.from('session_bookings').delete().eq('id', bookingId);
   if (error) { showToast('Error: ' + error.message, 'error'); return; }
   STATE.scheduleWeekBookings = STATE.scheduleWeekBookings.filter(b => b.id !== bookingId);
+
+  // Log
+  try {
+    logActivity('session_booking.remove', {
+      table: 'session_bookings', id: bookingId, label: studName
+    }, { session_id: booking?.session_id });
+  } catch(e) {}
+
   showToast('Alumno quitado de la clase', 'success');
   // Re-render del modal y de la grilla
   const ctx = STATE.cellModalCtx;
@@ -4959,6 +4973,15 @@ async function confirmAssignStudentToCell() {
 
   if (successCount > 0) {
     showToast(`✓ ${successCount} clase${successCount === 1 ? '' : 's'} asignada${successCount === 1 ? '' : 's'} a ${stud.first_name}`, 'success');
+
+    // Log (solo si hubo al menos uno exitoso)
+    try {
+      const studName = `${stud.first_name || ''} ${stud.last_name || ''}`.trim();
+      logActivity('session_booking.create', {
+        table: 'session_bookings', id: null,
+        label: `${studName} · ${successCount} clase${successCount === 1 ? '' : 's'}`
+      }, { student_id: stud.id, count: successCount });
+    } catch(e) {}
   }
   if (failCount > 0) {
     showToast(`${failCount} no se pudo${failCount === 1 ? '' : 'n'} asignar (ya existía o error)`, 'error');
@@ -6868,6 +6891,18 @@ async function applyInstructorChange() {
   } catch(e) {}
 
   const inst = STATE.instructors.find(i => i.id === newInstId);
+
+  // Log
+  try {
+    const loc = getCurrentLocation();
+    const scopeLabel = {single:'1 clase', morning:'mañana', afternoon:'tarde', 'all-day':'todo el día'}[scope] || scope;
+    logActivity('instructor.change', {
+      table: 'class_sessions',
+      id: null,
+      label: `${inst?.full_name || 'profe'} · ${dateKey} · ${scopeLabel} · ${loc?.name || ''}`
+    }, { scope, hours, new_instructor_id: newInstId, reason });
+  } catch(e) {}
+
   showToast(`✓ ${inst.full_name} asignada/o a ${hours.length} clase${hours.length>1?'s':''}`, 'success');
   closeModals();
   await loadDayData();
@@ -7292,6 +7327,21 @@ async function markAttendance(studentId, hour, status, notes) {
       status_changed_at: new Date().toISOString(),
     }).eq('id', sessionId);
   }
+
+  // Log de actividad (diferencia mark / unmark / absence)
+  try {
+    const stud = STATE.students.find(s => s.id === studentId);
+    const studName = stud ? `${stud.first_name || ''} ${stud.last_name || ''}`.trim() : studentId;
+    let action = 'attendance.mark';
+    if (status === 'pending') action = 'attendance.unmark';
+    else if (status === 'attended') action = 'attendance.mark';
+    else if (['recoverable','lost','no_show'].includes(status)) action = 'attendance.absence';
+    logActivity(action, {
+      table: 'attendance',
+      id: booking.id,
+      label: `${studName} · ${dateToIsoLocal(STATE.currentDate)} ${formatHour(hour)}`
+    }, { status, counts_against_package: countsAgainst, is_recoverable: isRecoverable });
+  } catch(e) {}
 
   // 8. Refrescar widget "Por re-agendar" del dashboard si está visible
   if (typeof loadRescheduleList === 'function') loadRescheduleList();
@@ -8195,6 +8245,15 @@ async function cancelClass(hour) {
   const idx = STATE.classSessions.findIndex(s => s.id === sessionId);
   if (idx >= 0) STATE.classSessions[idx] = data;
   else STATE.classSessions.push(data);
+
+  // Log
+  try {
+    logActivity('session.cancel', {
+      table: 'class_sessions',
+      id: sessionId,
+      label: `${dateToIsoLocal(STATE.currentDate)} ${formatHour(hour)} · ${loc.name}`
+    }, { reason });
+  } catch(e) {}
 
   showToast(`✗ Clase de ${formatHour(hour)} cancelada`, 'success');
   closeClassMenu();
@@ -11757,6 +11816,16 @@ async function saveAssignPackage() {
     : '✓ Paquete asignado';
   showToast(msg, 'success');
 
+  // Log
+  try {
+    const studName = student ? `${student.first_name || ''} ${student.last_name || ''}`.trim() : studentId;
+    const pkg = STATE.packages.find(p => p.id === data.package_id);
+    logActivity('student_package.create', {
+      table: 'student_packages', id: data.id,
+      label: `${studName} · ${pkg?.name || 'paquete'}`
+    }, { price, imputed: initialUsed });
+  } catch(e) {}
+
   // Refrescar widget Por cobrar
   if (typeof loadToPayList === 'function') loadToPayList();
 
@@ -12029,6 +12098,18 @@ async function saveEditPayment(paymentId) {
   }).eq('id', paymentId);
 
   if (error) { showToast('Error: '+error.message, 'error'); return; }
+
+  // Log
+  try {
+    const stud = STATE.students.find(x => x.id === studentId);
+    const studName = stud ? `${stud.first_name || ''} ${stud.last_name || ''}`.trim() : studentId;
+    logActivity('payment.update', {
+      table: 'payments',
+      id: paymentId,
+      label: `${studName} · S/ ${amount}`
+    }, { amount, method, discount_pct: discountPct });
+  } catch(e) {}
+
   showToast('✓ Pago actualizado', 'success');
   closeModals();
   // Refrescar el modal del alumno si está abierto
@@ -12063,6 +12144,14 @@ async function deletePayment(paymentId) {
 
   const { error } = await sb.from('payments').delete().eq('id', paymentId);
   if (error) { showToast('Error: '+error.message, 'error'); return; }
+
+  // Log
+  try {
+    const stud = STATE.students.find(x => x.id === studentId);
+    const studName = stud ? `${stud.first_name || ''} ${stud.last_name || ''}`.trim() : studentId;
+    logActivity('payment.delete', { table: 'payments', id: paymentId, label: studName }, null);
+  } catch(e) {}
+
   showToast('✓ Pago eliminado', 'success');
   closeModals();
 
@@ -12145,6 +12234,18 @@ async function saveRegisterPayment() {
   });
 
   if (error) { showToast('Error: '+error.message, 'error'); return; }
+
+  // Log
+  try {
+    const stud = STATE.students.find(x => x.id === studentId);
+    const studName = stud ? `${stud.first_name || ''} ${stud.last_name || ''}`.trim() : studentId;
+    logActivity('payment.create', {
+      table: 'payments',
+      id: null,
+      label: `${studName} · S/ ${amount}`
+    }, { amount, method, discount_pct: discountPct, discount_amount: discountAmount });
+  } catch(e) {}
+
   showToast('✓ Pago registrado', 'success');
   closeModals();
   // Refrescar el modal del alumno si está abierto
@@ -15608,11 +15709,14 @@ function humanizeAction(action) {
     'student.health_update': '⚠ Editó notas de salud',
     'payment.create': '$ Registró pago',
     'payment.update': '✎ Editó pago',
+    'payment.delete': '✗ Eliminó pago',
     'student_package.create': '📦 Creó paquete',
     'session.cancel': '✗ Canceló clase',
-    'session_booking.create': '📅 Agendó booking',
+    'session_booking.create': '📅 Agendó alumna',
     'session_booking.cancel': '✗ Canceló booking',
+    'session_booking.remove': '⊘ Quitó alumna',
     'session_note.create': '📝 Nota de sesión',
+    'instructor.change': '🔄 Cambió profesor',
   };
   return map[action] || `<code style="font-family:monospace;font-size:11px;color:var(--ink-soft);">${escape(action || '')}</code>`;
 }
