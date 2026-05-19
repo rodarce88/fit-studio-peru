@@ -9628,21 +9628,23 @@ function changePkgWizardSetReason(text) {
   wiz.changeReason = text || '';
 }
 
-// Construye el payload exacto que se enviará al backend (Entregable 2E)
+// Construye el payload exacto que se enviará al backend
 function buildChangePkgPayload() {
   const wiz = STATE.changePkgWizard;
   if (!wiz) return null;
   const newPkg = (STATE.packagesCatalog || []).find(p => p.id === wiz.selectedNewPkgId);
   const transferredCount = (wiz.pkgUsage?.used || 0) + (wiz.pkgUsage?.transferred || 0);
+  const cancelledIds = wiz.cancelledBookingIds || [];
+  const allFuture = wiz.futureBookings || [];
+  const keptBookingIds = allFuture
+    .filter(b => !cancelledIds.includes(b.booking_id))
+    .map(b => b.booking_id);
   return {
     p_old_package_id: wiz.pkgId,
     p_new_package_template_id: wiz.selectedNewPkgId,
-    p_new_package_name: newPkg?.name,
-    p_new_package_sessions: newPkg?.sessions,
-    p_new_package_price: parseFloat(newPkg?.price_pen || 0),
-    p_new_package_validity_days: newPkg?.validity_days,
     p_transferred_count: transferredCount,
-    p_cancelled_booking_ids: wiz.cancelledBookingIds || [],
+    p_cancelled_booking_ids: cancelledIds,
+    p_kept_booking_ids: keptBookingIds,
     p_kept_recoverable_ids: wiz.keptRecoverableIds || [],
     p_discarded_recoverable_ids: wiz.discardedRecoverableIds || [],
     p_refund_amount: parseFloat(wiz.refundAmount || 0),
@@ -9708,7 +9710,7 @@ function updateChangePkgWizardNextEnabled() {
   nextBtn.style.cursor = enabled ? 'pointer' : 'not-allowed';
 }
 
-function changePkgWizardNext() {
+async function changePkgWizardNext() {
   const wiz = STATE.changePkgWizard;
   if (!wiz) return;
 
@@ -9724,19 +9726,51 @@ function changePkgWizardNext() {
 
   if (wiz.step < 6) {
     showChangePkgWizardStep(nextChangePkgStep(wiz.step));
-  } else {
-    // Paso 6: confirmar (modo PREVIEW · Entregable 2D)
-    // En 2E reemplazamos esto por la llamada real a la RPC change_student_package.
-    const undecidedRecCount = (wiz.activeRecoverables || []).length
-      - (wiz.keptRecoverableIds || []).length
-      - (wiz.discardedRecoverableIds || []).length;
-    if (undecidedRecCount > 0) {
-      showToast('Hay recuperables sin decisión — volvé al paso 4', 'error');
-      return;
+    return;
+  }
+
+  // Paso 6: ejecutar el cambio real vía RPC change_student_package
+  const undecidedRecCount = (wiz.activeRecoverables || []).length
+    - (wiz.keptRecoverableIds || []).length
+    - (wiz.discardedRecoverableIds || []).length;
+  if (undecidedRecCount > 0) {
+    showToast('Hay recuperables sin decisión — volvé al paso 4', 'error');
+    return;
+  }
+
+  const payload = buildChangePkgPayload();
+  console.log('[ChangePkgWizard] Enviando:', payload);
+
+  // Bloquear el botón mientras se ejecuta
+  const nextBtn = document.getElementById('change-pkg-wizard-next');
+  const prevBtn = document.getElementById('change-pkg-wizard-prev');
+  if (nextBtn) { nextBtn.disabled = true; nextBtn.style.opacity = '0.5'; nextBtn.textContent = '⏳ Procesando…'; }
+  if (prevBtn) { prevBtn.disabled = true; prevBtn.style.opacity = '0.4'; }
+
+  try {
+    const { data, error } = await sb.rpc('change_student_package', payload);
+    if (error) throw error;
+    console.log('[ChangePkgWizard] Resultado:', data);
+
+    const studentId = wiz.pkgUsage?.student_id;
+    showToast('✓ Paquete cambiado correctamente', 'success');
+    closeChangePkgWizard();
+
+    // Refrescar el perfil del alumno para que la coord vea el cambio
+    if (studentId && typeof openStudentDetail === 'function') {
+      // Pequeño delay para que el toast sea visible antes del re-render
+      setTimeout(() => openStudentDetail(studentId), 300);
     }
-    const payload = buildChangePkgPayload();
-    console.log('[ChangePkgWizard] Payload listo para enviar:', payload);
-    showToast('✓ Preview OK · payload en consola (ejecución real en 2E)', 'success');
+  } catch (e) {
+    console.error('[ChangePkgWizard] Error:', e);
+    showToast('Error: ' + (e.message || 'no se pudo cambiar el paquete'), 'error');
+    // Re-habilitar botones
+    if (nextBtn) {
+      nextBtn.disabled = false;
+      nextBtn.style.opacity = '1';
+      nextBtn.textContent = '✓ Confirmar cambio';
+    }
+    if (prevBtn) { prevBtn.disabled = false; prevBtn.style.opacity = '1'; }
   }
 }
 
