@@ -11663,12 +11663,13 @@ async function instructorRenderCase(caseType, stud, pkg) {
 
 function instructorRenderInviteForm(prefillName) {
   // Si recibe un prefill (lo que escribió en búsqueda), intentar split "Nombre Apellido"
+  // Aplicamos toTitleCase desde el inicio para que aparezca capitalizado en los inputs.
   let prefFirst = '', prefLast = '';
   if (prefillName) {
     const trimmed = prefillName.trim();
     const parts = trimmed.split(/\s+/);
-    prefFirst = parts[0] || '';
-    if (parts.length > 1) prefLast = parts.slice(1).join(' ');
+    prefFirst = toTitleCase(parts[0] || '');
+    if (parts.length > 1) prefLast = toTitleCase(parts.slice(1).join(' '));
   }
 
   // Si el header está en modo search, restaurarlo a modo simple para esta pantalla
