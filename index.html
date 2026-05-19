@@ -305,10 +305,10 @@
   .mi-dia-cards-stack { display: flex; flex-direction: column; gap: 10px; }
   .mi-dia-cards-stack .class-block { margin-bottom: 0; scroll-margin-top: calc(var(--topbar-h) + var(--mi-dia-header-h, 84px) + 12px); }
   .mi-dia-cards-stack .class-block.is-open { border-color: var(--fit-purple); }
-  .class-block { border: 1px solid var(--line-soft); border-radius: var(--radius-md); margin-bottom: 12px; transition: all 0.2s; background: white; }
-  .class-block:hover { border-color: var(--fit-purple-soft); box-shadow: var(--shadow-md); }
+  .class-block { border: 1px solid rgba(0,0,0,0.03); border-radius: var(--radius-md); margin-bottom: 12px; transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease; background: var(--fit-cream); box-shadow: var(--shadow-sm), var(--shadow-md); }
+  .class-block:hover { border-color: var(--fit-purple-soft); transform: translateY(-1px); box-shadow: 0 2px 4px rgba(91,42,143,0.06), 0 10px 26px rgba(91,42,143,0.10); }
   .class-block.is-current { border-color: var(--fit-purple); border-width: 2px; background: var(--fit-lavender-pale); }
-  .class-block.is-empty { background: var(--fit-cream); }
+  .class-block.is-empty { background: transparent; border-style: dashed; box-shadow: none; opacity: 0.75; }
 
   .class-header { padding: 16px 20px; display: grid; grid-template-columns: 80px 1fr auto auto; align-items: center; gap: 16px; cursor: pointer; }
   .class-time { font-family: var(--display); font-size: 22px; font-weight: 400; line-height: 1; }
@@ -611,7 +611,8 @@
   .inst-section-title .pill { font-size: 10px; background: var(--fit-lavender-pale); color: var(--fit-purple); padding: 3px 8px; border-radius: 999px; letter-spacing: 0.5px; text-transform: none; font-weight: 500; }
 
   /* Hour cards (rediseñadas) */
-  .inst-hour-card { background: white; border: 1px solid var(--line); border-radius: 16px; margin-bottom: 10px; overflow: hidden; transition: opacity 0.2s; }
+  .inst-hour-card { background: var(--fit-cream); border: 1px solid rgba(0,0,0,0.03); border-radius: 16px; margin-bottom: 10px; overflow: hidden; transition: transform 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease; box-shadow: var(--shadow-sm), var(--shadow-md); }
+  .inst-hour-card:hover { transform: translateY(-1px); box-shadow: 0 2px 4px rgba(91,42,143,0.06), 0 10px 26px rgba(91,42,143,0.10); }
   .inst-hour-card.is-collapsed { background: var(--fit-cream); }
   .inst-hour-card.is-collapsed .inst-hour-head:hover { background: white; }
   /* Toggle quirúrgico: el body siempre está renderizado, solo se oculta con CSS */
