@@ -9045,6 +9045,14 @@ function toggleUpcomingPkg(pkgId) {
         </div>
       </div>
 
+      ${(CURRENT_USER?.role === 'coordinator' && pkg.is_active && (!pkg.status || pkg.status === 'active')) ? `
+        <div style="margin-bottom: 16px;">
+          <button class="btn btn-ghost" onclick="openChangePackageWizard('${pkg.id}')" style="width: 100%; padding: 10px; font-size: 13px; border: 1px dashed var(--fit-purple); color: var(--fit-purple); background: transparent;">
+            ⇄ Cambiar paquete
+          </button>
+        </div>
+      ` : ''}
+
       <div style="font-size: 11px; color: var(--ink-mute); text-transform: uppercase; letter-spacing: 0.5px; font-weight: 500; margin-bottom: 8px;">Clases del paquete (${myAtts.length})</div>
       <div style="background: white; border: 1px solid var(--line); border-radius: 8px; max-height: 320px; overflow-y: auto;">
         ${myAtts.length === 0 ? `
@@ -9086,6 +9094,224 @@ function toggleUpcomingPkg(pkgId) {
 function closePkgDetailModal() {
   const m = document.getElementById('pkg-detail-modal');
   if (m) m.style.display = 'none';
+}
+
+// ============================================
+// Wizard: Cambiar paquete (Fase 1 · Entregable 2A)
+// ============================================
+// Solo coords. Reemplaza un paquete activo por uno nuevo, manteniendo
+// la trazabilidad histórica vía replaces_id/replaced_by_id.
+// Pasos: 1·Análisis  2·Nuevo paquete  3·Conflicto cupo  4·Recuperables
+//        5·Balance financiero  6·Confirmar
+// Entregable 2A: paso 1 funcional. Pasos 2-6 son placeholders.
+const CHANGE_PKG_STEP_TITLES = [
+  'Análisis',
+  'Nuevo paquete',
+  'Conflicto cupo',
+  'Recuperables',
+  'Balance',
+  'Confirmar',
+];
+
+async function openChangePackageWizard(pkgId) {
+  if (!isOnline) { showToast('Sin conexión', 'error'); return; }
+  if (CURRENT_USER?.role !== 'coordinator') {
+    showToast('Solo coordinadoras pueden cambiar paquetes', 'error');
+    return;
+  }
+
+  // Estado inicial del wizard
+  STATE.changePkgWizard = {
+    step: 1,
+    pkgId: pkgId,
+    pkgUsage: null,            // se llena con la RPC get_package_usage
+    selectedNewPkgId: null,    // paso 2
+    cancelledBookingIds: [],   // paso 3
+    keptRecoverableIds: [],    // paso 4
+    discardedRecoverableIds: [],
+    refundAmount: 0,           // paso 5
+    refundMethod: null,
+    changeReason: '',
+    notes: '',
+  };
+
+  // Cerrar el modal de detalle si está abierto
+  closePkgDetailModal();
+
+  // Crear y mostrar el modal del wizard
+  ensureChangePkgWizardModal();
+  showChangePkgWizardStep(1);
+
+  // Cargar data del paquete vía RPC
+  try {
+    const { data: usage, error } = await sb.rpc('get_package_usage', { p_package_id: pkgId });
+    if (error) throw error;
+    STATE.changePkgWizard.pkgUsage = usage;
+    showChangePkgWizardStep(1); // Re-render con la data ya cargada
+  } catch (e) {
+    showToast('Error cargando paquete: ' + (e.message || 'desconocido'), 'error');
+    closeChangePkgWizard();
+  }
+}
+
+function ensureChangePkgWizardModal() {
+  let modal = document.getElementById('change-pkg-wizard-modal');
+  if (modal) { modal.style.display = 'flex'; return; }
+
+  modal = document.createElement('div');
+  modal.id = 'change-pkg-wizard-modal';
+  modal.style.cssText = 'position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 1100; display: flex; align-items: center; justify-content: center; padding: 20px;';
+  modal.onclick = (e) => { if (e.target === modal) closeChangePkgWizard(); };
+
+  const inner = document.createElement('div');
+  inner.style.cssText = 'background: white; border-radius: 12px; max-width: 580px; width: 100%; max-height: 90vh; overflow: hidden; display: flex; flex-direction: column;';
+  inner.innerHTML = `
+    <div style="padding: 14px 18px; background: var(--fit-cream); border-bottom: 1px solid var(--line); display: flex; align-items: center; justify-content: space-between;">
+      <div style="display: flex; align-items: center; gap: 10px;">
+        <span style="font-size: 18px; color: var(--fit-purple);">⇄</span>
+        <div>
+          <div style="font-weight: 500; font-size: 14px; color: var(--ink);">Cambiar paquete</div>
+          <div style="font-size: 12px; color: var(--ink-mute);" id="change-pkg-wizard-step-label">Paso 1 de 6 · Análisis</div>
+        </div>
+      </div>
+      <button onclick="closeChangePkgWizard()" style="background: none; border: none; font-size: 22px; cursor: pointer; color: var(--ink-mute); line-height: 1;">×</button>
+    </div>
+    <div style="padding: 12px 18px; border-bottom: 1px solid var(--line-soft); display: flex; align-items: center;" id="change-pkg-wizard-stepper"></div>
+    <div style="padding: 18px; overflow-y: auto; flex: 1; min-height: 220px;" id="change-pkg-wizard-content">
+      <div style="padding: 40px; text-align: center; color: var(--ink-mute); font-size: 13px;">Cargando…</div>
+    </div>
+    <div style="padding: 12px 18px; border-top: 1px solid var(--line); background: var(--fit-cream); display: flex; justify-content: space-between;">
+      <button class="btn btn-ghost" id="change-pkg-wizard-prev" onclick="changePkgWizardPrev()" style="padding: 8px 16px; font-size: 13px;">← Atrás</button>
+      <button class="btn btn-primary" id="change-pkg-wizard-next" onclick="changePkgWizardNext()" style="padding: 8px 20px; font-size: 13px;">Siguiente →</button>
+    </div>
+  `;
+  modal.appendChild(inner);
+  document.body.appendChild(modal);
+}
+
+function renderChangePkgWizardStepper() {
+  const stepper = document.getElementById('change-pkg-wizard-stepper');
+  if (!stepper) return;
+  const step = STATE.changePkgWizard?.step || 1;
+  let html = '';
+  for (let i = 1; i <= 6; i++) {
+    const isActive = (i === step);
+    const isDone = (i < step);
+    const bg = isActive ? 'var(--fit-purple)' : (isDone ? '#EEEDFE' : 'var(--fit-cream)');
+    const fg = isActive ? 'white' : (isDone ? 'var(--fit-purple)' : 'var(--ink-faint)');
+    const border = isActive ? 'var(--fit-purple)' : (isDone ? '#AFA9EC' : 'var(--line)');
+    html += `<div style="width: 22px; height: 22px; border-radius: 50%; background: ${bg}; color: ${fg}; border: 1px solid ${border}; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 500; flex-shrink: 0;">${i}</div>`;
+    if (i < 6) {
+      const lineColor = isDone ? '#AFA9EC' : 'var(--line)';
+      html += `<div style="flex: 1; height: 1px; background: ${lineColor}; margin: 0 4px;"></div>`;
+    }
+  }
+  stepper.innerHTML = html;
+}
+
+function showChangePkgWizardStep(step) {
+  if (!STATE.changePkgWizard) return;
+  STATE.changePkgWizard.step = step;
+
+  // Actualizar label y stepper
+  const label = document.getElementById('change-pkg-wizard-step-label');
+  if (label) label.textContent = `Paso ${step} de 6 · ${CHANGE_PKG_STEP_TITLES[step-1]}`;
+  renderChangePkgWizardStepper();
+
+  // Actualizar footer buttons
+  const prevBtn = document.getElementById('change-pkg-wizard-prev');
+  const nextBtn = document.getElementById('change-pkg-wizard-next');
+  if (prevBtn) {
+    prevBtn.disabled = (step === 1);
+    prevBtn.style.opacity = (step === 1) ? '0.4' : '1';
+  }
+  if (nextBtn) {
+    if (step === 6) {
+      nextBtn.textContent = '✓ Confirmar cambio';
+      nextBtn.style.background = '#27500A';
+    } else {
+      nextBtn.textContent = 'Siguiente →';
+      nextBtn.style.background = '';
+    }
+  }
+
+  // Render del paso
+  const content = document.getElementById('change-pkg-wizard-content');
+  if (!content) return;
+
+  const wiz = STATE.changePkgWizard;
+  const u = wiz.pkgUsage;
+
+  if (step === 1) {
+    if (!u) {
+      content.innerHTML = `<div style="padding: 40px; text-align: center; color: var(--ink-mute); font-size: 13px;">Cargando datos del paquete…</div>`;
+      return;
+    }
+    const pricePaid = u.price_paid ? parseFloat(u.price_paid).toFixed(2) : null;
+    content.innerHTML = `
+      <p style="font-size: 14px; color: var(--ink-mute); margin: 0 0 14px; line-height: 1.5;">
+        Vas a cambiar este paquete. Primero revisemos su estado actual.
+      </p>
+      <div style="background: var(--fit-cream); border-radius: 8px; padding: 16px;">
+        <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px;">
+          <div style="font-family: var(--display); font-size: 17px; color: var(--fit-purple); font-style: italic;">${escape(u.name)}</div>
+          <span style="font-size: 10px; background: #EAF3DE; color: #27500A; padding: 3px 8px; border-radius: 4px; text-transform: uppercase; letter-spacing: 0.05em;">Activo</span>
+        </div>
+        <div style="font-size: 12px; color: var(--ink-mute); margin-bottom: 14px;">
+          Comprado ${formatDate(u.purchase_date)}${u.expiration_date ? ` · vence ${formatDate(u.expiration_date)}` : ''}
+        </div>
+        <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px 16px; font-size: 13px;">
+          <div><span style="color: var(--ink-mute);">Asistidas:</span> <strong style="color: var(--ink);">${u.used}</strong> / ${u.total}</div>
+          <div><span style="color: var(--ink-mute);">Disponibles:</span> <strong style="color: var(--ink);">${u.disponibles}</strong></div>
+          <div><span style="color: var(--ink-mute);">Agendadas a futuro:</span> <strong style="color: var(--ink);">${u.agendadas_futuras}</strong></div>
+          <div><span style="color: var(--ink-mute);">Recuperables activas:</span> <strong style="color: var(--ink);">${u.recuperables_activas}</strong></div>
+          ${u.transferred > 0 ? `
+            <div style="grid-column: 1/-1; padding-top: 8px; border-top: 1px solid var(--line-soft);">
+              <span style="color: var(--ink-mute);">Transferidas del paquete anterior:</span>
+              <strong style="color: var(--ink);">${u.transferred}</strong>
+              ${u.replaces_name ? `<span style="font-size: 11px; color: var(--ink-mute);"> · venían de ${escape(u.replaces_name)}</span>` : ''}
+            </div>
+          ` : ''}
+          <div style="grid-column: 1/-1; padding-top: 10px; border-top: 1px solid var(--line-soft); margin-top: 4px;">
+            <span style="color: var(--ink-mute);">Pago registrado:</span>
+            ${pricePaid
+              ? `<strong style="color: var(--ink);">S/ ${pricePaid}</strong> <span style="font-size: 11px; color: #27500A; margin-left: 4px;">✓ pagado</span>`
+              : `<strong style="color: #993C1D;">Sin pago</strong>`}
+          </div>
+        </div>
+      </div>
+    `;
+  } else {
+    // Pasos 2-6 son placeholders en el Entregable 2A
+    content.innerHTML = `
+      <div style="padding: 40px; text-align: center; color: var(--ink-mute);">
+        <div style="font-size: 14px; margin-bottom: 6px;">Paso ${step}: ${CHANGE_PKG_STEP_TITLES[step-1]}</div>
+        <div style="font-size: 12px;">Próximo entregable (2${'BCDEF'[step-2]}).</div>
+      </div>
+    `;
+  }
+}
+
+function changePkgWizardNext() {
+  const wiz = STATE.changePkgWizard;
+  if (!wiz) return;
+  if (wiz.step < 6) {
+    showChangePkgWizardStep(wiz.step + 1);
+  } else {
+    showToast('Confirmación aún no implementada (Entregable 2F)', '');
+  }
+}
+
+function changePkgWizardPrev() {
+  const wiz = STATE.changePkgWizard;
+  if (!wiz) return;
+  if (wiz.step > 1) showChangePkgWizardStep(wiz.step - 1);
+}
+
+function closeChangePkgWizard() {
+  const m = document.getElementById('change-pkg-wizard-modal');
+  if (m) m.remove();
+  STATE.changePkgWizard = null;
 }
 
 function showToast(msg, type = '') {
