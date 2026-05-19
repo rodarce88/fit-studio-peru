@@ -10598,55 +10598,153 @@ function instructorNavWeek(direction) {
   instructorSetDateIso(dateToIsoLocal(selDate));
 }
 
-function renderInstructorNextClassBlock(classes) {
-  const block = document.querySelector('[data-inst-next]');
-  if (!block) return;
-
-  const todayIso = dateToIsoLocal(new Date());
-  const isViewingToday = STATE.instDayDate === todayIso;
+// ============================================
+// Encontrar la próxima clase REAL del profesor.
+// "Real" = clase asignada al profesor, no cancelada, no terminada físicamente,
+// y con AL MENOS 1 alumno asignado (booking activo o fijo).
+// Busca primero en classesToday; si no hay, query a DB para próximos 30 días.
+// Retorna: { inProgress, target, sessionDate } o null si no hay ninguna.
+async function findInstructorNextRealClass(instructorId, classesToday) {
   const now = new Date();
+  const todayIso = dateToIsoLocal(now);
   const currentHour = now.getHours();
   const currentMin = now.getMinutes();
 
-  // Solo mostrar la card de "próxima/en curso" si estamos viendo HOY
-  if (!isViewingToday) { block.innerHTML = ''; return; }
-
-  // Buscar la clase que está en curso o la próxima.
-  //   Una clase se considera "ya terminada" SÓLO si:
-  //   - está cancelada, O
-  //   - está marcada como delivered Y físicamente ya pasaron ≥50 min desde su inicio
-  // Esto evita que clases con flag delivered erróneo (ej. coord marcó por error,
-  // o auto-mark retroactivo) "salten" cuando aún no ocurrieron físicamente.
-  const sorted = [...(classes || [])].sort((a,b) => a.hour - b.hour);
-  function isClassDone(c) {
+  function isDoneNow(c) {
     if (c.session?.is_cancelled) return true;
-    const status = c.session?.class_status || 'scheduled';
-    if (status !== 'delivered') return false;
-    const minsSinceStart = (currentHour - c.hour) * 60 + currentMin;
-    return minsSinceStart > 50;
+    if (c.session?.class_status === 'delivered') {
+      const minsSinceStart = (currentHour - c.hour) * 60 + currentMin;
+      return minsSinceStart > 50;
+    }
+    return false;
   }
 
-  let inProgress = sorted.find(c => {
-    if (isClassDone(c)) return false;
+  // 1. Buscar en clases de HOY ya cargadas
+  const todaySorted = [...(classesToday || [])].sort((a, b) => a.hour - b.hour);
+
+  const inProgress = todaySorted.find(c => {
+    if (isDoneNow(c)) return false;
+    if (c.isOtherInstructor) return false;
+    if (c.students.length === 0) return false;
     return currentHour === c.hour || (currentHour === c.hour - 1 && currentMin >= 50);
   });
-  let next = null;
-  if (!inProgress) {
-    next = sorted.find(c => {
-      if (isClassDone(c)) return false;
-      return c.hour > currentHour || (c.hour === currentHour && currentMin < 10);
-    });
-  }
-  const target = inProgress || next;
+  if (inProgress) return { inProgress: true, target: inProgress, sessionDate: todayIso };
 
-  // Proyección de ganancia del día y conteo de paquetes por vencer (entre alumnas del día)
+  const nextToday = todaySorted.find(c => {
+    if (isDoneNow(c)) return false;
+    if (c.isOtherInstructor) return false;
+    if (c.students.length === 0) return false;
+    return c.hour > currentHour || (c.hour === currentHour && currentMin < 10);
+  });
+  if (nextToday) return { inProgress: false, target: nextToday, sessionDate: todayIso };
+
+  // 2. No hay clase real hoy: query a DB para próximos 30 días
+  if (!isOnline) return null;
+
+  const tomorrow = new Date(now);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const tomorrowIso = dateToIsoLocal(tomorrow);
+  const cutoff = new Date(now);
+  cutoff.setDate(cutoff.getDate() + 30);
+  const cutoffIso = dateToIsoLocal(cutoff);
+
+  const { data: sessions } = await sb.from('class_sessions')
+    .select('id, session_date, hour, location_id, class_status, is_cancelled, instructor_id, actual_instructor_id')
+    .or(`instructor_id.eq.${instructorId},actual_instructor_id.eq.${instructorId}`)
+    .gte('session_date', tomorrowIso)
+    .lte('session_date', cutoffIso)
+    .eq('is_cancelled', false)
+    .neq('class_status', 'delivered')
+    .order('session_date', { ascending: true })
+    .order('hour', { ascending: true })
+    .limit(100);
+
+  if (!sessions || sessions.length === 0) return null;
+
+  // Si actual_instructor_id está seteado, debe coincidir (suplencias manuales)
+  const myClassSessions = sessions.filter(s => {
+    if (s.actual_instructor_id) return s.actual_instructor_id === instructorId;
+    return s.instructor_id === instructorId;
+  });
+  if (myClassSessions.length === 0) return null;
+
+  // Contar bookings activos por sesión
+  const sessionIds = myClassSessions.map(s => s.id);
+  const { data: bookings } = await sb.from('session_bookings')
+    .select('session_id, cancelled_at')
+    .in('session_id', sessionIds);
+
+  const countBySession = new Map();
+  (bookings || []).forEach(b => {
+    if (b.cancelled_at) return;
+    countBySession.set(b.session_id, (countBySession.get(b.session_id) || 0) + 1);
+  });
+
+  // Sumar fijos (fixed_bookings que matchean loc, dow, hour)
+  for (const sess of myClassSessions) {
+    const dow = new Date(sess.session_date + 'T12:00:00').getDay();
+    const fixedCount = (STATE.fixedBookings || []).filter(b =>
+      b.is_active && b.location_id === sess.location_id && b.day_of_week === dow && b.hour === sess.hour
+    ).length;
+    if (fixedCount > 0) {
+      countBySession.set(sess.id, (countBySession.get(sess.id) || 0) + fixedCount);
+    }
+  }
+
+  // Primera sesión (en orden cronológico) con al menos 1 alumno
+  const targetSession = myClassSessions.find(s => (countBySession.get(s.id) || 0) > 0);
+  if (!targetSession) return null;
+
+  const studentCount = countBySession.get(targetSession.id);
+  return {
+    inProgress: false,
+    target: {
+      hour: targetSession.hour,
+      students: new Array(studentCount).fill(null),
+      session: targetSession,
+      isOtherInstructor: false,
+    },
+    sessionDate: targetSession.session_date,
+  };
+}
+
+async function renderInstructorNextClassBlock(classes) {
+  const block = document.querySelector('[data-inst-next]');
+  if (!block) return;
+
   const inst = CURRENT_USER?.record;
+  if (!inst) { block.innerHTML = ''; return; }
+
+  const now = new Date();
+  const todayIso = dateToIsoLocal(now);
+  const isViewingToday = STATE.instDayDate === todayIso;
+  const currentHour = now.getHours();
+  const currentMin = now.getMinutes();
+
+  // El widget SIEMPRE se refiere a HOY, independientemente del día seleccionado.
+  // - Si estamos viendo HOY: usar `classes` directo (ya están cargadas).
+  // - Si estamos viendo otro día: cargar las clases de HOY (cacheadas en STATE).
+  let todayClasses;
+  if (isViewingToday) {
+    todayClasses = classes || [];
+  } else if (STATE.instTodayCache && STATE.instTodayCache.date === todayIso) {
+    todayClasses = STATE.instTodayCache.classes;
+  } else {
+    todayClasses = await loadInstructorClassesForDate(inst, todayIso);
+    STATE.instTodayCache = { date: todayIso, classes: todayClasses };
+  }
+
+  // Buscar la próxima clase REAL (con alumnos asignados): primero en hoy,
+  // si no hay → query a próximos 30 días.
+  const result = await findInstructorNextRealClass(inst.id, todayClasses);
+
+  // Proyección de ganancia y paquetes por vencer: SIEMPRE sobre clases de HOY
   const tiers = inst ? getPayConfigFor(inst.id).tiers : [];
   let projectedPay = 0;
-  const expiringStudentIds = new Set(); // dedup por alumno (mismo alumno puede aparecer en varias clases)
-  for (const c of sorted) {
+  const expiringStudentIds = new Set();
+  for (const c of todayClasses) {
     if (c.session?.is_cancelled) continue;
-    if (c.isOtherInstructor) continue; // no proyectar las que no son nuestras
+    if (c.isOtherInstructor) continue;
     if (c.students.length > 0) {
       projectedPay += getPayForCount(c.students.length, tiers);
     }
@@ -10659,37 +10757,59 @@ function renderInstructorNextClassBlock(classes) {
   }
   const expiringCount = expiringStudentIds.size;
 
-  // Si no hay target Y no hay nada para mostrar, ocultar widget
-  if (!target && projectedPay === 0 && expiringCount === 0) { block.innerHTML = ''; return; }
+  // Ocultar widget solo si NO hay nada que mostrar en ninguna sección
+  if (!result && projectedPay === 0 && expiringCount === 0) { block.innerHTML = ''; return; }
 
   // Render del bloque principal
   let mainContent = '';
-  if (target) {
-    const isInProgress = !!inProgress;
+  if (result) {
+    const target = result.target;
+    const sessionDate = result.sessionDate;
+    const isInProgress = result.inProgress;
+    const isFutureDay = sessionDate !== todayIso;
     const studentsCount = target.students.length;
     const markedCount = target.marked || 0;
+
     let timeLabel = '';
     if (isInProgress) {
       timeLabel = 'en curso ahora';
+    } else if (isFutureDay) {
+      // Calcular distancia humana
+      const dt = new Date(sessionDate + 'T' + String(target.hour).padStart(2, '0') + ':00:00');
+      const diffMs = dt - now;
+      const diffDays = Math.floor(diffMs / 86400000);
+      const dayNames = ['domingo','lunes','martes','miércoles','jueves','viernes','sábado'];
+      const monthShort = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+      if (diffDays === 0) {
+        // Mañana técnicamente (cruzó medianoche): "mañana"
+        timeLabel = 'mañana';
+      } else if (diffDays === 1) {
+        timeLabel = 'mañana';
+      } else if (diffDays < 7) {
+        timeLabel = dayNames[dt.getDay()];
+      } else {
+        timeLabel = `${dt.getDate()} ${monthShort[dt.getMonth()]}`;
+      }
     } else {
       const minsToStart = (target.hour - currentHour) * 60 - currentMin;
       if (minsToStart < 60) timeLabel = `en ${minsToStart} min`;
       else { const h = Math.floor(minsToStart/60); const m = minsToStart % 60; timeLabel = `en ${h}h${m > 0 ? ` ${m}min` : ''}`; }
     }
+
     mainContent = `
       <div class="inst-next-tag">${isInProgress ? 'EN CURSO · AHORA' : 'TU PRÓXIMA CLASE'}</div>
       <div class="inst-next-time">${formatHour(target.hour)}</div>
       <div class="inst-next-info">${timeLabel} · ${studentsCount} alumno${studentsCount === 1 ? '' : 's'}${isInProgress && markedCount > 0 ? ` · ${markedCount} ya marcado${markedCount === 1 ? '' : 's'}` : ''}</div>
     `;
-  } else {
-    // No hay más clases por dictar hoy → mensaje de cierre
+  } else if (projectedPay > 0 || expiringCount > 0) {
+    // Hay info de hoy (proyectado/paquetes) pero no hay próxima clase con alumnos en los próximos 30 días
     mainContent = `
-      <div class="inst-next-tag">YA TERMINASTE TU DÍA</div>
-      <div class="inst-next-time" style="font-size: 26px;">¡Buen trabajo!</div>
+      <div class="inst-next-tag">SIN PRÓXIMAS CLASES CON ALUMNOS</div>
+      <div class="inst-next-time" style="font-size: 26px;">A descansar</div>
     `;
   }
 
-  // Footer con proyección de ganancia y alerta de paquetes
+  // Footer con proyección de ganancia y alerta de paquetes (siempre de HOY)
   let footerParts = [];
   if (projectedPay > 0) {
     footerParts.push(`<span class="inst-next-foot-item"><span class="inst-next-foot-num">S/ ${projectedPay.toFixed(2)}</span><span class="inst-next-foot-lbl">proyectado hoy</span></span>`);
