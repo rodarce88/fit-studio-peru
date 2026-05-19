@@ -573,6 +573,12 @@
   @keyframes inst-pulse { 0%,100% { box-shadow: 0 0 0 4px rgba(255,139,92,0.3); } 50% { box-shadow: 0 0 0 7px rgba(255,139,92,0.15); } }
   .inst-next-time { font-family: var(--display); font-style: italic; font-size: 36px; line-height: 1; margin-top: 4px; }
   .inst-next-info { font-size: 13px; opacity: 0.9; margin-top: 6px; }
+  .inst-next-foot { margin-top: 14px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,0.18); display: flex; gap: 18px; flex-wrap: wrap; align-items: baseline; }
+  .inst-next-foot-item { display: inline-flex; align-items: baseline; gap: 6px; }
+  .inst-next-foot-num { font-family: var(--display); font-style: italic; font-size: 18px; font-weight: 400; color: white; }
+  .inst-next-foot-lbl { font-size: 11px; color: rgba(255,255,255,0.75); }
+  .inst-next-foot-warn .inst-next-foot-num { color: #FFD68A; }
+  .inst-next-foot-warn .inst-next-foot-lbl { color: rgba(255, 214, 138, 0.85); }
 
   /* Past hours toggle */
   .inst-past-toggle { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; margin-bottom: 14px; background: white; border: 1px dashed var(--line); border-radius: 12px; cursor: pointer; transition: all 0.2s; font-size: 12px; color: var(--ink-mute); }
@@ -631,6 +637,14 @@
   .inst-stud-status.is-warn { color: #633806; }
   .inst-stud-status.is-danger { color: #791F1F; }
   .inst-stud-status.is-confirmed { color: var(--good); font-weight: 600; }
+
+  /* Mini barra del paquete por vencer (≤ 2 clases restantes), debajo del nombre */
+  .inst-stud-pkg-wrap { display: flex; align-items: center; gap: 8px; margin-top: 5px; }
+  .inst-stud-pkg-bar { flex: 0 1 auto; display: grid; gap: 2px; height: 5px; min-width: 60px; max-width: 140px; width: 100%; }
+  .inst-stud-pkg-seg { height: 5px; border-radius: 1.5px; }
+  .inst-stud-pkg-seg.used { background: #97C459; }
+  .inst-stud-pkg-seg.warn { background: #E24B4A; }
+  .inst-stud-pkg-label { font-size: 10.5px; color: #A32D2D; font-weight: 500; white-space: nowrap; }
 
   /* Tag visible "Prueba" para alumnas trial — más prominente que un alert icon */
   .inst-stud-trial-tag {
@@ -10140,9 +10154,56 @@ async function renderInstructorDay() {
 
   // Cargar y renderizar clases del día
   const classes = await loadInstructorClassesForDate(inst, STATE.instDayDate);
+
+  // Enriquecer cada alumno con info de su paquete activo (para mostrar mini barra "por vencer"
+  // y para el contador del widget superior)
+  const studentIds = [...new Set(
+    classes.flatMap(c => c.students.map(s => s.student.id))
+  )];
+  if (studentIds.length > 0) {
+    const pkgMap = await loadActivePackagesForStudents(studentIds);
+    for (const c of classes) {
+      for (const s of c.students) {
+        s.packageInfo = pkgMap.get(s.student.id) || null;
+      }
+    }
+  }
+
   renderInstructorNextClassBlock(classes);
   renderInstructorClassesBlock(classes);
   renderInstructorStatsBlock(STATE.instMonthStats);
+}
+
+// Carga el paquete activo (FIFO) de cada alumno entre los IDs pasados.
+// Retorna un Map: studentId → { packageId, name, total, used, remaining }.
+// Solo considera paquetes con is_active=true, status='active' (o null) y no frozen,
+// con clases disponibles (used < total).
+async function loadActivePackagesForStudents(studentIds) {
+  if (!isOnline || !studentIds || studentIds.length === 0) return new Map();
+  const { data, error } = await sb.from('student_packages')
+    .select('id, student_id, classes_total, classes_used, status, is_active, is_frozen, purchase_date, packages(name)')
+    .in('student_id', studentIds)
+    .eq('is_active', true)
+    .order('purchase_date', { ascending: true }); // FIFO: el más viejo es el activo
+  if (error) { console.warn('loadActivePackagesForStudents error:', error); return new Map(); }
+
+  const map = new Map();
+  for (const p of (data || [])) {
+    if (p.status && p.status !== 'active') continue;
+    if (p.is_frozen) continue;
+    const used = p.classes_used || 0;
+    const total = p.classes_total || 0;
+    if (total === 0 || used >= total) continue;
+    if (map.has(p.student_id)) continue; // ya tomamos el más viejo
+    map.set(p.student_id, {
+      packageId: p.id,
+      name: p.packages?.name || '',
+      total,
+      used,
+      remaining: total - used,
+    });
+  }
+  return map;
 }
 
 // Auto-actualiza class_status:
@@ -10369,46 +10430,95 @@ function renderInstructorNextClassBlock(classes) {
   // Solo mostrar la card de "próxima/en curso" si estamos viendo HOY
   if (!isViewingToday) { block.innerHTML = ''; return; }
 
-  // Buscar la clase que está en curso o la próxima
+  // Buscar la clase que está en curso o la próxima.
+  //   Una clase se considera "ya terminada" SÓLO si:
+  //   - está cancelada, O
+  //   - está marcada como delivered Y físicamente ya pasaron ≥50 min desde su inicio
+  // Esto evita que clases con flag delivered erróneo (ej. coord marcó por error,
+  // o auto-mark retroactivo) "salten" cuando aún no ocurrieron físicamente.
   const sorted = [...(classes || [])].sort((a,b) => a.hour - b.hour);
-  // En curso: si current hour == c.hour O si current hour == c.hour-1 y currentMin >= 50 (margen 10 min)
-  let inProgress = sorted.find(c => {
+  function isClassDone(c) {
+    if (c.session?.is_cancelled) return true;
     const status = c.session?.class_status || 'scheduled';
-    if (status === 'delivered' || c.session?.is_cancelled) return false;
+    if (status !== 'delivered') return false;
+    const minsSinceStart = (currentHour - c.hour) * 60 + currentMin;
+    return minsSinceStart > 50;
+  }
+
+  let inProgress = sorted.find(c => {
+    if (isClassDone(c)) return false;
     return currentHour === c.hour || (currentHour === c.hour - 1 && currentMin >= 50);
   });
   let next = null;
   if (!inProgress) {
     next = sorted.find(c => {
-      const status = c.session?.class_status || 'scheduled';
-      if (status === 'delivered' || c.session?.is_cancelled) return false;
+      if (isClassDone(c)) return false;
       return c.hour > currentHour || (c.hour === currentHour && currentMin < 10);
     });
   }
   const target = inProgress || next;
-  if (!target) { block.innerHTML = ''; return; }
 
-  const isInProgress = !!inProgress;
-  const studentsCount = target.students.length;
-  const markedCount = target.marked || 0;
-
-  // Calcular tiempo hasta inicio
-  let timeLabel = '';
-  if (isInProgress) {
-    timeLabel = 'en curso ahora';
-  } else {
-    const minsToStart = (target.hour - currentHour) * 60 - currentMin;
-    if (minsToStart < 60) timeLabel = `en ${minsToStart} min`;
-    else { const h = Math.floor(minsToStart/60); const m = minsToStart % 60; timeLabel = `en ${h}h${m > 0 ? ` ${m}min` : ''}`; }
+  // Proyección de ganancia del día y conteo de paquetes por vencer (entre alumnas del día)
+  const inst = CURRENT_USER?.record;
+  const tiers = inst ? getPayConfigFor(inst.id).tiers : [];
+  let projectedPay = 0;
+  const expiringStudentIds = new Set(); // dedup por alumno (mismo alumno puede aparecer en varias clases)
+  for (const c of sorted) {
+    if (c.session?.is_cancelled) continue;
+    if (c.isOtherInstructor) continue; // no proyectar las que no son nuestras
+    if (c.students.length > 0) {
+      projectedPay += getPayForCount(c.students.length, tiers);
+    }
+    for (const s of c.students) {
+      const pi = s.packageInfo;
+      if (pi && pi.remaining > 0 && pi.remaining <= 2) {
+        expiringStudentIds.add(s.student.id);
+      }
+    }
   }
+  const expiringCount = expiringStudentIds.size;
 
-  block.innerHTML = `
-    <div class="inst-next-card">
+  // Si no hay target Y no hay nada para mostrar, ocultar widget
+  if (!target && projectedPay === 0 && expiringCount === 0) { block.innerHTML = ''; return; }
+
+  // Render del bloque principal
+  let mainContent = '';
+  if (target) {
+    const isInProgress = !!inProgress;
+    const studentsCount = target.students.length;
+    const markedCount = target.marked || 0;
+    let timeLabel = '';
+    if (isInProgress) {
+      timeLabel = 'en curso ahora';
+    } else {
+      const minsToStart = (target.hour - currentHour) * 60 - currentMin;
+      if (minsToStart < 60) timeLabel = `en ${minsToStart} min`;
+      else { const h = Math.floor(minsToStart/60); const m = minsToStart % 60; timeLabel = `en ${h}h${m > 0 ? ` ${m}min` : ''}`; }
+    }
+    mainContent = `
       <div class="inst-next-tag">${isInProgress ? 'EN CURSO · AHORA' : 'TU PRÓXIMA CLASE'}</div>
       <div class="inst-next-time">${formatHour(target.hour)}</div>
       <div class="inst-next-info">${timeLabel} · ${studentsCount} alumno${studentsCount === 1 ? '' : 's'}${isInProgress && markedCount > 0 ? ` · ${markedCount} ya marcado${markedCount === 1 ? '' : 's'}` : ''}</div>
-    </div>
-  `;
+    `;
+  } else {
+    // No hay más clases por dictar hoy → mensaje de cierre
+    mainContent = `
+      <div class="inst-next-tag">YA TERMINASTE TU DÍA</div>
+      <div class="inst-next-time" style="font-size: 26px;">¡Buen trabajo!</div>
+    `;
+  }
+
+  // Footer con proyección de ganancia y alerta de paquetes
+  let footerParts = [];
+  if (projectedPay > 0) {
+    footerParts.push(`<span class="inst-next-foot-item"><span class="inst-next-foot-num">S/ ${projectedPay.toFixed(2)}</span><span class="inst-next-foot-lbl">proyectado hoy</span></span>`);
+  }
+  if (expiringCount > 0) {
+    footerParts.push(`<span class="inst-next-foot-item inst-next-foot-warn"><span class="inst-next-foot-num">${expiringCount}</span><span class="inst-next-foot-lbl">${expiringCount === 1 ? 'alumna' : 'alumnas'} con paquete por vencer</span></span>`);
+  }
+  const footer = footerParts.length > 0 ? `<div class="inst-next-foot">${footerParts.join('')}</div>` : '';
+
+  block.innerHTML = `<div class="inst-next-card">${mainContent}${footer}</div>`;
 }
 
 function renderInstructorStatsBlock(stats) {
@@ -11313,6 +11423,34 @@ function renderInstructorStudentRow(item, classCtx) {
     isPending ? '<span class="inst-stud-alert is-note" title="Pago pendiente" style="background:var(--warn-soft); color:#633806;">$</span>' : '',
   ].filter(Boolean).join('');
 
+  // Mini barra de progreso del paquete: solo cuando el paquete está por vencer (≤ 2 clases restantes).
+  // Cada segmento = 1 clase del paquete. Verde = ya usada, rojo = por usar (por vencer).
+  // Para paquetes muy grandes (>14 clases), mostramos solo el contador sin la barra para no saturar.
+  let pkgBarHtml = '';
+  const pi = item.packageInfo;
+  if (pi && pi.remaining > 0 && pi.remaining <= 2 && pi.total <= 14) {
+    const segs = [];
+    for (let i = 0; i < pi.total; i++) {
+      const cls = (i < pi.used) ? 'used' : 'warn';
+      segs.push(`<div class="inst-stud-pkg-seg ${cls}"></div>`);
+    }
+    pkgBarHtml = `
+      <div class="inst-stud-pkg-wrap">
+        <div class="inst-stud-pkg-bar" style="grid-template-columns: repeat(${pi.total}, 1fr);">
+          ${segs.join('')}
+        </div>
+        <span class="inst-stud-pkg-label">${pi.remaining === 1 ? 'última clase' : `${pi.remaining} restantes`}</span>
+      </div>
+    `;
+  } else if (pi && pi.remaining > 0 && pi.remaining <= 2) {
+    // Paquete grande, solo texto
+    pkgBarHtml = `
+      <div class="inst-stud-pkg-wrap">
+        <span class="inst-stud-pkg-label">⚠ ${pi.remaining === 1 ? 'última clase del paquete' : `${pi.remaining} clases restantes del paquete`}</span>
+      </div>
+    `;
+  }
+
   // El check inline solo se muestra si NO está ya marcada como attended
   const isAttended = status === 'attended';
   const checkBtnHtml = isAttended
@@ -11330,6 +11468,7 @@ function renderInstructorStudentRow(item, classCtx) {
             ${alertIcons}
           </div>
           ${statusLine}
+          ${pkgBarHtml}
         </div>
       </div>
       ${checkBtnHtml}
