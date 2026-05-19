@@ -2292,11 +2292,11 @@
         <div class="form-grid">
           <div class="form-row">
             <label>Nombre <span class="req">*</span></label>
-            <input type="text" id="f-first-name" required />
+            <input type="text" id="f-first-name" required onblur="this.value = toTitleCase(this.value)" />
           </div>
           <div class="form-row">
             <label>Apellidos</label>
-            <input type="text" id="f-last-name" />
+            <input type="text" id="f-last-name" onblur="this.value = toTitleCase(this.value)" />
           </div>
           <div class="form-row">
             <label>Email</label>
@@ -11694,12 +11694,14 @@ function instructorRenderInviteForm(prefillName) {
     <div style="padding: 0 18px 12px;">
       <div style="font-size: 11px; color: var(--ink-mute); text-transform: uppercase; letter-spacing: 0.12em; font-weight: 600; margin-bottom: 6px;">Nombre <span style="color: var(--danger);">*</span></div>
       <input id="invite-first-name" placeholder="Ej. María" autocomplete="off" value="${escape(prefFirst)}"
+        onblur="this.value = toTitleCase(this.value)"
         style="width: 100%; padding: 11px 14px; font-size: 14px; border: 1px solid var(--line); border-radius: 10px; box-sizing: border-box; font-family: var(--body); -webkit-appearance: none;" />
     </div>
 
     <div style="padding: 0 18px 12px;">
       <div style="font-size: 11px; color: var(--ink-mute); text-transform: uppercase; letter-spacing: 0.12em; font-weight: 600; margin-bottom: 6px;">Apellido</div>
       <input id="invite-last-name" placeholder="Ej. Rodríguez" autocomplete="off" value="${escape(prefLast)}"
+        onblur="this.value = toTitleCase(this.value)"
         style="width: 100%; padding: 11px 14px; font-size: 14px; border: 1px solid var(--line); border-radius: 10px; box-sizing: border-box; font-family: var(--body); -webkit-appearance: none;" />
     </div>
 
