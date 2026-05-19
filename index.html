@@ -9142,14 +9142,22 @@ async function openChangePackageWizard(pkgId) {
   ensureChangePkgWizardModal();
   showChangePkgWizardStep(1);
 
-  // Cargar data del paquete vía RPC (en paralelo con el catálogo)
+  // Cargar data del paquete + catálogo + bookings + recuperables en paralelo
   try {
-    const [usageRes, catalogRes] = await Promise.all([
+    const [usageRes, bookingsRes, recoverablesRes] = await Promise.all([
       sb.rpc('get_package_usage', { p_package_id: pkgId }),
+      sb.rpc('get_package_future_bookings', { p_package_id: pkgId }),
+      sb.rpc('get_package_active_recoverables', { p_package_id: pkgId }),
       changePkgWizardLoadCatalog(),
     ]);
     if (usageRes.error) throw usageRes.error;
+    if (bookingsRes.error) throw bookingsRes.error;
+    if (recoverablesRes.error) throw recoverablesRes.error;
     STATE.changePkgWizard.pkgUsage = usageRes.data;
+    STATE.changePkgWizard.futureBookings = bookingsRes.data || [];
+    STATE.changePkgWizard.activeRecoverables = recoverablesRes.data || [];
+    // Default: mantener todas las recuperables
+    STATE.changePkgWizard.keptRecoverableIds = STATE.changePkgWizard.activeRecoverables.map(r => r.attendance_id);
     showChangePkgWizardStep(STATE.changePkgWizard.step); // Re-render
   } catch (e) {
     showToast('Error cargando paquete: ' + (e.message || 'desconocido'), 'error');
@@ -9362,24 +9370,244 @@ function showChangePkgWizardStep(step) {
       </p>
       ${cards}
     `;
+  } else if (step === 3) {
+    // Paso 3: Conflicto de cupo
+    const newPkg = (STATE.packagesCatalog || []).find(p => p.id === wiz.selectedNewPkgId);
+    if (!newPkg || !u) { content.innerHTML = ''; return; }
+    const newCapacity = newPkg.sessions || 0;
+    const usedInOld = (u.used || 0) + (u.transferred || 0);
+    const availableNew = Math.max(0, newCapacity - usedInOld);
+    const bookings = wiz.futureBookings || [];
+    const excess = Math.max(0, bookings.length - availableNew);
 
-    // Habilitar/deshabilitar botón "Siguiente" según si hay selección
-    updateChangePkgWizardNextEnabled();
-  } else {
-    // Pasos 2-6 son placeholders en el Entregable 2A
+    // Pre-seleccionar los más lejanos a cancelar (solo la primera vez)
+    if (wiz.cancelledBookingIds.length === 0 && excess > 0) {
+      const sorted = [...bookings].sort((a,b) => {
+        const cmp = b.session_date.localeCompare(a.session_date);
+        return cmp !== 0 ? cmp : b.hour - a.hour;
+      });
+      wiz.cancelledBookingIds = sorted.slice(0, excess).map(b => b.booking_id);
+    }
+
+    const rows = bookings.map(b => {
+      const isCancelled = wiz.cancelledBookingIds.includes(b.booking_id);
+      return `
+        <label style="display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-bottom: 1px solid var(--line-soft); cursor: pointer;">
+          <input type="checkbox" ${isCancelled ? 'checked' : ''}
+            onchange="changePkgWizardToggleBooking('${b.booking_id}')"
+            style="width: 16px; height: 16px;">
+          <span style="color: ${isCancelled ? 'var(--ink)' : 'var(--ink-soft)'};">
+            ${formatDate(b.session_date)} · ${formatHour(b.hour)}${b.location_name ? ` · ${escape(b.location_name)}` : ''}
+          </span>
+          <span style="margin-left: auto; font-size: 11px; color: ${isCancelled ? '#993C1D' : 'var(--ink-mute)'}; font-weight: 500;">
+            ${isCancelled ? 'cancelar' : 'se mantiene'}
+          </span>
+        </label>
+      `;
+    }).join('');
+
+    content.innerHTML = `
+      <div style="background: #FAEEDA; color: #633806; padding: 12px 14px; border-radius: 8px; margin-bottom: 12px; font-size: 13px; line-height: 1.5;">
+        <strong style="font-weight: 500;">Hay conflicto de cupo.</strong> El nuevo paquete tiene ${newCapacity} cupos. Ya usaste ${usedInOld}, quedan ${availableNew}. Pero hay ${bookings.length} clases agendadas a futuro — sobran ${excess}.
+      </div>
+      <p style="font-size: 11px; color: var(--ink-mute); text-transform: uppercase; letter-spacing: 0.08em; margin: 0 0 8px; font-weight: 500;">
+        Elige cuáles cancelar${excess > 0 ? ` · ${excess} más lejana${excess === 1 ? '' : 's'} pre-marcada${excess === 1 ? '' : 's'}` : ''}
+      </p>
+      <div style="border: 1px solid var(--line); border-radius: 8px; overflow: hidden;">
+        ${rows || '<div style="padding: 20px; text-align: center; color: var(--ink-mute); font-size: 13px;">Sin bookings futuros</div>'}
+      </div>
+    `;
+  } else if (step === 4) {
+    // Paso 4: Recuperables
+    const recoverables = wiz.activeRecoverables || [];
+    const rows = recoverables.map(r => {
+      const isKept = wiz.keptRecoverableIds.includes(r.attendance_id);
+      const isDiscarded = wiz.discardedRecoverableIds.includes(r.attendance_id);
+      const noteFirstLine = (r.notes || '').split('\n')[0] || '';
+      return `
+        <div style="border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; margin-bottom: 8px;">
+          <div style="margin-bottom: 10px;">
+            <div style="font-weight: 500; font-size: 13px; color: var(--ink);">
+              Recuperable del ${formatDate(r.session_date)} · ${formatHour(r.hour)}
+            </div>
+            <div style="font-size: 11px; color: var(--ink-mute); margin-top: 3px;">
+              ${r.location_name ? escape(r.location_name) : ''}${noteFirstLine ? ` · ${escape(noteFirstLine.substring(0, 80))}` : ''}
+            </div>
+          </div>
+          <div style="display: flex; gap: 6px;">
+            <button onclick="changePkgWizardSetRecoverable('${r.attendance_id}', true)"
+              style="flex: 1; padding: 7px; font-size: 12px; ${isKept
+                ? 'background: #EAF3DE; color: #27500A; border: 1px solid #97C459; font-weight: 500;'
+                : 'background: white; color: var(--ink-mute); border: 1px solid var(--line);'} border-radius: 6px; cursor: pointer; transition: all 0.15s;">
+              Mantener
+            </button>
+            <button onclick="changePkgWizardSetRecoverable('${r.attendance_id}', false)"
+              style="flex: 1; padding: 7px; font-size: 12px; ${isDiscarded
+                ? 'background: #FCEBEB; color: #791F1F; border: 1px solid #F09595; font-weight: 500;'
+                : 'background: white; color: var(--ink-mute); border: 1px solid var(--line);'} border-radius: 6px; cursor: pointer; transition: all 0.15s;">
+              Descartar
+            </button>
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    content.innerHTML = `
+      <p style="font-size: 14px; color: var(--ink-mute); margin: 0 0 14px; line-height: 1.5;">
+        Tiene ${recoverables.length} recuperable${recoverables.length === 1 ? '' : 's'} activa${recoverables.length === 1 ? '' : 's'}. ¿Qué hacer con ${recoverables.length === 1 ? 'ella' : 'ellas'}?
+      </p>
+      ${rows}
+    `;
+  } else if (step === 5) {
+    // Paso 5: Balance financiero
+    const pricePaid = parseFloat(u?.price_paid || 0);
+    const newPkg = (STATE.packagesCatalog || []).find(p => p.id === wiz.selectedNewPkgId);
+    const priceNew = parseFloat(newPkg?.price_pen || 0);
+    const diff = pricePaid - priceNew;
+    const isRefund = diff > 0;
+    const absDiff = Math.abs(diff).toFixed(2);
+
+    // Guardar el ajuste en el estado (positivo = devolver, negativo = cobrar)
+    wiz.refundAmount = parseFloat(diff.toFixed(2));
+
+    const methods = [
+      { key: 'cash', label: 'Efectivo' },
+      { key: 'transfer', label: 'Transferencia' },
+      { key: 'yape', label: 'Yape' },
+      { key: 'plin', label: 'Plin' },
+    ];
+
+    content.innerHTML = `
+      <p style="font-size: 14px; color: var(--ink-mute); margin: 0 0 14px; line-height: 1.5;">
+        ${isRefund
+          ? 'El paquete viejo estaba pagado. El nuevo cuesta menos. Hay un excedente a favor de la alumna.'
+          : 'El paquete viejo estaba pagado. El nuevo cuesta más. Hay una diferencia a cobrar a la alumna.'}
+      </p>
+      <div style="background: var(--fit-cream); border-radius: 8px; padding: 14px; margin-bottom: 12px; font-size: 13px;">
+        <div style="display: flex; justify-content: space-between; padding: 3px 0;">
+          <span style="color: var(--ink-mute);">Pagado al paquete viejo</span>
+          <span style="color: var(--ink);">S/ ${pricePaid.toFixed(2)}</span>
+        </div>
+        <div style="display: flex; justify-content: space-between; padding: 3px 0;">
+          <span style="color: var(--ink-mute);">Costo del nuevo paquete</span>
+          <span style="color: var(--ink);">−S/ ${priceNew.toFixed(2)}</span>
+        </div>
+        <div style="display: flex; justify-content: space-between; padding: 8px 0 0; margin-top: 6px; border-top: 1px solid var(--line-soft);">
+          <span style="font-weight: 500; color: var(--ink);">${isRefund ? 'A devolver al alumno' : 'A cobrar al alumno'}</span>
+          <span style="font-weight: 500; font-size: 15px; color: ${isRefund ? '#27500A' : '#993C1D'};">S/ ${absDiff}</span>
+        </div>
+      </div>
+      <p style="font-size: 11px; color: var(--ink-mute); text-transform: uppercase; letter-spacing: 0.08em; margin: 0 0 8px; font-weight: 500;">Método de ${isRefund ? 'devolución' : 'cobro'}</p>
+      <div style="border: 1px solid var(--line); border-radius: 8px; padding: 4px 14px; font-size: 13px;">
+        ${methods.map((m, i) => `
+          <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; padding: 10px 0; ${i > 0 ? 'border-top: 1px solid var(--line-soft);' : ''}">
+            <input type="radio" name="refund-method" value="${m.key}" ${wiz.refundMethod === m.key ? 'checked' : ''}
+              onchange="changePkgWizardSetRefundMethod('${m.key}')"
+              style="width: 14px; height: 14px;">
+            <span style="color: var(--ink);">${m.label}</span>
+            <span style="margin-left: auto; color: var(--ink-mute);">S/ ${absDiff}</span>
+          </label>
+        `).join('')}
+      </div>
+    `;
+  } else if (step === 6) {
+    // Paso 6: confirmación (placeholder por ahora, completar en Entregable 2D)
     content.innerHTML = `
       <div style="padding: 40px; text-align: center; color: var(--ink-mute);">
-        <div style="font-size: 14px; margin-bottom: 6px;">Paso ${step}: ${CHANGE_PKG_STEP_TITLES[step-1]}</div>
-        <div style="font-size: 12px;">Próximo entregable (2${'BCDEF'[step-2]}).</div>
+        <div style="font-size: 14px; margin-bottom: 6px;">Paso 6: Confirmar</div>
+        <div style="font-size: 12px;">Próximo entregable (2D).</div>
       </div>
     `;
   }
+
+  // Habilitar/deshabilitar "Siguiente" según validaciones del paso
+  updateChangePkgWizardNextEnabled();
 }
 
 function changePkgWizardSelectPkg(newPkgId) {
   if (!STATE.changePkgWizard) return;
+  // Si cambia el paquete seleccionado, resetear decisiones que dependen de él
+  if (STATE.changePkgWizard.selectedNewPkgId !== newPkgId) {
+    STATE.changePkgWizard.cancelledBookingIds = [];
+    STATE.changePkgWizard.refundMethod = null;
+  }
   STATE.changePkgWizard.selectedNewPkgId = newPkgId;
   showChangePkgWizardStep(STATE.changePkgWizard.step); // re-render
+}
+
+function changePkgWizardToggleBooking(bookingId) {
+  const wiz = STATE.changePkgWizard;
+  if (!wiz) return;
+  const idx = wiz.cancelledBookingIds.indexOf(bookingId);
+  if (idx >= 0) wiz.cancelledBookingIds.splice(idx, 1);
+  else wiz.cancelledBookingIds.push(bookingId);
+  showChangePkgWizardStep(wiz.step);
+}
+
+function changePkgWizardSetRecoverable(attId, keep) {
+  const wiz = STATE.changePkgWizard;
+  if (!wiz) return;
+  if (keep) {
+    if (!wiz.keptRecoverableIds.includes(attId)) wiz.keptRecoverableIds.push(attId);
+    const di = wiz.discardedRecoverableIds.indexOf(attId);
+    if (di >= 0) wiz.discardedRecoverableIds.splice(di, 1);
+  } else {
+    if (!wiz.discardedRecoverableIds.includes(attId)) wiz.discardedRecoverableIds.push(attId);
+    const ki = wiz.keptRecoverableIds.indexOf(attId);
+    if (ki >= 0) wiz.keptRecoverableIds.splice(ki, 1);
+  }
+  showChangePkgWizardStep(wiz.step);
+}
+
+function changePkgWizardSetRefundMethod(method) {
+  const wiz = STATE.changePkgWizard;
+  if (!wiz) return;
+  wiz.refundMethod = method;
+  // No re-render — el radio button ya quedó marcado por el navegador
+  updateChangePkgWizardNextEnabled();
+}
+
+// Determina si un paso aplica según el estado actual del wizard
+function isChangePkgStepApplicable(step) {
+  const wiz = STATE.changePkgWizard;
+  if (!wiz) return false;
+  if (step === 1 || step === 2 || step === 6) return true;
+
+  const newPkg = (STATE.packagesCatalog || []).find(p => p.id === wiz.selectedNewPkgId);
+  if (!newPkg) return false;
+
+  if (step === 3) {
+    // Hay conflicto si bookings futuros > cupo disponible en el nuevo
+    const newCapacity = newPkg.sessions || 0;
+    const usedInOld = (wiz.pkgUsage?.used || 0) + (wiz.pkgUsage?.transferred || 0);
+    const availableNew = Math.max(0, newCapacity - usedInOld);
+    const future = (wiz.futureBookings || []).length;
+    return future > availableNew;
+  }
+  if (step === 4) {
+    return (wiz.activeRecoverables || []).length > 0;
+  }
+  if (step === 5) {
+    // Solo si hay diferencia financiera distinta de 0 Y el viejo tiene pago
+    const pricePaid = parseFloat(wiz.pkgUsage?.price_paid || 0);
+    const priceNew = parseFloat(newPkg.price_pen || 0);
+    return pricePaid > 0 && Math.abs(pricePaid - priceNew) > 0.01;
+  }
+  return true;
+}
+
+function nextChangePkgStep(currentStep) {
+  for (let s = currentStep + 1; s <= 6; s++) {
+    if (isChangePkgStepApplicable(s)) return s;
+  }
+  return 6;
+}
+
+function prevChangePkgStep(currentStep) {
+  for (let s = currentStep - 1; s >= 1; s--) {
+    if (isChangePkgStepApplicable(s)) return s;
+  }
+  return 1;
 }
 
 function updateChangePkgWizardNextEnabled() {
@@ -9388,8 +9616,8 @@ function updateChangePkgWizardNextEnabled() {
   if (!nextBtn || !wiz) return;
 
   let enabled = true;
-  // Validación por paso
   if (wiz.step === 2 && !wiz.selectedNewPkgId) enabled = false;
+  if (wiz.step === 5 && !wiz.refundMethod) enabled = false;
 
   nextBtn.disabled = !enabled;
   nextBtn.style.opacity = enabled ? '1' : '0.4';
@@ -9405,18 +9633,22 @@ function changePkgWizardNext() {
     showToast('Seleccioná un paquete nuevo', 'error');
     return;
   }
+  if (wiz.step === 5 && !wiz.refundMethod) {
+    showToast('Elegí un método', 'error');
+    return;
+  }
 
   if (wiz.step < 6) {
-    showChangePkgWizardStep(wiz.step + 1);
+    showChangePkgWizardStep(nextChangePkgStep(wiz.step));
   } else {
-    showToast('Confirmación aún no implementada (Entregable 2F)', '');
+    showToast('Confirmación aún no implementada (Entregable 2D)', '');
   }
 }
 
 function changePkgWizardPrev() {
   const wiz = STATE.changePkgWizard;
   if (!wiz) return;
-  if (wiz.step > 1) showChangePkgWizardStep(wiz.step - 1);
+  if (wiz.step > 1) showChangePkgWizardStep(prevChangePkgStep(wiz.step));
 }
 
 function closeChangePkgWizard() {
