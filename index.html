@@ -467,6 +467,18 @@
   .inst-class-skel { display: flex; align-items: center; gap: 16px; padding: 18px 22px; background: white; border: 1px solid var(--line); border-radius: var(--radius-md); margin-bottom: 6px; }
   .inst-skel-on-purple { background: linear-gradient(90deg, rgba(255,255,255,0.10) 25%, rgba(255,255,255,0.24) 50%, rgba(255,255,255,0.10) 75%); background-size: 200% 100%; animation: shimmer 1.5s infinite; border-radius: 6px; }
 
+  /* Cupo liberado: sección donde van alumnas con recoverable/lost (no ocupan cupo) */
+  .released-section { border-top: 1px dashed var(--line); margin-top: 4px; padding-top: 4px; }
+  .released-header { display: flex; align-items: center; gap: 10px; padding: 10px 18px 4px; }
+  .released-title { font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--ink-mute); font-weight: 600; }
+  .released-sub { font-size: 11px; color: var(--ink-mute); font-style: italic; font-family: var(--display); }
+  .released-section .student-row { opacity: 0.78; }
+  .inst-released-section { border-top: 1px dashed var(--line); margin-top: 4px; padding-top: 4px; }
+  .inst-released-header { display: flex; align-items: center; gap: 10px; padding: 10px 18px 4px; }
+  .inst-released-title { font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--ink-mute); font-weight: 600; }
+  .inst-released-sub { font-size: 11px; color: var(--ink-mute); font-style: italic; font-family: var(--display); }
+  .inst-released-section .inst-student-row { opacity: 0.78; }
+
   /* RESPONSIVE */
   @media (max-width: 1100px) {
     .layout-grid { grid-template-columns: 1fr; }
@@ -3024,6 +3036,45 @@ const HEALTH_TAG_MAP = (() => {
 // no porque el alumno se retiró antes de tiempo).
 const ATTENDANCE_PROCESSED = ['attended', 'lost', 'no_show', 'recoverable'];
 
+// Estados que NO ocupan cupo (liberan asiento): la alumna sigue listada pero el
+// asiento queda disponible para meter otra. Recoverable = avisó con tiempo,
+// puede recuperar después. Lost = avisó tarde / no recuperable.
+const ATTENDANCE_RELEASES_SLOT = ['recoverable', 'lost'];
+
+// Estados que NO cuentan para el pago del profesor (no entran al tier):
+// solo recoverable (avisó con tiempo, no se dictó la clase para esa alumna).
+// Lost y no_show SÍ pagan: la coord sabe que la alumna estaba esperada y
+// el profe armó la clase contando con ella.
+const ATTENDANCE_NOT_PAYABLE = ['recoverable'];
+
+// Calcula info de cupos para una clase dado un array de alumnos y una función
+// que devuelve la attendance de cada uno.
+// Retorna: occupying (ocupan cupo), released (liberaron asiento),
+// occupyingCount, releasedCount, payableCount (cuentan para tier del profe).
+function _classSlotInfo(students, getAttendanceForStudent) {
+  const occupying = [];
+  const released = [];
+  let payableCount = 0;
+  for (const s of students || []) {
+    const att = getAttendanceForStudent(s);
+    const status = att ? att.status : null;
+    if (ATTENDANCE_RELEASES_SLOT.includes(status)) {
+      released.push(s);
+    } else {
+      occupying.push(s);
+    }
+    if (!ATTENDANCE_NOT_PAYABLE.includes(status)) {
+      payableCount++;
+    }
+  }
+  return {
+    occupying, released,
+    occupyingCount: occupying.length,
+    releasedCount: released.length,
+    payableCount,
+  };
+}
+
 // Decide si un booking debe ser visible en historiales y vistas del día.
 // Acepta tanto un booking solo (sin attendance) como booking + attendance.
 function bookingShouldBeVisible(booking, attendance) {
@@ -4405,8 +4456,14 @@ function renderTimeline() {
       .map(id => STATE.students.find(s => s.id === id))
       .filter(Boolean);
 
-    // Confirmadas: alumnos cuyo booking activo tiene confirmed_at
-    const confirmedCount = studentsAtHour.filter(s => {
+    // Slot info: separa quiénes ocupan cupo (occupying) de quiénes lo liberaron (released).
+    // Releases: attendance.status en ['recoverable', 'lost']. Esos alumnos se siguen
+    // mostrando en la card pero su asiento queda disponible para meter otra alumna.
+    const slotInfo = _classSlotInfo(studentsAtHour, s => _attFor(s.id));
+
+    // Confirmadas: alumnos cuyo booking activo tiene confirmed_at.
+    // Solo contamos entre los que OCUPAN cupo (los liberados no cuentan al sidebar).
+    const confirmedCount = slotInfo.occupying.filter(s => {
       const booking = liveBookings.find(b => b.student_id === s.id && !b.cancelled_at);
       return booking && booking.confirmed_at;
     }).length;
@@ -4414,8 +4471,10 @@ function renderTimeline() {
     return {
       hour: h, session, sessionId, isCancelled,
       studentsAtHour, liveBookings,
+      occupyingStudents: slotInfo.occupying,
+      releasedStudents: slotInfo.released,
       confirmedCount,
-      enrolled: studentsAtHour.length,
+      enrolled: slotInfo.occupyingCount,
       capacity: loc.capacity,
       isCurrent: isViewingToday && nowFilter.getHours() === h,
       isPast: isViewingToday && h < currentHourNow,
@@ -4469,10 +4528,10 @@ function renderTimeline() {
     const inst = resolveInstructor(loc.id, STATE.currentDate, dow, h);
     const instColor = getInstructorColor(inst);
 
-    const studentRows = d.studentsAtHour.map(s => {
+    // Función para renderizar una fila de alumno (reusada para occupying y released)
+    const renderStudentRowFor = (s) => {
       const att = d.sessionId ? findAttendance(s.id, d.sessionId) : null;
       const status = att ? att.status : null;
-      // Booking activo del alumno en esta clase, para detectar confirmación
       const booking = d.liveBookings.find(b => b.student_id === s.id && !b.cancelled_at);
       const isConfirmed = !status && booking && booking.confirmed_at;
       let statusBadge = '';
@@ -4508,14 +4567,33 @@ function renderTimeline() {
           </button>
         </div>
       </div>
-    `}).join('');
+    `;
+    };
 
+    // Filas que ocupan cupo (van arriba)
+    const occupyingRows = d.occupyingStudents.map(renderStudentRowFor).join('');
+
+    // Slots vacíos: tantos como cupos libres (capacity - occupying)
     const emptySlots = d.isCancelled ? '' : Array.from({ length: cap - occ }, () => `
       <div class="empty-slot" onclick="event.stopPropagation(); openAddFlexibleModal(${h})">
         <div class="empty-slot-dot">+</div>
         <span>Cupo disponible · clic para agregar alumno flexible</span>
       </div>
     `).join('');
+
+    // Sección "Cupo liberado": alumnas con recoverable/lost (no ocupan asiento pero quedan listadas)
+    const releasedRows = d.releasedStudents.map(renderStudentRowFor).join('');
+    const releasedSection = d.releasedStudents.length > 0 ? `
+      <div class="released-section">
+        <div class="released-header">
+          <span class="released-title">Cupo liberado</span>
+          <span class="released-sub">${d.releasedStudents.length} ${d.releasedStudents.length === 1 ? 'alumna' : 'alumnas'} · no ocupan asiento</span>
+        </div>
+        ${releasedRows}
+      </div>
+    ` : '';
+
+    const studentRows = occupyingRows + emptySlots + releasedSection;
 
     return `
       <div class="class-block ${stateClass} ${openClass} ${pastClass} ${d.isCancelled ? 'is-cancelled' : ''}"
@@ -4544,7 +4622,6 @@ function renderTimeline() {
         </div>
         <div class="class-students">
           ${studentRows || ''}
-          ${emptySlots}
         </div>
       </div>
     `;
@@ -10782,8 +10859,11 @@ async function renderInstructorNextClassBlock(classes) {
   for (const c of todayClasses) {
     if (c.session?.is_cancelled) continue;
     if (c.isOtherInstructor) continue;
-    if (c.students.length > 0) {
-      projectedPay += getPayForCount(c.students.length, tiers);
+    // El pago al profe excluye recuperables (no entran al tier).
+    // Lost y no_show SÍ pagan (el profe armó la clase con esas alumnas en su grupo).
+    const slotInfo = _classSlotInfo(c.students, s => s.attendance);
+    if (slotInfo.payableCount > 0) {
+      projectedPay += getPayForCount(slotInfo.payableCount, tiers);
     }
     for (const s of c.students) {
       const pi = s.packageInfo;
@@ -10804,7 +10884,11 @@ async function renderInstructorNextClassBlock(classes) {
     const sessionDate = result.sessionDate;
     const isInProgress = result.inProgress;
     const isFutureDay = sessionDate !== todayIso;
-    const studentsCount = target.students.length;
+    // Conteo de alumnos: si target.students tiene attendance (clases de hoy), filtramos
+    // por los que ocupan cupo. Si vienen sin attendance (sesiones futuras),
+    // el conteo crudo es correcto (no hay attendances todavía).
+    const targetSlot = _classSlotInfo(target.students || [], s => s && s.attendance);
+    const studentsCount = targetSlot.occupyingCount;
     const markedCount = target.marked || 0;
 
     let timeLabel = '';
@@ -11633,7 +11717,10 @@ function renderInstructorClassCard(c, ctx) {
   else if (isToday && c.hour > currentHour) { subLabel = 'próxima'; }
   else if (!isToday) { subLabel = ''; }
 
-  const studentsCount = c.isOtherInstructor ? (c.otherStudentsCount || 0) : c.students.length;
+  // Slot info: separa quiénes ocupan cupo (occupying) de quiénes lo liberaron (released).
+  // Recoverable y lost no ocupan asiento; el cupo queda libre para meter otra.
+  const slotInfo = c.isOtherInstructor ? null : _classSlotInfo(c.students, s => s.attendance);
+  const studentsCount = c.isOtherInstructor ? (c.otherStudentsCount || 0) : slotInfo.occupyingCount;
   const markedCount = c.marked || 0;
 
   // Sub-info
@@ -11651,18 +11738,26 @@ function renderInstructorClassCard(c, ctx) {
   ].filter(Boolean).join(' ');
 
   // Students inside (si tiene alumnos)
-  const studentsHtml = studentsCount === 0
+  // Estructura: occupying arriba + botón "Agregar alumno flexible" + released (cupo liberado) abajo
+  const occupyingHtml = slotInfo ? slotInfo.occupying.map(item => renderInstructorStudentRow(item, c)).join('') : '';
+  const releasedHtml = slotInfo && slotInfo.released.length > 0
+    ? `<div class="inst-released-section">
+         <div class="inst-released-header">
+           <span class="inst-released-title">Cupo liberado</span>
+           <span class="inst-released-sub">${slotInfo.released.length} ${slotInfo.released.length === 1 ? 'alumna' : 'alumnas'} · no ocupan asiento</span>
+         </div>
+         ${slotInfo.released.map(item => renderInstructorStudentRow(item, c)).join('')}
+       </div>`
+    : '';
+  const addFlexBtn = (!isCancelled && !isNotDelivered)
     ? `<div class="inst-empty-slot" onclick="instructorOpenAddStudent('${c.dateIso}', ${c.hour}, '${c.location.id}')">
          <div class="inst-empty-slot-icon">+</div>
-         <span>Sin alumnos · tap para agregar</span>
+         <span>${studentsCount === 0 ? 'Sin alumnos · tap para agregar' : 'Agregar alumno flexible'}</span>
        </div>`
-    : c.students.map(item => renderInstructorStudentRow(item, c)).join('') +
-      (!isCancelled && !isNotDelivered
-        ? `<div class="inst-empty-slot" onclick="instructorOpenAddStudent('${c.dateIso}', ${c.hour}, '${c.location.id}')">
-             <div class="inst-empty-slot-icon">+</div>
-             <span>Agregar alumno flexible</span>
-           </div>`
-        : '');
+    : '';
+  const studentsHtml = (studentsCount === 0 && (!slotInfo || slotInfo.released.length === 0))
+    ? addFlexBtn
+    : (occupyingHtml + addFlexBtn + releasedHtml);
 
   // Botón "Clase dictada sin asistentes" para clases ya empezadas y no marcadas
   const canMarkEmpty = !isDelivered && !isCancelled && (isPast || (isToday && currentHour >= c.hour));
