@@ -463,6 +463,10 @@
   .skel { background: linear-gradient(90deg, var(--line-soft) 25%, var(--line) 50%, var(--line-soft) 75%); background-size: 200% 100%; animation: shimmer 1.5s infinite; border-radius: var(--radius-sm); height: 16px; }
   @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
 
+  /* Skeletons específicos vista profesor */
+  .inst-class-skel { display: flex; align-items: center; gap: 16px; padding: 18px 22px; background: white; border: 1px solid var(--line); border-radius: var(--radius-md); margin-bottom: 6px; }
+  .inst-skel-on-purple { background: linear-gradient(90deg, rgba(255,255,255,0.10) 25%, rgba(255,255,255,0.24) 50%, rgba(255,255,255,0.10) 75%); background-size: 200% 100%; animation: shimmer 1.5s infinite; border-radius: 6px; }
+
   /* RESPONSIVE */
   @media (max-width: 1100px) {
     .layout-grid { grid-template-columns: 1fr; }
@@ -10314,30 +10318,34 @@ async function renderInstructorDay() {
         </div>
       </div>
     `;
+    // Pintar skeletons mientras esperamos las queries iniciales
+    showInstructorSkeletons();
   }
 
-  // Auto-marcar clases pasadas como pending_confirmation y vencidas como not_delivered
-  await autoMarkInstructorClassStates(inst.id);
-
-  // Cargar stats del mes solo si no están cacheadas o son del mes anterior
+  // Lanzar las 4 queries independientes en paralelo (eran secuenciales antes)
   const monthKey = new Date().toISOString().slice(0,7);
-  if (!STATE.instMonthStats || STATE.instMonthStatsKey !== monthKey) {
-    STATE.instMonthStats = await loadInstructorMonthStats(inst.id);
+  const needStats = !STATE.instMonthStats || STATE.instMonthStatsKey !== monthKey;
+  const [, monthStats, pending, classes] = await Promise.all([
+    autoMarkInstructorClassStates(inst.id),
+    needStats ? loadInstructorMonthStats(inst.id) : Promise.resolve(STATE.instMonthStats),
+    loadInstructorPendingClasses(inst.id),
+    loadInstructorClassesForDate(inst, STATE.instDayDate),
+  ]);
+
+  if (needStats) {
+    STATE.instMonthStats = monthStats;
     STATE.instMonthStatsKey = monthKey;
   }
 
+  // Cachear las clases recién cargadas (para navegación entre días)
+  STATE.instClassesCache = STATE.instClassesCache || {};
+  STATE.instClassesCache[STATE.instDayDate] = classes;
+
   renderInstructorGreetBlock();
   renderInstructorDayStrip();
-
-  // Cargar pendientes por marcar (banner arriba)
-  const pending = await loadInstructorPendingClasses(inst.id);
   renderInstructorPendingBanner(pending);
 
-  // Cargar y renderizar clases del día
-  const classes = await loadInstructorClassesForDate(inst, STATE.instDayDate);
-
-  // Enriquecer cada alumno con info de su paquete activo (para mostrar mini barra "por vencer"
-  // y para el contador del widget superior)
+  // Enriquecer cada alumno con info de su paquete activo (depende de classes, va después)
   const studentIds = [...new Set(
     classes.flatMap(c => c.students.map(s => s.student.id))
   )];
@@ -10353,6 +10361,34 @@ async function renderInstructorDay() {
   renderInstructorNextClassBlock(classes);
   renderInstructorClassesBlock(classes);
   renderInstructorStatsBlock(STATE.instMonthStats);
+}
+
+// Helpers de skeletons para la vista profesor
+function showInstructorSkeletons() {
+  const nextBlock = document.querySelector('[data-inst-next]');
+  if (nextBlock) nextBlock.innerHTML = instNextSkeletonHTML();
+  const classesBlock = document.querySelector('[data-inst-classes]');
+  if (classesBlock) classesBlock.innerHTML = instClassesSkeletonHTML();
+}
+
+function instNextSkeletonHTML() {
+  return `<div class="inst-next-card">
+    <div class="inst-skel-on-purple" style="width: 110px; height: 11px; margin-bottom: 14px;"></div>
+    <div class="inst-skel-on-purple" style="width: 110px; height: 42px; margin-bottom: 10px;"></div>
+    <div class="inst-skel-on-purple" style="width: 180px; height: 13px;"></div>
+  </div>`;
+}
+
+function instClassesSkeletonHTML() {
+  let rows = '';
+  for (let i = 0; i < 6; i++) {
+    rows += `<div class="inst-class-skel">
+      <div class="skel" style="width: 60px; height: 28px;"></div>
+      <div class="skel" style="flex: 1; max-width: 200px; height: 14px;"></div>
+      <div class="skel" style="width: 36px; height: 36px; border-radius: 50%; margin-left: auto;"></div>
+    </div>`;
+  }
+  return rows;
 }
 
 // Carga el paquete activo (FIFO) de cada alumno entre los IDs pasados.
@@ -12228,17 +12264,14 @@ async function instructorSetDateIso(iso) {
     renderInstructorNextClassBlock(cached);
     renderInstructorClassesBlock(cached);
   } else {
-    // Sin cache: mostrar loading inline en la sección de clases
+    // Sin cache: skeletons en la sección de clases. El widget se MANTIENE con
+    // el contenido anterior (ahora siempre representa HOY, así que no necesita cambiar).
     const block = document.querySelector('[data-inst-classes]');
     const headerBlock = document.querySelector('[data-inst-classes-header]');
     const pastToggleBlock = document.querySelector('[data-inst-past-toggle]');
-    const nextBlock = document.querySelector('[data-inst-next]');
-    if (nextBlock) nextBlock.innerHTML = '';
     if (headerBlock) headerBlock.innerHTML = '';
     if (pastToggleBlock) pastToggleBlock.innerHTML = '';
-    if (block) {
-      block.innerHTML = `<div class="inst-loading"><span class="spinner"></span> Cargando clases del día...</div>`;
-    }
+    if (block) block.innerHTML = instClassesSkeletonHTML();
   }
   const inst = CURRENT_USER.record;
   const classes = await loadInstructorClassesForDate(inst, STATE.instDayDate);
