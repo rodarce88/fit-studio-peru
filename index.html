@@ -9511,12 +9511,68 @@ function showChangePkgWizardStep(step) {
       </div>
     `;
   } else if (step === 6) {
-    // Paso 6: confirmación (placeholder por ahora, completar en Entregable 2D)
-    content.innerHTML = `
-      <div style="padding: 40px; text-align: center; color: var(--ink-mute);">
-        <div style="font-size: 14px; margin-bottom: 6px;">Paso 6: Confirmar</div>
-        <div style="font-size: 12px;">Próximo entregable (2D).</div>
+    // Paso 6: resumen + motivo + confirmar (preview en 2D, ejecución real en 2E)
+    const newPkg = (STATE.packagesCatalog || []).find(p => p.id === wiz.selectedNewPkgId);
+    if (!newPkg || !u) { content.innerHTML = '<div style="padding:20px;color:var(--ink-mute);">Faltan datos</div>'; return; }
+
+    // Cálculos para el resumen
+    const transferredToNew = (u.used || 0) + (u.transferred || 0);
+    const cancelledIds = wiz.cancelledBookingIds || [];
+    const allFuture = wiz.futureBookings || [];
+    const cancelledBookings = allFuture.filter(b => cancelledIds.includes(b.booking_id));
+    const keptBookings = allFuture.filter(b => !cancelledIds.includes(b.booking_id));
+    const keptRecCount = (wiz.keptRecoverableIds || []).length;
+    const discardedRecCount = (wiz.discardedRecoverableIds || []).length;
+    const undecidedRecCount = (wiz.activeRecoverables || []).length - keptRecCount - discardedRecCount;
+    const refundAmount = parseFloat(wiz.refundAmount || 0);
+    const hasFinancial = Math.abs(refundAmount) > 0.01;
+    const isRefund = refundAmount > 0;
+    const methodLabels = { cash: 'Efectivo', transfer: 'Transferencia', yape: 'Yape', plin: 'Plin' };
+
+    const items = [];
+    items.push(`<strong style="font-weight: 500;">${escape(u.name)}</strong> → cerrado con motivo "cambio"`);
+    items.push(`<strong style="font-weight: 500;">${escape(newPkg.name)}</strong> → creado${transferredToNew > 0 ? `, hereda ${transferredToNew} asistencia${transferredToNew === 1 ? '' : 's'}` : ''}`);
+    if (cancelledBookings.length > 0) {
+      const dates = cancelledBookings.map(b => `${formatDate(b.session_date)} · ${formatHour(b.hour)}`).join(', ');
+      items.push(`<strong style="font-weight: 500;">${cancelledBookings.length} booking${cancelledBookings.length === 1 ? '' : 's'} futuro${cancelledBookings.length === 1 ? '' : 's'}</strong> → cancelado${cancelledBookings.length === 1 ? '' : 's'} <span style="font-size: 11px; color: var(--ink-mute);">(${dates})</span>`);
+    }
+    if (keptBookings.length > 0) {
+      items.push(`<strong style="font-weight: 500;">${keptBookings.length} booking${keptBookings.length === 1 ? '' : 's'} futuro${keptBookings.length === 1 ? '' : 's'}</strong> → mantenido${keptBookings.length === 1 ? '' : 's'} en el paquete nuevo`);
+    }
+    if (keptRecCount > 0) {
+      items.push(`<strong style="font-weight: 500;">${keptRecCount} recuperable${keptRecCount === 1 ? '' : 's'}</strong> → conservada${keptRecCount === 1 ? '' : 's'}`);
+    }
+    if (discardedRecCount > 0) {
+      items.push(`<strong style="font-weight: 500;">${discardedRecCount} recuperable${discardedRecCount === 1 ? '' : 's'}</strong> → descartada${discardedRecCount === 1 ? '' : 's'}`);
+    }
+    if (undecidedRecCount > 0) {
+      items.push(`<span style="color: #993C1D;"><strong style="font-weight: 500;">⚠ ${undecidedRecCount} recuperable${undecidedRecCount === 1 ? '' : 's'} sin decisión</strong> → volvé al paso 4</span>`);
+    }
+    if (hasFinancial) {
+      const amt = Math.abs(refundAmount).toFixed(2);
+      const methodLabel = methodLabels[wiz.refundMethod] || wiz.refundMethod || '?';
+      items.push(`<strong style="font-weight: 500;">${isRefund ? 'Devolución' : 'Cobro de diferencia'} S/ ${amt}</strong> · ${methodLabel} → registrado en payments`);
+    }
+
+    const itemsHtml = items.map(text => `
+      <div style="display: flex; gap: 8px; padding: 4px 0; align-items: flex-start;">
+        <span style="color: #534AB7; font-weight: 500; flex-shrink: 0;">✓</span>
+        <span style="flex: 1;">${text}</span>
       </div>
+    `).join('');
+
+    content.innerHTML = `
+      <p style="font-size: 14px; color: var(--ink-mute); margin: 0 0 12px; line-height: 1.5;">
+        Revisá antes de confirmar. Este cambio es atómico — todo se aplica o nada.
+      </p>
+      <div style="background: #EEEDFE; color: #3C3489; border-radius: 8px; padding: 14px 16px; margin-bottom: 14px; font-size: 13px; line-height: 1.6;">
+        ${itemsHtml}
+      </div>
+      <p style="font-size: 11px; color: var(--ink-mute); text-transform: uppercase; letter-spacing: 0.08em; margin: 0 0 6px; font-weight: 500;">Motivo del cambio (opcional)</p>
+      <textarea id="change-pkg-wizard-reason" rows="2"
+        placeholder="Ej. cliente pidió cambio · solo da 2 días por semana · etc."
+        oninput="changePkgWizardSetReason(this.value)"
+        style="width: 100%; padding: 10px 12px; font-size: 13px; border: 1px solid var(--line); border-radius: 8px; box-sizing: border-box; font-family: inherit; resize: vertical;">${escape(wiz.changeReason || '')}</textarea>
     `;
   }
 
@@ -9563,8 +9619,36 @@ function changePkgWizardSetRefundMethod(method) {
   const wiz = STATE.changePkgWizard;
   if (!wiz) return;
   wiz.refundMethod = method;
-  // No re-render — el radio button ya quedó marcado por el navegador
   updateChangePkgWizardNextEnabled();
+}
+
+function changePkgWizardSetReason(text) {
+  const wiz = STATE.changePkgWizard;
+  if (!wiz) return;
+  wiz.changeReason = text || '';
+}
+
+// Construye el payload exacto que se enviará al backend (Entregable 2E)
+function buildChangePkgPayload() {
+  const wiz = STATE.changePkgWizard;
+  if (!wiz) return null;
+  const newPkg = (STATE.packagesCatalog || []).find(p => p.id === wiz.selectedNewPkgId);
+  const transferredCount = (wiz.pkgUsage?.used || 0) + (wiz.pkgUsage?.transferred || 0);
+  return {
+    p_old_package_id: wiz.pkgId,
+    p_new_package_template_id: wiz.selectedNewPkgId,
+    p_new_package_name: newPkg?.name,
+    p_new_package_sessions: newPkg?.sessions,
+    p_new_package_price: parseFloat(newPkg?.price_pen || 0),
+    p_new_package_validity_days: newPkg?.validity_days,
+    p_transferred_count: transferredCount,
+    p_cancelled_booking_ids: wiz.cancelledBookingIds || [],
+    p_kept_recoverable_ids: wiz.keptRecoverableIds || [],
+    p_discarded_recoverable_ids: wiz.discardedRecoverableIds || [],
+    p_refund_amount: parseFloat(wiz.refundAmount || 0),
+    p_refund_method: wiz.refundMethod || null,
+    p_change_reason: wiz.changeReason || null,
+  };
 }
 
 // Determina si un paso aplica según el estado actual del wizard
@@ -9641,7 +9725,18 @@ function changePkgWizardNext() {
   if (wiz.step < 6) {
     showChangePkgWizardStep(nextChangePkgStep(wiz.step));
   } else {
-    showToast('Confirmación aún no implementada (Entregable 2D)', '');
+    // Paso 6: confirmar (modo PREVIEW · Entregable 2D)
+    // En 2E reemplazamos esto por la llamada real a la RPC change_student_package.
+    const undecidedRecCount = (wiz.activeRecoverables || []).length
+      - (wiz.keptRecoverableIds || []).length
+      - (wiz.discardedRecoverableIds || []).length;
+    if (undecidedRecCount > 0) {
+      showToast('Hay recuperables sin decisión — volvé al paso 4', 'error');
+      return;
+    }
+    const payload = buildChangePkgPayload();
+    console.log('[ChangePkgWizard] Payload listo para enviar:', payload);
+    showToast('✓ Preview OK · payload en consola (ejecución real en 2E)', 'success');
   }
 }
 
