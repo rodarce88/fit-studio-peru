@@ -9142,15 +9142,34 @@ async function openChangePackageWizard(pkgId) {
   ensureChangePkgWizardModal();
   showChangePkgWizardStep(1);
 
-  // Cargar data del paquete vía RPC
+  // Cargar data del paquete vía RPC (en paralelo con el catálogo)
   try {
-    const { data: usage, error } = await sb.rpc('get_package_usage', { p_package_id: pkgId });
-    if (error) throw error;
-    STATE.changePkgWizard.pkgUsage = usage;
-    showChangePkgWizardStep(1); // Re-render con la data ya cargada
+    const [usageRes, catalogRes] = await Promise.all([
+      sb.rpc('get_package_usage', { p_package_id: pkgId }),
+      changePkgWizardLoadCatalog(),
+    ]);
+    if (usageRes.error) throw usageRes.error;
+    STATE.changePkgWizard.pkgUsage = usageRes.data;
+    showChangePkgWizardStep(STATE.changePkgWizard.step); // Re-render
   } catch (e) {
     showToast('Error cargando paquete: ' + (e.message || 'desconocido'), 'error');
     closeChangePkgWizard();
+  }
+}
+
+// Carga del catálogo de paquetes (cache global)
+async function changePkgWizardLoadCatalog() {
+  if (STATE.packagesCatalog && STATE.packagesCatalog.length > 0) return;
+  try {
+    const { data, error } = await sb.from('packages')
+      .select('*')
+      .eq('is_active', true)
+      .order('display_order', { ascending: true });
+    if (error) throw error;
+    STATE.packagesCatalog = data || [];
+  } catch (e) {
+    console.error('Error cargando catálogo de paquetes:', e);
+    STATE.packagesCatalog = [];
   }
 }
 
@@ -9233,6 +9252,10 @@ function showChangePkgWizardStep(step) {
       nextBtn.textContent = 'Siguiente →';
       nextBtn.style.background = '';
     }
+    // Default: habilitado. Cada paso puede deshabilitar después si falta validación.
+    nextBtn.disabled = false;
+    nextBtn.style.opacity = '1';
+    nextBtn.style.cursor = 'pointer';
   }
 
   // Render del paso
@@ -9281,6 +9304,67 @@ function showChangePkgWizardStep(step) {
         </div>
       </div>
     `;
+  } else if (step === 2) {
+    // Paso 2: elegir el paquete nuevo
+    if (!STATE.packagesCatalog) {
+      content.innerHTML = `<div style="padding: 40px; text-align: center; color: var(--ink-mute); font-size: 13px;">Cargando catálogo…</div>`;
+      return;
+    }
+    const catalog = STATE.packagesCatalog;
+    const currentTemplateId = u?.package_template_id;
+    const selectedId = wiz.selectedNewPkgId;
+
+    const cards = catalog.map(p => {
+      const isSelected = (p.id === selectedId);
+      const isCurrent = (p.id === currentTemplateId);
+      const price = parseFloat(p.price_pen || 0).toFixed(0);
+
+      return `
+        <div onclick="changePkgWizardSelectPkg('${p.id}')"
+          style="
+            border: ${isSelected ? '2px' : '1px'} solid ${isSelected ? 'var(--fit-purple)' : 'var(--line)'};
+            background: ${isSelected ? '#EEEDFE' : 'white'};
+            border-radius: 8px;
+            padding: ${isSelected ? '11px 13px' : '12px 14px'};
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            transition: all 0.15s;
+            margin-bottom: 8px;
+          ">
+          <div style="
+            width: 18px; height: 18px; border-radius: 50%; flex-shrink: 0;
+            ${isSelected
+              ? 'background: var(--fit-purple); display: flex; align-items: center; justify-content: center;'
+              : 'border: 1.5px solid var(--line); background: white;'}
+          ">
+            ${isSelected ? '<span style="color: white; font-size: 11px; line-height: 1;">✓</span>' : ''}
+          </div>
+          <div style="flex: 1; display: flex; justify-content: space-between; align-items: baseline; gap: 12px; min-width: 0;">
+            <div style="flex: 1; min-width: 0;">
+              <div style="font-weight: 500; font-size: 14px; color: ${isSelected ? '#26215C' : 'var(--ink)'};">
+                ${escape(p.name)}${isCurrent ? ` <span style="font-size: 10px; color: var(--ink-mute); font-weight: 400;">(actual)</span>` : ''}
+              </div>
+              <div style="font-size: 12px; color: ${isSelected ? '#3C3489' : 'var(--ink-mute)'}; margin-top: 3px;">
+                ${p.sessions} clase${p.sessions === 1 ? '' : 's'} · vence en ${p.validity_days} días${isSelected ? ' · seleccionado' : ''}
+              </div>
+            </div>
+            <div style="font-weight: 500; font-size: 15px; color: ${isSelected ? '#26215C' : 'var(--ink)'}; flex-shrink: 0;">S/ ${price}</div>
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    content.innerHTML = `
+      <p style="font-size: 14px; color: var(--ink-mute); margin: 0 0 14px; line-height: 1.5;">
+        ¿Qué paquete nuevo quiere la alumna?
+      </p>
+      ${cards}
+    `;
+
+    // Habilitar/deshabilitar botón "Siguiente" según si hay selección
+    updateChangePkgWizardNextEnabled();
   } else {
     // Pasos 2-6 son placeholders en el Entregable 2A
     content.innerHTML = `
@@ -9292,9 +9376,36 @@ function showChangePkgWizardStep(step) {
   }
 }
 
+function changePkgWizardSelectPkg(newPkgId) {
+  if (!STATE.changePkgWizard) return;
+  STATE.changePkgWizard.selectedNewPkgId = newPkgId;
+  showChangePkgWizardStep(STATE.changePkgWizard.step); // re-render
+}
+
+function updateChangePkgWizardNextEnabled() {
+  const wiz = STATE.changePkgWizard;
+  const nextBtn = document.getElementById('change-pkg-wizard-next');
+  if (!nextBtn || !wiz) return;
+
+  let enabled = true;
+  // Validación por paso
+  if (wiz.step === 2 && !wiz.selectedNewPkgId) enabled = false;
+
+  nextBtn.disabled = !enabled;
+  nextBtn.style.opacity = enabled ? '1' : '0.4';
+  nextBtn.style.cursor = enabled ? 'pointer' : 'not-allowed';
+}
+
 function changePkgWizardNext() {
   const wiz = STATE.changePkgWizard;
   if (!wiz) return;
+
+  // Validaciones específicas por paso antes de avanzar
+  if (wiz.step === 2 && !wiz.selectedNewPkgId) {
+    showToast('Seleccioná un paquete nuevo', 'error');
+    return;
+  }
+
   if (wiz.step < 6) {
     showChangePkgWizardStep(wiz.step + 1);
   } else {
