@@ -11909,22 +11909,29 @@ async function instructorConfirmInvite() {
   try {
     const ctx = STATE.instAddCtx;
 
-    // Construir payload — agregar referral_source si existe (a las notas si la columna no existe)
-    const payload = {
-      first_name,
-      last_name: last_name || null,
-      phone,
-      location_id: ctx.locationId,
-      modality: 'flexible',
-      student_status: 'trial',
-    };
-    // El "Cómo nos conoció" lo guardamos en notes/medical_notes? Mejor en una columna específica si existe.
-    // Para ser conservador: lo metemos en medical_notes como "Referida por: X" si la coordinadora quiere verlo
-    // (no es ideal pero no requiere migración). Si en el futuro hay una columna referral_source, migramos.
-    if (referral) payload.medical_notes = `Referida por: ${referral}`;
+    // Para evitar problemas con RLS, usamos una RPC con SECURITY DEFINER
+    // que crea el row internamente verificando que el caller sea instructor activo.
+    const referralFinal = referral ? `Referida por: ${referral}` : null;
 
-    const { data: stud, error: stErr } = await sb.from('students').insert(payload).select().single();
-    if (stErr) throw stErr;
+    const { data: newStudentId, error: rpcErr } = await sb.rpc('create_trial_student', {
+      p_first_name: first_name,
+      p_last_name: last_name || null,
+      p_phone: phone,
+      p_location_id: ctx.locationId,
+      p_referral_source: referralFinal,
+    });
+    if (rpcErr) throw rpcErr;
+
+    // Re-cargar el row recién creado (incluyendo todos los campos)
+    const { data: stud, error: fetchErr } = await sb.from('students')
+      .select('*').eq('id', newStudentId).single();
+    if (fetchErr) throw fetchErr;
+
+    // Si hay referral, lo guardamos en medical_notes (workaround mientras no hay columna referral)
+    if (referralFinal && !stud.medical_notes) {
+      await sb.from('students').update({ medical_notes: referralFinal }).eq('id', newStudentId);
+      stud.medical_notes = referralFinal;
+    }
 
     // Cache local
     STATE.students.push(stud);
