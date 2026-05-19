@@ -235,9 +235,12 @@
   /* TIMELINE */
   .layout-grid { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 24px; }
   .timeline-card, .panel, .table-card { background: white; border-radius: var(--radius-lg); border: 1px solid var(--line); overflow: hidden; box-shadow: var(--shadow-sm); }
-  /* Cuando contiene el layout de Mi día, permitimos overflow visible para que el sidebar sticky funcione. */
+  /* Cuando contiene el layout de Mi día: overflow visible (para que sticky funcione) + header y sidebar sticky */
   .timeline-card:has(.mi-dia-layout) { overflow: visible; }
-  .timeline-card:has(.mi-dia-layout) .timeline-header { border-top-left-radius: var(--radius-lg); border-top-right-radius: var(--radius-lg); }
+  .timeline-card:has(.mi-dia-layout) .timeline-header { 
+    position: sticky; top: var(--topbar-h); z-index: 10;
+    border-top-left-radius: var(--radius-lg); border-top-right-radius: var(--radius-lg);
+  }
   .timeline-card:has(.mi-dia-layout) .timeline-body { border-bottom-left-radius: var(--radius-lg); border-bottom-right-radius: var(--radius-lg); }
   .timeline-header { padding: 22px 26px; border-bottom: 1px solid var(--line-soft); display: flex; align-items: center; justify-content: space-between; background: var(--fit-cream); }
   .timeline-title { display: flex; align-items: baseline; gap: 10px; }
@@ -255,7 +258,14 @@
 
   /* MI DÍA — layout 2 columnas con sidebar de horas */
   .mi-dia-layout { display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: 14px; align-items: start; }
-  .mi-dia-sidebar { position: sticky; top: 16px; align-self: start; max-height: calc(100vh - 32px); overflow-y: auto; padding-top: 4px; padding-right: 2px; }
+  .mi-dia-sidebar { 
+    position: sticky; 
+    top: calc(var(--topbar-h) + var(--mi-dia-header-h, 84px) + 12px);
+    align-self: start; 
+    max-height: calc(100vh - var(--topbar-h) - var(--mi-dia-header-h, 84px) - 32px); 
+    overflow-y: auto; 
+    padding-top: 4px; padding-right: 2px;
+  }
   .mi-dia-sidebar-line { position: absolute; left: 10px; top: 18px; bottom: 18px; width: 1px; background: var(--line); z-index: 0; pointer-events: none; }
   .mi-dia-sidebar-list { position: relative; z-index: 1; display: flex; flex-direction: column; gap: 2px; }
   .mi-dia-hour-item { padding: 6px 6px 8px 6px; cursor: pointer; border-radius: 6px; transition: background 0.15s; }
@@ -276,7 +286,7 @@
   .mi-dia-hour-item.is-past .mi-dia-hour-label { opacity: 0.5; }
   .mi-dia-hour-item.is-past .mi-dia-hour-count { opacity: 0.5; }
   .mi-dia-cards-stack { display: flex; flex-direction: column; gap: 10px; }
-  .mi-dia-cards-stack .class-block { margin-bottom: 0; }
+  .mi-dia-cards-stack .class-block { margin-bottom: 0; scroll-margin-top: calc(var(--topbar-h) + var(--mi-dia-header-h, 84px) + 12px); }
   .mi-dia-cards-stack .class-block.is-open { border-color: var(--fit-purple); }
   .class-block { border: 1px solid var(--line-soft); border-radius: var(--radius-md); margin-bottom: 12px; transition: all 0.2s; background: white; }
   .class-block:hover { border-color: var(--fit-purple-soft); box-shadow: var(--shadow-md); }
@@ -4347,13 +4357,35 @@ function renderTimeline() {
     </div>
   `;
 
-  // Scroll suave a la card expandida
+  // Medir altura real del timeline-header y aplicarla como CSS var para que el
+  // sidebar sticky calcule su `top` correctamente (queda pegado justo debajo del header).
+  updateMiDiaHeaderHeight();
+
+  // Scroll suave a la card expandida (block:'start' respeta scroll-margin-top, que ya
+  // tiene en cuenta el topbar fijo + el timeline-header sticky para no quedar tapada)
   if (expandedHour !== null) {
     setTimeout(() => {
       const card = body.querySelector(`.class-block[data-hour="${expandedHour}"]`);
-      if (card) card.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      if (card) card.scrollIntoView({ block: 'start', behavior: 'smooth' });
     }, 50);
   }
+}
+
+// Mide la altura del timeline-header y la expone como --mi-dia-header-h.
+// Se llama después de cada renderTimeline y en window resize.
+function updateMiDiaHeaderHeight() {
+  requestAnimationFrame(() => {
+    const header = document.querySelector('.timeline-card .timeline-header');
+    if (header) {
+      const h = header.offsetHeight;
+      document.documentElement.style.setProperty('--mi-dia-header-h', h + 'px');
+    }
+  });
+}
+if (typeof window !== 'undefined') {
+  window.addEventListener('resize', () => {
+    if (typeof updateMiDiaHeaderHeight === 'function') updateMiDiaHeaderHeight();
+  });
 }
 
 // Click en una hora del sidebar → expandir esa card y centrar scroll.
