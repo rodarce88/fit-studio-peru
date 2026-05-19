@@ -590,6 +590,21 @@
   .inst-stud-status.is-danger { color: #791F1F; }
   .inst-stud-status.is-confirmed { color: var(--good); font-weight: 600; }
 
+  /* Tag visible "Prueba" para alumnas trial — más prominente que un alert icon */
+  .inst-stud-trial-tag {
+    display: inline-block;
+    font-size: 9.5px;
+    padding: 2px 7px;
+    border-radius: 999px;
+    background: #EEEDFE;
+    color: #3C3489;
+    font-weight: 700;
+    letter-spacing: 0.6px;
+    text-transform: uppercase;
+    white-space: nowrap;
+    vertical-align: middle;
+  }
+
   /* Check button inline */
   .inst-check-btn { width: 36px; height: 36px; border-radius: 50%; border: 1.5px solid var(--line); background: white; display: flex; align-items: center; justify-content: center; font-size: 14px; color: var(--ink-mute); cursor: pointer; flex-shrink: 0; transition: all 0.15s; position: relative; }
   .inst-check-btn:hover { border-color: var(--good); color: var(--good); }
@@ -10460,13 +10475,11 @@ function renderInstructorStudentRow(item, classCtx) {
   const rowKlass = st ? st.klass : (isConfirmedByCoord ? 'is-confirmed' : '');
 
   const isPending = att?.pending_payment_at;
-  const isTrial = s.student_status === 'trial';
+  const isTrial = s.student_status === 'trial' || s.modality === 'trial';
   const isFlex = s.modality === 'flexible';
 
-  // Tag
-  const tag = isFlex
-    ? '<span class="inst-stud-tag is-flex">Flex</span>'
-    : (s.modality === 'fixed' ? '<span class="inst-stud-tag">Fijo</span>' : '');
+  // Tag de modalidad/estado — visible junto al nombre
+  const trialTag = isTrial ? '<span class="inst-stud-trial-tag">Prueba</span>' : '';
 
   // Status / meta (solo se muestra si tiene marca; si "sin marcar" no se muestra texto repetitivo)
   let statusLine = '';
@@ -10490,7 +10503,6 @@ function renderInstructorStudentRow(item, classCtx) {
   const alertIcons = [
     hasHealthAlert ? '<span class="inst-stud-alert is-health" title="Tiene notas de salud">⚠</span>' : '',
     hasCoordNote ? '<span class="inst-stud-alert is-note" title="Tiene nota del coordinador">📝</span>' : '',
-    isTrial ? '<span class="inst-stud-alert is-note" title="Alumna invitada / trial" style="background:#EEEDFE; color:#3C3489;">★</span>' : '',
     isPending ? '<span class="inst-stud-alert is-note" title="Pago pendiente" style="background:var(--warn-soft); color:#633806;">$</span>' : '',
   ].filter(Boolean).join('');
 
@@ -10507,6 +10519,7 @@ function renderInstructorStudentRow(item, classCtx) {
         <div class="inst-stud-info">
           <div class="inst-stud-name">
             ${escape(s.first_name)} ${escape(s.last_name || '')}
+            ${trialTag}
             ${alertIcons}
           </div>
           ${statusLine}
@@ -12423,15 +12436,26 @@ async function saveAssignPackage() {
   }
 
   // Si la alumna era trial, promoverla a active (ahora tiene paquete)
+  // Cubrimos ambos campos: student_status y modality (porque la coord puede haberla
+  // creado con modality='trial' o student_status='trial' según el flujo)
   const student = STATE.students.find(s => s.id === studentId);
-  if (student && student.student_status === 'trial') {
-    await sb.from('students').update({ student_status: 'active' }).eq('id', studentId);
-    student.student_status = 'active';
+  let wasConverted = false;
+  if (student) {
+    const updates = {};
+    if (student.student_status === 'trial') updates.student_status = 'active';
+    if (student.modality === 'trial') updates.modality = 'flexible'; // default flexible
+    if (Object.keys(updates).length > 0) {
+      await sb.from('students').update(updates).eq('id', studentId);
+      Object.assign(student, updates);
+      wasConverted = true;
+    }
   }
 
-  const msg = shouldImpute
-    ? `✓ Paquete asignado · ${initialUsed} clase${initialUsed === 1 ? '' : 's'} imputada${initialUsed === 1 ? '' : 's'}`
-    : '✓ Paquete asignado';
+  const msg = wasConverted
+    ? '✓ Paquete asignado · Convertida de Prueba a alumna activa'
+    : (shouldImpute
+        ? `✓ Paquete asignado · ${initialUsed} clase${initialUsed === 1 ? '' : 's'} imputada${initialUsed === 1 ? '' : 's'}`
+        : '✓ Paquete asignado');
   showToast(msg, 'success');
 
   // Log
