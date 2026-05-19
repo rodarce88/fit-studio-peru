@@ -8092,15 +8092,25 @@ async function recalcPackageCounters(studentId) {
 // ============================================
 // PAQUETE ACTIVO (FIFO): el más antiguo con clases libres
 // ============================================
+// Determina si un paquete está "vivo" — disponible para uso actual.
+// Un paquete está vivo si:
+//   - is_active = true (puede ser undefined en legacy → considerar vivo)
+//   - status es 'active' o null/undefined (no 'changed', 'cancelled', 'expired')
+//   - is_frozen = false
+//   - tiene clases libres (used < total)
+function isPkgAlive(p) {
+  if (!p) return false;
+  if (p.is_active === false) return false;
+  if (p.status && p.status !== 'active') return false;
+  if (p.is_frozen) return false;
+  const used = p.classes_used || 0;
+  const total = p.classes_total || 0;
+  return used < total;
+}
+
 function getActivePackage(packages) {
   if (!packages || packages.length === 0) return null;
-  // Filtrar paquetes vivos (no congelados, con clases libres)
-  const alive = packages.filter(p => {
-    if (p.is_frozen) return false;
-    const used = p.classes_used || 0;
-    const total = p.classes_total || 0;
-    return used < total;
-  });
+  const alive = packages.filter(isPkgAlive);
   if (alive.length === 0) return null;
   // FIFO: el más antiguo primero. Desempate por created_at para orden estable.
   alive.sort((a, b) => {
@@ -8120,10 +8130,7 @@ function getUpcomingPackages(packages) {
   if (!packages || !active) return [];
   return packages.filter(p => {
     if (p.id === active.id) return false;
-    if (p.is_frozen) return false;
-    const used = p.classes_used || 0;
-    const total = p.classes_total || 0;
-    return used < total;
+    return isPkgAlive(p);
   }).sort((a, b) => {
     const da = a.purchase_date || a.start_date || '1900-01-01';
     const db = b.purchase_date || b.start_date || '1900-01-01';
@@ -8131,13 +8138,13 @@ function getUpcomingPackages(packages) {
   });
 }
 
-// Devuelve los paquetes completados (sin clases libres)
+// Devuelve los paquetes completados (sin clases libres) o cerrados (changed/cancelled/expired)
 function getCompletedPackages(packages) {
   if (!packages) return [];
   return packages.filter(p => {
-    const used = p.classes_used || 0;
-    const total = p.classes_total || 0;
-    return used >= total && total > 0;
+    if (isPkgAlive(p)) return false;
+    if (p.is_frozen) return false;  // congelados van aparte
+    return true;
   }).sort((a, b) => {
     const da = b.purchase_date || b.start_date || '1900-01-01';
     const db = a.purchase_date || a.start_date || '1900-01-01';
@@ -8149,7 +8156,7 @@ function getCompletedPackages(packages) {
 function totalRemainingClasses(packages) {
   if (!packages) return 0;
   return packages.reduce((sum, p) => {
-    if (p.is_frozen) return sum;
+    if (!isPkgAlive(p)) return sum;
     const used = p.classes_used || 0;
     const total = p.classes_total || 0;
     return sum + Math.max(0, total - used);
@@ -15017,11 +15024,16 @@ async function openStudentDetail(id) {
         .select('*, class_sessions!attendance_session_id_fkey(id, session_date, hour, location_id, is_cancelled, instructor_id, actual_instructor_id)')
         .eq('student_id', id)
         .order('marked_at', { ascending: false })
-        .then(r => ({ attendances: r.data || [] }))
+        .then(r => ({ attendances: r.data || [] })),
+      sb.from('package_changes')
+        .select('*')
+        .eq('student_id', id)
+        .order('executed_at', { ascending: false })
+        .then(r => ({ packageChanges: r.data || [] }))
     );
   }
   const results = await Promise.all(tasks);
-  STATE.studentDetailData = Object.assign({ bookings: [], payments: [], packages: [], attendances: [] }, ...results);
+  STATE.studentDetailData = Object.assign({ bookings: [], payments: [], packages: [], attendances: [], packageChanges: [] }, ...results);
 
   // Auto-cleanup al abrir el detalle: vincula attendances huérfanas y corrige flags inconsistentes
   if (isOnline) {
@@ -15145,6 +15157,107 @@ function renderStudentDetail() {
 function setStudentDetailTab(tab) {
   STATE.studentDetailTab = tab;
   renderStudentDetail();
+}
+
+// Toggle del detalle expandible de un paquete cambiado en el resumen
+function toggleExpandedPkgChange(pkgId) {
+  STATE.expandedPkgChangeId = (STATE.expandedPkgChangeId === pkgId) ? null : pkgId;
+  renderStudentDetail();
+}
+
+// Render del "ticket de auditoría" de un paquete cambiado
+// Lee la fila correspondiente en STATE.studentDetailData.packageChanges
+function renderPkgChangeDetail(pkg) {
+  const data = STATE.studentDetailData || {};
+  const changes = data.packageChanges || [];
+  // Buscar el package_change donde este paquete es el OLD (es decir, fue reemplazado)
+  const ch = changes.find(c => c.old_package_id === pkg.id);
+  if (!ch) {
+    return `<div style="padding: 14px; background: white; border: 1px solid var(--line); border-top: none; border-radius: 0 0 6px 6px; font-size: 12px; color: var(--ink-mute);">Sin registro de auditoría para este cambio.</div>`;
+  }
+
+  // Datos del paquete nuevo (lo que reemplazó al actual)
+  const newPkg = (data.packages || []).find(p => p.id === ch.new_package_id);
+  const newPkgName = newPkg?.packages?.name || `Paquete ${newPkg?.classes_total || ''}`;
+  const oldPkgName = pkg.packages?.name || `Paquete ${pkg.classes_total || ''}`;
+
+  // Resolver nombre del coord
+  const executedByUser = (STATE.users || []).find(u => u.id === ch.executed_by);
+  const executedByName = executedByUser?.full_name || executedByUser?.email || '—';
+
+  // Resolver bookings cancelados/mantenidos (mostrar fecha + hora)
+  const fmtBookingList = (ids) => {
+    if (!ids || ids.length === 0) return '—';
+    const lines = ids.map(id => {
+      const b = (data.bookings || []).find(x => x.id === id);
+      if (!b || !b.class_sessions) return null;
+      return `${formatDate(b.class_sessions.session_date)} · ${formatHour(b.class_sessions.hour)}`;
+    }).filter(Boolean);
+    return lines.length > 0 ? lines.join(', ') : `${ids.length} clase${ids.length === 1 ? '' : 's'}`;
+  };
+
+  const cancelledIds = ch.cancelled_booking_ids || [];
+  const keptIds = ch.kept_booking_ids || [];
+  const keptRecIds = ch.kept_recoverable_ids || [];
+  const discardedRecIds = ch.discarded_recoverable_ids || [];
+  const refundAmt = parseFloat(ch.refund_amount || 0);
+  const hasFinancial = Math.abs(refundAmt) > 0.01;
+  const isRefund = refundAmt > 0;
+  const methodLabels = { cash: 'efectivo', transfer: 'transferencia', yape: 'Yape', plin: 'Plin' };
+
+  const rows = [];
+  rows.push({ label: 'Reemplazado por', value: `<strong style="font-weight: 500;">${escape(newPkgName)}</strong>` });
+  if ((ch.transferred_attendances_count || 0) > 0) {
+    rows.push({ label: 'Asistencias transferidas', value: `${ch.transferred_attendances_count} ${ch.transferred_attendances_count === 1 ? 'clase' : 'clases'}` });
+  }
+  if (cancelledIds.length > 0) {
+    rows.push({ label: 'Bookings cancelados', value: `${cancelledIds.length} · ${escape(fmtBookingList(cancelledIds))}` });
+  }
+  if (keptIds.length > 0) {
+    rows.push({ label: 'Bookings mantenidos', value: `${keptIds.length} · ${escape(fmtBookingList(keptIds))}` });
+  }
+  if (keptRecIds.length > 0) {
+    rows.push({ label: 'Recuperables conservadas', value: `${keptRecIds.length}` });
+  }
+  if (discardedRecIds.length > 0) {
+    rows.push({ label: 'Recuperables descartadas', value: `${discardedRecIds.length}` });
+  }
+  if (parseFloat(ch.original_payment_amount || 0) > 0) {
+    rows.push({ label: 'Pago original', value: `S/ ${parseFloat(ch.original_payment_amount).toFixed(2)}` });
+  }
+  if (hasFinancial) {
+    const methodLabel = methodLabels[ch.refund_method] || ch.refund_method || '?';
+    const amt = Math.abs(refundAmt).toFixed(2);
+    rows.push({
+      label: isRefund ? 'Devolución registrada' : 'Cobro de diferencia',
+      value: `<span style="color: ${isRefund ? '#27500A' : '#993C1D'}; font-weight: 500;">S/ ${amt}</span> · ${methodLabel}`
+    });
+  }
+  if (ch.change_reason) {
+    rows.push({ label: 'Motivo', value: `<em style="color: var(--ink-soft);">${escape(ch.change_reason)}</em>` });
+  }
+
+  return `
+    <div style="padding: 14px 16px; background: #FDFCFB; border: 1px solid var(--line); border-top: none; border-radius: 0 0 6px 6px;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+        <p style="font-weight: 500; font-size: 13px; margin: 0; color: var(--ink);">Detalle del cambio</p>
+        <p style="font-size: 11px; color: var(--ink-mute); margin: 0;">${formatDate(ch.executed_at)} · ${escape(executedByName)}</p>
+      </div>
+      <div style="display: flex; align-items: center; gap: 8px; background: #EEEDFE; padding: 10px 12px; border-radius: 6px; margin-bottom: 12px; font-size: 12px;">
+        <span style="color: var(--ink-mute); text-decoration: line-through;">${escape(oldPkgName)}</span>
+        <span style="color: var(--fit-purple);">→</span>
+        <span style="font-weight: 500; color: var(--fit-purple-deep);">${escape(newPkgName)}</span>
+      </div>
+      <table style="width: 100%; font-size: 12px; border-collapse: collapse;">
+        ${rows.map((r, i) => `
+          <tr>
+            <td style="padding: 6px 0; color: var(--ink-mute); width: 38%; ${i > 0 ? 'border-top: 1px solid var(--line-soft);' : ''}">${r.label}</td>
+            <td style="padding: 6px 0; color: var(--ink); ${i > 0 ? 'border-top: 1px solid var(--line-soft);' : ''}">${r.value}</td>
+          </tr>
+        `).join('')}
+      </table>
+    </div>
+  `;
 }
 
 function openAssignPackageFromDetail(studentId) {
@@ -15293,6 +15406,9 @@ function renderDetailSummary(stud) {
     const used = p.classes_used || 0;
     const total = p.classes_total || 0;
     if (p.is_frozen) return { key: 'frozen', label: '❄ Congelado', color: '#2563EB', bgSoft: '#DBEAFE' };
+    if (p.status === 'changed') return { key: 'changed', label: '⇄ Cambiado', color: '#5F5E5A', bgSoft: '#F1EFE8' };
+    if (p.status === 'cancelled') return { key: 'cancelled', label: '✕ Cancelado', color: '#791F1F', bgSoft: '#FCEBEB' };
+    if (p.status === 'expired') return { key: 'expired', label: '⏱ Vencido', color: '#5F5E5A', bgSoft: '#F1EFE8' };
     if (used >= total && total > 0) return { key: 'completed', label: '🏁 Completado', color: '#3B6D11', bgSoft: '#EAF3DE' };
     if (activePkg && p.id === activePkg.id) return { key: 'active', label: '★ Activo', color: '#7c3aed', bgSoft: 'var(--fit-lavender-pale)' };
     return { key: 'upcoming', label: 'Próximo', color: '#92400E', bgSoft: '#FEF7E6' };
@@ -15350,6 +15466,19 @@ function renderDetailSummary(stud) {
         <div style="margin-top: 10px; padding: 8px 12px; background: #DBEAFE; border-radius: 6px; font-size: 12px; color: #1E40AF;">
           ${escape(p.freeze_reason || 'Paquete congelado')}
           <button class="btn btn-ghost" onclick="reactivatePackage('${p.id}')" style="margin-left: 8px; padding: 3px 10px; font-size: 11px;">Reactivar</button>
+        </div>
+      `;
+    } else if (status.key === 'changed') {
+      // Botón para expandir el detalle del cambio (ticket de auditoría)
+      const isExpanded = STATE.expandedPkgChangeId === p.id;
+      actionsBlock = `
+        <div style="margin-top: 10px;">
+          <button onclick="toggleExpandedPkgChange('${p.id}')"
+            style="display: flex; align-items: center; justify-content: space-between; width: 100%; padding: 8px 12px; background: #F1EFE8; border: 1px solid var(--line); border-radius: 6px; cursor: pointer; font-size: 12px; color: var(--ink-soft);">
+            <span>${isExpanded ? 'Ocultar' : 'Ver'} detalle del cambio</span>
+            <span style="font-size: 14px; color: var(--ink-mute);">${isExpanded ? '▴' : '▾'}</span>
+          </button>
+          ${isExpanded ? renderPkgChangeDetail(p) : ''}
         </div>
       `;
     }
