@@ -6916,8 +6916,8 @@ async function saveStudent() {
 
   const data = {
     location_id: STATE.currentLocationId,
-    first_name: f('f-first-name').value.trim(),
-    last_name: f('f-last-name').value.trim() || null,
+    first_name: toTitleCase(f('f-first-name').value.trim()),
+    last_name: toTitleCase(f('f-last-name').value.trim()) || null,
     email: f('f-email').value.trim() || null,
     phone: readPhoneFieldValue('f'),
     document_type: f('f-doc-type').value || null,
@@ -8931,6 +8931,13 @@ function escape(s) {
   const div = document.createElement('div');
   div.textContent = s;
   return div.innerHTML;
+}
+
+// Capitaliza la primera letra de cada palabra: "mariana garcía-lópez" → "Mariana García-López"
+// Soporta acentos, ñ, guiones, apóstrofes. NO toca palabras que ya tienen mayúsculas internas (ej "McDonald").
+function toTitleCase(s) {
+  if (!s || typeof s !== 'string') return s;
+  return s.trim().toLowerCase().replace(/(^|[\s\-'"])([\p{L}])/gu, (_, sep, ch) => sep + ch.toUpperCase());
 }
 
 // ============================================
@@ -11891,8 +11898,9 @@ async function instructorConfirmAddCaseC(studentId) {
 
 async function instructorConfirmInvite() {
   if (!isOnline) { showToast('Sin conexión', 'error'); return; }
-  const first_name = document.getElementById('invite-first-name').value.trim();
-  const last_name = document.getElementById('invite-last-name').value.trim();
+  // Capitalizar nombres automáticamente: "mariana barreda" → "Mariana Barreda"
+  const first_name = toTitleCase(document.getElementById('invite-first-name').value.trim());
+  const last_name = toTitleCase(document.getElementById('invite-last-name').value.trim());
   const phone = readPhoneFieldValue('invite');
   const referral = document.getElementById('invite-referral').value.trim();
   if (!first_name) { showToast('Falta el nombre', 'error'); return; }
