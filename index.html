@@ -239,13 +239,41 @@
   .timeline-title { display: flex; align-items: baseline; gap: 10px; }
   .timeline-title h2 { font-family: var(--display); font-size: 24px; font-weight: 400; }
   .timeline-title em { font-style: italic; color: var(--fit-purple); }
-  .day-nav { display: flex; align-items: center; gap: 4px; padding: 4px; background: white; border-radius: var(--radius-pill); border: 1px solid var(--line); }
+  .day-nav { display: flex; align-items: center; gap: 6px; padding: 4px; background: white; border-radius: var(--radius-pill); border: 1px solid var(--line); }
   .day-nav button { padding: 6px 14px; border-radius: var(--radius-pill); font-size: 12px; color: var(--ink-mute); font-weight: 500; transition: all 0.2s; }
   .day-nav button.is-active { background: var(--fit-purple); color: white; }
   .day-nav button:hover:not(.is-active) { color: var(--fit-purple); }
-  .day-nav .nav-arrow { padding: 6px 10px; }
+  .day-nav .nav-arrow { padding: 0; width: 36px; height: 36px; display: inline-flex; align-items: center; justify-content: center; color: var(--ink-soft); }
+  .day-nav .nav-arrow:hover { background: var(--fit-lavender-pale); color: var(--fit-purple); }
+  .day-nav .nav-arrow svg { display: block; }
 
   .timeline-body { padding: 12px 16px 20px; }
+
+  /* MI DÍA — layout 2 columnas con sidebar de horas */
+  .mi-dia-layout { display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: 14px; align-items: start; }
+  .mi-dia-sidebar { position: relative; padding-top: 4px; }
+  .mi-dia-sidebar-line { position: absolute; left: 10px; top: 18px; bottom: 18px; width: 1px; background: var(--line); z-index: 0; pointer-events: none; }
+  .mi-dia-sidebar-list { position: relative; z-index: 1; display: flex; flex-direction: column; gap: 2px; }
+  .mi-dia-hour-item { padding: 6px 6px 8px 6px; cursor: pointer; border-radius: 6px; transition: background 0.15s; }
+  .mi-dia-hour-item:hover { background: rgba(238, 237, 254, 0.5); }
+  .mi-dia-hour-top { display: flex; align-items: center; gap: 8px; }
+  .mi-dia-hour-dot { width: 8px; height: 8px; border-radius: 50%; background: white; border: 1px solid var(--ink-faint); flex-shrink: 0; transition: all 0.15s; }
+  .mi-dia-hour-label { font-size: 12.5px; color: var(--ink-mute); font-weight: 500; font-variant-numeric: tabular-nums; flex: 1; transition: color 0.15s; }
+  .mi-dia-hour-count { font-size: 11px; color: var(--ink-mute); font-variant-numeric: tabular-nums; transition: color 0.15s; }
+  .mi-dia-hour-bar-wrap { margin-top: 5px; padding-left: 16px; }
+  .mi-dia-hour-bar-track { height: 3px; background: var(--line); border-radius: 2px; overflow: hidden; }
+  .mi-dia-hour-bar-fill { height: 100%; border-radius: 2px; transition: width 0.2s; }
+  .mi-dia-hour-item:hover .mi-dia-hour-dot { border-color: var(--fit-purple); }
+  .mi-dia-hour-item:hover .mi-dia-hour-label { color: var(--fit-purple-deep, var(--fit-purple)); }
+  .mi-dia-hour-item.is-active { background: var(--fit-lavender-pale); }
+  .mi-dia-hour-item.is-active .mi-dia-hour-dot { background: var(--fit-purple); border-color: var(--fit-purple); width: 10px; height: 10px; box-shadow: 0 0 0 3px rgba(83, 74, 183, 0.2); }
+  .mi-dia-hour-item.is-active .mi-dia-hour-label { color: var(--fit-purple-deep, var(--fit-purple)); }
+  .mi-dia-hour-item.is-active .mi-dia-hour-count { color: var(--fit-purple-deep, var(--fit-purple)); font-weight: 500; }
+  .mi-dia-hour-item.is-past .mi-dia-hour-label { opacity: 0.5; }
+  .mi-dia-hour-item.is-past .mi-dia-hour-count { opacity: 0.5; }
+  .mi-dia-cards-stack { display: flex; flex-direction: column; gap: 10px; }
+  .mi-dia-cards-stack .class-block { margin-bottom: 0; }
+  .mi-dia-cards-stack .class-block.is-open { border-color: var(--fit-purple); }
   .class-block { border: 1px solid var(--line-soft); border-radius: var(--radius-md); margin-bottom: 12px; transition: all 0.2s; background: white; }
   .class-block:hover { border-color: var(--fit-purple-soft); box-shadow: var(--shadow-md); }
   .class-block.is-current { border-color: var(--fit-purple); border-width: 2px; background: var(--fit-lavender-pale); }
@@ -1875,9 +1903,13 @@
             <h2>Clases de <em id="timeline-day-title">hoy</em></h2>
           </div>
           <div class="day-nav">
-            <button class="nav-arrow" onclick="changeDay(-1)">‹</button>
+            <button class="nav-arrow" onclick="changeDay(-1)" aria-label="Día anterior" title="Día anterior">
+              <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>
+            </button>
             <button id="day-today-btn" class="is-active" onclick="goToday()">Hoy</button>
-            <button class="nav-arrow" onclick="changeDay(1)">›</button>
+            <button class="nav-arrow" onclick="changeDay(1)" aria-label="Día siguiente" title="Día siguiente">
+              <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg>
+            </button>
           </div>
         </div>
         <div class="timeline-body" id="timeline-body">
@@ -2965,6 +2997,7 @@ const STATE = {
   cellModalCtx: null,            // {locationId, date (Date), hour}
   assignCtx: null,               // contexto del wizard de asignar alumno
   showPastHours: false,          // mostrar clases anteriores a la actual (filtro temporal en Mi día)
+  miDiaExpandedHour: null,       // hora actualmente expandida en "Mi día" (null = ninguna; null + currentHour → expande hora actual)
 };
 
 // ============================================
@@ -4081,23 +4114,6 @@ function renderTimeline() {
   const loc = getCurrentLocation();
   if (!loc) { body.innerHTML = ''; return; }
 
-  // Guardar qué clases (por hora) estaban abiertas antes de re-renderizar
-  const openHours = new Set();
-  body.querySelectorAll('.class-block.is-open').forEach(block => {
-    const timeEl = block.querySelector('.class-time');
-    if (timeEl) {
-      // Extraer hora del texto (ej "6am", "10am", "5pm")
-      const match = timeEl.textContent.trim().match(/(\d+)\s*(am|pm)/i);
-      if (match) {
-        let h = parseInt(match[1]);
-        const ap = match[2].toLowerCase();
-        if (ap === 'pm' && h !== 12) h += 12;
-        if (ap === 'am' && h === 12) h = 0;
-        openHours.add(h);
-      }
-    }
-  });
-
   const dow = STATE.currentDate.getDay();
   const days = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
   const monthsShort = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
@@ -4115,19 +4131,14 @@ function renderTimeline() {
   else titleText = `${dayLabel} ${dateLabel}`;
   document.getElementById('timeline-day-title').textContent = titleText;
 
-  // Determine hours based on day of week
+  // Hours del día según día de la semana
   const isSunday = dow === 0;
   const isSaturday = dow === 6;
   let hours = [];
-  if (isSunday) {
-    hours = [8, 9]; // Santa Cruz dom 8-10
-  } else if (isSaturday) {
-    hours = [7, 8, 9, 10, 11]; // Santa Cruz sáb 7-12
-  } else {
-    hours = [6, 7, 8, 9, 10, 11, 16, 17, 18, 19, 20];
-  }
+  if (isSunday) hours = [8, 9];
+  else if (isSaturday) hours = [7, 8, 9, 10, 11];
+  else hours = [6, 7, 8, 9, 10, 11, 16, 17, 18, 19, 20];
 
-  // Get bookings for current day
   const todayBookings = STATE.fixedBookings.filter(b => b.location_id === loc.id && b.day_of_week === dow);
 
   if (todayBookings.length === 0 && hours.length === 0) {
@@ -4135,35 +4146,24 @@ function renderTimeline() {
     return;
   }
 
-  // Filtro temporal: si estamos viendo HOY, ocultar clases pasadas excepto la inmediatamente anterior (margen de contexto)
   const nowFilter = new Date();
   const isViewingToday = STATE.currentDate.toDateString() === nowFilter.toDateString();
   const currentHourNow = nowFilter.getHours();
-  let hiddenPastSet = new Set();
-  let lastPastHour = null;
-  if (isViewingToday) {
-    const pastHours = hours.filter(h => h < currentHourNow);
-    if (pastHours.length > 0) lastPastHour = Math.max(...pastHours);
-    // Las horas a ocultar: las pasadas excepto la inmediatamente anterior
-    hiddenPastSet = new Set(pastHours.filter(h => h !== lastPastHour));
-  }
-  const finalHours = (STATE.showPastHours || hiddenPastSet.size === 0)
-    ? hours
-    : hours.filter(h => !hiddenPastSet.has(h));
+  // Mostramos TODAS las horas del día (Rodrigo pidió ver todas, incluyendo pasadas).
+  const finalHours = hours;
 
-  // Toggle "Ver / Ocultar clases anteriores"
-  let pastTogglerHTML = '';
-  if (hiddenPastSet.size > 0) {
-    if (STATE.showPastHours) {
-      pastTogglerHTML = `<div class="past-toggle is-open" onclick="togglePastHours()"><span><strong>Ocultar clases anteriores</strong> · ${hiddenPastSet.size} mostradas</span><span>▲</span></div>`;
-    } else {
-      const hList = Array.from(hiddenPastSet).sort((a,b) => a-b).map(h => formatHour(h)).join(', ');
-      pastTogglerHTML = `<div class="past-toggle" onclick="togglePastHours()"><span><strong>Ver ${hiddenPastSet.size} clases anteriores</strong> · ${hList}</span><span>▼</span></div>`;
-    }
+  // Decidir hora expandida:
+  //  - Si STATE.miDiaExpandedHour es número válido en finalHours → respetar
+  //  - Si es null y estamos en HOY → expandir la hora actual (si existe)
+  //  - Caso contrario → ninguna
+  let expandedHour = STATE.miDiaExpandedHour;
+  if (expandedHour !== null && !finalHours.includes(expandedHour)) expandedHour = null;
+  if (expandedHour === null && isViewingToday && finalHours.includes(currentHourNow)) {
+    expandedHour = currentHourNow;
   }
 
-  body.innerHTML = pastTogglerHTML + finalHours.map(h => {
-    // Buscar session existente para este slot
+  // Pre-compute data por hora (incluye confirmedCount para el sidebar)
+  const hoursData = finalHours.map(h => {
     const dateStr = dateToIsoLocal(STATE.currentDate);
     const session = STATE.classSessions.find(s =>
       s.location_id === loc.id && s.session_date === dateStr && s.hour === h
@@ -4171,81 +4171,101 @@ function renderTimeline() {
     const sessionId = session ? session.id : null;
     const isCancelled = session && session.is_cancelled;
 
-    // Alumnos fijos del día/hora
     const bookingsAtHour = todayBookings.filter(b => b.hour === h);
     const fixedStudentIds = bookingsAtHour.map(b => b.student_id);
-
-    // session_bookings de esta clase (incluye flexibles agregados y movidos)
     const liveBookings = sessionId ? STATE.sessionBookings.filter(b => b.session_id === sessionId) : [];
-    // Helper: encontrar la attendance del student_id en esta sesión
     const _attFor = (sid) => sessionId ? (STATE.attendances || []).find(a => a.session_id === sessionId && a.student_id === sid) : null;
-    // IDs de fijos que se movieron afuera DE VERDAD:
-    // (cancelled_at + source fixed) PERO solo si NO tienen attendance procesada
-    // (si tienen attendance, fueron marcados — siguen visibles)
     const movedOutIds = new Set(
       liveBookings
         .filter(b => b.cancelled_at && b.source === 'fixed' && !ATTENDANCE_PROCESSED.includes(_attFor(b.student_id)?.status))
         .map(b => b.student_id)
     );
-    // IDs visibles del booking: activos OR cancelados con attendance procesada (no_show/lost/etc)
     const addedIds = liveBookings
       .filter(b => bookingShouldBeVisible(b, _attFor(b.student_id)))
       .map(b => b.student_id);
-
-    // Combinar: fijos que NO se movieron + agregados, sin duplicar
     const finalIds = new Set([
       ...fixedStudentIds.filter(id => !movedOutIds.has(id)),
       ...addedIds,
     ]);
-
     const studentsAtHour = Array.from(finalIds)
       .map(id => STATE.students.find(s => s.id === id))
       .filter(Boolean);
 
-    const occ = studentsAtHour.length;
-    const cap = loc.capacity;
+    // Confirmadas: alumnos cuyo booking activo tiene confirmed_at
+    const confirmedCount = studentsAtHour.filter(s => {
+      const booking = liveBookings.find(b => b.student_id === s.id && !b.cancelled_at);
+      return booking && booking.confirmed_at;
+    }).length;
+
+    return {
+      hour: h, session, sessionId, isCancelled,
+      studentsAtHour, liveBookings,
+      confirmedCount,
+      enrolled: studentsAtHour.length,
+      capacity: loc.capacity,
+      isCurrent: isViewingToday && nowFilter.getHours() === h,
+      isPast: isViewingToday && h < currentHourNow,
+      isExpanded: h === expandedHour,
+    };
+  });
+
+  // Sidebar con horas + mini barra de confirmadas
+  const sidebarHTML = `
+    <div class="mi-dia-sidebar">
+      <div class="mi-dia-sidebar-line"></div>
+      <div class="mi-dia-sidebar-list">
+        ${hoursData.map(d => {
+          const pct = d.enrolled === 0 ? 0 : Math.round((d.confirmedCount / d.enrolled) * 100);
+          const isComplete = d.confirmedCount === d.enrolled && d.enrolled > 0;
+          const fillColor = isComplete ? '#639922' : (d.confirmedCount > 0 ? 'var(--fit-purple)' : 'var(--ink-faint)');
+          return `
+            <div class="mi-dia-hour-item ${d.isExpanded ? 'is-active' : ''} ${d.isPast ? 'is-past' : ''}"
+                 onclick="onMiDiaHourClick(${d.hour})">
+              <div class="mi-dia-hour-top">
+                <span class="mi-dia-hour-dot"></span>
+                <span class="mi-dia-hour-label">${formatHour(d.hour)}</span>
+                <span class="mi-dia-hour-count">${d.confirmedCount}/${d.enrolled}</span>
+              </div>
+              <div class="mi-dia-hour-bar-wrap">
+                <div class="mi-dia-hour-bar-track">
+                  <div class="mi-dia-hour-bar-fill" style="width:${pct}%; background:${fillColor};"></div>
+                </div>
+              </div>
+            </div>
+          `;
+        }).join('')}
+      </div>
+    </div>
+  `;
+
+  // Cards stack
+  const cardsHTML = hoursData.map(d => {
+    const h = d.hour;
+    const occ = d.enrolled;
+    const cap = d.capacity;
     const occPct = Math.min(100, (occ / cap) * 100);
     let occClass = '';
     if (occ === cap) occClass = 'full';
     else if (occ === 0) occClass = 'warn';
 
-    const now = new Date();
-    const isCurrentClass = STATE.currentDate.toDateString() === now.toDateString() && now.getHours() === h;
-    const isPastClass = isViewingToday && h < currentHourNow;
-    const wasOpen = openHours.has(h);
-    const stateClass = isCurrentClass ? 'is-current is-open' : (wasOpen ? 'is-open' : (occ === 0 ? 'is-empty' : ''));
-    const pastClass = isPastClass ? 'is-past' : '';
+    const stateClass = d.isCurrent ? 'is-current' : (occ === 0 ? 'is-empty' : '');
+    const openClass = d.isExpanded ? 'is-open' : '';
+    const pastClass = d.isPast ? 'is-past' : '';
 
-    // Resolver profesor REAL para esta clase basado en fecha + sede + día_semana + hora
     const inst = resolveInstructor(loc.id, STATE.currentDate, dow, h);
     const instColor = getInstructorColor(inst);
 
-    const studentRows = studentsAtHour.map(s => {
-      const att = sessionId ? findAttendance(s.id, sessionId) : null;
+    const studentRows = d.studentsAtHour.map(s => {
+      const att = d.sessionId ? findAttendance(s.id, d.sessionId) : null;
       const status = att ? att.status : null;
-
-      // Estado visual según attendance
       let statusBadge = '';
       let rowStyle = '';
-      if (status === 'attended') {
-        statusBadge = '<span style="font-size:10px; background:#10b981; color:white; padding:2px 8px; border-radius:999px; font-weight:600;">✓ ASISTIÓ</span>';
-        rowStyle = 'background: #ecfdf5;';
-      } else if (status === 'recoverable') {
-        statusBadge = '<span style="font-size:10px; background:#3b82f6; color:white; padding:2px 8px; border-radius:999px; font-weight:600;">⊙ RECUPERABLE</span>';
-        rowStyle = 'background: #eff6ff;';
-      } else if (status === 'lost') {
-        statusBadge = '<span style="font-size:10px; background:#f97316; color:white; padding:2px 8px; border-radius:999px; font-weight:600;">⚠ PERDIDA</span>';
-        rowStyle = 'background: #fff7ed;';
-      } else if (status === 'no_show') {
-        statusBadge = '<span style="font-size:10px; background:#ef4444; color:white; padding:2px 8px; border-radius:999px; font-weight:600;">✗ NO VINO</span>';
-        rowStyle = 'background: #fef2f2;';
-      } else if (status === 'pending') {
-        statusBadge = '<span style="font-size:10px; background:#a78bfa; color:white; padding:2px 8px; border-radius:999px; font-weight:600;">? PENDIENTE</span>';
-        rowStyle = 'background: #f5f3ff;';
-      } else if (status === 'rescheduled') {
-        statusBadge = '<span style="font-size:10px; background:#8b5cf6; color:white; padding:2px 8px; border-radius:999px; font-weight:600;">↔ MOVIDA</span>';
-        rowStyle = 'background: #faf5ff;';
-      }
+      if (status === 'attended') { statusBadge = '<span style="font-size:10px; background:#10b981; color:white; padding:2px 8px; border-radius:999px; font-weight:600;">✓ ASISTIÓ</span>'; rowStyle = 'background: #ecfdf5;'; }
+      else if (status === 'recoverable') { statusBadge = '<span style="font-size:10px; background:#3b82f6; color:white; padding:2px 8px; border-radius:999px; font-weight:600;">⊙ RECUPERABLE</span>'; rowStyle = 'background: #eff6ff;'; }
+      else if (status === 'lost') { statusBadge = '<span style="font-size:10px; background:#f97316; color:white; padding:2px 8px; border-radius:999px; font-weight:600;">⚠ PERDIDA</span>'; rowStyle = 'background: #fff7ed;'; }
+      else if (status === 'no_show') { statusBadge = '<span style="font-size:10px; background:#ef4444; color:white; padding:2px 8px; border-radius:999px; font-weight:600;">✗ NO VINO</span>'; rowStyle = 'background: #fef2f2;'; }
+      else if (status === 'pending') { statusBadge = '<span style="font-size:10px; background:#a78bfa; color:white; padding:2px 8px; border-radius:999px; font-weight:600;">? PENDIENTE</span>'; rowStyle = 'background: #f5f3ff;'; }
+      else if (status === 'rescheduled') { statusBadge = '<span style="font-size:10px; background:#8b5cf6; color:white; padding:2px 8px; border-radius:999px; font-weight:600;">↔ MOVIDA</span>'; rowStyle = 'background: #faf5ff;'; }
 
       return `
       <div class="student-row" style="${rowStyle}">
@@ -4259,49 +4279,49 @@ function renderTimeline() {
           </div>
         </div>
         <div class="attendance-toggle">
-          <button class="att-btn ${status === 'attended' ? 'is-attended' : ''}" onclick="markAttendance('${s.id}', ${h}, 'attended')" title="Asistió">
+          <button class="att-btn ${status === 'attended' ? 'is-attended' : ''}" onclick="event.stopPropagation(); markAttendance('${s.id}', ${h}, 'attended')" title="Asistió">
             <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
           </button>
-          <button class="att-btn ${status && status !== 'attended' ? 'is-noshow' : ''}" onclick="openAbsenceMenu('${s.id}', ${h}, event)" title="Falta / cambio">
+          <button class="att-btn ${status && status !== 'attended' ? 'is-noshow' : ''}" onclick="event.stopPropagation(); openAbsenceMenu('${s.id}', ${h}, event)" title="Falta / cambio">
             <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
           </button>
-          <button class="att-btn" onclick="openMoveStudentModal('${s.id}', ${h})" title="Mover a otro horario / día" style="background: var(--fit-lavender-pale); color: var(--fit-purple);">
+          <button class="att-btn" onclick="event.stopPropagation(); openMoveStudentModal('${s.id}', ${h})" title="Mover a otro horario / día" style="background: var(--fit-lavender-pale); color: var(--fit-purple);">
             <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
           </button>
         </div>
       </div>
     `}).join('');
 
-    const emptySlots = isCancelled ? '' : Array.from({ length: cap - occ }, () => `
-      <div class="empty-slot" onclick="openAddFlexibleModal(${h})">
+    const emptySlots = d.isCancelled ? '' : Array.from({ length: cap - occ }, () => `
+      <div class="empty-slot" onclick="event.stopPropagation(); openAddFlexibleModal(${h})">
         <div class="empty-slot-dot">+</div>
         <span>Cupo disponible · clic para agregar alumno flexible</span>
       </div>
     `).join('');
 
     return `
-      <div class="class-block ${stateClass} ${pastClass} ${isCancelled ? 'is-cancelled' : ''}" ${isCancelled ? 'style="opacity:0.5; background: repeating-linear-gradient(45deg, transparent, transparent 10px, rgba(0,0,0,0.03) 10px, rgba(0,0,0,0.03) 20px);"' : ''}>
-        <div class="class-header" onclick="this.parentElement.classList.toggle('is-open')">
+      <div class="class-block ${stateClass} ${openClass} ${pastClass} ${d.isCancelled ? 'is-cancelled' : ''}"
+           data-hour="${h}"
+           onclick="onMiDiaCardClick(event, ${h})"
+           ${d.isCancelled ? 'style="opacity:0.5; background: repeating-linear-gradient(45deg, transparent, transparent 10px, rgba(0,0,0,0.03) 10px, rgba(0,0,0,0.03) 20px);"' : ''}>
+        <div class="class-header">
           <div>
-            <div class="class-time">${formatHour(h)} ${isCancelled ? '<span style="font-size:11px;color:var(--err);background:#fef2f2;padding:2px 8px;border-radius:999px;margin-left:6px;">✗ CANCELADA</span>' : ''}</div>
-            <div class="class-time-end">${isCancelled ? (session && session.notes ? escape(session.notes) : 'Clase cancelada') : 'hasta ' + formatHour(h) + ':50'}</div>
+            <div class="class-time">${formatHour(h)} ${d.isCancelled ? '<span style="font-size:11px;color:var(--err);background:#fef2f2;padding:2px 8px;border-radius:999px;margin-left:6px;">✗ CANCELADA</span>' : ''}</div>
+            <div class="class-time-end">${d.isCancelled ? (d.session && d.session.notes ? escape(d.session.notes) : 'Clase cancelada') : 'hasta ' + formatHour(h) + ':50'}</div>
           </div>
           <div class="class-instructor" onclick="event.stopPropagation(); openChangeInstructorModal(${h}, ${dow})" style="cursor: pointer;" title="Click para cambiar profesor">
             <div class="instructor-avatar" style="--inst-color: ${instColor}; ${inst._isUnassigned ? 'border: 2px dashed var(--warn);' : ''}">${inst.initials}</div>
             <div class="instructor-info">
               <div class="instructor-name">${escape(inst.full_name)} ${inst._isOverride ? '<span style="font-size:9px;color:var(--warn);background:var(--warn-soft);padding:1px 6px;border-radius:999px;margin-left:4px;">REEMPLAZO</span>' : ''}</div>
-              <div class="instructor-meta">${inst._isUnassigned ? '⚠ Asignar profesor' : escape(inst.certifications || '')}</div>
+              ${inst._isUnassigned ? '<div class="instructor-meta" style="color: var(--warn);">⚠ Asignar profesor</div>' : ''}
             </div>
           </div>
           <div class="class-occupancy">
             <div class="occupancy-bar"><div class="occupancy-fill ${occClass}" style="width: ${occPct}%"></div></div>
             <div class="occupancy-num">${occ}<span>/${cap}</span></div>
           </div>
-          <button class="class-toggle" onclick="event.stopPropagation(); openClassMenu(${h}, event)" title="Más opciones" style="margin-right: 4px;">
+          <button class="class-toggle" onclick="event.stopPropagation(); openClassMenu(${h}, event)" title="Más opciones" aria-label="Más opciones">
             <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="1"/><circle cx="12" cy="5" r="1"/><circle cx="12" cy="19" r="1"/></svg>
-          </button>
-          <button class="class-toggle">
-            <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg>
           </button>
         </div>
         <div class="class-students">
@@ -4311,6 +4331,39 @@ function renderTimeline() {
       </div>
     `;
   }).join('');
+
+  body.innerHTML = `
+    <div class="mi-dia-layout">
+      ${sidebarHTML}
+      <div class="mi-dia-cards-stack">${cardsHTML}</div>
+    </div>
+  `;
+
+  // Scroll suave a la card expandida
+  if (expandedHour !== null) {
+    setTimeout(() => {
+      const card = body.querySelector(`.class-block[data-hour="${expandedHour}"]`);
+      if (card) card.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    }, 50);
+  }
+}
+
+// Click en una hora del sidebar → expandir esa card y centrar scroll.
+function onMiDiaHourClick(hour) {
+  STATE.miDiaExpandedHour = hour;
+  renderTimeline();
+}
+
+// Click en una card → si estaba colapsada, expandirla; si estaba expandida, colapsarla.
+// Ignora clicks en zonas interactivas (botones, alumnos, profe, slots vacíos).
+function onMiDiaCardClick(event, hour) {
+  if (event.target.closest('button, .student-row, .class-instructor, .empty-slot')) return;
+  if (STATE.miDiaExpandedHour === hour) {
+    STATE.miDiaExpandedHour = null;
+  } else {
+    STATE.miDiaExpandedHour = hour;
+  }
+  renderTimeline();
 }
 
 function renderStudents() {
@@ -7771,12 +7824,14 @@ function showView(name, btn) {
 
 async function changeDay(delta) {
   STATE.currentDate.setDate(STATE.currentDate.getDate() + delta);
+  STATE.miDiaExpandedHour = null;
   setDateDisplay();
   await loadDayData();
   renderTimeline();
 }
 async function goToday() {
   STATE.currentDate = new Date();
+  STATE.miDiaExpandedHour = null;
   setDateDisplay();
   await loadDayData();
   renderTimeline();
