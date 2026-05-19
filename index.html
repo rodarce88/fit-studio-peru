@@ -14858,10 +14858,19 @@ function renderDetailSummary(stud) {
     // Acciones según estado
     let actionsBlock = '';
     if (isActive) {
+      const isCoord = CURRENT_USER?.role === 'coordinator';
       actionsBlock = `
         <div style="display: flex; gap: 6px; flex-wrap: wrap; margin-top: 12px;">
           <button class="btn btn-ghost" onclick="openStudentScheduleEditor('${stud.id}')" style="padding: 6px 12px; font-size: 11px;">Agendar clases →</button>
           <button class="btn btn-ghost" onclick="openFreezeModal('${p.id}')" style="padding: 6px 12px; font-size: 11px;">Congelar</button>
+          ${isCoord ? `
+            <button onclick="openChangePackageWizard('${p.id}')"
+              style="padding: 6px 14px; font-size: 11px; background: #1a1a1a; color: white; border: 1px solid #1a1a1a; border-radius: var(--radius-sm); cursor: pointer; font-weight: 500; letter-spacing: 0.02em; transition: background 0.15s;"
+              onmouseover="this.style.background='#2c2c2a'"
+              onmouseout="this.style.background='#1a1a1a'">
+              ⇄ Cambiar paquete
+            </button>
+          ` : ''}
         </div>
       `;
     } else if (status.key === 'frozen') {
