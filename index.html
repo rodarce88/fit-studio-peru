@@ -15429,8 +15429,13 @@ function renderDetailSummary(stud) {
     const name = escape(p.packages?.name || `Paquete ${total} clases`);
     const isActive = status.key === 'active';
 
-    // Bloque de pago
-    const payBlock = owed > 0 ? `
+    // Bloque de pago: comportamiento distinto según estado del paquete
+    const isClosedPkg = ['changed', 'cancelled', 'expired'].includes(p.status);
+    const payBlock = isClosedPkg ? `
+      <div style="display: inline-block; background: var(--fit-cream); border: 1px solid var(--line); border-radius: 999px; padding: 3px 10px; font-size: 11px; color: var(--ink-mute); margin-top: 6px;">
+        Pago original S/ ${price.toFixed(2)}
+      </div>
+    ` : owed > 0 ? `
       <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 10px;">
         <div style="background: #FEF7E6; border: 1px solid #F4D58A; border-radius: var(--radius-sm); padding: 8px 12px; flex: 1; min-width: 180px;">
           <div style="font-size: 10px; color: #8B6F1A; text-transform: uppercase; letter-spacing: 0.4px; font-weight: 600;">Saldo pendiente</div>
