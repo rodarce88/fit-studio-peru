@@ -14409,6 +14409,151 @@ function _pdfPkgStatusKey(p, activePkgId) {
   return 'upcoming';
 }
 
+// ============================================
+// CALENDARIO VISUAL DEL PDF
+// ============================================
+// Genera la sección de calendario de asistencia para el PDF del alumno.
+// Reglas:
+// - Rango adaptable: mes pasado + actual + próximo (mínimo). Si hay clases
+//   agendadas más allá del mes próximo, se extiende hasta cubrirlas. Tope: 6 meses.
+// - Solo muestra lo positivo (asistidas, próximas, hoy). Las perdidas y por-re-agendar
+//   están en el detalle textual más abajo del PDF.
+// - "Por re-agendar" del paquete activo se calcula como total - usadas - agendadas futuras.
+// - Chip "Constancia ejemplar ★" aparece solo si ≥90% asistencia en últimos 2 meses
+//   (mínimo 3 clases registradas para que el ratio sea significativo).
+function _pdfBuildCalendarSection(takenAtts, upcomingBookings, activePkg, todayIso) {
+  const totalAsistidas = takenAtts.filter(a => a.status === 'attended').length;
+  const totalProximas = upcomingBookings.length;
+  if (totalAsistidas === 0 && totalProximas === 0) return '';
+
+  const today = new Date(todayIso + 'T00:00:00');
+  const todayY = today.getFullYear(), todayM = today.getMonth();
+
+  // Rango: mes pasado siempre, hasta max(mes próximo, último upcoming). Cap 6 meses.
+  const startIdx = todayY * 12 + (todayM - 1);
+  let endIdx = todayY * 12 + (todayM + 1);
+  upcomingBookings.forEach(b => {
+    const sd = b.class_sessions && b.class_sessions.session_date;
+    if (!sd) return;
+    const parts = sd.split('-').map(Number);
+    const bIdx = parts[0] * 12 + (parts[1] - 1);
+    if (bIdx > endIdx) endIdx = bIdx;
+  });
+  if (endIdx - startIdx + 1 > 6) endIdx = startIdx + 5;
+
+  const months = [];
+  for (let idx = startIdx; idx <= endIdx; idx++) {
+    months.push([Math.floor(idx / 12), idx % 12]);
+  }
+
+  // Mapas de días
+  const attMap = new Map();
+  takenAtts.forEach(a => {
+    if (a.status === 'attended' && a.class_sessions && a.class_sessions.session_date) {
+      attMap.set(a.class_sessions.session_date, true);
+    }
+  });
+  const upMap = new Map();
+  upcomingBookings.forEach(b => {
+    if (b.class_sessions && b.class_sessions.session_date) {
+      upMap.set(b.class_sessions.session_date, true);
+    }
+  });
+
+  // Por re-agendar del paquete activo
+  let porReagendar = 0;
+  if (activePkg) {
+    const total = activePkg.classes_total || 0;
+    const used = activePkg.classes_used || 0;
+    const upcomingForPkg = upcomingBookings.filter(b =>
+      !b.student_package_id || b.student_package_id === activePkg.id
+    ).length;
+    porReagendar = Math.max(0, total - used - upcomingForPkg);
+  }
+
+  // Constancia
+  const cutoffDate = new Date(today.getFullYear(), today.getMonth() - 2, today.getDate());
+  const cutoffIso = cutoffDate.toISOString().slice(0, 10);
+  const recent = takenAtts.filter(a => a.class_sessions && a.class_sessions.session_date >= cutoffIso);
+  const recentAtt = recent.filter(a => a.status === 'attended').length;
+  const recentLost = recent.filter(a => a.status === 'lost' || a.status === 'no_show').length;
+  const recentTotal = recentAtt + recentLost;
+  const showConstanciaChip = recentTotal >= 3 && (recentAtt / recentTotal) >= 0.9;
+
+  const monthNames = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Setiembre','Octubre','Noviembre','Diciembre'];
+
+  const renderMonth = (y, m) => {
+    const isCurrent = (y === todayY && m === todayM);
+    const lastDay = new Date(y, m + 1, 0).getDate();
+    const firstDow = new Date(y, m, 1).getDay();
+    const startCol = (firstDow + 6) % 7;
+    let cells = '';
+    for (let i = 0; i < startCol; i++) cells += '<div></div>';
+    for (let d = 1; d <= lastDay; d++) {
+      const iso = `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+      const isToday = iso === todayIso;
+      let cls = 'cal-day none';
+      if (attMap.has(iso)) cls = 'cal-day att';
+      else if (isToday) cls = 'cal-day today';
+      else if (upMap.has(iso)) cls = 'cal-day upcoming';
+      cells += `<div class="${cls}">${d}</div>`;
+    }
+    return `
+      <div class="cal-month">
+        <div class="cal-month-title${isCurrent ? ' current' : ''}">${monthNames[m]} <em>${y}</em></div>
+        <div class="cal-dow-row">
+          <div class="cal-dow">L</div><div class="cal-dow">M</div><div class="cal-dow">M</div><div class="cal-dow">J</div><div class="cal-dow">V</div><div class="cal-dow">S</div><div class="cal-dow">D</div>
+        </div>
+        <div class="cal-grid">${cells}</div>
+      </div>
+    `;
+  };
+
+  const monthsHTML = months.map(([y, m]) => renderMonth(y, m)).join('');
+  const monthsCount = months.length;
+  const colsPerRow = Math.min(monthsCount, 3);
+  const rangeText = monthsCount === 1
+    ? `${monthNames[months[0][1]]} ${months[0][0]}`
+    : `${monthNames[months[0][1]]} — ${monthNames[months[monthsCount-1][1]]} ${months[monthsCount-1][0]}`;
+
+  return `
+    <section class="section">
+      <div class="section-head">
+        <h2 class="section-title">Calendario de asistencia</h2>
+        <span class="section-sub">${rangeText}</span>
+      </div>
+      <div class="cal-stats">
+        <div>
+          <div class="cal-stat-lbl">Asistidas</div>
+          <div class="cal-stat-num purple">${totalAsistidas}</div>
+        </div>
+        <div>
+          <div class="cal-stat-lbl">Próximas</div>
+          <div class="cal-stat-num">${totalProximas}</div>
+        </div>
+        ${porReagendar > 0 ? `
+        <div>
+          <div class="cal-stat-lbl amber">Por re-agendar</div>
+          <div class="cal-stat-num amber">${porReagendar}</div>
+        </div>` : ''}
+        ${showConstanciaChip ? `
+        <div class="cal-constancia">
+          <span class="cal-constancia-chip">Constancia ejemplar ★</span>
+        </div>` : ''}
+      </div>
+      <div class="cal-months" style="grid-template-columns: repeat(${colsPerRow}, 1fr);">
+        ${monthsHTML}
+      </div>
+      <div class="cal-legend">
+        <span class="cal-legend-item"><span class="cal-dot att"></span>Asistió</span>
+        <span class="cal-legend-item"><span class="cal-dot upcoming"></span>Próxima clase</span>
+        <span class="cal-legend-item"><span class="cal-dot today"></span>Hoy</span>
+        ${porReagendar > 0 ? `<span class="cal-legend-note">Las clases por re-agendar y no asistidas aparecen en el detalle completo abajo</span>` : ''}
+      </div>
+    </section>
+  `;
+}
+
 function _pdfBuildHTML(stud, data) {
   // ============ DATOS DEL ALUMNO ============
   const loc = STATE.locations.find(l => l.id === stud.location_id);
@@ -14656,6 +14801,9 @@ function _pdfBuildHTML(stud, data) {
     </section>
   ` : '';
 
+  // ============ CALENDARIO VISUAL (sección bonita arriba del detalle) ============
+  const calendarSection = _pdfBuildCalendarSection(takenAtts, upcomingBookings, activePkg, todayIso);
+
   // ============ HTML FINAL ============
   return `
     <div class="pdf-page">
@@ -14837,6 +14985,33 @@ function _pdfBuildHTML(stud, data) {
           font-style: italic; font-family: 'Fraunces', Georgia, serif;
           font-size: 11px; color: #4A4350;
         }
+        .pdf-page .cal-stats { display: flex; gap: 28px; margin-bottom: 18px; align-items: flex-end; }
+        .pdf-page .cal-stat-lbl { font-size: 10px; text-transform: uppercase; letter-spacing: 0.12em; color: #8B8493; font-weight: 500; margin-bottom: 2px; }
+        .pdf-page .cal-stat-lbl.amber { color: #8B6F1A; }
+        .pdf-page .cal-stat-num { font-family: 'Fraunces', Georgia, serif; font-size: 30px; font-weight: 400; color: #1A1419; line-height: 1; }
+        .pdf-page .cal-stat-num.purple { color: #5B2A8F; }
+        .pdf-page .cal-stat-num.amber { color: #8B6F1A; }
+        .pdf-page .cal-constancia { margin-left: auto; }
+        .pdf-page .cal-constancia-chip { display: inline-block; padding: 8px 14px; background: #F4EFFB; border-radius: 999px; font-family: 'Fraunces', Georgia, serif; font-style: italic; font-size: 12px; color: #5B2A8F; }
+        .pdf-page .cal-months { display: grid; gap: 22px; }
+        .pdf-page .cal-month-title { font-family: 'Fraunces', Georgia, serif; font-style: italic; font-size: 14px; color: #1A1419; text-align: center; margin-bottom: 8px; }
+        .pdf-page .cal-month-title.current { color: #5B2A8F; }
+        .pdf-page .cal-month-title em { color: #8B8493; font-style: normal; font-size: 11px; margin-left: 2px; }
+        .pdf-page .cal-dow-row { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; margin-bottom: 3px; }
+        .pdf-page .cal-dow { font-size: 8px; text-align: center; text-transform: uppercase; color: #8B8493; letter-spacing: 0.14em; font-weight: 500; }
+        .pdf-page .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; }
+        .pdf-page .cal-day { aspect-ratio: 1; display: flex; align-items: center; justify-content: center; font-size: 10px; border-radius: 50%; line-height: 1; font-family: 'Fraunces', Georgia, serif; }
+        .pdf-page .cal-day.none { color: #C9C3D1; }
+        .pdf-page .cal-day.att { background: #5B2A8F; color: white; font-weight: 500; }
+        .pdf-page .cal-day.upcoming { border: 1.5px solid #5B2A8F; color: #5B2A8F; font-weight: 500; }
+        .pdf-page .cal-day.today { background: #F4EFFB; border: 1.5px solid #5B2A8F; color: #5B2A8F; font-weight: 500; }
+        .pdf-page .cal-legend { margin-top: 16px; padding-top: 12px; border-top: 0.5px solid #EBE5F0; display: flex; gap: 22px; align-items: center; font-size: 10px; color: #4A4350; flex-wrap: wrap; }
+        .pdf-page .cal-legend-item { display: inline-flex; align-items: center; gap: 6px; }
+        .pdf-page .cal-dot { display: inline-block; width: 12px; height: 12px; border-radius: 50%; }
+        .pdf-page .cal-dot.att { background: #5B2A8F; }
+        .pdf-page .cal-dot.upcoming { border: 1.5px solid #5B2A8F; box-sizing: border-box; }
+        .pdf-page .cal-dot.today { background: #F4EFFB; border: 1.5px solid #5B2A8F; box-sizing: border-box; }
+        .pdf-page .cal-legend-note { margin-left: auto; color: #8B6F1A; font-style: italic; font-family: 'Fraunces', Georgia, serif; font-size: 10px; }
       </style>
 
       <header class="pdf-header">
@@ -14863,6 +15038,7 @@ function _pdfBuildHTML(stud, data) {
       </section>
 
       ${pkgSection}
+      ${calendarSection}
       ${takenSection}
       ${upcomingSection}
       ${paySection}
