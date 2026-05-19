@@ -11915,9 +11915,11 @@ async function instructorConfirmInvite() {
     // Usamos una RPC con SECURITY DEFINER que crea el row internamente
     // verificando que el caller sea instructor activo. Bypasea RLS.
     // El "Cómo nos conoció" se guarda en medical_notes como "Referida por: X"
+    // La RPC retorna el row completo en JSON (no podemos hacer SELECT después
+    // porque RLS de SELECT bloquea a Alex de ver el row recién creado).
     const referralFinal = referral ? `Referida por: ${referral}` : null;
 
-    const { data: newStudentId, error: rpcErr } = await sb.rpc('create_trial_student', {
+    const { data: stud, error: rpcErr } = await sb.rpc('create_trial_student', {
       p_first_name: first_name,
       p_last_name: last_name || null,
       p_phone: phone,
@@ -11925,11 +11927,7 @@ async function instructorConfirmInvite() {
       p_referral_source: referralFinal,
     });
     if (rpcErr) throw rpcErr;
-
-    // Re-cargar el row recién creado (incluyendo todos los campos)
-    const { data: stud, error: fetchErr } = await sb.from('students')
-      .select('*').eq('id', newStudentId).single();
-    if (fetchErr) throw fetchErr;
+    if (!stud || !stud.id) throw new Error('La RPC no retornó el row creado');
 
     // Cache local
     STATE.students.push(stud);
