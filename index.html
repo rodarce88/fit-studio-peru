@@ -232,6 +232,23 @@
   .kpi-icon { position: absolute; top: 22px; right: 22px; width: 36px; height: 36px; border-radius: 50%; background: var(--fit-lavender); color: var(--fit-purple); display: grid; place-items: center; }
   .kpi-purple .kpi-icon { background: rgba(255,255,255,0.15); color: white; }
 
+  /* Widget de cobranza del mes (reemplaza el kpi-row) */
+  .cobranza-widget { background: white; border: 1px solid var(--line); border-radius: var(--radius-md); padding: 20px 28px; margin-bottom: 28px; cursor: pointer; transition: border-color 0.15s, transform 0.15s, box-shadow 0.15s; display: grid; grid-template-columns: 240px minmax(0, 1fr) auto auto; gap: 28px; align-items: center; }
+  .cobranza-widget:hover { border-color: var(--fit-purple-soft); transform: translateY(-1px); box-shadow: 0 4px 16px rgba(0,0,0,0.05); }
+  .cobranza-widget:focus { outline: none; border-color: var(--fit-purple); box-shadow: 0 0 0 3px var(--fit-lavender-pale); }
+  .cob-gauge { display: flex; align-items: center; justify-content: center; }
+  .cob-gauge svg { width: 100%; height: auto; max-height: 165px; }
+  .cob-main { min-width: 0; }
+  .cob-header { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; flex-wrap: wrap; }
+  .cob-chip { font-size: 11px; padding: 2px 8px; border-radius: var(--radius-pill); font-weight: 500; letter-spacing: 0.04em; background: #FEE2E2; color: #DC2626; }
+  .cob-amount { font-family: var(--display); font-size: 48px; font-weight: 500; line-height: 1; letter-spacing: -0.02em; color: var(--ink); }
+  .cob-meta { font-size: 13px; color: var(--ink-mute); margin-top: 8px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  .cob-stats { display: flex; flex-direction: column; gap: 16px; padding-left: 24px; border-left: 1px solid var(--line); }
+  .cob-stat-value { font-family: var(--display); font-size: 22px; font-weight: 500; line-height: 1; }
+  .cob-stat-sub { font-size: 11px; color: var(--ink-mute); margin-top: 4px; }
+  .cob-chevron { color: var(--ink-mute); }
+  @media (max-width: 768px) { .cobranza-widget { grid-template-columns: 1fr; gap: 16px; } .cob-stats { flex-direction: row; padding-left: 0; padding-top: 16px; border-left: none; border-top: 1px solid var(--line); } }
+
   /* TIMELINE */
   .layout-grid { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 24px; }
   .timeline-card, .panel, .table-card { background: white; border-radius: var(--radius-lg); border: 1px solid var(--line); overflow: hidden; box-shadow: var(--shadow-sm); }
@@ -1897,30 +1914,44 @@
       <div id="dash-student-search-results" style="display: none; position: absolute; top: calc(100% + 4px); left: 0; right: 0; background: white; border: 1px solid var(--line); border-radius: var(--radius-md); box-shadow: 0 8px 24px rgba(0,0,0,0.08); max-height: 380px; overflow-y: auto; z-index: 50;"></div>
     </div>
 
-    <div class="kpi-row">
-      <div class="kpi kpi-purple">
-        <div class="kpi-icon"><svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="7" r="4"/><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/></svg></div>
-        <div class="kpi-label">Reservados hoy</div>
-        <div class="kpi-value" id="kpi-today">—</div>
-        <div class="kpi-sub" id="kpi-today-sub">en clases programadas</div>
+    <!-- Widget de cobranza del mes (reemplaza los 4 KPI cards) -->
+    <div class="cobranza-widget" id="cobranza-widget" onclick="openCobranzaPanel()" tabindex="0" role="button" aria-label="Cobranza del mes — ver alumnos pendientes">
+      <div class="cob-gauge">
+        <svg viewBox="0 0 220 165" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <path d="M 20 130 A 90 90 0 0 1 200 130" fill="none" stroke="var(--line)" stroke-width="16" stroke-linecap="round"/>
+          <path id="cob-arc-progress" d="M 20 130 A 90 90 0 0 1 20 130" fill="none" stroke="#EF4444" stroke-width="16" stroke-linecap="round"/>
+          <circle id="cob-arc-tip" cx="20" cy="130" r="6" fill="#EF4444"/>
+          <line id="cob-tick-expected" x1="0" y1="0" x2="0" y2="0" stroke="var(--ink-faint)" stroke-width="2" stroke-linecap="round"/>
+          <text x="155" y="32" text-anchor="start" font-size="11" fill="var(--ink-mute)">esperado</text>
+          <text x="155" y="45" text-anchor="start" font-size="11" fill="var(--ink-mute)" id="cob-expected-text">hoy: —</text>
+          <text id="cob-pct" x="110" y="102" text-anchor="middle" font-size="34" font-weight="500" fill="#EF4444" letter-spacing="-0.5" font-family="var(--display)">—</text>
+          <text x="110" y="124" text-anchor="middle" font-size="12" fill="var(--ink-mute)">cobrado del mes</text>
+          <text x="20" y="158" text-anchor="middle" font-size="11" fill="var(--ink-faint)">S/ 0</text>
+          <text id="cob-total-label" x="200" y="158" text-anchor="middle" font-size="11" fill="var(--ink-faint)">S/ —</text>
+        </svg>
       </div>
-      <div class="kpi">
-        <div class="kpi-icon"><svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div>
-        <div class="kpi-label">Total alumnos</div>
-        <div class="kpi-value" id="kpi-total">—</div>
-        <div class="kpi-sub" id="kpi-total-sub">activos en sede</div>
+      <div class="cob-main">
+        <div class="cob-header">
+          <span class="kpi-label">Por cobrar en <span id="cob-loc-name">—</span></span>
+          <span class="cob-chip" id="cob-chip">—</span>
+        </div>
+        <div class="cob-amount" id="cob-amount">S/ —</div>
+        <div class="cob-meta" id="cob-meta">—</div>
       </div>
-      <div class="kpi">
-        <div class="kpi-icon" style="background: var(--info-soft); color: var(--info);"><svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 11l18-8-8 18-3-7z"/></svg></div>
-        <div class="kpi-label">Horario fijo</div>
-        <div class="kpi-value" id="kpi-fixed">—</div>
-        <div class="kpi-sub">no requieren confirmación</div>
+      <div class="cob-stats">
+        <div>
+          <div class="kpi-label" style="font-size: 10px; margin-bottom: 4px;">Ya cobrado</div>
+          <div class="cob-stat-value" id="cob-paid" style="color: #10B981;">S/ —</div>
+          <div class="cob-stat-sub" id="cob-paid-sub">— alumnos</div>
+        </div>
+        <div>
+          <div class="kpi-label" style="font-size: 10px; margin-bottom: 4px;">Ritmo requerido</div>
+          <div class="cob-stat-value" id="cob-rate">S/ —/d</div>
+          <div class="cob-stat-sub">para llegar a 100%</div>
+        </div>
       </div>
-      <div class="kpi">
-        <div class="kpi-icon" style="background: var(--warn-soft); color: var(--warn);"><svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 9v4M12 17h.01"/><circle cx="12" cy="12" r="10"/></svg></div>
-        <div class="kpi-label">Datos incompletos</div>
-        <div class="kpi-value" id="kpi-incomplete" style="color: var(--warn);">—</div>
-        <div class="kpi-sub">falta email o documento</div>
+      <div class="cob-chevron" aria-hidden="true">
+        <svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg>
       </div>
     </div>
 
@@ -3554,17 +3585,10 @@ function renderDashboard() {
   const incompleteStudents = locStudents.filter(s => !s.data_complete);
 
   document.getElementById('dash-sub').textContent = `${locStudents.length} alumnos · ${loc.capacity} cupos por clase · capacidad semanal ~${loc.capacity * 12 * 5 + loc.capacity * 5 * 2}`;
-  document.getElementById('kpi-total').textContent = locStudents.length;
-  document.getElementById('kpi-total-sub').textContent = `${fixedStudents} fijos · ${locStudents.length - fixedStudents} flexibles`;
-  document.getElementById('kpi-fixed').textContent = fixedStudents;
-  document.getElementById('kpi-incomplete').textContent = incompleteStudents.length;
   document.getElementById('badge-students').textContent = locStudents.length;
 
-  // Today's bookings
-  const dow = STATE.currentDate.getDay();
-  const todayFixed = STATE.fixedBookings.filter(b => b.location_id === loc.id && b.day_of_week === dow);
-  document.getElementById('kpi-today').textContent = todayFixed.length;
-  document.getElementById('kpi-today-sub').textContent = todayFixed.length > 0 ? 'alumnos fijos del día' : 'sin reservas del día';
+  // Widget de cobranza del mes (async, no bloquea el render)
+  renderCobranzaWidget();
 
   // Incomplete list
   const incompleteEl = document.getElementById('incomplete-list');
@@ -3591,6 +3615,163 @@ function renderDashboard() {
   // Cargar widgets en background (no bloquea la UI)
   loadRescheduleList();
   loadToPayList();
+}
+
+// ============================================
+// WIDGET DE COBRANZA DEL MES (reemplaza los 4 KPIs)
+// ============================================
+// Lee paquetes del mes en curso para la sede actual y calcula:
+// - totalMes: suma de price_paid de paquetes con purchase_date en el mes
+// - cobrado: suma de (amount_pen + discount_amount) de pagos asociados
+// - pendiente: totalMes - cobrado
+// - alumnosPendientes: alumnos con paquete ACTIVO del mes y saldo > 0 (R6 wizard)
+// - gap: pctCobrado - pctEsperado (donde pctEsperado = dayOfMonth / daysInMonth)
+//
+// Sin buffer: la lógica de color se activa desde el día 1 del mes.
+async function renderCobranzaWidget() {
+  const loc = getCurrentLocation();
+  if (!loc) return;
+  const widget = document.getElementById('cobranza-widget');
+  if (!widget) return;
+
+  // Mes calendario en curso
+  const now = STATE.currentDate || new Date();
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+  const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+  const dayOfMonth = now.getDate();
+  const daysLeft = Math.max(0, daysInMonth - dayOfMonth);
+  const pctExpected = (dayOfMonth / daysInMonth) * 100;
+
+  const studentIds = STATE.students.filter(s => s.location_id === loc.id).map(s => s.id);
+
+  let totalMes = 0, cobrado = 0, alumnosPagaron = 0, alumnosPendientes = 0;
+
+  if (studentIds.length > 0) {
+    const { data: packages = [], error: pErr } = await sb
+      .from('student_packages')
+      .select('id, student_id, price_paid, status, is_frozen')
+      .in('student_id', studentIds)
+      .gte('purchase_date', monthStart.toISOString())
+      .lt('purchase_date', monthEnd.toISOString());
+
+    if (pErr) console.warn('renderCobranzaWidget packages:', pErr);
+
+    const pkgList = packages || [];
+    totalMes = pkgList.reduce((s, p) => s + (+p.price_paid || 0), 0);
+    const pkgIds = pkgList.map(p => p.id);
+
+    const paidByPkg = new Map();
+    if (pkgIds.length > 0) {
+      const { data: payments = [], error: payErr } = await sb
+        .from('payments')
+        .select('amount_pen, discount_amount, student_package_id')
+        .in('student_package_id', pkgIds);
+      if (payErr) console.warn('renderCobranzaWidget payments:', payErr);
+
+      (payments || []).forEach(p => {
+        const amt = (+p.amount_pen || 0) + (+p.discount_amount || 0);
+        cobrado += amt;
+        paidByPkg.set(p.student_package_id, (paidByPkg.get(p.student_package_id) || 0) + amt);
+      });
+    }
+
+    // Alumnos pendientes: paquete ACTIVO (R6 wizard), no congelado, saldo > 0
+    const studentsPending = new Set();
+    const studentsTotalMes = new Set();
+    pkgList.forEach(p => {
+      studentsTotalMes.add(p.student_id);
+      const isActive = !p.status || p.status === 'active';
+      const notFrozen = !p.is_frozen;
+      const paid = paidByPkg.get(p.id) || 0;
+      const owed = (+p.price_paid || 0) - paid;
+      if (isActive && notFrozen && owed > 0.01) studentsPending.add(p.student_id);
+    });
+    alumnosPendientes = studentsPending.size;
+    alumnosPagaron = studentsTotalMes.size - alumnosPendientes;
+  }
+
+  const pendiente = Math.max(0, totalMes - cobrado);
+  const pctCobrado = totalMes > 0 ? (cobrado / totalMes) * 100 : 0;
+  const gap = pctCobrado - pctExpected;
+  const ritmoRequerido = daysLeft > 0 ? pendiente / daysLeft : pendiente;
+
+  paintCobranzaWidget({ locName: loc.name, totalMes, cobrado, pendiente, alumnosPendientes, alumnosPagaron, daysLeft, pctCobrado, pctExpected, gap, ritmoRequerido });
+}
+
+function paintCobranzaWidget(d) {
+  // Colores tech (Tailwind) según gap — sin buffer
+  let color, chipBg, chipColor, chipText;
+  if (d.gap >= 0) {
+    color = '#10B981'; chipBg = '#D1FAE5'; chipColor = '#059669';
+    chipText = d.gap > 0.5 ? `+${d.gap.toFixed(0)} pp adelantada` : 'Al día';
+  } else if (d.gap > -10) {
+    color = '#F59E0B'; chipBg = '#FEF3C7'; chipColor = '#D97706';
+    chipText = `${Math.round(d.gap)} pp del ritmo`;
+  } else {
+    color = '#EF4444'; chipBg = '#FEE2E2'; chipColor = '#DC2626';
+    chipText = `${Math.round(d.gap)} pp del ritmo`;
+  }
+
+  // Geometría del arco (centro 110/130, radio 90, semicírculo superior)
+  const angleProg = Math.PI + (d.pctCobrado / 100) * Math.PI;
+  const xProg = 110 + 90 * Math.cos(angleProg);
+  const yProg = 130 + 90 * Math.sin(angleProg);
+  const angleExp = Math.PI + (d.pctExpected / 100) * Math.PI;
+  const xExp = 110 + 90 * Math.cos(angleExp);
+  const yExp = 130 + 90 * Math.sin(angleExp);
+  const dx = (xExp - 110) / 90, dy = (yExp - 130) / 90;
+  const tickX1 = xExp - dx * 6, tickY1 = yExp - dy * 6;
+  const tickX2 = xExp + dx * 8, tickY2 = yExp + dy * 8;
+
+  const fmtMoney = n => 'S/ ' + Math.round(n).toLocaleString('es-PE');
+  const fmtTotal = n => n >= 1000 ? 'S/ ' + (n / 1000).toFixed(1) + 'k' : 'S/ ' + Math.round(n);
+
+  // Textos
+  document.getElementById('cob-loc-name').textContent = d.locName;
+  document.getElementById('cob-amount').textContent = fmtMoney(d.pendiente);
+  document.getElementById('cob-meta').innerHTML =
+    '<svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>' +
+    `<span>${d.alumnosPendientes} alumno${d.alumnosPendientes === 1 ? '' : 's'} pendiente${d.alumnosPendientes === 1 ? '' : 's'}</span>` +
+    '<span style="opacity:0.4">·</span>' +
+    '<svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>' +
+    `<span>${d.daysLeft} día${d.daysLeft === 1 ? '' : 's'} restante${d.daysLeft === 1 ? '' : 's'}</span>`;
+
+  document.getElementById('cob-paid').textContent = fmtMoney(d.cobrado);
+  document.getElementById('cob-paid-sub').textContent = `${d.alumnosPagaron} alumno${d.alumnosPagaron === 1 ? '' : 's'}`;
+  document.getElementById('cob-rate').textContent = fmtMoney(d.ritmoRequerido) + '/d';
+  document.getElementById('cob-rate').style.color = color;
+
+  // Chip
+  const chip = document.getElementById('cob-chip');
+  chip.textContent = chipText;
+  chip.style.background = chipBg;
+  chip.style.color = chipColor;
+
+  // SVG
+  document.getElementById('cob-arc-progress').setAttribute('d', `M 20 130 A 90 90 0 0 1 ${xProg.toFixed(1)} ${yProg.toFixed(1)}`);
+  document.getElementById('cob-arc-progress').setAttribute('stroke', color);
+  const tip = document.getElementById('cob-arc-tip');
+  tip.setAttribute('cx', xProg.toFixed(1));
+  tip.setAttribute('cy', yProg.toFixed(1));
+  tip.setAttribute('fill', color);
+  const tick = document.getElementById('cob-tick-expected');
+  tick.setAttribute('x1', tickX1.toFixed(1));
+  tick.setAttribute('y1', tickY1.toFixed(1));
+  tick.setAttribute('x2', tickX2.toFixed(1));
+  tick.setAttribute('y2', tickY2.toFixed(1));
+  document.getElementById('cob-pct').textContent = d.pctCobrado.toFixed(1) + '%';
+  document.getElementById('cob-pct').setAttribute('fill', color);
+  document.getElementById('cob-expected-text').textContent = `hoy: ${d.pctExpected.toFixed(0)}%`;
+  document.getElementById('cob-total-label').textContent = fmtTotal(d.totalMes);
+}
+
+function openCobranzaPanel() {
+  // Navega a la vista completa de pendientes de cobro (ya existente)
+  if (typeof showView === 'function' && typeof renderFullPaymentView === 'function') {
+    showView('full-payment', null);
+    renderFullPaymentView();
+  }
 }
 
 // ============================================
