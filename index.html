@@ -11430,6 +11430,38 @@ async function changePkgWizardNext() {
     if (error) throw error;
     console.log('[ChangePkgWizard] Resultado:', data);
 
+    // FIX CRÍTICO: la RPC change_student_package NO re-vincula las attendances
+    // existentes del paquete viejo al nuevo. Eso deja la clase ya tomada
+    // (y cualquier futura attendance del paquete viejo) apuntando a un paquete
+    // que ya está en status='changed'. Resultado visual: "Clases pasadas" muestra
+    // el paquete viejo, y los contadores del nuevo paquete están desincronizados.
+    //
+    // Solución: encontrar el id del paquete nuevo (por replaces_id) y mover
+    // todas las attendances que apuntan al viejo. Luego recalcular contadores.
+    try {
+      const studentIdForRelink = wiz.pkgUsage?.student_id;
+      if (studentIdForRelink && wiz.pkgId) {
+        // 1. Encontrar el paquete nuevo (replaces_id apunta al viejo)
+        const { data: newPkgRow } = await sb.from('student_packages')
+          .select('id')
+          .eq('replaces_id', wiz.pkgId)
+          .eq('status', 'active')
+          .maybeSingle();
+        if (newPkgRow?.id) {
+          // 2. Mover attendances del viejo al nuevo
+          await sb.from('attendance')
+            .update({ student_package_id: newPkgRow.id })
+            .eq('student_package_id', wiz.pkgId);
+          // 3. Recalcular contadores del paquete nuevo (con la lógica defensiva existente)
+          if (typeof recalcPackageCounters === 'function') {
+            await recalcPackageCounters(studentIdForRelink);
+          }
+        }
+      }
+    } catch (relinkErr) {
+      console.warn('[ChangePkgWizard] Re-vinculación de attendances falló:', relinkErr);
+    }
+
     // POST-HOC: si el paquete viejo NO tenía pagos reales (wiz.actualPaid === 0)
     // pero la RPC creó payments nuevos, esos son fantasma — los borramos.
     if (parseFloat(wiz.actualPaid || 0) === 0) {
