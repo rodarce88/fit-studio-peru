@@ -5868,9 +5868,11 @@ function getCellStudents(locationId, date, hour) {
 
   const studentMap = new Map(); // studentId -> { student, type, label, bookingId, confirmedAt }
 
-  // Helper: una alumna en prueba (student_status==='trial') siempre se muestra como PRUEBA,
-  // sin importar si su booking es fijo o flexible — eso es la info relevante para el coord.
-  const isTrialStudent = (s) => s && s.student_status === 'trial';
+  // Helper: una alumna en prueba siempre se muestra como PRUEBA, sin importar
+  // si su booking es fijo o flexible. La info de "trial" puede venir de cualquiera
+  // de los dos campos según cómo se creó la alumna (algunos flows setean modality='trial',
+  // otros student_status='trial').
+  const isTrialStudent = (s) => s && (s.student_status === 'trial' || s.modality === 'trial');
 
   // Fixed bookings de esta celda
   (STATE.fixedBookings || []).filter(b =>
