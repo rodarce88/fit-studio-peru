@@ -757,6 +757,91 @@
     gap: 4px;
     font-family: var(--body);
   }
+
+  /* ==============================================================
+     INSTRUCTOR MOBILE — bottom bar (3 items) + menu overview
+     Mismo patrón que el coord, pero sin FAB, sin Buscar/Alumnos.
+     La alerta y la próxima clase pasan al menú overview.
+     ============================================================== */
+  #mobile-menu-prof { display: none; }
+
+  @media (max-width: 800px) {
+    /* Solo en profesor: mostrar bottom bar y compactar header */
+    body.role-instructor .mobile-bottom-bar-prof {
+      display: flex;
+      position: fixed;
+      bottom: 14px;
+      left: 14px;
+      right: 14px;
+      gap: 10px;
+      align-items: center;
+      z-index: 200;
+      pointer-events: auto;
+    }
+    body.role-instructor .main { padding-bottom: 100px; }
+
+    /* Ocultar la columna de saludo "Tu día en Santa Cruz" — usamos un saludo compacto custom */
+    body.role-instructor .inst-greet-row { flex-direction: column; align-items: stretch; gap: 12px; }
+    body.role-instructor .inst-greet-title { font-size: 19px; line-height: 1.15; }
+    body.role-instructor .inst-tabs-inline { align-self: flex-start; }
+
+    /* Ocultar pending banner y next class en el flow principal — viven en el menú */
+    body.role-instructor [data-inst-pending-banner] { display: none; }
+    body.role-instructor [data-inst-next] { display: none; }
+
+    /* Compactar el day strip: ocultar banner "VIENDO Hoy..." y nav-bar de semana */
+    body.role-instructor [data-inst-daystrip] > div:first-child { display: none; }
+    body.role-instructor .inst-week-nav { display: none; }
+  }
+
+  .mobile-bottom-bar-prof { display: none; }
+
+  /* Menu screen profesor (full-screen overlay) */
+  #mobile-menu-prof.is-open {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 199;
+    background: var(--fit-cream);
+    overflow-y: auto;
+    padding-bottom: 100px;
+    animation: mobileMenuIn 0.22s ease-out;
+  }
+  .mob-prof-next {
+    margin: 14px 20px 6px;
+    background: linear-gradient(135deg, #534AB7, #3C3489);
+    color: white;
+    border-radius: 16px;
+    padding: 16px 18px;
+    border: none;
+    width: calc(100% - 40px);
+    text-align: left;
+    cursor: pointer;
+    font-family: var(--body);
+  }
+  .mob-prof-next .tag { font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; opacity: 0.85; display: flex; align-items: center; gap: 6px; }
+  .mob-prof-next .tag::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: #F0997B; }
+  .mob-prof-next .time { font-family: var(--display); font-style: italic; font-size: 36px; line-height: 1; margin-top: 6px; }
+  .mob-prof-next .meta { font-size: 12px; opacity: 0.85; margin-top: 4px; }
+  .mob-prof-next .amount { font-family: var(--display); font-size: 16px; margin-top: 12px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,0.18); }
+  .mob-prof-next .amount small { font-size: 11px; opacity: 0.75; font-family: var(--body); font-style: normal; margin-left: 6px; }
+
+  .mob-prof-alert {
+    margin: 10px 20px 0;
+    background: #FAEEDA;
+    border: 1px solid #F4D58A;
+    border-radius: 14px;
+    padding: 14px 16px;
+  }
+  .mob-prof-alert-head { font-size: 12px; font-weight: 500; color: #633806; text-transform: uppercase; letter-spacing: 0.04em; display: flex; align-items: center; gap: 6px; }
+  .mob-prof-alert-body { font-size: 11px; color: #854F0B; line-height: 1.45; margin-top: 6px; }
+  .mob-prof-alert-cta { margin-top: 10px; background: #633806; color: white; border: none; padding: 8px 14px; border-radius: 999px; font-size: 11px; font-weight: 500; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; font-family: var(--body); }
+
+  .mob-prof-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 14px 20px 6px; }
+  .mob-prof-stat { background: white; border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; }
+  .mob-prof-stat-label { font-size: 10px; color: var(--ink-mute); text-transform: uppercase; letter-spacing: 0.04em; }
+  .mob-prof-stat-value { font-family: var(--display); font-size: 19px; color: var(--fit-purple-deep, #26215C); margin-top: 4px; line-height: 1; }
+  .mob-prof-stat-sub { font-size: 10px; color: var(--ink-mute); margin-top: 4px; }
   ::-webkit-scrollbar { width: 10px; height: 10px; }
   ::-webkit-scrollbar-track { background: transparent; }
   ::-webkit-scrollbar-thumb { background: var(--line); border-radius: 5px; }
@@ -3316,6 +3401,96 @@
     <button class="mob-menu-link" type="button" onclick="mobileNavGoto('logs'); showView('logs', null); renderLogsView();">
       <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
       <span class="mob-menu-link-text">Actividad</span>
+    </button>
+  </div>
+</div>
+
+<!-- ============================================
+     INSTRUCTOR MOBILE — Bottom bar (3 items) + Menu overview
+     ============================================ -->
+<div class="mobile-bottom-bar-prof" aria-hidden="false">
+  <nav class="mobile-bottom-nav" role="tablist" aria-label="Navegación profesor móvil">
+    <button class="m-nav-item is-active" type="button" data-prof-tab="day" onclick="profNavGoto('day', this)" aria-label="Hoy">
+      <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+      <span>Hoy</span>
+    </button>
+    <button class="m-nav-item" type="button" data-prof-tab="week" onclick="profNavGoto('week', this)" aria-label="Semana">
+      <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="9" y1="14" x2="15" y2="14"/><line x1="9" y1="18" x2="15" y2="18"/></svg>
+      <span>Semana</span>
+    </button>
+    <button class="m-nav-item" type="button" data-prof-tab="menu" onclick="profToggleMenu(this)" aria-label="Menú">
+      <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+      <span>Menú</span>
+      <span class="menu-badge-red" id="prof-menu-badge" style="display: none; position: absolute; top: 4px; right: 14px; width: 7px; height: 7px; border-radius: 50%; background: #E24B4A; border: 1.5px solid #26215C;"></span>
+    </button>
+  </nav>
+</div>
+
+<div id="mobile-menu-prof" aria-hidden="true">
+  <div class="mob-menu-head">
+    <div class="mob-menu-user">
+      <div class="mob-menu-avatar" id="prof-menu-avatar">PR</div>
+      <div>
+        <div class="mob-menu-name" id="prof-menu-name">Profesor</div>
+        <div class="mob-menu-role" id="prof-menu-role">Cargando sede…</div>
+      </div>
+      <div class="mob-menu-head-actions">
+        <button type="button" onclick="logout()" aria-label="Cerrar sesión" title="Cerrar sesión">
+          <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <div class="mob-menu-section-label">tu próxima clase</div>
+  <button class="mob-prof-next" type="button" id="prof-menu-next-card" onclick="profMenuJumpToNext()">
+    <div class="tag">Próxima clase</div>
+    <div class="time" id="prof-menu-next-time">—</div>
+    <div class="meta" id="prof-menu-next-meta">—</div>
+    <div class="amount" id="prof-menu-next-amount">—</div>
+  </button>
+
+  <!-- Alerta de clases pendientes (oculta si no hay) -->
+  <div id="prof-menu-alert-wrap" style="display: none;">
+    <div class="mob-menu-section-label" style="margin-top: 6px;">requiere atención</div>
+    <div class="mob-prof-alert">
+      <div class="mob-prof-alert-head">
+        <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="14" height="14"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+        <span id="prof-menu-alert-title">— clases pendientes de marcar</span>
+      </div>
+      <div class="mob-prof-alert-body">Tienes 3 días desde la fecha de cada clase para confirmar asistencia. Si no, la clase queda como no dictada.</div>
+      <button class="mob-prof-alert-cta" onclick="profMenuJumpToAlert()">Ir a marcar <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="11" height="11"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></button>
+    </div>
+  </div>
+
+  <div class="mob-menu-section-label" style="margin-top: 14px;">resumen del mes</div>
+  <div class="mob-prof-stats">
+    <div class="mob-prof-stat">
+      <div class="mob-prof-stat-label">Clases dictadas</div>
+      <div class="mob-prof-stat-value" id="prof-menu-stat-classes">—</div>
+      <div class="mob-prof-stat-sub">este mes</div>
+    </div>
+    <div class="mob-prof-stat">
+      <div class="mob-prof-stat-label">Proyectado</div>
+      <div class="mob-prof-stat-value" id="prof-menu-stat-amount">—</div>
+      <div class="mob-prof-stat-sub">a fin de mes</div>
+    </div>
+  </div>
+
+  <div class="mob-menu-divider"></div>
+
+  <div class="mob-menu-list">
+    <button class="mob-menu-link" type="button" onclick="profNavGoto('day')">
+      <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+      <span class="mob-menu-link-text">Mi día</span>
+    </button>
+    <button class="mob-menu-link" type="button" onclick="profNavGoto('week')">
+      <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="9" y1="14" x2="15" y2="14"/><line x1="9" y1="18" x2="15" y2="18"/></svg>
+      <span class="mob-menu-link-text">Mi semana</span>
+    </button>
+    <button class="mob-menu-link" type="button" onclick="profNavGoto('pay')">
+      <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="3"/></svg>
+      <span class="mob-menu-link-text">Mis cobros</span>
     </button>
   </div>
 </div>
@@ -9011,6 +9186,183 @@ function asMoveStudent() {
   setTimeout(() => openMoveStudentModal(sid, hr), 180);
 }
 
+// ============================================
+// INSTRUCTOR MOBILE — Bottom bar (3 items) + Menu overview
+// Mismo patrón que coord pero más simple: Hoy / Semana / Menú.
+// El menú reemplaza el banner de pending + card de próxima clase del flow principal.
+// ============================================
+function profNavGoto(tab, btnEl) {
+  profCloseMenu();
+  if (tab === 'day') {
+    showView('instructor-day', null);
+    if (typeof switchInstructorTab === 'function') {
+      // No usamos el switchInstructorTab porque ya hicimos showView; solo aseguramos estado
+      STATE.instTab = 'day';
+    }
+    if (typeof renderInstructorDay === 'function') renderInstructorDay();
+  } else if (tab === 'week') {
+    // No existe vista semana separada todavía; abrimos el date picker nativo
+    // para que el profe pueda saltar a cualquier fecha de su semana.
+    if (typeof instructorOpenDatePicker === 'function') {
+      instructorOpenDatePicker({ currentTarget: btnEl || document.querySelector('.mobile-bottom-bar-prof [data-prof-tab="week"]') });
+    }
+  } else if (tab === 'pay') {
+    showView('instructor-pay', null);
+    STATE.instTab = 'pay';
+    if (typeof renderInstructorPayView === 'function') renderInstructorPayView();
+  }
+  // Actualizar activo en bottom bar
+  document.querySelectorAll('.mobile-bottom-bar-prof .m-nav-item').forEach(b => b.classList.remove('is-active'));
+  const targetBtn = btnEl || document.querySelector('.mobile-bottom-bar-prof [data-prof-tab="' + tab + '"]');
+  if (targetBtn) targetBtn.classList.add('is-active');
+}
+
+function profToggleMenu(btnEl) {
+  const screen = document.getElementById('mobile-menu-prof');
+  if (!screen) return;
+  if (screen.classList.contains('is-open')) {
+    profCloseMenu();
+  } else {
+    profOpenMenu(btnEl);
+  }
+}
+
+function profOpenMenu(btnEl) {
+  const screen = document.getElementById('mobile-menu-prof');
+  if (!screen) return;
+  screen.classList.add('is-open');
+  screen.setAttribute('aria-hidden', 'false');
+  document.body.style.overflow = 'hidden';
+  document.querySelectorAll('.mobile-bottom-bar-prof .m-nav-item').forEach(b => b.classList.remove('is-active'));
+  const menuBtn = document.querySelector('.mobile-bottom-bar-prof [data-prof-tab="menu"]');
+  if (menuBtn) menuBtn.classList.add('is-active');
+  updateMobileProfMenuData();
+}
+
+function profCloseMenu() {
+  const screen = document.getElementById('mobile-menu-prof');
+  if (!screen) return;
+  screen.classList.remove('is-open');
+  screen.setAttribute('aria-hidden', 'true');
+  document.body.style.overflow = '';
+  // Restaurar activo según vista actual
+  const activeView = document.querySelector('.view.is-active');
+  const viewId = activeView ? activeView.id.replace('view-', '') : '';
+  document.querySelectorAll('.mobile-bottom-bar-prof .m-nav-item').forEach(b => b.classList.remove('is-active'));
+  let tabKey = 'day';
+  if (viewId === 'instructor-pay') tabKey = 'pay';
+  const btn = document.querySelector('.mobile-bottom-bar-prof [data-prof-tab="' + tabKey + '"]');
+  if (btn) btn.classList.add('is-active');
+}
+
+function profMenuJumpToNext() {
+  profCloseMenu();
+  // Ir a Mi día si no estamos ya ahí; el block .data-inst-next del cuerpo principal
+  // está oculto en mobile, pero la card de hora correspondiente está en el listado.
+  showView('instructor-day', null);
+  setTimeout(() => {
+    const nowCard = document.querySelector('.inst-hour-card.is-now');
+    if (nowCard && typeof nowCard.scrollIntoView === 'function') {
+      nowCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  }, 240);
+}
+
+function profMenuJumpToAlert() {
+  profCloseMenu();
+  showView('instructor-day', null);
+  // El banner está oculto en mobile, pero `instructorGoToPending` salta al día correcto
+  // donde la clase aparecerá en el listado.
+  const firstPending = (STATE.instPendingClasses && STATE.instPendingClasses[0]) || null;
+  if (firstPending && typeof instructorGoToPending === 'function') {
+    setTimeout(() => instructorGoToPending(firstPending.session_date, firstPending.location_id), 200);
+  }
+}
+
+function updateMobileProfMenuData() {
+  // Header: avatar, nombre, sede
+  try {
+    const inst = CURRENT_USER && CURRENT_USER.record;
+    if (inst) {
+      const av = document.getElementById('prof-menu-avatar');
+      const initials = (inst.initials || ((inst.first_name || '?')[0] + ((inst.last_name || '')[0] || ''))).toUpperCase();
+      if (av) av.textContent = initials;
+      const nameEl = document.getElementById('prof-menu-name');
+      if (nameEl) nameEl.textContent = (inst.handle || inst.first_name || 'Profesor');
+      const loc = (typeof getCurrentLocation === 'function') ? getCurrentLocation() : null;
+      const roleEl = document.getElementById('prof-menu-role');
+      if (roleEl) roleEl.textContent = loc ? ('Profesor · ' + loc.name) : 'Profesor';
+    }
+  } catch (e) { console.warn('[prof-menu] header', e); }
+
+  // Tu próxima clase: leer del DOM del cuerpo (data-inst-next) que ya rendea renderInstructorNextClassBlock
+  try {
+    const nextBlock = document.querySelector('[data-inst-next]');
+    if (nextBlock) {
+      const timeEl = nextBlock.querySelector('.inst-next-time, .inst-hour-time, [class*="next-time"]');
+      const tagEl = nextBlock.querySelector('.inst-next-tag');
+      const metaEl = nextBlock.querySelector('.inst-next-meta, .inst-next-students');
+      const amountEl = nextBlock.querySelector('.inst-next-amount, .inst-next-projected');
+      const timeText = (timeEl && timeEl.textContent.trim()) || '';
+      const metaText = (metaEl && metaEl.textContent.trim()) || '';
+      const amountText = (amountEl && amountEl.textContent.trim()) || '';
+      const tEl = document.getElementById('prof-menu-next-time');
+      const mEl = document.getElementById('prof-menu-next-meta');
+      const aEl = document.getElementById('prof-menu-next-amount');
+      if (tEl) tEl.textContent = timeText || 'Sin clase próxima';
+      if (mEl) mEl.textContent = metaText || (tagEl ? tagEl.textContent.trim() : '—');
+      if (aEl) aEl.textContent = amountText || '—';
+    }
+  } catch (e) { console.warn('[prof-menu] next class', e); }
+
+  // Alerta de pendientes
+  try {
+    const pending = STATE.instPendingClasses || [];
+    const wrap = document.getElementById('prof-menu-alert-wrap');
+    const badge = document.getElementById('prof-menu-badge');
+    if (pending.length > 0) {
+      if (wrap) wrap.style.display = 'block';
+      const title = document.getElementById('prof-menu-alert-title');
+      if (title) title.textContent = pending.length + ' clase' + (pending.length === 1 ? '' : 's') + ' pendiente' + (pending.length === 1 ? '' : 's') + ' de marcar';
+      if (badge) badge.style.display = 'block';
+    } else {
+      if (wrap) wrap.style.display = 'none';
+      if (badge) badge.style.display = 'none';
+    }
+  } catch (e) { console.warn('[prof-menu] alert', e); }
+
+  // Stats del mes — leer de STATE.instMonthStats
+  try {
+    const s = STATE.instMonthStats || {};
+    const c = document.getElementById('prof-menu-stat-classes');
+    if (c) c.textContent = (s.classesCount != null ? s.classesCount : (s.delivered != null ? s.delivered : '—'));
+    const a = document.getElementById('prof-menu-stat-amount');
+    if (a) {
+      const proj = s.projected || s.totalProjected || s.amount || null;
+      a.textContent = proj != null ? ('S/ ' + (typeof proj === 'number' ? proj.toLocaleString('es-PE') : proj)) : '—';
+    }
+  } catch (e) { console.warn('[prof-menu] stats', e); }
+}
+
+// Cuando renderInstructorDay carga las pending classes, las guarda en STATE
+// para que el menú las pueda leer sin re-query. Hook ligero al loader original.
+(function hookInstPending() {
+  if (typeof loadInstructorPendingClasses !== 'function') return;
+  const orig = loadInstructorPendingClasses;
+  if (orig.__hookedForProfMenu) return;
+  window.loadInstructorPendingClasses = async function(instructorId) {
+    const result = await orig(instructorId);
+    STATE.instPendingClasses = result || [];
+    // Actualizar badge si el menú no está abierto
+    try {
+      const badge = document.getElementById('prof-menu-badge');
+      if (badge) badge.style.display = (result && result.length > 0) ? 'block' : 'none';
+    } catch (e) {}
+    return result;
+  };
+  window.loadInstructorPendingClasses.__hookedForProfMenu = true;
+})();
+
 async function changeDay(delta) {
   STATE.currentDate.setDate(STATE.currentDate.getDate() + delta);
   STATE.miDiaExpandedHour = null;
@@ -11171,6 +11523,10 @@ async function logout() {
 
 async function initForRole() {
   const role = CURRENT_USER.role;
+
+  // Marcar el body con la clase del rol activo (útil para CSS condicional)
+  document.body.classList.remove('role-coordinator', 'role-instructor', 'role-student');
+  document.body.classList.add('role-' + role);
 
   // Aplicar visibility del sidebar según rol (oculta entradas data-coord-only para no-coords)
   applyRoleVisibility();
