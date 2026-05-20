@@ -1063,18 +1063,19 @@
   .inst-check-btn:hover { border-color: var(--good); color: var(--good); }
   .inst-check-btn:active { transform: scale(0.92); }
   .inst-check-btn.is-attended { background: var(--good); border-color: var(--good); color: white; }
-  .inst-check-btn.is-saving { pointer-events: none; opacity: 0.85; }
+  .inst-check-btn.is-saving { pointer-events: none; color: transparent !important; }
   .inst-check-btn.is-saving::after {
     content: '';
     position: absolute;
-    inset: -2px;
+    inset: 7px;
     border-radius: 50%;
-    border: 2px solid transparent;
+    border: 2px solid rgba(83, 74, 183, 0.22);
     border-top-color: var(--fit-purple);
-    border-right-color: var(--fit-purple);
-    animation: check-spin 0.6s linear infinite;
+    animation: check-spin 0.55s linear infinite;
+    z-index: 1;
   }
-  .inst-check-btn.is-saving.is-attended::after { border-top-color: white; border-right-color: white; }
+  .inst-check-btn.is-saving.is-attended { background: var(--good); border-color: var(--good); }
+  .inst-check-btn.is-saving.is-attended::after { border-color: rgba(255,255,255,0.35); border-top-color: white; }
   @keyframes check-spin { to { transform: rotate(360deg); } }
 
   /* Empty slot */
@@ -12507,6 +12508,7 @@ async function loadInstructorClassesForDate(inst, dateIso) {
           source: b.source || 'fixed',
           attendance: att,
           bookingId: b.id,
+          bookingCancelledAt: b.cancelled_at || null,
           bookingConfirmedAt: b.confirmed_at || null,
         });
       }
@@ -13841,80 +13843,110 @@ function instructorOpenMoveModal(studentId, dateIso, hour, locationId) {
 async function instructorWriteAttendance(studentId, dateIso, hour, locationId, status) {
   if (!isOnline) { showToast('Necesitas conexión', 'error'); return; }
 
-  // 1. OPTIMISTIC UI — Pintar loading instantáneo en el botón check del alumno
-  // Buscamos cualquier botón del DOM relacionado a este alumno
+  // 1. Buscar elementos del DOM y leer del cache
   const checkBtn = document.querySelector(
     `.inst-stud-row [onclick*="${studentId}"][onclick*="${dateIso}"][onclick*="${hour}"][onclick*="${locationId}"]`
   );
-  const studRow = checkBtn ? checkBtn.closest('.inst-stud-row') : null;
-  if (checkBtn) checkBtn.classList.add('is-saving');
 
-  // Capturar status PREVIO para el log (saber si está marcando o revirtiendo)
   let prevStatus = null;
-  try {
-    // Buscar sesión y attendance previos en STATE cache si disponible
-    const cached = STATE.instCachedClasses?.[dateIso];
-    if (cached) {
-      for (const c of cached) {
-        if (c.hour === hour && c.location?.id === locationId) {
-          const cs = c.students?.find(x => x.student.id === studentId);
-          if (cs?.attendance) prevStatus = cs.attendance.status;
-          break;
+  let cachedSession = null;
+  let cachedBookingId = null;
+  let cachedBookingCancelledAt = null;
+  let cachedAttendanceId = null;
+  const cached = (STATE.instClassesCache || {})[dateIso];
+  if (cached) {
+    for (const c of cached) {
+      if (c.hour === hour && c.location?.id === locationId) {
+        cachedSession = c.session || null;
+        const cs = c.students?.find(x => x.student.id === studentId);
+        if (cs) {
+          cachedBookingId = cs.bookingId || null;
+          cachedBookingCancelledAt = cs.bookingCancelledAt || null;
+          if (cs.attendance) {
+            prevStatus = cs.attendance.status;
+            cachedAttendanceId = cs.attendance.id;
+          }
         }
+        break;
       }
     }
-  } catch(e) {}
+  }
+
+  // 2. OPTIMISTIC UI — pintar el estado destino INMEDIATAMENTE con spinner dentro del círculo
+  const prevAttendedClass = checkBtn ? checkBtn.classList.contains('is-attended') : false;
+  if (checkBtn) {
+    checkBtn.classList.add('is-saving');
+    // Pre-aplicar el color destino (verde si va a estar attended, blanco si va a pending)
+    if (status === 'attended') {
+      checkBtn.classList.add('is-attended');
+    } else if (status === 'pending' || ['recoverable','lost','no_show'].includes(status)) {
+      checkBtn.classList.remove('is-attended');
+    }
+  }
 
   try {
-    // Asegurar session
-    let { data: session } = await sb.from('class_sessions')
-      .select('*')
-      .eq('location_id', locationId)
-      .eq('session_date', dateIso)
-      .eq('hour', hour)
-      .maybeSingle();
+    // 3. Asegurar session (saltarse SELECT si está en cache)
+    let session = cachedSession;
     if (!session) {
-      const { data: created, error } = await sb.from('class_sessions').insert({
-        location_id: locationId, session_date: dateIso, hour: hour,
-        instructor_id: CURRENT_USER.record.id,
-      }).select().single();
-      if (error) throw error;
-      session = created;
+      const { data: sExisting } = await sb.from('class_sessions')
+        .select('*')
+        .eq('location_id', locationId)
+        .eq('session_date', dateIso)
+        .eq('hour', hour)
+        .maybeSingle();
+      if (sExisting) {
+        session = sExisting;
+      } else {
+        const { data: created, error } = await sb.from('class_sessions').insert({
+          location_id: locationId, session_date: dateIso, hour: hour,
+          instructor_id: CURRENT_USER.record.id,
+        }).select().single();
+        if (error) throw error;
+        session = created;
+      }
     }
 
-    // Asegurar booking (re-activar si está cancelled)
-    let { data: booking } = await sb.from('session_bookings')
-      .select('id, cancelled_at')
-      .eq('session_id', session.id)
-      .eq('student_id', studentId)
-      .maybeSingle();
-
-    if (!booking) {
-      const stud = STATE.students.find(s => s.id === studentId);
-      const source = stud?.modality === 'flexible' ? 'flexible' : 'fixed';
-      const { data: newB, error } = await sb.from('session_bookings').insert({
-        session_id: session.id, student_id: studentId, source,
-      }).select().single();
-      if (error) throw error;
-      booking = newB;
+    // 4. Asegurar booking (saltarse SELECT si está en cache)
+    let booking = null;
+    if (cachedBookingId) {
+      booking = { id: cachedBookingId, cancelled_at: cachedBookingCancelledAt };
+    } else {
+      const { data: bExisting } = await sb.from('session_bookings')
+        .select('id, cancelled_at')
+        .eq('session_id', session.id)
+        .eq('student_id', studentId)
+        .maybeSingle();
+      if (bExisting) {
+        booking = bExisting;
+      } else {
+        const stud = STATE.students.find(s => s.id === studentId);
+        const source = stud?.modality === 'flexible' ? 'flexible' : 'fixed';
+        const { data: newB, error } = await sb.from('session_bookings').insert({
+          session_id: session.id, student_id: studentId, source,
+        }).select().single();
+        if (error) throw error;
+        booking = newB;
+      }
     }
 
-    // Liberar/re-activar slot según status
+    // 5. Liberar/re-activar slot según status
     const releaseSlot = ['recoverable','lost','no_show'].includes(status);
     const reactivateBooking = (status === 'attended' || status === 'pending');
     const stamp = new Date().toLocaleString('es-PE', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
     const actor = `profesor (${CURRENT_USER.record.first_name || ''})`;
     const reasonMap = { recoverable: 'falta justificada', lost: 'cancelación tardía', no_show: 'no vino sin avisar' };
-
     const labelMap = { attended: 'asistió', recoverable: 'falta justificada (recuperable)', lost: 'cancelación tardía', no_show: 'no vino sin avisar', pending: 'pendiente' };
     const noteLine = `[${stamp}] ${labelMap[status] || status} · marcado por ${actor}`;
     const isRecoverable = (status === 'recoverable');
     const countsAgainst = ['attended','lost','no_show'].includes(status);
 
-    // Paralelo: obtener paquete activo + buscar attendance existente
+    // 6. Paralelo: obtener paquete activo (si aplica) + buscar attendance existente (si no la teníamos en cache)
+    const needAttLookup = !cachedAttendanceId && (prevStatus == null);
     const [pkgId, existingAttRes] = await Promise.all([
       countsAgainst ? getOrCreateActivePackageId(studentId) : Promise.resolve(null),
-      sb.from('attendance').select('id').eq('session_id', session.id).eq('student_id', studentId).maybeSingle(),
+      needAttLookup
+        ? sb.from('attendance').select('id').eq('session_id', session.id).eq('student_id', studentId).maybeSingle()
+        : Promise.resolve({ data: cachedAttendanceId ? { id: cachedAttendanceId } : null }),
     ]);
     const existing = existingAttRes?.data;
 
@@ -13930,15 +13962,13 @@ async function instructorWriteAttendance(studentId, dateIso, hour, locationId, s
       student_package_id: pkgId,
     };
 
-    // Operaciones en PARALELO: attendance upsert + booking cancel/reactivate + class delivered
+    // 7. Operaciones en PARALELO: attendance upsert + booking cancel/reactivate + class delivered
     const ops = [];
-    // attendance
     if (existing) {
       ops.push(sb.from('attendance').update(payload).eq('id', existing.id));
     } else {
       ops.push(sb.from('attendance').insert(payload));
     }
-    // booking
     if (releaseSlot && !booking.cancelled_at) {
       ops.push(sb.from('session_bookings').update({
         cancelled_at: new Date().toISOString(),
@@ -13949,7 +13979,6 @@ async function instructorWriteAttendance(studentId, dateIso, hour, locationId, s
         cancelled_at: null, cancelled_reason: null,
       }).eq('id', booking.id));
     }
-    // class delivered
     if (['attended','recoverable','lost','no_show'].includes(status)) {
       ops.push(sb.from('class_sessions').update({
         class_status: 'delivered',
@@ -13963,10 +13992,10 @@ async function instructorWriteAttendance(studentId, dateIso, hour, locationId, s
       if (r?.error) throw r.error;
     }
 
-    // En BACKGROUND (sin await): recalc paquete counters
+    // 8. En BACKGROUND (sin await): recalc paquete counters
     recalcPackageCounters(studentId).catch(e => console.warn('recalc bg:', e));
 
-    // Log diferenciado según transición
+    // 9. Log diferenciado
     try {
       const stud = STATE.students.find(s => s.id === studentId);
       const studName = stud ? `${stud.first_name || ''} ${stud.last_name || ''}`.trim() : studentId;
@@ -13981,7 +14010,7 @@ async function instructorWriteAttendance(studentId, dateIso, hour, locationId, s
       }, { status, prev_status: prevStatus, is_recoverable: isRecoverable, counts_against_package: countsAgainst });
     } catch(e) { /* never block */ }
 
-    // Quitar loading
+    // 10. Quitar SOLO la clase de loading; el color final (verde o no) ya estaba aplicado por la optimistic UI
     if (checkBtn) checkBtn.classList.remove('is-saving');
 
     // Toast
@@ -13999,8 +14028,13 @@ async function instructorWriteAttendance(studentId, dateIso, hour, locationId, s
     renderInstructorDay();
 
   } catch (err) {
-    // Revertir loading
-    if (checkBtn) checkBtn.classList.remove('is-saving');
+    // Revertir UI optimista
+    if (checkBtn) {
+      checkBtn.classList.remove('is-saving');
+      // Restaurar el estado previo del fondo verde
+      if (prevAttendedClass) checkBtn.classList.add('is-attended');
+      else checkBtn.classList.remove('is-attended');
+    }
     console.error('writeAttendance error', err);
     showToast('Error: ' + (err.message || 'no se pudo guardar'), 'error');
   }
