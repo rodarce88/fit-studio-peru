@@ -1067,15 +1067,16 @@
   .inst-check-btn.is-saving::after {
     content: '';
     position: absolute;
-    inset: 7px;
+    top: 5px; left: 5px; right: 5px; bottom: 5px;
     border-radius: 50%;
-    border: 2px solid rgba(83, 74, 183, 0.22);
+    border: 2.5px solid rgba(83, 74, 183, 0.20);
     border-top-color: var(--fit-purple);
+    border-right-color: var(--fit-purple);
     animation: check-spin 0.55s linear infinite;
-    z-index: 1;
+    z-index: 2;
   }
   .inst-check-btn.is-saving.is-attended { background: var(--good); border-color: var(--good); }
-  .inst-check-btn.is-saving.is-attended::after { border-color: rgba(255,255,255,0.35); border-top-color: white; }
+  .inst-check-btn.is-saving.is-attended::after { border-color: rgba(255,255,255,0.32); border-top-color: white; border-right-color: white; }
   @keyframes check-spin { to { transform: rotate(360deg); } }
 
   /* Empty slot */
@@ -13887,7 +13888,6 @@ async function instructorWriteAttendance(studentId, dateIso, hour, locationId, s
   const prevAttendedClass = checkBtn ? checkBtn.classList.contains('is-attended') : false;
   if (checkBtn) {
     checkBtn.classList.add('is-saving');
-    // Pre-aplicar el color destino (verde si va a estar attended, blanco si va a pending)
     if (status === 'attended') {
       checkBtn.classList.add('is-attended');
     } else if (status === 'pending' || ['recoverable','lost','no_show'].includes(status)) {
@@ -13895,8 +13895,13 @@ async function instructorWriteAttendance(studentId, dateIso, hour, locationId, s
     }
   }
 
+  // 3. Garantizar que el spinner sea visible al menos 280ms (UX consistente
+  // incluso cuando las queries terminan rápido)
+  const SPINNER_MIN_MS = 280;
+  const spinnerMinPromise = new Promise(r => setTimeout(r, SPINNER_MIN_MS));
+
   try {
-    // 3. Asegurar session (saltarse SELECT si está en cache)
+    // 4. Asegurar session (saltar SELECT si está en cache)
     let session = cachedSession;
     if (!session) {
       const { data: sExisting } = await sb.from('class_sessions')
@@ -13917,7 +13922,7 @@ async function instructorWriteAttendance(studentId, dateIso, hour, locationId, s
       }
     }
 
-    // 4. Asegurar booking (saltarse SELECT si está en cache)
+    // 5. Asegurar booking (saltar SELECT si está en cache)
     let booking = null;
     if (cachedBookingId) {
       booking = { id: cachedBookingId, cancelled_at: cachedBookingCancelledAt };
@@ -13940,7 +13945,7 @@ async function instructorWriteAttendance(studentId, dateIso, hour, locationId, s
       }
     }
 
-    // 5. Liberar/re-activar slot según status
+    // 6. Calcular flags
     const releaseSlot = ['recoverable','lost','no_show'].includes(status);
     const reactivateBooking = (status === 'attended' || status === 'pending');
     const stamp = new Date().toLocaleString('es-PE', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
@@ -13950,8 +13955,9 @@ async function instructorWriteAttendance(studentId, dateIso, hour, locationId, s
     const noteLine = `[${stamp}] ${labelMap[status] || status} · marcado por ${actor}`;
     const isRecoverable = (status === 'recoverable');
     const countsAgainst = ['attended','lost','no_show'].includes(status);
+    const markedAt = new Date().toISOString();
 
-    // 6. Paralelo: obtener paquete activo (si aplica) + buscar attendance existente (si no la teníamos en cache)
+    // 7. Paralelo: obtener paquete activo + lookup attendance existente (solo si no en cache)
     const needAttLookup = !cachedAttendanceId && (prevStatus == null);
     const [pkgId, existingAttRes] = await Promise.all([
       countsAgainst ? getOrCreateActivePackageId(studentId) : Promise.resolve(null),
@@ -13969,16 +13975,17 @@ async function instructorWriteAttendance(studentId, dateIso, hour, locationId, s
       is_recoverable: isRecoverable,
       counts_against_package: countsAgainst,
       notes: noteLine,
-      marked_at: new Date().toISOString(),
+      marked_at: markedAt,
       student_package_id: pkgId,
     };
 
-    // 7. Operaciones en PARALELO: attendance upsert + booking cancel/reactivate + class delivered
+    // 8. Operaciones en PARALELO: attendance upsert + booking cancel/reactivate + class delivered
+    // OJO: el INSERT usa .select() para devolver el id (lo necesitamos para el cache)
     const ops = [];
     if (existing) {
-      ops.push(sb.from('attendance').update(payload).eq('id', existing.id));
+      ops.push(sb.from('attendance').update(payload).eq('id', existing.id).select('id'));
     } else {
-      ops.push(sb.from('attendance').insert(payload));
+      ops.push(sb.from('attendance').insert(payload).select('id'));
     }
     if (releaseSlot && !booking.cancelled_at) {
       ops.push(sb.from('session_bookings').update({
@@ -14003,10 +14010,19 @@ async function instructorWriteAttendance(studentId, dateIso, hour, locationId, s
       if (r?.error) throw r.error;
     }
 
-    // 8. En BACKGROUND (sin await): recalc paquete counters
+    // 9. Capturar el id del attendance (insertado o existente)
+    let attendanceId = existing?.id || cachedAttendanceId || null;
+    if (!attendanceId && results[0]?.data) {
+      // El primer op es el attendance: si fue INSERT con .select(), data es array con la fila nueva
+      const firstData = results[0].data;
+      if (Array.isArray(firstData) && firstData[0]?.id) attendanceId = firstData[0].id;
+      else if (firstData?.id) attendanceId = firstData.id;
+    }
+
+    // 10. Background: recalc paquete counters (no bloquea)
     recalcPackageCounters(studentId).catch(e => console.warn('recalc bg:', e));
 
-    // 9. Log diferenciado
+    // 11. Log de actividad (no bloquea)
     try {
       const stud = STATE.students.find(s => s.id === studentId);
       const studName = stud ? `${stud.first_name || ''} ${stud.last_name || ''}`.trim() : studentId;
@@ -14016,15 +14032,62 @@ async function instructorWriteAttendance(studentId, dateIso, hour, locationId, s
       else if (['recoverable','lost','no_show'].includes(status)) action = 'attendance.absence';
       logActivity(action, {
         table: 'attendance',
-        id: existing?.id || booking.id,
+        id: attendanceId || booking.id,
         label: `${studName} · ${session.session_date} ${formatHour(session.hour)}`
       }, { status, prev_status: prevStatus, is_recoverable: isRecoverable, counts_against_package: countsAgainst });
     } catch(e) { /* never block */ }
 
-    // 10. Quitar SOLO la clase de loading; el color final (verde o no) ya estaba aplicado por la optimistic UI
-    if (checkBtn) checkBtn.classList.remove('is-saving');
+    // 12. ESPERAR el mínimo visual del spinner ANTES de re-renderear.
+    // Esto garantiza que el spinner sea visible siempre, no importa qué tan rápido fue la BD.
+    await spinnerMinPromise;
 
-    // Toast
+    // 13. Actualizar el cache LOCALMENTE (sin recargar de BD) — esta es la optimización principal
+    const cachedNow = (STATE.instClassesCache || {})[dateIso];
+    if (cachedNow) {
+      for (const c of cachedNow) {
+        if (c.hour !== hour || c.location?.id !== locationId) continue;
+        // Actualizar session si no estaba
+        if (!c.session && session) c.session = session;
+        // Actualizar/crear attendance del alumno
+        let cs = c.students?.find(x => x.student.id === studentId);
+        if (!cs) {
+          // Alumno nuevo en esta clase (caso raro, ej. walk-in)
+          const stud = STATE.students.find(s => s.id === studentId);
+          if (stud) {
+            cs = { student: stud, source: 'walk_in', bookingId: booking.id, bookingCancelledAt: null, bookingConfirmedAt: null };
+            c.students.push(cs);
+          }
+        }
+        if (cs) {
+          cs.attendance = {
+            id: attendanceId,
+            session_id: session.id,
+            student_id: studentId,
+            booking_id: booking.id,
+            status,
+            is_recoverable: isRecoverable,
+            counts_against_package: countsAgainst,
+            student_package_id: pkgId,
+            marked_at: markedAt,
+            notes: noteLine,
+          };
+          if (releaseSlot) cs.bookingCancelledAt = new Date().toISOString();
+          else if (reactivateBooking) cs.bookingCancelledAt = null;
+          if (!cs.bookingId) cs.bookingId = booking.id;
+        }
+        // Recalcular `marked` count
+        c.marked = c.students.filter(x => x.attendance && x.attendance.status !== 'pending').length;
+        break;
+      }
+      // Re-render local (instantáneo, sin queries)
+      if (typeof renderInstructorClassesBlock === 'function') renderInstructorClassesBlock(cachedNow);
+      if (typeof renderInstructorNextClassBlock === 'function') renderInstructorNextClassBlock(cachedNow);
+    }
+
+    // 14. Invalidar stats del mes (se recalculan en background al refrescar)
+    STATE.instMonthStats = null;
+
+    // 15. Toast
     const toastMap = {
       attended: '✓ Asistió',
       recoverable: '⊙ Falta justificada · cupo liberado',
@@ -14034,15 +14097,11 @@ async function instructorWriteAttendance(studentId, dateIso, hour, locationId, s
     };
     showToast(toastMap[status] || 'Marcado', 'success');
 
-    STATE.instMonthStats = null;
-    instructorInvalidateCache(dateIso);
-    renderInstructorDay();
-
   } catch (err) {
-    // Revertir UI optimista
+    // Esperar el mínimo visual antes de revertir (evita flash del spinner)
+    await spinnerMinPromise;
     if (checkBtn) {
       checkBtn.classList.remove('is-saving');
-      // Restaurar el estado previo del fondo verde
       if (prevAttendedClass) checkBtn.classList.add('is-attended');
       else checkBtn.classList.remove('is-attended');
     }
