@@ -14222,6 +14222,21 @@ async function instructorOpenAddStudent(dateIso, hour, locationId) {
   const modal = document.getElementById('instructor-add-modal');
   modal.classList.add('is-open');
   instructorRenderAddSearch('', { mode: 'list' });
+
+  // Refrescar STATE.students en background — el cache local puede estar stale
+  // si el coordinador agregó alumnos durante esta sesión del profesor.
+  try {
+    const { data: freshStudents } = await sb.from('students').select('*').eq('status', 'active').order('first_name');
+    if (freshStudents) {
+      STATE.students = freshStudents;
+      // Re-rendear si el modal sigue abierto y el usuario no escribió todavía
+      if (modal.classList.contains('is-open') && STATE.instAddMode === 'list') {
+        instructorRenderAddSearch('', { mode: 'list' });
+      }
+    }
+  } catch (e) {
+    console.warn('[instructorOpenAddStudent] refresh students failed:', e);
+  }
 }
 
 function instructorRenderAddSearch(query, opts) {
@@ -14304,13 +14319,15 @@ function _instAddCtxLabel() {
 function instructorRenderResults(query) {
   const results = document.getElementById('inst-add-results');
   if (!results) return;
-  const q = (query || '').toLowerCase().trim();
+  // Normalizar query: lowercase + sin acentos
+  const norm = (str) => (str || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  const q = norm(query).trim();
   const mode = STATE.instAddMode || 'list';
 
-  // Helper para escapar y resaltar coincidencia
+  // Helper para escapar y resaltar coincidencia (matching insensible a acentos)
   const highlight = (text) => {
     if (!q || !text) return escape(text);
-    const lower = text.toLowerCase();
+    const lower = norm(text);
     const idx = lower.indexOf(q);
     if (idx === -1) return escape(text);
     return escape(text.slice(0, idx))
@@ -14321,9 +14338,9 @@ function instructorRenderResults(query) {
   let matches = STATE.students || [];
   if (q) {
     matches = matches.filter(s => {
-      const name = ((s.first_name || '') + ' ' + (s.last_name || '')).toLowerCase();
+      const name = norm((s.first_name || '') + ' ' + (s.last_name || ''));
       const phone = (s.phone || '').replace(/\s/g, '');
-      const doc = (s.document_number || '').toLowerCase();
+      const doc = norm(s.document_number || '');
       return name.includes(q) || phone.includes(q) || doc.includes(q);
     });
   } else {
