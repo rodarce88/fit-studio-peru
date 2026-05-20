@@ -660,6 +660,15 @@
     .released-header { padding-left: 18px; padding-right: 18px; }
     /* Ocultar botón "Nuevo alumno" del dashboard en mobile (el FAB lo reemplaza) */
     body:not(.no-sidebar) #view-dashboard .page-header .page-actions { display: none; }
+    /* Compactar header del timeline-card: "Clases de hoy · Miércoles 20 may" + day-nav
+       ocupaban casi 40% del viewport. Reducimos padding, font-size y truncamos. */
+    body:not(.no-sidebar) .timeline-header { padding: 14px 16px; flex-wrap: nowrap; gap: 10px; }
+    body:not(.no-sidebar) .timeline-title { flex: 1; min-width: 0; overflow: hidden; }
+    body:not(.no-sidebar) .timeline-title h2 { font-size: 16px; line-height: 1.25; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    body:not(.no-sidebar) .day-nav { padding: 2px; flex-shrink: 0; gap: 2px; }
+    body:not(.no-sidebar) .day-nav button { padding: 5px 11px; font-size: 11px; }
+    body:not(.no-sidebar) .day-nav .nav-arrow { width: 28px; height: 28px; }
+    body:not(.no-sidebar) .day-nav .nav-arrow svg { width: 16px; height: 16px; }
     /* Widget cobranza: layout compacto en mobile */
     .cobranza-widget { padding: 16px; gap: 12px !important; }
     .cob-gauge { max-width: 200px; margin: 0 auto; }
