@@ -620,6 +620,143 @@
   .mob-menu-badge.neutral { background: #F1EFE8; color: #444441; }
   .mob-menu-badge.success { background: #EAF3DE; color: #3B6D11; }
   .mob-menu-divider { height: 1px; background: var(--line); margin: 10px 20px; }
+
+  /* ==============================================================
+     COORD MOBILE — Simplificación de cards de alumno + Action Sheet
+     ============================================================== */
+  /* Botón ⋮ que reemplaza los 3 botones att-btn en mobile */
+  .att-btn-mob {
+    display: none;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    border: 1.5px solid var(--line);
+    background: white;
+    color: var(--ink-soft);
+    cursor: pointer;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    transition: all 0.15s;
+  }
+  .att-btn-mob:hover, .att-btn-mob:active { border-color: var(--fit-purple); color: var(--fit-purple); background: var(--fit-lavender-pale); }
+
+  /* Utility classes para alternar contenido desktop/mobile */
+  .show-mobile-only { display: none; }
+
+  @media (max-width: 800px) {
+    .hide-mobile { display: none !important; }
+    .show-mobile-only { display: inline-flex !important; align-items: center; justify-content: center; }
+    /* Ocultar los 3 botones desktop y mostrar el ⋮ */
+    .student-row .attendance-toggle { display: none !important; }
+    .student-row .att-btn-mob { display: inline-flex; }
+    /* Compactar chips: padding más chico cuando solo hay icono */
+    .student-row .modality-pill { padding: 2px 7px; }
+    .student-row .data-warn { font-size: 14px; line-height: 1; }
+    /* Ocultar botón "Nuevo alumno" del dashboard en mobile (el FAB lo reemplaza) */
+    body:not(.no-sidebar) #view-dashboard .page-header .page-actions { display: none; }
+    /* Widget cobranza: layout compacto en mobile */
+    .cobranza-widget { padding: 16px; gap: 12px !important; }
+    .cob-gauge { max-width: 200px; margin: 0 auto; }
+    .cob-gauge svg { max-height: 130px; }
+    .cob-amount { font-size: 28px !important; }
+    .cob-stats { gap: 16px; }
+    .cob-stat-value { font-size: 15px !important; }
+    .cob-chevron { display: none; }
+    /* Page header en mobile coord — título más controlado */
+    body:not(.no-sidebar) #view-dashboard .page-title { font-size: 26px; line-height: 1.15; }
+    /* Search input full width sin overflow */
+    .dash-search-wrap { margin-bottom: 18px; }
+  }
+
+  /* Action Sheet — bottom sheet de acciones del alumno (mobile) */
+  #student-actions-sheet {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 9998;
+  }
+  #student-actions-sheet.is-open { display: block; }
+  .as-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+    animation: asFadeIn 0.18s ease-out;
+  }
+  .as-panel {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: white;
+    border-radius: 20px 20px 0 0;
+    padding: 8px 0 20px;
+    box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.18);
+    animation: asSlideUp 0.24s ease-out;
+    max-height: 80vh;
+    overflow-y: auto;
+  }
+  @keyframes asFadeIn { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes asSlideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+  .as-handle { width: 36px; height: 4px; border-radius: 2px; background: var(--line); margin: 8px auto 16px; }
+  .as-header { padding: 0 20px 12px; border-bottom: 1px solid var(--line-soft); }
+  .as-title { font-size: 12px; color: var(--ink-mute); text-transform: uppercase; letter-spacing: 0.06em; font-weight: 500; }
+  .as-subtitle { font-size: 16px; font-weight: 500; color: var(--ink); margin-top: 4px; font-family: var(--display); font-style: italic; }
+  .as-body { padding: 8px 14px; }
+  .as-btn {
+    display: flex;
+    width: 100%;
+    align-items: center;
+    gap: 14px;
+    padding: 14px 14px;
+    border-radius: 12px;
+    border: none;
+    background: white;
+    cursor: pointer;
+    text-align: left;
+    transition: background 0.15s;
+    font-family: var(--body);
+  }
+  .as-btn:hover, .as-btn:active { background: var(--fit-cream); }
+  .as-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    flex-shrink: 0;
+  }
+  .as-icon svg { width: 18px; height: 18px; }
+  .as-label { font-size: 15px; font-weight: 500; color: var(--ink); line-height: 1.2; }
+  .as-sub { font-size: 12px; color: var(--ink-mute); margin-top: 2px; line-height: 1.3; }
+  .as-cancel {
+    width: calc(100% - 28px);
+    margin: 8px 14px 0;
+    padding: 13px;
+    border: none;
+    background: var(--fit-cream);
+    color: var(--ink);
+    border-radius: 12px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    font-family: var(--body);
+  }
+  .as-cancel:hover, .as-cancel:active { background: var(--fit-lavender-pale); color: var(--fit-purple); }
+  .as-back {
+    background: transparent;
+    border: none;
+    color: var(--fit-purple);
+    font-size: 13px;
+    padding: 4px 0;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-family: var(--body);
+  }
   ::-webkit-scrollbar { width: 10px; height: 10px; }
   ::-webkit-scrollbar-track { background: transparent; }
   ::-webkit-scrollbar-thumb { background: var(--line); border-radius: 5px; }
@@ -3183,6 +3320,101 @@
   </div>
 </div>
 
+<!-- Action sheet de acciones del alumno (mobile) -->
+<div id="student-actions-sheet" aria-hidden="true" role="dialog" aria-label="Acciones del alumno">
+  <div class="as-backdrop" onclick="closeStudentActionsSheet()"></div>
+  <div class="as-panel">
+    <div class="as-handle"></div>
+    <div class="as-header">
+      <div class="as-title">Acciones</div>
+      <div class="as-subtitle" id="as-student-name">—</div>
+    </div>
+
+    <!-- Vista principal -->
+    <div class="as-body" id="as-view-main">
+      <button class="as-btn" type="button" onclick="asMarkAttended()">
+        <span class="as-icon" style="background: #10b981;">
+          <svg fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+        </span>
+        <div>
+          <div class="as-label">Marcar asistencia</div>
+          <div class="as-sub">El alumno vino a clase</div>
+        </div>
+      </button>
+      <button class="as-btn" type="button" onclick="asShowAbsenceView()">
+        <span class="as-icon" style="background: #ef4444;">
+          <svg fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </span>
+        <div>
+          <div class="as-label">Falta o cambio</div>
+          <div class="as-sub">Justificada, perdida, no vino, pendiente</div>
+        </div>
+      </button>
+      <button class="as-btn" type="button" onclick="asMoveStudent()">
+        <span class="as-icon" style="background: var(--fit-purple);">
+          <svg fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
+        </span>
+        <div>
+          <div class="as-label">Mover de horario</div>
+          <div class="as-sub">Cambiar a otra clase o día</div>
+        </div>
+      </button>
+    </div>
+
+    <!-- Vista de tipo de falta (oculta por defecto) -->
+    <div class="as-body" id="as-view-absence" style="display: none;">
+      <button class="as-back" type="button" onclick="asShowMainView()">← Atrás</button>
+      <button class="as-btn" type="button" onclick="asMarkStatus('recoverable')">
+        <span class="as-icon" style="background: #3b82f6;">
+          <span style="font-size: 18px;">⊙</span>
+        </span>
+        <div>
+          <div class="as-label" style="color: #3b82f6;">Falta justificada · recuperable</div>
+          <div class="as-sub">Avisó con +4h. No descuenta del paquete.</div>
+        </div>
+      </button>
+      <button class="as-btn" type="button" onclick="asMarkStatus('lost')">
+        <span class="as-icon" style="background: #f97316;">
+          <span style="font-size: 18px;">⚠</span>
+        </span>
+        <div>
+          <div class="as-label" style="color: #f97316;">Cancelación tardía · perdida</div>
+          <div class="as-sub">Avisó con menos de 4h. Cuenta como falta.</div>
+        </div>
+      </button>
+      <button class="as-btn" type="button" onclick="asMarkStatus('no_show')">
+        <span class="as-icon" style="background: #ef4444;">
+          <span style="font-size: 18px;">✗</span>
+        </span>
+        <div>
+          <div class="as-label" style="color: #ef4444;">No vino sin avisar</div>
+          <div class="as-sub">Cuenta como falta. Queda registro.</div>
+        </div>
+      </button>
+      <button class="as-btn" type="button" onclick="asMarkStatus('pending')">
+        <span class="as-icon" style="background: #a78bfa;">
+          <span style="font-size: 18px;">?</span>
+        </span>
+        <div>
+          <div class="as-label" style="color: #a78bfa;">Marcar como pendiente</div>
+          <div class="as-sub">Aún no se sabe si va a venir.</div>
+        </div>
+      </button>
+      <button class="as-btn" type="button" onclick="asClearStatus()" style="margin-top: 4px;">
+        <span class="as-icon" style="background: var(--ink-mute);">
+          <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+        </span>
+        <div>
+          <div class="as-label" style="color: var(--ink-mute);">Limpiar marca</div>
+          <div class="as-sub">Quitar cualquier estado registrado</div>
+        </div>
+      </button>
+    </div>
+
+    <button class="as-cancel" type="button" onclick="closeStudentActionsSheet()">Cancelar</button>
+  </div>
+</div>
+
 </div><!-- /app-layout -->
 
 <!-- ============================================
@@ -4913,24 +5145,33 @@ function renderTimeline() {
       const status = att ? att.status : null;
       const booking = d.liveBookings.find(b => b.student_id === s.id && !b.cancelled_at);
       const isConfirmed = !status && booking && booking.confirmed_at;
+      // Badge dual: una versión completa (desktop) + solo icono (mobile)
+      const makeBadge = (icon, label, bg, color, weight) => `<span style="font-size:10px; background:${bg}; color:${color}; padding:2px 8px; border-radius:999px; font-weight:${weight || 600}; display: inline-flex; align-items: center; gap: 4px;"><span class="hide-mobile">${icon} ${label}</span><span class="show-mobile-only" title="${label}">${icon}</span></span>`;
       let statusBadge = '';
       let rowStyle = '';
-      if (status === 'attended') { statusBadge = '<span style="font-size:10px; background:#10b981; color:white; padding:2px 8px; border-radius:999px; font-weight:600;">✓ ASISTIÓ</span>'; rowStyle = 'background: #ecfdf5;'; }
-      else if (status === 'recoverable') { statusBadge = '<span style="font-size:10px; background:#3b82f6; color:white; padding:2px 8px; border-radius:999px; font-weight:600;">⊙ RECUPERABLE</span>'; rowStyle = 'background: #eff6ff;'; }
-      else if (status === 'lost') { statusBadge = '<span style="font-size:10px; background:#f97316; color:white; padding:2px 8px; border-radius:999px; font-weight:600;">⚠ PERDIDA</span>'; rowStyle = 'background: #fff7ed;'; }
-      else if (status === 'no_show') { statusBadge = '<span style="font-size:10px; background:#ef4444; color:white; padding:2px 8px; border-radius:999px; font-weight:600;">✗ NO VINO</span>'; rowStyle = 'background: #fef2f2;'; }
-      else if (status === 'pending') { statusBadge = '<span style="font-size:10px; background:#a78bfa; color:white; padding:2px 8px; border-radius:999px; font-weight:600;">? PENDIENTE</span>'; rowStyle = 'background: #f5f3ff;'; }
-      else if (status === 'rescheduled') { statusBadge = '<span style="font-size:10px; background:#8b5cf6; color:white; padding:2px 8px; border-radius:999px; font-weight:600;">↔ MOVIDA</span>'; rowStyle = 'background: #faf5ff;'; }
-      else if (isConfirmed) { statusBadge = '<span style="font-size:10px; background:#dcfce7; color:#15803d; padding:2px 8px; border-radius:999px; font-weight:600;">✓ CONFIRMADA</span>'; rowStyle = 'background: rgba(86, 161, 96, 0.05);'; }
+      if (status === 'attended') { statusBadge = makeBadge('✓', 'ASISTIÓ', '#10b981', 'white'); rowStyle = 'background: #ecfdf5;'; }
+      else if (status === 'recoverable') { statusBadge = makeBadge('⊙', 'RECUPERABLE', '#3b82f6', 'white'); rowStyle = 'background: #eff6ff;'; }
+      else if (status === 'lost') { statusBadge = makeBadge('⚠', 'PERDIDA', '#f97316', 'white'); rowStyle = 'background: #fff7ed;'; }
+      else if (status === 'no_show') { statusBadge = makeBadge('✗', 'NO VINO', '#ef4444', 'white'); rowStyle = 'background: #fef2f2;'; }
+      else if (status === 'pending') { statusBadge = makeBadge('?', 'PENDIENTE', '#a78bfa', 'white'); rowStyle = 'background: #f5f3ff;'; }
+      else if (status === 'rescheduled') { statusBadge = makeBadge('↔', 'MOVIDA', '#8b5cf6', 'white'); rowStyle = 'background: #faf5ff;'; }
+      else if (isConfirmed) { statusBadge = makeBadge('✓', 'CONFIRMADA', '#dcfce7', '#15803d'); rowStyle = 'background: rgba(86, 161, 96, 0.05);'; }
+
+      const modalityIcon = s.modality === 'fixed' ? '★' : (s.modality === 'flexible' ? '↻' : '✦');
+      const modalityLabel = s.modality === 'fixed' ? 'Fijo' : (s.modality === 'flexible' ? 'Flexible' : 'Prueba');
+      const fullName = (escape(s.first_name) + ' ' + escape(s.last_name || '')).trim();
 
       return `
       <div class="student-row" style="${rowStyle}">
         <div class="student-avatar">${initials(s)}</div>
         <div>
-          <div class="student-name">${escape(s.first_name)} ${escape(s.last_name || '')}</div>
+          <div class="student-name">${fullName}</div>
           <div class="student-meta">
-            <span class="modality-pill modality-${s.modality}">${s.modality === 'fixed' ? '★ Fijo' : (s.modality === 'flexible' ? '↻ Flexible' : '✦ Prueba')}</span>
-            ${!s.data_complete ? '<span style="color: var(--warn);">⚠ datos faltantes</span>' : ''}
+            <span class="modality-pill modality-${s.modality}">
+              <span class="hide-mobile">${modalityIcon} ${modalityLabel}</span>
+              <span class="show-mobile-only" title="${modalityLabel}">${modalityIcon}</span>
+            </span>
+            ${!s.data_complete ? '<span class="data-warn"><span class="hide-mobile" style="color: var(--warn);">⚠ datos faltantes</span><span class="show-mobile-only" style="color: var(--warn);" title="Datos faltantes">⚠</span></span>' : ''}
             ${statusBadge}
           </div>
         </div>
@@ -4945,6 +5186,9 @@ function renderTimeline() {
             <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
           </button>
         </div>
+        <button class="att-btn-mob" onclick="event.stopPropagation(); openStudentActionsSheet('${s.id}', ${h}, ${JSON.stringify(fullName).replace(/"/g,'&quot;')})" title="Más acciones" aria-label="Más acciones">
+          <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><circle cx="12" cy="12" r="1"/><circle cx="12" cy="5" r="1"/><circle cx="12" cy="19" r="1"/></svg>
+        </button>
       </div>
     `;
     };
@@ -8689,6 +8933,82 @@ function updateMobileMenuData() {
   if (elRecTitle) elRecTitle.textContent = recRows > 0 ? (recRows + ' pendientes') : '—';
   const elRecMeta = document.getElementById('mob-card-recovery-meta');
   if (elRecMeta) elRecMeta.textContent = recRows > 0 ? 'click para revisar' : '—';
+}
+
+// ============================================
+// ACTION SHEET — bottom sheet de acciones del alumno (mobile)
+// Reemplaza los 3 botones inline (✓ ✗ ⇄) en mobile. Tiene 2 vistas:
+// (a) Principal: Asistencia / Falta / Mover
+// (b) Falta: Recuperable / Perdida / No vino / Pendiente / Limpiar
+// Reusa las funciones markAttendance, openMoveStudentModal, clearAttendance.
+// ============================================
+const STUDENT_ACTIONS_CTX = { studentId: null, hour: null, name: '' };
+
+function openStudentActionsSheet(studentId, hour, fullName) {
+  STUDENT_ACTIONS_CTX.studentId = studentId;
+  STUDENT_ACTIONS_CTX.hour = hour;
+  STUDENT_ACTIONS_CTX.name = fullName || '';
+  const sheet = document.getElementById('student-actions-sheet');
+  if (!sheet) return;
+  // Mostrar vista principal por default (reset si venía abierta en otra vista)
+  asShowMainView();
+  const nameEl = document.getElementById('as-student-name');
+  if (nameEl) nameEl.textContent = STUDENT_ACTIONS_CTX.name + (hour != null ? ' · ' + formatHour(hour) : '');
+  sheet.classList.add('is-open');
+  sheet.setAttribute('aria-hidden', 'false');
+  document.body.style.overflow = 'hidden';
+}
+
+function closeStudentActionsSheet() {
+  const sheet = document.getElementById('student-actions-sheet');
+  if (!sheet) return;
+  sheet.classList.remove('is-open');
+  sheet.setAttribute('aria-hidden', 'true');
+  document.body.style.overflow = '';
+  asShowMainView(); // reset al cerrar
+}
+
+function asShowMainView() {
+  const main = document.getElementById('as-view-main');
+  const abs = document.getElementById('as-view-absence');
+  if (main) main.style.display = 'block';
+  if (abs) abs.style.display = 'none';
+}
+
+function asShowAbsenceView() {
+  const main = document.getElementById('as-view-main');
+  const abs = document.getElementById('as-view-absence');
+  if (main) main.style.display = 'none';
+  if (abs) abs.style.display = 'block';
+}
+
+function asMarkAttended() {
+  if (!STUDENT_ACTIONS_CTX.studentId) return;
+  markAttendance(STUDENT_ACTIONS_CTX.studentId, STUDENT_ACTIONS_CTX.hour, 'attended');
+  closeStudentActionsSheet();
+}
+
+function asMarkStatus(status) {
+  if (!STUDENT_ACTIONS_CTX.studentId) return;
+  markAttendance(STUDENT_ACTIONS_CTX.studentId, STUDENT_ACTIONS_CTX.hour, status);
+  closeStudentActionsSheet();
+}
+
+function asClearStatus() {
+  if (!STUDENT_ACTIONS_CTX.studentId) return;
+  if (typeof clearAttendance === 'function') {
+    clearAttendance(STUDENT_ACTIONS_CTX.studentId, STUDENT_ACTIONS_CTX.hour);
+  }
+  closeStudentActionsSheet();
+}
+
+function asMoveStudent() {
+  if (!STUDENT_ACTIONS_CTX.studentId) return;
+  const sid = STUDENT_ACTIONS_CTX.studentId;
+  const hr = STUDENT_ACTIONS_CTX.hour;
+  closeStudentActionsSheet();
+  // Pequeño delay para que el cierre del sheet no choque con el modal
+  setTimeout(() => openMoveStudentModal(sid, hr), 180);
 }
 
 async function changeDay(delta) {
