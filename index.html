@@ -1974,6 +1974,7 @@
 
     <div class="layout-grid">
       <div class="timeline-card">
+        <div id="frozen-reminders-banner"></div>
         <div class="timeline-header">
           <div class="timeline-title">
             <h2>Clases de <em id="timeline-day-title">hoy</em></h2>
@@ -2032,6 +2033,14 @@
             <span class="panel-go">→</span>
           </div>
           <div class="panel-body" id="reschedule-list"></div>
+        </div>
+
+        <div class="panel" id="frozen-reminders-panel" style="display: none;">
+          <div class="panel-header">
+            <div class="panel-title">Congelados <em>por revisar</em></div>
+            <span class="panel-count warn" id="frozen-reminders-count">—</span>
+          </div>
+          <div class="panel-body" id="frozen-reminders-list"></div>
         </div>
 
         <div class="panel">
@@ -2887,12 +2896,22 @@
           <option value="other">Otro</option>
         </select>
       </div>
+      <div class="form-row" style="margin-bottom:12px;">
+        <label>Recordarme el <span class="req">*</span></label>
+        <input type="date" id="freeze-remind-at" required />
+        <div style="font-size: 11px; color: var(--ink-mute); margin-top: 4px;">
+          Ese día aparecerá una alerta en Mi día para que revises este paquete.
+        </div>
+      </div>
       <div class="form-row">
         <label>Notas (opcional)</label>
         <textarea id="freeze-notes" rows="2"></textarea>
       </div>
-      <div style="background: var(--warn-soft); border-left: 3px solid var(--warn); padding: 12px 14px; border-radius: var(--radius-sm); font-size: 12px; color: var(--warn); margin-top: 12px;">
-        Mientras esté congelado, el alumno se oculta de los horarios. Al reactivar, el vencimiento se recalcula a 30 días desde la fecha de reactivación.
+      <div style="background: var(--warn-soft); border-left: 3px solid var(--warn); padding: 12px 14px; border-radius: var(--radius-sm); font-size: 12px; color: var(--warn); margin-top: 12px; line-height: 1.5;">
+        <strong>Qué pasa al congelar:</strong><br>
+        · Las clases ya tomadas quedan como historial.<br>
+        · Las clases agendadas para días futuros se liberan (vuelven a "por re-agendar").<br>
+        · La alumna se oculta de horarios mientras esté congelado.
       </div>
     </div>
     <div class="modal-footer">
@@ -3671,6 +3690,8 @@ function renderDashboard() {
   // Cargar widgets en background (no bloquea la UI)
   loadRescheduleList();
   loadToPayList();
+  loadFrozenRemindersList();
+  renderFrozenRemindersBanner();
 }
 
 // ============================================
@@ -4291,6 +4312,105 @@ async function loadToPayList() {
   }).join('') + (items.length > 6
     ? `<div class="panel-more" onclick="showView('full-payment', null); renderFullPaymentView();">Ver los ${items.length} pendientes →</div>`
     : '');
+}
+
+// ============================================
+// CONGELADOS POR REVISAR (recordatorios vencidos)
+// ============================================
+// Carga paquetes congelados con freeze_remind_at <= hoy y los muestra:
+// (A) banner ancho a ancho arriba de la timeline en Mi día
+// (B) panel en sidebar derecho debajo de "Por re-agendar"
+async function loadFrozenRemindersList() {
+  const listEl = document.getElementById('frozen-reminders-list');
+  const countEl = document.getElementById('frozen-reminders-count');
+  const panelEl = document.getElementById('frozen-reminders-panel');
+  if (!listEl || !countEl || !panelEl) return;
+
+  if (!isOnline) {
+    panelEl.style.display = 'none';
+    return;
+  }
+
+  const todayIso = dateToIsoLocal(new Date());
+  const { data: frozen } = await sb.from('student_packages')
+    .select('id, student_id, freeze_started_at, freeze_remind_at, freeze_reason, classes_total, classes_used')
+    .eq('is_frozen', true)
+    .lte('freeze_remind_at', todayIso)
+    .order('freeze_remind_at', { ascending: true });
+
+  // Filtrar a alumnos de la sede actual
+  const locId = STATE.currentLocationId;
+  const studentsInLoc = new Set(
+    (STATE.students || []).filter(s => s.location_id === locId).map(s => s.id)
+  );
+  const items = (frozen || []).filter(p => studentsInLoc.has(p.student_id));
+
+  if (items.length === 0) {
+    panelEl.style.display = 'none';
+    countEl.textContent = '0';
+    return;
+  }
+
+  panelEl.style.display = '';
+  countEl.textContent = items.length;
+
+  listEl.innerHTML = items.slice(0, 5).map(p => {
+    const stud = STATE.students.find(s => s.id === p.student_id);
+    if (!stud) return '';
+    const remindLabel = p.freeze_remind_at ? formatDate(p.freeze_remind_at) : '';
+    const remaining = Math.max(0, (p.classes_total || 0) - (p.classes_used || 0));
+    return `
+      <div class="alert-row" onclick="openStudentDetail('${stud.id}')">
+        <div class="alert-icon warn" style="background: #FEE2E2; color: #DC2626;">
+          <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        </div>
+        <div class="alert-content">
+          <div class="alert-name">${escape(stud.first_name)} ${escape(stud.last_name || '')}</div>
+          <div class="alert-desc">${remaining} ${remaining === 1 ? 'clase' : 'clases'} pendientes · recordatorio ${remindLabel}</div>
+        </div>
+        <span class="alert-action">Revisar</span>
+      </div>
+    `;
+  }).join('') + (items.length > 5 ? `<div style="padding: 12px; text-align: center; font-size: 12px; color: var(--ink-mute);">+${items.length - 5} más</div>` : '');
+}
+
+// Banner ancho a ancho arriba de la timeline cuando hay recordatorios vencidos
+async function renderFrozenRemindersBanner() {
+  const banner = document.getElementById('frozen-reminders-banner');
+  if (!banner) return;
+
+  if (!isOnline) { banner.innerHTML = ''; return; }
+
+  const todayIso = dateToIsoLocal(new Date());
+  const { data: frozen } = await sb.from('student_packages')
+    .select('id, student_id, freeze_remind_at')
+    .eq('is_frozen', true)
+    .lte('freeze_remind_at', todayIso);
+
+  const locId = STATE.currentLocationId;
+  const studentsInLoc = new Set(
+    (STATE.students || []).filter(s => s.location_id === locId).map(s => s.id)
+  );
+  const items = (frozen || []).filter(p => studentsInLoc.has(p.student_id));
+
+  if (items.length === 0) { banner.innerHTML = ''; return; }
+
+  const studentNames = items.slice(0, 2).map(p => {
+    const stud = STATE.students.find(s => s.id === p.student_id);
+    return stud ? `${stud.first_name} ${stud.last_name || ''}`.trim() : '';
+  }).filter(Boolean);
+  const moreCount = items.length - studentNames.length;
+  const namesLabel = studentNames.join(', ') + (moreCount > 0 ? ` y ${moreCount} más` : '');
+
+  banner.innerHTML = `
+    <div style="background: #FEF2F2; border-bottom: 1px solid #FCA5A5; border-left: 4px solid #DC2626; padding: 12px 22px; color: #7F1D1D; display: flex; align-items: center; gap: 12px; border-top-left-radius: var(--radius-lg); border-top-right-radius: var(--radius-lg);">
+      <span style="font-size: 16px;">⏰</span>
+      <div style="flex: 1; font-size: 13px; line-height: 1.5;">
+        <strong>${items.length} ${items.length === 1 ? 'paquete congelado' : 'paquetes congelados'} con recordatorio para hoy</strong>
+        <div style="font-size: 12px; opacity: 0.85; margin-top: 2px;">${escape(namesLabel)} · revisa si reactivar o ajustar.</div>
+      </div>
+    </div>
+  `;
 }
 
 // Abre el modal de asignar paquete con la opción "imputar pendientes" pre-marcada
@@ -14288,7 +14408,12 @@ async function saveRegisterPayment() {
 function openFreezeModal(packageId) {
   document.getElementById('freeze-pkg-id').value = packageId;
   document.getElementById('freeze-reason').value = 'injury';
+  document.getElementById('freeze-remind-at').value = '';
   document.getElementById('freeze-notes').value = '';
+  // Mínimo: mañana (no permitir hoy ni pasado)
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  document.getElementById('freeze-remind-at').min = dateToIsoLocal(tomorrow);
   document.getElementById('freeze-modal').classList.add('is-open');
 }
 
@@ -14296,33 +14421,83 @@ async function saveFreezePackage() {
   if (!isOnline) { showToast('Conexión requerida', 'error'); return; }
   const pkgId = document.getElementById('freeze-pkg-id').value;
   const reason = document.getElementById('freeze-reason').value;
+  const remindAt = document.getElementById('freeze-remind-at').value;
   const notes = document.getElementById('freeze-notes').value.trim() || null;
+
+  // Validar fecha de recordatorio obligatoria y futura
+  if (!remindAt) {
+    showToast('Selecciona una fecha de recordatorio', 'error');
+    document.getElementById('freeze-remind-at').focus();
+    return;
+  }
+  const todayIso = dateToIsoLocal(new Date());
+  if (remindAt <= todayIso) {
+    showToast('La fecha de recordatorio debe ser futura', 'error');
+    document.getElementById('freeze-remind-at').focus();
+    return;
+  }
+
   const reasonLabels = { injury: 'Lesión', travel: 'Viaje', medical: 'Tema médico', personal: 'Motivo personal', other: 'Otro' };
   const fullReason = `${reasonLabels[reason]}${notes ? ': '+notes : ''}`;
 
+  // 1. Update del paquete
   const { error } = await sb.from('student_packages').update({
     is_frozen: true,
     freeze_started_at: new Date().toISOString(),
     freeze_reason: fullReason,
+    freeze_remind_at: remindAt,
   }).eq('id', pkgId);
-
   if (error) { showToast('Error: '+error.message, 'error'); return; }
-  showToast('Paquete congelado', 'success');
+
+  // 2. Liberar session_bookings futuros del alumno: cancelarlos para que las
+  // clases vuelvan al pool de "por re-agendar". Las clases pasadas (con
+  // attendance ya procesada) NO se tocan — son historial.
+  const { data: pkg } = await sb.from('student_packages')
+    .select('student_id')
+    .eq('id', pkgId)
+    .single();
+
+  let liberadas = 0;
+  if (pkg && pkg.student_id) {
+    // Buscar bookings activos del alumno en sesiones futuras
+    const { data: futureBookings } = await sb.from('session_bookings')
+      .select('id, session_id, class_sessions!inner(session_date)')
+      .eq('student_id', pkg.student_id)
+      .is('cancelled_at', null)
+      .gte('class_sessions.session_date', todayIso);
+
+    if (futureBookings && futureBookings.length > 0) {
+      const ids = futureBookings.map(b => b.id);
+      const { error: cancelErr } = await sb.from('session_bookings').update({
+        cancelled_at: new Date().toISOString(),
+        cancelled_reason: 'package_frozen',
+      }).in('id', ids);
+      if (!cancelErr) liberadas = ids.length;
+    }
+  }
+
+  showToast(`Paquete congelado${liberadas > 0 ? ` · ${liberadas} clase${liberadas === 1 ? '' : 's'} liberada${liberadas === 1 ? '' : 's'}` : ''}`, 'success');
   closeModals();
-  // Refrescar
+
+  // Refrescar perfil + listas del coord
   const studentId = document.getElementById('f-student-id').value;
   if (studentId) {
     const s = STATE.students.find(x => x.id === studentId);
     renderActivePackageBlock(s);
+    if (typeof renderStudentDetail === 'function') renderStudentDetail();
   }
+  if (typeof loadRescheduleList === 'function') loadRescheduleList();
+  if (typeof loadFrozenRemindersList === 'function') loadFrozenRemindersList();
+  if (typeof renderFrozenRemindersBanner === 'function') renderFrozenRemindersBanner();
 }
 
 async function reactivatePackage(pkgId) {
   if (!isOnline) { showToast('Conexión requerida', 'error'); return; }
-  if (!confirm('¿Reactivar el paquete?\n\nEl vencimiento se recalcula a 30 días desde hoy.')) return;
+  if (!confirm('¿Reactivar el paquete?\n\nLa alumna volverá a aparecer en horarios. Las clases que se cancelaron durante el congelamiento NO se recuperan automáticamente — tendrás que re-agendarlas manualmente.')) return;
   const { error } = await sb.from('student_packages').update({
     is_frozen: false,
     freeze_started_at: null,
+    freeze_remind_at: null,
   }).eq('id', pkgId);
   if (error) { showToast('Error: '+error.message, 'error'); return; }
   showToast('Paquete reactivado', 'success');
@@ -14330,7 +14505,10 @@ async function reactivatePackage(pkgId) {
   if (studentId) {
     const s = STATE.students.find(x => x.id === studentId);
     renderActivePackageBlock(s);
+    if (typeof renderStudentDetail === 'function') renderStudentDetail();
   }
+  if (typeof loadFrozenRemindersList === 'function') loadFrozenRemindersList();
+  if (typeof renderFrozenRemindersBanner === 'function') renderFrozenRemindersBanner();
 }
 
 // ============================================
@@ -15955,10 +16133,43 @@ function renderStudentDetail() {
   else if (STATE.studentDetailTab === 'payments') bodyHTML = renderDetailPayments(stud);
   else if (STATE.studentDetailTab === 'data') bodyHTML = renderDetailData(stud);
 
+  // Banner de paquete congelado (ancho a ancho, arriba del todo)
+  const frozenPkg = (_data.packages || []).find(p => p.is_frozen === true);
+  let frozenBannerHTML = '';
+  if (frozenPkg) {
+    const freezeStartedIso = frozenPkg.freeze_started_at ? frozenPkg.freeze_started_at.slice(0, 10) : null;
+    const freezeStartedLabel = freezeStartedIso ? formatDate(freezeStartedIso) : 'fecha desconocida';
+    const remindIso = frozenPkg.freeze_remind_at || null;
+    const remindLabel = remindIso ? formatDate(remindIso) : null;
+    const remaining = Math.max(0, (frozenPkg.classes_total || 0) - (frozenPkg.classes_used || 0));
+    const todayIso = dateToIsoLocal(new Date());
+    const remindOverdue = remindIso && remindIso <= todayIso;
+    frozenBannerHTML = `
+      <div style="background: #FEF2F2; border: 1px solid #FCA5A5; border-left: 4px solid #DC2626; border-radius: var(--radius-md); padding: 14px 18px; margin-bottom: 16px; color: #7F1D1D;">
+        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 4px;">
+          <span style="font-size: 14px;">❄</span>
+          <strong style="font-size: 14px;">Paquete congelado</strong>
+          <span style="font-size: 11px; opacity: 0.7;">desde ${freezeStartedLabel}</span>
+        </div>
+        <div style="font-size: 13px; line-height: 1.6;">
+          <strong>${remaining}</strong> ${remaining === 1 ? 'clase' : 'clases'} por re-agendar cuando reactive.
+          ${remindLabel
+            ? `${remindOverdue
+                ? `<span style="background: #DC2626; color: white; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 600; margin-left: 6px;">⏰ Recordatorio vencido · ${remindLabel}</span>`
+                : `<span style="opacity: 0.8;">· Recordatorio: <strong>${remindLabel}</strong></span>`}`
+            : ''}
+        </div>
+        ${frozenPkg.freeze_reason ? `<div style="font-size: 12px; opacity: 0.8; margin-top: 4px;">Motivo: ${escape(frozenPkg.freeze_reason)}</div>` : ''}
+      </div>
+    `;
+  }
+
   container.innerHTML = `
     <div style="margin-bottom: 16px;">
       <button onclick="showView('students', document.querySelector('[data-view=students]'))" style="background: transparent; border: none; color: var(--ink-soft); font-size: 13px; cursor: pointer; padding: 4px 0;">← Volver a Alumnos</button>
     </div>
+
+    ${frozenBannerHTML}
 
     <div style="background: white; border: 1px solid var(--line); border-radius: var(--radius-lg); padding: 24px; margin-bottom: 16px;">
       <div style="display: flex; gap: 18px; align-items: flex-start;">
