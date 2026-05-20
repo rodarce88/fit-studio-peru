@@ -10789,11 +10789,12 @@ async function openChangePackageWizard(pkgId) {
 
   // Cargar data del paquete + catálogo + bookings + recuperables en paralelo
   try {
-    const [usageRes, bookingsRes, recoverablesRes] = await Promise.all([
+    const [usageRes, bookingsRes, recoverablesRes, paymentsRes] = await Promise.all([
       sb.rpc('get_package_usage', { p_package_id: pkgId }),
       sb.rpc('get_package_future_bookings', { p_package_id: pkgId }),
       sb.rpc('get_package_active_recoverables', { p_package_id: pkgId }),
       changePkgWizardLoadCatalog(),
+      sb.from('payments').select('amount').eq('student_package_id', pkgId),
     ]);
     if (usageRes.error) throw usageRes.error;
     if (bookingsRes.error) throw bookingsRes.error;
@@ -10801,6 +10802,12 @@ async function openChangePackageWizard(pkgId) {
     STATE.changePkgWizard.pkgUsage = usageRes.data;
     STATE.changePkgWizard.futureBookings = bookingsRes.data || [];
     STATE.changePkgWizard.activeRecoverables = recoverablesRes.data || [];
+    // Calcular el total realmente pagado SUMANDO payments del paquete viejo.
+    // Esto evita depender del campo `price_paid` de la RPC que puede estar
+    // desincronizado con la realidad (ej: paquetes sin pagos donde la RPC
+    // devuelve total_amount en lugar de total_paid).
+    const paymentRows = (paymentsRes && !paymentsRes.error) ? (paymentsRes.data || []) : [];
+    STATE.changePkgWizard.actualPaid = paymentRows.reduce((sum, p) => sum + parseFloat(p.amount || 0), 0);
     // Default: mantener todas las recuperables
     STATE.changePkgWizard.keptRecoverableIds = STATE.changePkgWizard.activeRecoverables.map(r => r.attendance_id);
     showChangePkgWizardStep(STATE.changePkgWizard.step); // Re-render
@@ -10923,7 +10930,9 @@ function showChangePkgWizardStep(step) {
       content.innerHTML = `<div style="padding: 40px; text-align: center; color: var(--ink-mute); font-size: 13px;">Cargando datos del paquete…</div>`;
       return;
     }
-    const pricePaid = u.price_paid ? parseFloat(u.price_paid).toFixed(2) : null;
+    // Usar el total realmente pagado (sumado de payments) en lugar del campo de la RPC
+    // que puede estar desincronizado
+    const pricePaid = wiz.actualPaid > 0 ? parseFloat(wiz.actualPaid).toFixed(2) : null;
     content.innerHTML = `
       <p style="font-size: 14px; color: var(--ink-mute); margin: 0 0 14px; line-height: 1.5;">
         Vas a cambiar este paquete. Primero revisemos su estado actual.
@@ -11105,7 +11114,8 @@ function showChangePkgWizardStep(step) {
     `;
   } else if (step === 5) {
     // Paso 5: Balance financiero
-    const pricePaid = parseFloat(u?.price_paid || 0);
+    // Usar actualPaid (sumado de payments reales) en lugar del price_paid de la RPC
+    const pricePaid = parseFloat(wiz.actualPaid || 0);
     const newPkg = (STATE.packagesCatalog || []).find(p => p.id === wiz.selectedNewPkgId);
     const priceNew = parseFloat(newPkg?.price_pen || 0);
     const diff = pricePaid - priceNew;
@@ -11319,8 +11329,9 @@ function isChangePkgStepApplicable(step) {
     return (wiz.activeRecoverables || []).length > 0;
   }
   if (step === 5) {
-    // Solo si hay diferencia financiera distinta de 0 Y el viejo tiene pago
-    const pricePaid = parseFloat(wiz.pkgUsage?.price_paid || 0);
+    // Solo si hay diferencia financiera distinta de 0 Y el viejo tiene pago real
+    // (usamos actualPaid = suma real de payments, no el campo de la RPC)
+    const pricePaid = parseFloat(wiz.actualPaid || 0);
     const priceNew = parseFloat(newPkg.price_pen || 0);
     return pricePaid > 0 && Math.abs(pricePaid - priceNew) > 0.01;
   }
