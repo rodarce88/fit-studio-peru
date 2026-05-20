@@ -11405,9 +11405,52 @@ async function changePkgWizardNext() {
   if (prevBtn) { prevBtn.disabled = true; prevBtn.style.opacity = '0.4'; }
 
   try {
+    // NOTA: la RPC change_student_package puede crear un "payment fantasma" en la tabla
+    // `payments` para representar pagos heredados del paquete viejo al nuevo. Cuando el
+    // paquete viejo NO tenía pagos reales (wiz.actualPaid === 0), esa transferencia es
+    // espuria y deja al alumno con un saldo "pagado" inexistente. Detectamos eso y
+    // limpiamos post-hoc abajo (no podemos tocar la RPC desde acá).
+    //
+    // Snapshot de IDs de payments existentes ANTES de la RPC, para identificar después
+    // cuáles fueron creados por la RPC.
+    let paymentsBeforeIds = new Set();
+    try {
+      const studentIdPre = wiz.pkgUsage?.student_id;
+      if (studentIdPre) {
+        const { data: paysPre } = await sb.from('payments')
+          .select('id')
+          .eq('student_id', studentIdPre);
+        paymentsBeforeIds = new Set((paysPre || []).map(p => p.id));
+      }
+    } catch (snapErr) {
+      console.warn('[ChangePkgWizard] snapshot payments falló:', snapErr);
+    }
+
     const { data, error } = await sb.rpc('change_student_package', payload);
     if (error) throw error;
     console.log('[ChangePkgWizard] Resultado:', data);
+
+    // POST-HOC: si el paquete viejo NO tenía pagos reales (wiz.actualPaid === 0)
+    // pero la RPC creó payments nuevos, esos son fantasma — los borramos.
+    if (parseFloat(wiz.actualPaid || 0) === 0) {
+      try {
+        const studentIdPost = wiz.pkgUsage?.student_id;
+        if (studentIdPost) {
+          const { data: paysPost } = await sb.from('payments')
+            .select('id')
+            .eq('student_id', studentIdPost);
+          const ghostIds = (paysPost || [])
+            .map(p => p.id)
+            .filter(id => !paymentsBeforeIds.has(id));
+          if (ghostIds.length > 0) {
+            console.log('[ChangePkgWizard] Borrando', ghostIds.length, 'payment(s) fantasma creados por la RPC');
+            await sb.from('payments').delete().in('id', ghostIds);
+          }
+        }
+      } catch (postErr) {
+        console.warn('[ChangePkgWizard] limpieza payments fantasma falló:', postErr);
+      }
+    }
 
     const studentId = wiz.pkgUsage?.student_id;
     showToast('✓ Paquete cambiado correctamente', 'success');
