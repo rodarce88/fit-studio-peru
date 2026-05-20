@@ -948,7 +948,7 @@
   @keyframes inst-spin { to { transform: rotate(360deg); } }
 
   /* Next class card morado */
-  .inst-next-card { background: linear-gradient(135deg, var(--fit-purple) 0%, var(--fit-purple-deep) 100%); color: white; border-radius: 18px; padding: 18px; margin-bottom: 18px; position: relative; overflow: hidden; }
+  .inst-next-card { background: linear-gradient(135deg, #534AB7 0%, #3C3489 100%); color: white; border-radius: 18px; padding: 18px; margin-bottom: 18px; position: relative; overflow: hidden; }
   .inst-next-card::before { content: ''; position: absolute; top: -40px; right: -40px; width: 140px; height: 140px; background: radial-gradient(circle, rgba(255,255,255,0.12), transparent); pointer-events: none; }
   .inst-next-tag { font-size: 10px; text-transform: uppercase; letter-spacing: 1.5px; opacity: 0.7; display: flex; align-items: center; gap: 6px; }
   .inst-next-tag::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: #FF8B5C; box-shadow: 0 0 0 4px rgba(255,139,92,0.3); animation: inst-pulse 1.6s ease-out infinite; }
@@ -3443,12 +3443,11 @@
   </div>
 
   <div class="mob-menu-section-label">tu próxima clase</div>
-  <button class="mob-prof-next" type="button" id="prof-menu-next-card" onclick="profMenuJumpToNext()">
-    <div class="tag">Próxima clase</div>
-    <div class="time" id="prof-menu-next-time">—</div>
-    <div class="meta" id="prof-menu-next-meta">—</div>
-    <div class="amount" id="prof-menu-next-amount">—</div>
-  </button>
+  <div class="mob-prof-next-wrap" id="prof-menu-next-wrap" onclick="profMenuJumpToNext()" style="margin: 4px 20px 6px; cursor: pointer;">
+    <div id="prof-menu-next-slot">
+      <div class="mob-prof-next-empty">Cargando…</div>
+    </div>
+  </div>
 
   <!-- Alerta de clases pendientes (oculta si no hay) -->
   <div id="prof-menu-alert-wrap" style="display: none;">
@@ -3471,9 +3470,9 @@
       <div class="mob-prof-stat-sub">este mes</div>
     </div>
     <div class="mob-prof-stat">
-      <div class="mob-prof-stat-label">Proyectado</div>
-      <div class="mob-prof-stat-value" id="prof-menu-stat-amount">—</div>
-      <div class="mob-prof-stat-sub">a fin de mes</div>
+      <div class="mob-prof-stat-label">Asistieron</div>
+      <div class="mob-prof-stat-value" id="prof-menu-stat-attended">—</div>
+      <div class="mob-prof-stat-sub" id="prof-menu-stat-attended-sub">de — alumnos</div>
     </div>
   </div>
 
@@ -9295,23 +9294,17 @@ function updateMobileProfMenuData() {
     }
   } catch (e) { console.warn('[prof-menu] header', e); }
 
-  // Tu próxima clase: leer del DOM del cuerpo (data-inst-next) que ya rendea renderInstructorNextClassBlock
+  // Tu próxima clase: clonar el HTML del .inst-next-card que ya rendea renderInstructorNextClassBlock
+  // (incluye tag, time, info, footer con proyectado y paquetes por vencer)
   try {
-    const nextBlock = document.querySelector('[data-inst-next]');
-    if (nextBlock) {
-      const timeEl = nextBlock.querySelector('.inst-next-time, .inst-hour-time, [class*="next-time"]');
-      const tagEl = nextBlock.querySelector('.inst-next-tag');
-      const metaEl = nextBlock.querySelector('.inst-next-meta, .inst-next-students');
-      const amountEl = nextBlock.querySelector('.inst-next-amount, .inst-next-projected');
-      const timeText = (timeEl && timeEl.textContent.trim()) || '';
-      const metaText = (metaEl && metaEl.textContent.trim()) || '';
-      const amountText = (amountEl && amountEl.textContent.trim()) || '';
-      const tEl = document.getElementById('prof-menu-next-time');
-      const mEl = document.getElementById('prof-menu-next-meta');
-      const aEl = document.getElementById('prof-menu-next-amount');
-      if (tEl) tEl.textContent = timeText || 'Sin clase próxima';
-      if (mEl) mEl.textContent = metaText || (tagEl ? tagEl.textContent.trim() : '—');
-      if (aEl) aEl.textContent = amountText || '—';
+    const slot = document.getElementById('prof-menu-next-slot');
+    if (slot) {
+      const sourceCard = document.querySelector('[data-inst-next] .inst-next-card');
+      if (sourceCard) {
+        slot.innerHTML = sourceCard.outerHTML;
+      } else {
+        slot.innerHTML = '<div style="background: #EEEDFE; color: #3C3489; border-radius: 16px; padding: 18px; text-align: center; font-size: 13px;">Sin clases próximas hoy</div>';
+      }
     }
   } catch (e) { console.warn('[prof-menu] next class', e); }
 
@@ -9331,15 +9324,33 @@ function updateMobileProfMenuData() {
     }
   } catch (e) { console.warn('[prof-menu] alert', e); }
 
-  // Stats del mes — leer de STATE.instMonthStats
+  // Stats del mes — leer del DOM de [data-inst-stats] que ya rendea renderInstructorStatsBlock
   try {
-    const s = STATE.instMonthStats || {};
-    const c = document.getElementById('prof-menu-stat-classes');
-    if (c) c.textContent = (s.classesCount != null ? s.classesCount : (s.delivered != null ? s.delivered : '—'));
-    const a = document.getElementById('prof-menu-stat-amount');
-    if (a) {
-      const proj = s.projected || s.totalProjected || s.amount || null;
-      a.textContent = proj != null ? ('S/ ' + (typeof proj === 'number' ? proj.toLocaleString('es-PE') : proj)) : '—';
+    const statCells = document.querySelectorAll('[data-inst-stats] .inst-stat-cell');
+    const classesEl = document.getElementById('prof-menu-stat-classes');
+    const attendedEl = document.getElementById('prof-menu-stat-attended');
+    const attendedSub = document.getElementById('prof-menu-stat-attended-sub');
+    if (statCells.length >= 3) {
+      // cells: [0]=clases, [1]=alumnos, [2]=asistieron
+      const classesNum = statCells[0].querySelector('.inst-stat-num')?.textContent?.trim() || '—';
+      const studentsNum = statCells[1].querySelector('.inst-stat-num')?.textContent?.trim() || '—';
+      const attendedNum = statCells[2].querySelector('.inst-stat-num')?.textContent?.trim() || '—';
+      if (classesEl) classesEl.textContent = classesNum;
+      if (attendedEl) attendedEl.textContent = attendedNum;
+      if (attendedSub) attendedSub.textContent = 'de ' + studentsNum + ' alumnos';
+    } else {
+      // Fallback: leer de STATE.instMonthStats si está disponible
+      const s = STATE.instMonthStats;
+      if (s) {
+        if (classesEl) classesEl.textContent = (s.classes != null ? s.classes : '—');
+        if (attendedEl) attendedEl.textContent = (s.attended != null ? s.attended : '—');
+        const studentsTotal = Math.max(s.students || 0, (s.attended || 0) + (s.recoverable || 0) + (s.lost || 0) + (s.no_show || 0));
+        if (attendedSub) attendedSub.textContent = 'de ' + studentsTotal + ' alumnos';
+      } else {
+        if (classesEl) classesEl.textContent = '—';
+        if (attendedEl) attendedEl.textContent = '—';
+        if (attendedSub) attendedSub.textContent = 'de — alumnos';
+      }
     }
   } catch (e) { console.warn('[prof-menu] stats', e); }
 }
