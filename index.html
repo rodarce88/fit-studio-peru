@@ -5868,12 +5868,22 @@ function getCellStudents(locationId, date, hour) {
 
   const studentMap = new Map(); // studentId -> { student, type, label, bookingId, confirmedAt }
 
+  // Helper: una alumna en prueba (student_status==='trial') siempre se muestra como PRUEBA,
+  // sin importar si su booking es fijo o flexible — eso es la info relevante para el coord.
+  const isTrialStudent = (s) => s && s.student_status === 'trial';
+
   // Fixed bookings de esta celda
   (STATE.fixedBookings || []).filter(b =>
     b.location_id === locationId && b.day_of_week === dow && b.hour === hour
   ).forEach(b => {
     const student = STATE.students.find(s => s.id === b.student_id);
-    if (student) studentMap.set(b.student_id, { student, type: 'fixed', label: 'Fija', bookingId: null, confirmedAt: null });
+    if (student) {
+      if (isTrialStudent(student)) {
+        studentMap.set(b.student_id, { student, type: 'trial', label: 'Prueba', bookingId: null, confirmedAt: null });
+      } else {
+        studentMap.set(b.student_id, { student, type: 'fixed', label: 'Fija', bookingId: null, confirmedAt: null });
+      }
+    }
   });
 
   // Session bookings puntuales (sobreescriben fixed si tienen un source distinto)
@@ -5884,12 +5894,15 @@ function getCellStudents(locationId, date, hour) {
       const student = STATE.students.find(s => s.id === b.student_id);
       if (!student) return;
       const labels = { flexible: 'Flexible', makeup: 'Recuperación', fixed: 'Fija', rescheduled: 'Reagendada' };
-      const label = labels[b.source] || 'Asignada';
+      const studentIsTrial = isTrialStudent(student);
+      // El status trial gana sobre cualquier source del booking
+      const label = studentIsTrial ? 'Prueba' : (labels[b.source] || 'Asignada');
+      const type = studentIsTrial ? 'trial' : (b.source || 'session');
       const existing = studentMap.get(b.student_id);
-      // Si ya estaba como fija y el booking concreto la confirma, mantener "Fija" como label.
-      // Si vino como flexible/makeup, esa label gana.
-      if (!existing || (b.source && b.source !== 'fixed')) {
-        studentMap.set(b.student_id, { student, type: b.source || 'session', label, bookingId: b.id, confirmedAt: b.confirmed_at || null });
+      // Si ya estaba como fija y el booking concreto la confirma, mantener "Fija" como label
+      // (excepto si es trial, en cuyo caso ya la pusimos como 'trial' arriba y no la pisamos).
+      if (!existing || (b.source && b.source !== 'fixed') || studentIsTrial) {
+        studentMap.set(b.student_id, { student, type, label, bookingId: b.id, confirmedAt: b.confirmed_at || null });
       } else {
         // Existe como 'fixed' y este booking también es fixed → preservar bookingId y confirmedAt
         existing.bookingId = b.id;
@@ -6137,7 +6150,8 @@ function renderScheduleCellDrawer(locationId, dateIso, hour) {
 
   students.forEach(({ student, label, bookingId, confirmedAt, type }) => {
     const initialsStr = initials(student);
-    const labelBg = type === 'flexible' ? 'background: #fef3c7; color: #92400e;'
+    const labelBg = type === 'trial' ? 'background: #F0E6FF; color: #6B21A8;'
+      : type === 'flexible' ? 'background: #fef3c7; color: #92400e;'
       : type === 'makeup' ? 'background: #dbeafe; color: #1e40af;'
       : type === 'fixed' ? 'background: var(--fit-lavender-pale); color: var(--fit-purple-deep);'
       : 'background: var(--line); color: var(--ink-soft);';
