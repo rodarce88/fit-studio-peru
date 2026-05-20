@@ -630,8 +630,8 @@
     width: 36px;
     height: 36px;
     border-radius: 50%;
-    border: 1.5px solid var(--line);
-    background: white;
+    border: none;
+    background: transparent;
     color: var(--ink-soft);
     cursor: pointer;
     align-items: center;
@@ -639,7 +639,7 @@
     flex-shrink: 0;
     transition: all 0.15s;
   }
-  .att-btn-mob:hover, .att-btn-mob:active { border-color: var(--fit-purple); color: var(--fit-purple); background: var(--fit-lavender-pale); }
+  .att-btn-mob:hover, .att-btn-mob:active { background: rgba(83, 74, 183, 0.08); color: var(--fit-purple); }
 
   /* Utility classes para alternar contenido desktop/mobile */
   .show-mobile-only { display: none; }
@@ -653,6 +653,11 @@
     /* Compactar chips: padding más chico cuando solo hay icono */
     .student-row .modality-pill { padding: 2px 7px; }
     .student-row .data-warn { font-size: 14px; line-height: 1; }
+    /* Filas full-width: el padding lateral se mueve del contenedor al row, para que
+       el background del row (verde/azul/etc.) llegue de borde a borde del card */
+    .class-students { padding-left: 0; padding-right: 0; }
+    .student-row { padding-left: 18px; padding-right: 12px; }
+    .released-header { padding-left: 18px; padding-right: 18px; }
     /* Ocultar botón "Nuevo alumno" del dashboard en mobile (el FAB lo reemplaza) */
     body:not(.no-sidebar) #view-dashboard .page-header .page-actions { display: none; }
     /* Widget cobranza: layout compacto en mobile */
