@@ -6498,11 +6498,14 @@ async function selectStudentForAssign(studentId) {
   // Cargar paquete activo del alumno (FIFO = más antiguo con clases libres)
   if (isOnline) {
     const { data: allPkgs } = await sb.from('student_packages')
-      .select('id, classes_total, classes_used, classes_recoverable, purchase_date, start_date, is_frozen')
+      .select('id, classes_total, classes_used, classes_recoverable, purchase_date, start_date, is_frozen, status')
       .eq('student_id', studentId)
       .eq('is_frozen', false)
       .order('purchase_date', { ascending: true });
-    const pkg = (allPkgs || []).find(p => (p.classes_used || 0) < (p.classes_total || 0));
+    const pkg = (allPkgs || []).find(p =>
+      (!p.status || p.status === 'active') &&
+      (p.classes_used || 0) < (p.classes_total || 0)
+    );
     STATE.assignCtx.studentActivePackage = pkg || null;
 
     // Cargar fechas ya agendadas del alumno (futuras, no canceladas)
@@ -6931,15 +6934,17 @@ async function loadScheduleEditorData() {
   console.log('[schedEditor] step 1: load packages');
   // Cargar TODOS los paquetes del alumno (no solo el activo)
   const pkgResp = await sb.from('student_packages')
-    .select('id, classes_total, classes_used, classes_recoverable, purchase_date, start_date, is_frozen, packages(name, price_pen)')
+    .select('id, classes_total, classes_used, classes_recoverable, purchase_date, start_date, is_frozen, status, packages(name, price_pen)')
     .eq('student_id', ed.studentId)
     .order('purchase_date', { ascending: true });
   if (pkgResp.error) throw new Error('Paquetes: ' + pkgResp.error.message);
 
   const allPackages = pkgResp.data || [];
-  // Paquetes vivos: no congelados, con clases libres
+  // Paquetes vivos: status active (o legacy sin status), no congelados, con clases libres.
+  // Excluye paquetes con status='changed' (paquetes viejos reemplazados por wizard).
   const livePackages = allPackages.filter(p => {
     if (p.is_frozen) return false;
+    if (p.status && p.status !== 'active') return false;
     return (p.classes_used || 0) < (p.classes_total || 0);
   });
   // Paquete activo (FIFO) = el más antiguo con clases libres
@@ -9586,7 +9591,7 @@ async function recalcPackageCounters(studentId) {
 
   // Cargar TODOS los paquetes del alumno
   const { data: allPkgs } = await sb.from('student_packages')
-    .select('id, classes_total, classes_used, classes_recoverable, purchase_date, start_date, is_frozen')
+    .select('id, classes_total, classes_used, classes_recoverable, purchase_date, start_date, is_frozen, status')
     .eq('student_id', studentId);
 
   if (!allPkgs || allPkgs.length === 0) {
@@ -9650,11 +9655,17 @@ async function recalcPackageCounters(studentId) {
       return sessionDate >= pkgStart;
     });
     if (candidates.length === 0) return null;
-    // Preferir paquete VIVO más antiguo (FIFO): consistente con getActivePackage
-    const alive = candidates.filter(p => !p.is_frozen && (p.classes_used || 0) < (p.classes_total || 0));
+    // Preferir paquete VIVO más antiguo (FIFO): consistente con getActivePackage.
+    // Excluir paquetes con status='changed' (cerrados por wizard de cambio).
+    const alive = candidates.filter(p =>
+      !p.is_frozen &&
+      (!p.status || p.status === 'active') &&
+      (p.classes_used || 0) < (p.classes_total || 0)
+    );
     if (alive.length > 0) return alive[0];
-    // Si no hay vivos, retornar el más reciente
-    return candidates[candidates.length - 1];
+    // Si no hay vivos, retornar el más reciente NO cambiado (no queremos asignar a 'changed')
+    const notChanged = candidates.filter(p => !p.status || p.status === 'active');
+    return notChanged.length > 0 ? notChanged[notChanged.length - 1] : candidates[candidates.length - 1];
   };
 
   // ============ CLEANUP DEFENSIVO #2 ============
@@ -9664,7 +9675,13 @@ async function recalcPackageCounters(studentId) {
     console.log(`[recalcPackageCounters] ${orphans.length} att(s) huérfana(s) - vinculando por fecha`);
     for (const orphan of orphans) {
       const sessionDate = orphan.class_sessions?.session_date;
-      const targetPkg = findPkgByDate(sessionDate) || sortedByDate.find(p => !p.is_frozen && (p.classes_used || 0) < (p.classes_total || 0)) || sortedByDate[0];
+      const targetPkg = findPkgByDate(sessionDate)
+        || sortedByDate.find(p =>
+            !p.is_frozen &&
+            (!p.status || p.status === 'active') &&
+            (p.classes_used || 0) < (p.classes_total || 0)
+          )
+        || sortedByDate[0];
       if (targetPkg) {
         const { error } = await sb.from('attendance').update({ student_package_id: targetPkg.id }).eq('id', orphan.id);
         if (!error) {
@@ -9809,14 +9826,15 @@ function totalRemainingClasses(packages) {
 // sin pago registrado → queda en "Por cobrar". La coordinadora puede editarlo.
 // ============================================
 async function getOrCreateActivePackageId(studentId) {
-  // 1. Buscar paquete activo en BD (FIFO)
+  // 1. Buscar paquete activo en BD (FIFO entre paquetes con status='active' o sin status)
   const { data: pkgs } = await sb.from('student_packages')
-    .select('id, package_id, classes_total, classes_used, purchase_date, start_date, is_frozen, price_paid')
+    .select('id, package_id, classes_total, classes_used, purchase_date, start_date, is_frozen, price_paid, status')
     .eq('student_id', studentId)
     .order('purchase_date', { ascending: true });
 
   const active = (pkgs || []).find(p => {
     if (p.is_frozen) return false;
+    if (p.status && p.status !== 'active') return false; // excluir 'changed' / 'cancelled'
     const used = p.classes_used || 0;
     return used < (p.classes_total || 0);
   });
@@ -10313,12 +10331,12 @@ async function addStudentToClass(studentId) {
 
     // Cargar todos los paquetes para hacer FIFO y saber cuál es el activo
     const { data: allPkgs } = await sb.from('student_packages')
-      .select('id, classes_total, classes_used, purchase_date, start_date, is_frozen')
+      .select('id, classes_total, classes_used, purchase_date, start_date, is_frozen, status')
       .eq('student_id', studentId)
       .eq('is_frozen', false)
       .order('purchase_date', { ascending: true });
 
-    const sortedPkgs = (allPkgs || []).filter(p => !p.is_frozen);
+    const sortedPkgs = (allPkgs || []).filter(p => !p.is_frozen && (!p.status || p.status === 'active'));
     const activePkg = sortedPkgs.find(p => (p.classes_used || 0) < (p.classes_total || 0));
 
     // Asignar bookings sin attendance al paquete vía FIFO
@@ -14991,11 +15009,14 @@ async function renderStudentRecoverables(stud) {
 
   // Cargar paquete activo (FIFO) para acotar el rango
   const { data: allPkgs } = await sb.from('student_packages')
-    .select('purchase_date, start_date, classes_total, classes_used, is_frozen')
+    .select('purchase_date, start_date, classes_total, classes_used, is_frozen, status')
     .eq('student_id', stud.id)
     .eq('is_frozen', false)
     .order('purchase_date', { ascending: true });
-  const pkg = (allPkgs || []).find(p => (p.classes_used || 0) < (p.classes_total || 0));
+  const pkg = (allPkgs || []).find(p =>
+    (!p.status || p.status === 'active') &&
+    (p.classes_used || 0) < (p.classes_total || 0)
+  );
 
   const startRange = pkg ? (pkg.purchase_date || pkg.start_date) : null;
   const endRange = null; // los paquetes no vencen
