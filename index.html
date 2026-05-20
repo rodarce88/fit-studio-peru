@@ -493,6 +493,133 @@
     .class-header { grid-template-columns: 60px 1fr auto; }
     .class-occupancy { display: none; }
   }
+
+  /* ==============================================================
+     COORD MOBILE — bottom bar flotante + menu screen full-screen
+     ============================================================== */
+  .mobile-bottom-bar { display: none; }
+  #mobile-menu-screen { display: none; }
+
+  @media (max-width: 800px) {
+    /* Sólo coord (body sin .no-sidebar) en mobile muestra bottom bar */
+    body:not(.no-sidebar) .mobile-bottom-bar {
+      display: flex;
+      position: fixed;
+      bottom: 14px;
+      left: 14px;
+      right: 14px;
+      gap: 10px;
+      align-items: center;
+      z-index: 200;
+      pointer-events: auto;
+    }
+    body:not(.no-sidebar) .main { padding-bottom: 100px; }
+    /* Ocultar paneles laterales del dashboard en mobile coord (Por re-agendar / Por cobrar / etc.) */
+    body:not(.no-sidebar) .layout-grid > div:nth-of-type(2) { display: none; }
+    /* Mi día sin sidebar de horas en mobile */
+    body:not(.no-sidebar) .mi-dia-layout { grid-template-columns: 1fr; gap: 0; }
+    body:not(.no-sidebar) .mi-dia-sidebar { display: none; }
+  }
+
+  .mobile-bottom-nav {
+    flex: 1;
+    background: rgba(38, 33, 92, 0.96);
+    -webkit-backdrop-filter: blur(20px);
+    backdrop-filter: blur(20px);
+    border-radius: 999px;
+    padding: 8px 6px;
+    display: flex;
+    align-items: center;
+    justify-content: space-around;
+    box-shadow: 0 6px 24px rgba(38, 33, 92, 0.28);
+  }
+  .mobile-bottom-nav .m-nav-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    padding: 6px 14px;
+    color: rgba(255, 255, 255, 0.6);
+    cursor: pointer;
+    transition: all 0.15s;
+    border-radius: 999px;
+    border: none;
+    background: transparent;
+    font-family: var(--body);
+  }
+  .mobile-bottom-nav .m-nav-item:hover { color: rgba(255, 255, 255, 0.85); }
+  .mobile-bottom-nav .m-nav-item.is-active {
+    color: white;
+    background: rgba(255, 255, 255, 0.14);
+  }
+  .mobile-bottom-nav .m-nav-item svg { width: 19px; height: 19px; }
+  .mobile-bottom-nav .m-nav-item span { font-size: 9.5px; font-weight: 500; }
+
+  .mobile-fab {
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    background: var(--fit-purple-deep, #3C3489);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    cursor: pointer;
+    box-shadow: 0 4px 16px rgba(38, 33, 92, 0.42);
+    border: none;
+  }
+  .mobile-fab:active { transform: scale(0.94); }
+  .mobile-fab svg { width: 22px; height: 22px; }
+
+  /* Menu screen overlay */
+  #mobile-menu-screen.is-open {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 199;
+    background: var(--fit-cream);
+    overflow-y: auto;
+    padding-bottom: 100px;
+    animation: mobileMenuIn 0.22s ease-out;
+  }
+  @keyframes mobileMenuIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .mob-menu-head { padding: 22px 20px 14px; }
+  .mob-menu-user { display: flex; align-items: center; gap: 12px; }
+  .mob-menu-avatar { width: 38px; height: 38px; border-radius: 10px; background: var(--fit-purple-deep, #3C3489); color: white; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 500; position: relative; flex-shrink: 0; }
+  .mob-menu-avatar::after { content: ''; position: absolute; bottom: -2px; right: -2px; width: 10px; height: 10px; border-radius: 50%; background: #63A21F; border: 2px solid var(--fit-cream); }
+  .mob-menu-name { font-size: 15px; font-weight: 500; color: var(--ink); }
+  .mob-menu-role { font-size: 11px; color: var(--ink-mute); margin-top: 1px; }
+  .mob-menu-head-actions { margin-left: auto; display: flex; gap: 4px; }
+  .mob-menu-head-actions button { width: 34px; height: 34px; border-radius: 50%; border: none; background: transparent; color: var(--ink-soft); cursor: pointer; display: flex; align-items: center; justify-content: center; }
+  .mob-menu-head-actions button:hover { background: var(--fit-lavender-pale); color: var(--fit-purple); }
+
+  .mob-menu-section-label { font-size: 10.5px; color: var(--ink-mute); padding: 16px 20px 8px; text-transform: lowercase; letter-spacing: 0.02em; }
+  .mob-menu-cards { padding: 0 20px; display: flex; gap: 10px; overflow-x: auto; padding-bottom: 6px; }
+  .mob-menu-cards::-webkit-scrollbar { display: none; }
+  .mob-menu-card { flex: 0 0 160px; background: white; border-radius: 12px; padding: 14px; border: 1px solid var(--line); cursor: pointer; transition: border-color 0.15s, transform 0.15s; }
+  .mob-menu-card:hover { border-color: var(--fit-purple-soft); transform: translateY(-1px); }
+  .mob-menu-card-head { display: flex; align-items: center; gap: 6px; font-size: 10px; color: var(--ink-mute); text-transform: uppercase; letter-spacing: 0.04em; }
+  .mob-menu-card-head svg { width: 13px; height: 13px; color: var(--fit-purple); }
+  .mob-menu-card-title { font-size: 14px; font-weight: 500; color: var(--fit-purple-deep, #26215C); margin-top: 6px; line-height: 1.25; }
+  .mob-menu-card-meta { font-size: 10.5px; color: #BA7517; margin-top: 4px; font-weight: 500; }
+
+  .mob-menu-list { padding: 4px 8px; }
+  .mob-menu-link { display: flex; align-items: center; gap: 13px; padding: 12px 14px; cursor: pointer; border-radius: 10px; transition: background 0.15s; border: none; background: transparent; width: 100%; text-align: left; font-family: var(--body); }
+  .mob-menu-link:hover { background: rgba(83, 74, 183, 0.06); }
+  .mob-menu-link.is-active { background: var(--fit-lavender-pale); }
+  .mob-menu-link svg { width: 18px; height: 18px; color: var(--fit-purple); flex-shrink: 0; }
+  .mob-menu-link-text { font-size: 14px; color: var(--ink); flex: 1; }
+  .mob-menu-link.is-active .mob-menu-link-text { color: var(--fit-purple-deep, #26215C); font-weight: 500; }
+  .mob-menu-badge { font-size: 10px; padding: 2px 9px; border-radius: 999px; font-weight: 500; min-width: 22px; text-align: center; }
+  .mob-menu-badge.warn { background: #FAEEDA; color: #854F0B; }
+  .mob-menu-badge.urg { background: #FCEBEB; color: #A32D2D; }
+  .mob-menu-badge.neutral { background: #F1EFE8; color: #444441; }
+  .mob-menu-badge.success { background: #EAF3DE; color: #3B6D11; }
+  .mob-menu-divider { height: 1px; background: var(--line); margin: 10px 20px; }
   ::-webkit-scrollbar { width: 10px; height: 10px; }
   ::-webkit-scrollbar-track { background: transparent; }
   ::-webkit-scrollbar-thumb { background: var(--line); border-radius: 5px; }
@@ -2924,6 +3051,138 @@
 <!-- TOAST -->
 <div class="toast" id="toast"></div>
 
+<!-- ============================================
+     MOBILE COORD — Bottom bar flotante + Menu screen full-screen
+     ============================================ -->
+<div class="mobile-bottom-bar" aria-hidden="false">
+  <nav class="mobile-bottom-nav" role="tablist" aria-label="Navegación principal móvil">
+    <button class="m-nav-item is-active" type="button" data-mob-tab="dashboard" onclick="mobileNavGoto('dashboard', this)" aria-label="Mi día">
+      <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+      <span>Mi día</span>
+    </button>
+    <button class="m-nav-item" type="button" data-mob-tab="students" onclick="mobileNavGoto('students', this)" aria-label="Alumnos">
+      <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+      <span>Alumnos</span>
+    </button>
+    <button class="m-nav-item" type="button" data-mob-tab="search" onclick="mobileOpenSearch(this)" aria-label="Buscar">
+      <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+      <span>Buscar</span>
+    </button>
+    <button class="m-nav-item" type="button" data-mob-tab="menu" onclick="mobileToggleMenu(this)" aria-label="Menú">
+      <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+      <span>Menú</span>
+    </button>
+  </nav>
+  <button class="mobile-fab" type="button" onclick="mobileOpenCreate()" aria-label="Crear nuevo">
+    <svg fill="none" stroke="currentColor" stroke-width="2.4" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+  </button>
+</div>
+
+<!-- Menu screen full-screen overlay (mobile coord) -->
+<div id="mobile-menu-screen" aria-hidden="true">
+  <div class="mob-menu-head">
+    <div class="mob-menu-user">
+      <div class="mob-menu-avatar" id="mob-menu-avatar">CO</div>
+      <div>
+        <div class="mob-menu-name" id="mob-menu-name">Coordinación</div>
+        <div class="mob-menu-role" id="mob-menu-role">Cargando sede…</div>
+      </div>
+      <div class="mob-menu-head-actions">
+        <button type="button" onclick="openLocationModal()" aria-label="Cambiar sede" title="Cambiar sede">
+          <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+        </button>
+        <button type="button" onclick="logout()" aria-label="Cerrar sesión" title="Cerrar sesión">
+          <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <div class="mob-menu-section-label">pendientes de hoy</div>
+  <div class="mob-menu-cards">
+    <button class="mob-menu-card" type="button" onclick="mobileNavGoto('full-payment'); showView('full-payment', null); renderFullPaymentView();">
+      <div class="mob-menu-card-head"><svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="3"/></svg> Por cobrar</div>
+      <div class="mob-menu-card-title" id="mob-card-topay-amount">—</div>
+      <div class="mob-menu-card-meta" id="mob-card-topay-meta">—</div>
+    </button>
+    <button class="mob-menu-card" type="button" onclick="mobileNavGoto('full-reschedule'); showView('full-reschedule', null); renderFullRescheduleView();">
+      <div class="mob-menu-card-head"><svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><path d="M9 14l6 6"/><path d="M15 14l-6 6"/></svg> Por re-agendar</div>
+      <div class="mob-menu-card-title" id="mob-card-reschedule-title">—</div>
+      <div class="mob-menu-card-meta">sin clase asignada</div>
+    </button>
+    <button class="mob-menu-card" type="button" onclick="mobileNavGoto('pending-recovery'); showView('pending-recovery', document.querySelector('[data-view=pending-recovery]'));">
+      <div class="mob-menu-card-head" style="color: #0F6E56;"><svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg> Recuperar</div>
+      <div class="mob-menu-card-title" id="mob-card-recovery-title">—</div>
+      <div class="mob-menu-card-meta" style="color: #0F6E56;" id="mob-card-recovery-meta">—</div>
+    </button>
+  </div>
+
+  <div class="mob-menu-list">
+    <button class="mob-menu-link" type="button" onclick="mobileNavGoto('dashboard')">
+      <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+      <span class="mob-menu-link-text">Mi día</span>
+    </button>
+    <button class="mob-menu-link" type="button" onclick="mobileNavGoto('students')">
+      <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/></svg>
+      <span class="mob-menu-link-text">Alumnos</span>
+      <span class="mob-menu-badge neutral" id="mob-link-students-count">—</span>
+    </button>
+    <button class="mob-menu-link" type="button" onclick="mobileNavGoto('instructors')">
+      <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="7" r="4"/><path d="M16 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/></svg>
+      <span class="mob-menu-link-text">Profesores</span>
+      <span class="mob-menu-badge neutral" id="mob-link-instructors-count">—</span>
+    </button>
+    <button class="mob-menu-link" type="button" onclick="mobileNavGoto('schedule')">
+      <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+      <span class="mob-menu-link-text">Horarios</span>
+    </button>
+  </div>
+
+  <div class="mob-menu-divider"></div>
+
+  <div class="mob-menu-section-label">por resolver</div>
+  <div class="mob-menu-list">
+    <button class="mob-menu-link" type="button" onclick="mobileNavGoto('coord-pay'); showView('coord-pay', null); renderCoordPayList();">
+      <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="3"/></svg>
+      <span class="mob-menu-link-text">Cobranzas</span>
+      <span class="mob-menu-badge urg" id="mob-link-topay-badge">—</span>
+    </button>
+    <button class="mob-menu-link" type="button" onclick="mobileNavGoto('full-reschedule'); showView('full-reschedule', null); renderFullRescheduleView();">
+      <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><path d="M9 14l6 6M15 14l-6 6"/></svg>
+      <span class="mob-menu-link-text">Por re-agendar</span>
+      <span class="mob-menu-badge warn" id="mob-link-reschedule-badge">—</span>
+    </button>
+    <button class="mob-menu-link" type="button" onclick="mobileNavGoto('pending-recovery')">
+      <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
+      <span class="mob-menu-link-text">Pendientes recuperar</span>
+      <span class="mob-menu-badge warn" id="mob-link-recovery-badge">—</span>
+    </button>
+    <button class="mob-menu-link" type="button" onclick="mobileNavGoto('renewals')">
+      <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="17 11 12 6 7 11"/><polyline points="17 18 12 13 7 18"/></svg>
+      <span class="mob-menu-link-text">Próximos a renovar</span>
+      <span class="mob-menu-badge warn" id="mob-link-renewals-badge">—</span>
+    </button>
+  </div>
+
+  <div class="mob-menu-divider"></div>
+
+  <div class="mob-menu-section-label">otros</div>
+  <div class="mob-menu-list">
+    <button class="mob-menu-link" type="button" onclick="mobileNavGoto('packages')">
+      <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="16.5" y1="9.4" x2="7.5" y2="4.21"/><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
+      <span class="mob-menu-link-text">Paquetes</span>
+    </button>
+    <button class="mob-menu-link" type="button" onclick="mobileNavGoto('reports'); showView('reports', null); renderReportsView();">
+      <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+      <span class="mob-menu-link-text">Reportes</span>
+    </button>
+    <button class="mob-menu-link" type="button" onclick="mobileNavGoto('logs'); showView('logs', null); renderLogsView();">
+      <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+      <span class="mob-menu-link-text">Actividad</span>
+    </button>
+  </div>
+</div>
+
 </div><!-- /app-layout -->
 
 <!-- ============================================
@@ -4693,13 +4952,14 @@ function renderTimeline() {
     // Filas que ocupan cupo (van arriba)
     const occupyingRows = d.occupyingStudents.map(renderStudentRowFor).join('');
 
-    // Slots vacíos: tantos como cupos libres (capacity - occupying)
-    const emptySlots = d.isCancelled ? '' : Array.from({ length: cap - occ }, () => `
+    // Slots vacíos: una sola fila con contador del total de cupos libres
+    const freeSlots = Math.max(0, cap - occ);
+    const emptySlots = (d.isCancelled || freeSlots <= 0) ? '' : `
       <div class="empty-slot" onclick="event.stopPropagation(); openAddFlexibleModal(${h})">
         <div class="empty-slot-dot">+</div>
-        <span>Cupo disponible · clic para agregar alumno flexible</span>
+        <span>Agregar alumno flexible · ${freeSlots} ${freeSlots === 1 ? 'cupo disponible' : 'cupos disponibles'}</span>
       </div>
-    `).join('');
+    `;
 
     // Sección "Cupo liberado": alumnas con recoverable/lost (no ocupan asiento pero quedan listadas)
     const releasedRows = d.releasedStudents.map(renderStudentRowFor).join('');
@@ -8257,6 +8517,178 @@ function showView(name, btn) {
     btn.classList.add('is-active');
   }
   window.scrollTo({ top: 0, behavior: 'smooth' });
+  // Sincronizar bottom bar mobile (coord) con la vista activa
+  if (typeof syncMobileBottomNav === 'function') syncMobileBottomNav(name);
+}
+
+// ============================================
+// MOBILE COORD — Bottom bar + Menu screen
+// Funciones que solo aplican a coord en viewport mobile.
+// El bottom bar tiene 4 tabs (Mi día, Alumnos, Buscar, Menú) + FAB de crear.
+// El menu screen replica los paneles laterales del dashboard (Por cobrar, etc.).
+// ============================================
+function syncMobileBottomNav(viewName) {
+  const map = {
+    'dashboard': 'dashboard',
+    'students': 'students',
+    'student-detail': 'students',
+    'full-payment': 'menu',
+    'full-reschedule': 'menu',
+    'coord-pay': 'menu',
+    'coord-pay-config': 'menu',
+    'pending-recovery': 'menu',
+    'renewals': 'menu',
+    'instructors': 'menu',
+    'schedule': 'menu',
+    'packages': 'menu',
+    'reports': 'menu',
+    'logs': 'menu',
+  };
+  const target = map[viewName] || null;
+  document.querySelectorAll('.mobile-bottom-nav .m-nav-item').forEach(b => {
+    b.classList.toggle('is-active', target && b.dataset.mobTab === target);
+  });
+}
+
+function mobileNavGoto(viewName, btnEl) {
+  mobileCloseMenu();
+  // Mapear a sidebar button real (para mantener consistencia con showView)
+  const sidebarBtn = document.querySelector('.sidebar .nav-item[data-view="' + viewName + '"]');
+  if (sidebarBtn) {
+    // Simular click para reusar la lógica original
+    sidebarBtn.click();
+  } else {
+    // Fallback: showView directo
+    showView(viewName, null);
+  }
+  // syncMobileBottomNav ya se llama dentro de showView
+  if (btnEl) {
+    document.querySelectorAll('.mobile-bottom-nav .m-nav-item').forEach(b => b.classList.remove('is-active'));
+    btnEl.classList.add('is-active');
+  }
+}
+
+function mobileToggleMenu(btnEl) {
+  const screen = document.getElementById('mobile-menu-screen');
+  if (!screen) return;
+  if (screen.classList.contains('is-open')) {
+    mobileCloseMenu();
+  } else {
+    mobileOpenMenu(btnEl);
+  }
+}
+
+function mobileOpenMenu(btnEl) {
+  const screen = document.getElementById('mobile-menu-screen');
+  if (!screen) return;
+  screen.classList.add('is-open');
+  screen.setAttribute('aria-hidden', 'false');
+  document.body.style.overflow = 'hidden';
+  // Marcar Menú activo en bottom bar
+  document.querySelectorAll('.mobile-bottom-nav .m-nav-item').forEach(b => b.classList.remove('is-active'));
+  const menuBtn = document.querySelector('.mobile-bottom-nav [data-mob-tab="menu"]');
+  if (menuBtn) menuBtn.classList.add('is-active');
+  // Refrescar datos del menu
+  updateMobileMenuData();
+}
+
+function mobileCloseMenu() {
+  const screen = document.getElementById('mobile-menu-screen');
+  if (!screen) return;
+  screen.classList.remove('is-open');
+  screen.setAttribute('aria-hidden', 'true');
+  document.body.style.overflow = '';
+}
+
+function mobileOpenSearch(btnEl) {
+  mobileCloseMenu();
+  // Ir al dashboard donde vive el search principal
+  const sidebarBtn = document.querySelector('.sidebar .nav-item[data-view="dashboard"]');
+  if (sidebarBtn) sidebarBtn.click();
+  // Focus el input después de que la vista se renderee
+  setTimeout(() => {
+    const input = document.getElementById('dash-student-search');
+    if (input) {
+      input.focus();
+      input.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  }, 120);
+  // Marcar activo Buscar (temporal hasta que el usuario navegue a otro)
+  if (btnEl) {
+    document.querySelectorAll('.mobile-bottom-nav .m-nav-item').forEach(b => b.classList.remove('is-active'));
+    btnEl.classList.add('is-active');
+  }
+}
+
+function mobileOpenCreate() {
+  // Por ahora abre Nuevo alumno (lo más frecuente). Futuro: bottom sheet con opciones.
+  if (typeof openStudentModal === 'function') openStudentModal();
+}
+
+function updateMobileMenuData() {
+  // Header: avatar + nombre + sede
+  try {
+    if (CURRENT_USER && CURRENT_USER.authUser) {
+      const email = (CURRENT_USER.authUser.email || '').toLowerCase();
+      const initials = (email.split('@')[0] || 'CO').slice(0, 2).toUpperCase();
+      const av = document.getElementById('mob-menu-avatar');
+      if (av) av.textContent = initials;
+      const nameEl = document.getElementById('mob-menu-name');
+      if (nameEl) nameEl.textContent = 'Coordinación';
+      const loc = getCurrentLocation && getCurrentLocation();
+      const roleEl = document.getElementById('mob-menu-role');
+      if (roleEl) roleEl.textContent = loc ? ('Sede ' + loc.name) : 'Coordinación';
+    }
+  } catch (e) { console.warn('[mobile-menu] header', e); }
+
+  // Conteos: leer de los IDs del dashboard que ya rendea renderDashboard.
+  // Si están vacíos (porque el dashboard no se cargó aún), quedan en "—".
+  const readText = (id) => {
+    const el = document.getElementById(id);
+    return el ? (el.textContent || '').trim() : '';
+  };
+
+  // Cards horizontales
+  const topayAmount = readText('cob-amount');
+  const topayMeta = readText('cob-meta');
+  const reschCount = readText('reschedule-count');
+  const recCount = readText('pending-recovery-sub'); // sub del header; fallback
+  const renCount = readText('topay-count'); // estará vacío en realidad — usamos placeholder
+
+  const elTopayAmount = document.getElementById('mob-card-topay-amount');
+  if (elTopayAmount) elTopayAmount.textContent = topayAmount || '—';
+  const elTopayMeta = document.getElementById('mob-card-topay-meta');
+  if (elTopayMeta) elTopayMeta.textContent = topayMeta || '—';
+
+  const elReschTitle = document.getElementById('mob-card-reschedule-title');
+  if (elReschTitle) {
+    const n = parseInt(reschCount, 10);
+    elReschTitle.textContent = isNaN(n) ? '—' : (n + ' ' + (n === 1 ? 'alumna' : 'alumnas'));
+  }
+
+  // Counts en la lista
+  const setBadge = (id, value) => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = (value === '' || value === null || value === undefined) ? '—' : value;
+  };
+  setBadge('mob-link-students-count', (STATE.students || []).length || '—');
+  setBadge('mob-link-instructors-count', (STATE.instructors || []).filter(i => i.is_active !== false).length || '—');
+  setBadge('mob-link-topay-badge', readText('cob-amount') || readText('topay-count') || '—');
+  setBadge('mob-link-reschedule-badge', reschCount || '—');
+
+  // Pending recovery: cantidad de filas en la tabla si la vista se cargó
+  const recRows = document.querySelectorAll('#pending-recovery-tbody tr').length;
+  setBadge('mob-link-recovery-badge', recRows > 0 ? recRows : '—');
+
+  // Renovaciones: cantidad de filas si la vista se cargó
+  const renRows = document.querySelectorAll('#renewals-tbody tr').length;
+  setBadge('mob-link-renewals-badge', renRows > 0 ? renRows : '—');
+
+  // Recovery card title (es recuento)
+  const elRecTitle = document.getElementById('mob-card-recovery-title');
+  if (elRecTitle) elRecTitle.textContent = recRows > 0 ? (recRows + ' pendientes') : '—';
+  const elRecMeta = document.getElementById('mob-card-recovery-meta');
+  if (elRecMeta) elRecMeta.textContent = recRows > 0 ? 'click para revisar' : '—';
 }
 
 async function changeDay(delta) {
