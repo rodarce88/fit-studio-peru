@@ -7,7 +7,7 @@
 
 <!-- PWA Manifest + theme color -->
 <link rel="manifest" href="/manifest.json">
-<meta name="theme-color" content="#5B2A8F">
+<meta name="theme-color" content="var(--fit-purple)">
 
 <!-- iOS PWA: comportarse como app en home screen -->
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -439,8 +439,8 @@
   .class-occupancy { display: flex; align-items: center; gap: 12px; min-width: 120px; justify-content: flex-end; }
   .occupancy-bar { width: 60px; height: 6px; background: var(--line); border-radius: var(--radius-pill); overflow: hidden; }
   .occupancy-fill { height: 100%; background: linear-gradient(90deg, var(--fit-purple), var(--fit-purple-soft)); border-radius: inherit; transition: width 0.3s; }
-  .occupancy-fill.warn { background: linear-gradient(90deg, #C2410C, #F59E0B); }
-  .occupancy-fill.full { background: linear-gradient(90deg, #15803D, #22C55E); }
+  .occupancy-fill.warn { background: linear-gradient(90deg, var(--warn), #F59E0B); }
+  .occupancy-fill.full { background: linear-gradient(90deg, var(--good), #22C55E); }
   .occupancy-num { font-family: var(--display); font-size: 18px; font-weight: 400; color: var(--fit-purple); }
   .occupancy-num span { color: var(--ink-mute); font-size: 13px; }
   .class-toggle { width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; color: var(--ink-mute); transition: all 0.2s; }
@@ -1942,7 +1942,7 @@
   .log-role-coord { background: #FEF3C7; color: #92400E; }
   .log-role-instr { background: var(--fit-lavender-pale); color: var(--fit-purple); }
   .log-role-stud  { background: #DCFCE7; color: #166534; }
-  .log-role-agent { background: #DBEAFE; color: #1E40AF; }
+  .log-role-agent { background: #DBEAFE; color: var(--info); }
   .log-role-sys   { background: #F3F4F6; color: #4B5563; }
   .log-action {
     font-size: 12.5px;
@@ -2378,7 +2378,7 @@
 <style>
   #app-splash {
     position: fixed; inset: 0;
-    background: #5B2A8F;
+    background: var(--fit-purple);
     display: flex; flex-direction: column;
     align-items: center; justify-content: center;
     z-index: 99999;
@@ -3172,8 +3172,8 @@
         <input type="hidden" id="fi-id" />
 
         <!-- Foto upload -->
-        <div style="display: flex; gap: 18px; align-items: center; margin-bottom: 18px; padding: 14px; background: var(--fit-pale, #F4EFFB); border-radius: var(--radius-md);">
-          <div id="fi-photo-preview" style="width: 80px; height: 80px; border-radius: 50%; background: var(--fit-purple, #5B2A8F); color: white; display: flex; align-items: center; justify-content: center; font-size: 26px; font-weight: 600; overflow: hidden; flex-shrink: 0;">
+        <div style="display: flex; gap: 18px; align-items: center; margin-bottom: 18px; padding: 14px; background: var(--fit-pale, var(--fit-lavender-pale)); border-radius: var(--radius-md);">
+          <div id="fi-photo-preview" style="width: 80px; height: 80px; border-radius: 50%; background: var(--fit-purple, var(--fit-purple)); color: white; display: flex; align-items: center; justify-content: center; font-size: 26px; font-weight: 600; overflow: hidden; flex-shrink: 0;">
             <span id="fi-photo-initials">??</span>
           </div>
           <div style="flex: 1;">
@@ -3234,7 +3234,7 @@
           </div>
         </div>
 
-        <div id="fi-status-block" style="display:none; padding: 12px 14px; background: var(--fit-pale, #F4EFFB); border-radius: var(--radius-md); margin-top: 14px; font-size: 13px;">
+        <div id="fi-status-block" style="display:none; padding: 12px 14px; background: var(--fit-pale, var(--fit-lavender-pale)); border-radius: var(--radius-md); margin-top: 14px; font-size: 13px;">
           <strong>Estado de la cuenta:</strong> <span id="fi-status-text">—</span>
         </div>
       </form>
@@ -4352,7 +4352,7 @@ function resolveInstructor(locationId, date, dow, hour) {
 function getInstructorColor(inst) {
   if (!inst || inst._isUnassigned) return '#9CA3AF';
   const colors = {
-    'AL': '#5B2A8F',  // Alex - morado FIT
+    'AL': 'var(--fit-purple)',  // Alex - morado FIT
     'V':  '#DB2777',  // Valeria - magenta
     'AG': '#7C3AED',  // Angie - violeta
     'AR': '#0891B2',  // Artem - cyan
@@ -5691,7 +5691,7 @@ function renderTimeline() {
       else if (status === 'no_show') { statusBadge = makeBadge('✗', 'NO VINO', '#ef4444', 'white'); rowStyle = 'background: #fef2f2;'; }
       else if (status === 'pending') { statusBadge = makeBadge('?', 'PENDIENTE', '#a78bfa', 'white'); rowStyle = 'background: #f5f3ff;'; }
       else if (status === 'rescheduled') { statusBadge = makeBadge('↔', 'MOVIDA', '#8b5cf6', 'white'); rowStyle = 'background: #faf5ff;'; }
-      else if (isConfirmed) { statusBadge = makeBadge('✓', 'CONFIRMADA', '#dcfce7', '#15803d'); rowStyle = 'background: rgba(86, 161, 96, 0.05);'; }
+      else if (isConfirmed) { statusBadge = makeBadge('✓', 'CONFIRMADA', '#dcfce7', 'var(--good)'); rowStyle = 'background: rgba(86, 161, 96, 0.05);'; }
 
       const modalityIcon = s.modality === 'fixed' ? '★' : (s.modality === 'flexible' ? '↻' : '✦');
       const modalityLabel = s.modality === 'fixed' ? 'Fijo' : (s.modality === 'flexible' ? 'Flexible' : 'Prueba');
@@ -6362,8 +6362,8 @@ function renderSchedule() {
         hoverBg = '#fee2e2';
       } else if (count > 0) {
         bgColor = isFull ? '#dcfce7' : 'var(--fit-lavender-pale)';
-        countColor = isFull ? '#15803d' : 'var(--fit-purple)';
-        dotColor = isFull ? '#15803d' : 'var(--fit-purple)';
+        countColor = isFull ? 'var(--good)' : 'var(--fit-purple)';
+        dotColor = isFull ? 'var(--good)' : 'var(--fit-purple)';
         hoverBg = isFull ? '#bbf7d0' : '#e9def8';
       }
 
@@ -6374,7 +6374,7 @@ function renderSchedule() {
       let confirmMini = '';
       if (count > 0 && !occ.cancelled && !isPast) {
         if (confirmed === count) {
-          confirmMini = `<div style="margin-top: 4px; font-size: 9.5px; color: #15803d; font-weight: 600;">✓ ${confirmed}/${count}</div>`;
+          confirmMini = `<div style="margin-top: 4px; font-size: 9.5px; color: var(--good); font-weight: 600;">✓ ${confirmed}/${count}</div>`;
         } else if (confirmed > 0) {
           confirmMini = `<div style="margin-top: 4px; font-size: 9.5px; color: #B8860B; font-weight: 600;">✓ ${confirmed}/${count}</div>`;
         } else {
@@ -6465,7 +6465,7 @@ function renderScheduleCellDrawer(locationId, dateIso, hour) {
   let progressColor = 'var(--ink-mute)';
   let progressBg = 'var(--fit-cream)';
   if (students.length > 0) {
-    if (confirmedCount === students.length) { progressColor = '#15803d'; progressBg = '#dcfce7'; }
+    if (confirmedCount === students.length) { progressColor = 'var(--good)'; progressBg = '#dcfce7'; }
     else if (confirmedCount > 0) { progressColor = '#B8860B'; progressBg = '#FEF3C7'; }
   }
 
@@ -6502,7 +6502,7 @@ function renderScheduleCellDrawer(locationId, dateIso, hour) {
     const initialsStr = initials(student);
     const labelBg = type === 'trial' ? 'background: #F0E6FF; color: #6B21A8;'
       : type === 'flexible' ? 'background: #fef3c7; color: #92400e;'
-      : type === 'makeup' ? 'background: #dbeafe; color: #1e40af;'
+      : type === 'makeup' ? 'background: #dbeafe; color: var(--info);'
       : type === 'fixed' ? 'background: var(--fit-lavender-pale); color: var(--fit-purple-deep);'
       : 'background: var(--line); color: var(--ink-soft);';
     const phone = student.phone || '';
@@ -6531,9 +6531,9 @@ function renderScheduleCellDrawer(locationId, dateIso, hour) {
           <button onclick="openWhatsAppForCell('${student.id}', '${dateIso}', ${hour}, '${locationId}')" title="Abrir WhatsApp con mensaje" style="background: white; border: 1px solid var(--line); border-radius: 8px; padding: 6px 11px; font-size: 11.5px; cursor: pointer; color: #25D366; font-family: var(--body); font-weight: 500; display: inline-flex; align-items: center; gap: 5px;">💬 WhatsApp</button>
         ` : ''}
         <button onclick="toggleConfirmedForCell('${student.id}', '${dateIso}', ${hour}, '${locationId}')" data-confirm-btn="${student.id}"
-          style="background: ${isConfirmed ? '#dcfce7' : 'white'}; border: 1.5px solid ${isConfirmed ? '#15803d' : 'var(--line)'}; color: ${isConfirmed ? '#15803d' : 'var(--ink-mute)'}; padding: 7px 14px; border-radius: 999px; font-size: 12px; cursor: pointer; font-family: var(--body); font-weight: ${isConfirmed ? '600' : '500'}; display: inline-flex; align-items: center; gap: 6px; min-width: 150px; justify-content: center;"
+          style="background: ${isConfirmed ? '#dcfce7' : 'white'}; border: 1.5px solid ${isConfirmed ? 'var(--good)' : 'var(--line)'}; color: ${isConfirmed ? 'var(--good)' : 'var(--ink-mute)'}; padding: 7px 14px; border-radius: 999px; font-size: 12px; cursor: pointer; font-family: var(--body); font-weight: ${isConfirmed ? '600' : '500'}; display: inline-flex; align-items: center; gap: 6px; min-width: 150px; justify-content: center;"
           ${isPast ? 'disabled' : ''}>
-          <span style="width: 16px; height: 16px; border-radius: 50%; border: 1.5px solid ${isConfirmed ? '#15803d' : 'var(--ink-faint)'}; background: ${isConfirmed ? '#15803d' : 'white'}; color: ${isConfirmed ? 'white' : 'transparent'}; display: grid; place-items: center; font-size: 10px;">${isConfirmed ? '✓' : ''}</span>
+          <span style="width: 16px; height: 16px; border-radius: 50%; border: 1.5px solid ${isConfirmed ? 'var(--good)' : 'var(--ink-faint)'}; background: ${isConfirmed ? 'var(--good)' : 'white'}; color: ${isConfirmed ? 'white' : 'transparent'}; display: grid; place-items: center; font-size: 10px;">${isConfirmed ? '✓' : ''}</span>
           ${isConfirmed ? 'Confirmada' : 'Marcar confirmada'}
         </button>
       </div>
@@ -6685,7 +6685,7 @@ function openScheduleCellModal(locationId, dateIso, hour) {
     body += `<p style="color: var(--ink-mute); font-size: 13px; padding: 12px 4px;">Aún no hay alumnos agendados en esta clase.</p>`;
   } else {
     body += `<div style="display: flex; flex-direction: column; gap: 6px; margin-bottom: 16px;">${students.map(({ student, label, type, bookingId }) => {
-      const labelColor = type === 'makeup' ? 'background: #dbeafe; color: #1e40af;'
+      const labelColor = type === 'makeup' ? 'background: #dbeafe; color: var(--info);'
         : (type === 'flexible' ? 'background: #fef3c7; color: #92400e;'
         : (type === 'fixed' ? 'background: var(--fit-lavender-pale); color: var(--fit-purple);'
         : 'background: var(--line); color: var(--ink-soft);'));
@@ -17035,7 +17035,7 @@ function _pdfBuildHTML(stud, data) {
 
     const pkgPaidCell = owed === 0
       ? `<span class="pkg-amount">S/ ${price.toFixed(2)}</span>`
-      : `<span class="pkg-amount">S/ ${paid.toFixed(2)}</span><div style="font-size:9px;color:#8B8493;margin-top:2px;">debe S/ ${owed.toFixed(2)}</div>`;
+      : `<span class="pkg-amount">S/ ${paid.toFixed(2)}</span><div style="font-size:9px;color:var(--ink-mute);margin-top:2px;">debe S/ ${owed.toFixed(2)}</div>`;
 
     return `
       <tr>
@@ -17245,38 +17245,38 @@ function _pdfBuildHTML(stud, data) {
           background: white;
           padding: 16mm 16mm 14mm 16mm;
           font-family: 'Outfit', -apple-system, BlinkMacSystemFont, sans-serif;
-          color: #1A1419;
+          color: var(--ink);
           -webkit-font-smoothing: antialiased;
           display: flex;
           flex-direction: column;
         }
         .pdf-page .pdf-header {
           display: flex; justify-content: space-between; align-items: flex-start;
-          padding-bottom: 14px; border-bottom: 1px solid #EBE5F0;
+          padding-bottom: 14px; border-bottom: 1px solid var(--line);
         }
         .pdf-page .brand { display: flex; align-items: center; gap: 12px; }
         .pdf-page .brand-mark {
-          width: 42px; height: 42px; background: #5B2A8F; border-radius: 50%;
+          width: 42px; height: 42px; background: var(--fit-purple); border-radius: 50%;
           display: grid; place-items: center; color: white;
           font-weight: 800; font-size: 13px; letter-spacing: 0.04em;
         }
         .pdf-page .brand-name {
           font-family: 'Fraunces', Georgia, serif;
           font-size: 18px; font-weight: 500; font-style: italic;
-          color: #401D6B; line-height: 1;
+          color: var(--fit-purple-deep); line-height: 1;
         }
         .pdf-page .brand-sub {
-          font-size: 9.5px; color: #8B8493;
+          font-size: 9.5px; color: var(--ink-mute);
           text-transform: uppercase; letter-spacing: 0.18em; margin-top: 5px;
         }
         .pdf-page .header-meta { text-align: right; }
         .pdf-page .header-meta-label {
-          font-size: 9.5px; color: #8B8493;
+          font-size: 9.5px; color: var(--ink-mute);
           text-transform: uppercase; letter-spacing: 0.16em; margin-bottom: 4px;
         }
         .pdf-page .header-meta-date {
           font-family: 'Fraunces', Georgia, serif;
-          font-size: 14px; font-style: italic; color: #4A4350;
+          font-size: 14px; font-style: italic; color: var(--ink-soft);
         }
         .pdf-page .student-block {
           margin-top: 18px; padding-bottom: 16px;
@@ -17284,95 +17284,95 @@ function _pdfBuildHTML(stud, data) {
         }
         .pdf-page .student-info { flex: 1; }
         .pdf-page .student-greet {
-          font-size: 10.5px; color: #8B8493;
+          font-size: 10.5px; color: var(--ink-mute);
           text-transform: uppercase; letter-spacing: 0.16em; margin-bottom: 6px;
         }
         .pdf-page .student-name {
           font-family: 'Fraunces', Georgia, serif;
           font-size: 34px; font-weight: 400; font-style: italic;
-          color: #401D6B; line-height: 1.05; margin: 0;
+          color: var(--fit-purple-deep); line-height: 1.05; margin: 0;
         }
         .pdf-page .student-meta {
-          margin-top: 10px; font-size: 12px; color: #4A4350;
+          margin-top: 10px; font-size: 12px; color: var(--ink-soft);
           display: flex; flex-wrap: wrap; gap: 0 14px;
         }
         .pdf-page .student-meta-item { display: inline-flex; align-items: center; gap: 6px; }
         .pdf-page .student-meta-item + .student-meta-item::before {
-          content: "·"; color: #C9C3D1; margin-right: 8px;
+          content: "·"; color: var(--ink-faint); margin-right: 8px;
         }
-        .pdf-page .modality-star { color: #5B2A8F; font-size: 14px; line-height: 1; }
+        .pdf-page .modality-star { color: var(--fit-purple); font-size: 14px; line-height: 1; }
         .pdf-page .balance-card {
-          background: #F4EFFB; border: 1px solid #EBE5F0;
+          background: var(--fit-lavender-pale); border: 1px solid var(--line);
           border-radius: 14px; padding: 14px 20px; text-align: right; min-width: 200px;
         }
-        .pdf-page .balance-card.owed { background: #FFF1E8; border-color: #F4D58A; }
+        .pdf-page .balance-card.owed { background: var(--warn-soft); border-color: #F4D58A; }
         .pdf-page .balance-label {
-          font-size: 9.5px; color: #8B8493;
+          font-size: 9.5px; color: var(--ink-mute);
           text-transform: uppercase; letter-spacing: 0.14em; margin-bottom: 4px;
         }
         .pdf-page .balance-amount {
           font-family: 'Fraunces', Georgia, serif;
           font-size: 28px; font-style: italic; font-weight: 500;
-          color: #401D6B; line-height: 1;
+          color: var(--fit-purple-deep); line-height: 1;
         }
-        .pdf-page .balance-card.owed .balance-amount { color: #C2410C; }
+        .pdf-page .balance-card.owed .balance-amount { color: var(--warn); }
         .pdf-page .balance-note { font-size: 10.5px; margin-top: 6px; font-weight: 500; }
-        .pdf-page .balance-note.good { color: #15803D; }
-        .pdf-page .balance-note.warn { color: #C2410C; }
+        .pdf-page .balance-note.good { color: var(--good); }
+        .pdf-page .balance-note.warn { color: var(--warn); }
         .pdf-page .section { margin-top: 22px; page-break-inside: avoid; }
         .pdf-page .section-head {
           display: flex; align-items: baseline; justify-content: space-between;
-          margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px solid #EBE5F0;
+          margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px solid var(--line);
         }
         .pdf-page .section-title {
           font-family: 'Fraunces', Georgia, serif;
           font-size: 15px; font-style: italic; font-weight: 500;
-          color: #401D6B; margin: 0;
+          color: var(--fit-purple-deep); margin: 0;
         }
         .pdf-page .section-sub {
-          font-size: 10.5px; color: #8B8493;
+          font-size: 10.5px; color: var(--ink-mute);
           text-transform: uppercase; letter-spacing: 0.12em;
         }
         .pdf-page .pkg-table, .pdf-page .pay-table {
           width: 100%; border-collapse: collapse; font-size: 11.5px;
         }
         .pdf-page .pkg-table thead th, .pdf-page .pay-table thead th {
-          text-align: left; font-size: 9.5px; color: #8B8493;
+          text-align: left; font-size: 9.5px; color: var(--ink-mute);
           text-transform: uppercase; letter-spacing: 0.12em; font-weight: 600;
-          padding: 0 0 8px 0; border-bottom: 1px solid #EBE5F0;
+          padding: 0 0 8px 0; border-bottom: 1px solid var(--line);
         }
         .pdf-page .pkg-table thead th.num, .pdf-page .pkg-table td.num,
         .pdf-page .pay-table thead th.num, .pdf-page .pay-table td.num { text-align: right; }
         .pdf-page .pkg-table tbody td, .pdf-page .pay-table tbody td {
-          padding: 11px 0; border-bottom: 1px solid #EBE5F0; color: #4A4350;
+          padding: 11px 0; border-bottom: 1px solid var(--line); color: var(--ink-soft);
         }
         .pdf-page .pkg-table tbody tr:last-child td,
         .pdf-page .pay-table tbody tr:last-child td { border-bottom: none; }
-        .pdf-page .pkg-name { color: #1A1419; font-weight: 500; }
+        .pdf-page .pkg-name { color: var(--ink); font-weight: 500; }
         .pdf-page .pkg-amount, .pdf-page .pay-amount {
           font-family: 'Fraunces', Georgia, serif;
-          font-style: italic; color: #1A1419; font-weight: 500;
+          font-style: italic; color: var(--ink); font-weight: 500;
         }
         .pdf-page .pkg-progress { display: inline-flex; align-items: center; gap: 8px; }
         .pdf-page .progress-bar {
-          width: 56px; height: 4px; background: #EBE5F0;
+          width: 56px; height: 4px; background: var(--line);
           border-radius: 2px; overflow: hidden;
         }
-        .pdf-page .progress-fill { height: 100%; background: #5B2A8F; }
-        .pdf-page .progress-fill.done { background: #4A4350; }
+        .pdf-page .progress-fill { height: 100%; background: var(--fit-purple); }
+        .pdf-page .progress-fill.done { background: var(--ink-soft); }
         .pdf-page .pkg-status {
           display: inline-flex; align-items: center; gap: 5px;
           font-size: 10.5px; font-weight: 500;
         }
         .pdf-page .pkg-status .dot { font-size: 11px; line-height: 1; }
         .pdf-page .pkg-status.completed,
-        .pdf-page .pkg-status.completed .dot { color: #4A4350; }
-        .pdf-page .pkg-status.active { color: #5B2A8F; font-weight: 600; }
-        .pdf-page .pkg-status.active .dot { color: #5B2A8F; }
+        .pdf-page .pkg-status.completed .dot { color: var(--ink-soft); }
+        .pdf-page .pkg-status.active { color: var(--fit-purple); font-weight: 600; }
+        .pdf-page .pkg-status.active .dot { color: var(--fit-purple); }
         .pdf-page .pkg-status.upcoming,
-        .pdf-page .pkg-status.upcoming .dot { color: #8B8493; }
+        .pdf-page .pkg-status.upcoming .dot { color: var(--ink-mute); }
         .pdf-page .pkg-status.frozen,
-        .pdf-page .pkg-status.frozen .dot { color: #1E40AF; }
+        .pdf-page .pkg-status.frozen .dot { color: var(--info); }
         .pdf-page .classes-grid {
           display: grid; grid-template-columns: 1fr 1fr;
           grid-auto-flow: column; gap: 0 32px;
@@ -17380,67 +17380,67 @@ function _pdfBuildHTML(stud, data) {
         .pdf-page .class-row {
           display: grid; grid-template-columns: 64px 38px 1fr auto;
           align-items: center; gap: 10px;
-          padding: 7px 0; border-bottom: 1px solid #F2EDF5; font-size: 11.5px;
+          padding: 7px 0; border-bottom: 1px solid var(--line-soft); font-size: 11.5px;
         }
-        .pdf-page .class-date { font-weight: 500; color: #1A1419; }
-        .pdf-page .class-hour { color: #8B8493; font-size: 11px; }
-        .pdf-page .class-prof { color: #4A4350; }
-        .pdf-page .class-check { color: #5B2A8F; font-size: 12px; font-weight: 600; }
+        .pdf-page .class-date { font-weight: 500; color: var(--ink); }
+        .pdf-page .class-hour { color: var(--ink-mute); font-size: 11px; }
+        .pdf-page .class-prof { color: var(--ink-soft); }
+        .pdf-page .class-check { color: var(--fit-purple); font-size: 12px; font-weight: 600; }
         .pdf-page .class-row.lost .class-date,
         .pdf-page .class-row.lost .class-hour,
-        .pdf-page .class-row.lost .class-prof { color: #8B8493; }
-        .pdf-page .class-row.lost .class-check { color: #8B8493; font-weight: 500; }
+        .pdf-page .class-row.lost .class-prof { color: var(--ink-mute); }
+        .pdf-page .class-row.lost .class-check { color: var(--ink-mute); font-weight: 500; }
         .pdf-page .class-row.upcoming .class-check {
-          color: #C9C3D1; font-family: 'Fraunces', Georgia, serif;
+          color: var(--ink-faint); font-family: 'Fraunces', Georgia, serif;
           font-style: italic; font-size: 10.5px;
         }
-        .pdf-page .pay-method { color: #1A1419; }
-        .pdf-page .pay-detail { color: #8B8493; font-size: 10.5px; }
+        .pdf-page .pay-method { color: var(--ink); }
+        .pdf-page .pay-detail { color: var(--ink-mute); font-size: 10.5px; }
         .pdf-page .pay-discount {
-          display: inline-block; background: #F4EFFB; color: #401D6B;
+          display: inline-block; background: var(--fit-lavender-pale); color: var(--fit-purple-deep);
           font-size: 10px; padding: 2px 7px; border-radius: 4px;
           margin-left: 6px; font-weight: 500;
         }
         .pdf-page .pdf-footer {
-          margin-top: auto; padding-top: 18px; border-top: 1px solid #EBE5F0;
+          margin-top: auto; padding-top: 18px; border-top: 1px solid var(--line);
           display: flex; justify-content: space-between; align-items: center;
-          font-size: 10.5px; color: #8B8493;
+          font-size: 10.5px; color: var(--ink-mute);
         }
         .pdf-page .footer-contact { display: flex; align-items: center; gap: 14px; }
         .pdf-page .footer-contact-item { display: inline-flex; align-items: center; gap: 5px; }
         .pdf-page .footer-contact-item + .footer-contact-item::before {
-          content: "·"; color: #C9C3D1; margin-right: 9px;
+          content: "·"; color: var(--ink-faint); margin-right: 9px;
         }
         .pdf-page .footer-address {
           font-style: italic; font-family: 'Fraunces', Georgia, serif;
-          font-size: 11px; color: #4A4350;
+          font-size: 11px; color: var(--ink-soft);
         }
         .pdf-page .cal-stats { display: flex; gap: 28px; margin-bottom: 18px; align-items: flex-end; }
-        .pdf-page .cal-stat-lbl { font-size: 10px; text-transform: uppercase; letter-spacing: 0.12em; color: #8B8493; font-weight: 500; margin-bottom: 2px; }
+        .pdf-page .cal-stat-lbl { font-size: 10px; text-transform: uppercase; letter-spacing: 0.12em; color: var(--ink-mute); font-weight: 500; margin-bottom: 2px; }
         .pdf-page .cal-stat-lbl.amber { color: #8B6F1A; }
-        .pdf-page .cal-stat-num { font-family: 'Fraunces', Georgia, serif; font-size: 30px; font-weight: 400; color: #1A1419; line-height: 1; }
-        .pdf-page .cal-stat-num.purple { color: #5B2A8F; }
+        .pdf-page .cal-stat-num { font-family: 'Fraunces', Georgia, serif; font-size: 30px; font-weight: 400; color: var(--ink); line-height: 1; }
+        .pdf-page .cal-stat-num.purple { color: var(--fit-purple); }
         .pdf-page .cal-stat-num.amber { color: #8B6F1A; }
         .pdf-page .cal-constancia { margin-left: auto; }
-        .pdf-page .cal-constancia-chip { display: inline-block; padding: 8px 14px; background: #F4EFFB; border-radius: 999px; font-family: 'Fraunces', Georgia, serif; font-style: italic; font-size: 12px; color: #5B2A8F; }
+        .pdf-page .cal-constancia-chip { display: inline-block; padding: 8px 14px; background: var(--fit-lavender-pale); border-radius: 999px; font-family: 'Fraunces', Georgia, serif; font-style: italic; font-size: 12px; color: var(--fit-purple); }
         .pdf-page .cal-months { display: grid; gap: 22px; }
-        .pdf-page .cal-month-title { font-family: 'Fraunces', Georgia, serif; font-style: italic; font-size: 14px; color: #1A1419; text-align: center; margin-bottom: 8px; }
-        .pdf-page .cal-month-title.current { color: #5B2A8F; }
-        .pdf-page .cal-month-title em { color: #8B8493; font-style: normal; font-size: 11px; margin-left: 2px; }
+        .pdf-page .cal-month-title { font-family: 'Fraunces', Georgia, serif; font-style: italic; font-size: 14px; color: var(--ink); text-align: center; margin-bottom: 8px; }
+        .pdf-page .cal-month-title.current { color: var(--fit-purple); }
+        .pdf-page .cal-month-title em { color: var(--ink-mute); font-style: normal; font-size: 11px; margin-left: 2px; }
         .pdf-page .cal-dow-row { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; margin-bottom: 3px; }
-        .pdf-page .cal-dow { font-size: 8px; text-align: center; text-transform: uppercase; color: #8B8493; letter-spacing: 0.14em; font-weight: 500; }
+        .pdf-page .cal-dow { font-size: 8px; text-align: center; text-transform: uppercase; color: var(--ink-mute); letter-spacing: 0.14em; font-weight: 500; }
         .pdf-page .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; }
         .pdf-page .cal-day { aspect-ratio: 1; display: flex; align-items: center; justify-content: center; font-size: 10px; border-radius: 50%; line-height: 1; font-family: 'Fraunces', Georgia, serif; }
-        .pdf-page .cal-day.none { color: #C9C3D1; }
-        .pdf-page .cal-day.att { background: #5B2A8F; color: white; font-weight: 500; }
-        .pdf-page .cal-day.upcoming { border: 1.5px solid #5B2A8F; color: #5B2A8F; font-weight: 500; }
-        .pdf-page .cal-day.today { background: #F4EFFB; border: 1.5px solid #5B2A8F; color: #5B2A8F; font-weight: 500; }
-        .pdf-page .cal-legend { margin-top: 16px; padding-top: 12px; border-top: 0.5px solid #EBE5F0; display: flex; gap: 22px; align-items: center; font-size: 10px; color: #4A4350; flex-wrap: wrap; }
+        .pdf-page .cal-day.none { color: var(--ink-faint); }
+        .pdf-page .cal-day.att { background: var(--fit-purple); color: white; font-weight: 500; }
+        .pdf-page .cal-day.upcoming { border: 1.5px solid var(--fit-purple); color: var(--fit-purple); font-weight: 500; }
+        .pdf-page .cal-day.today { background: var(--fit-lavender-pale); border: 1.5px solid var(--fit-purple); color: var(--fit-purple); font-weight: 500; }
+        .pdf-page .cal-legend { margin-top: 16px; padding-top: 12px; border-top: 0.5px solid var(--line); display: flex; gap: 22px; align-items: center; font-size: 10px; color: var(--ink-soft); flex-wrap: wrap; }
         .pdf-page .cal-legend-item { display: inline-flex; align-items: center; gap: 6px; }
         .pdf-page .cal-dot { display: inline-block; width: 12px; height: 12px; border-radius: 50%; }
-        .pdf-page .cal-dot.att { background: #5B2A8F; }
-        .pdf-page .cal-dot.upcoming { border: 1.5px solid #5B2A8F; box-sizing: border-box; }
-        .pdf-page .cal-dot.today { background: #F4EFFB; border: 1.5px solid #5B2A8F; box-sizing: border-box; }
+        .pdf-page .cal-dot.att { background: var(--fit-purple); }
+        .pdf-page .cal-dot.upcoming { border: 1.5px solid var(--fit-purple); box-sizing: border-box; }
+        .pdf-page .cal-dot.today { background: var(--fit-lavender-pale); border: 1.5px solid var(--fit-purple); box-sizing: border-box; }
         .pdf-page .cal-legend-note { margin-left: auto; color: #8B6F1A; font-style: italic; font-family: 'Fraunces', Georgia, serif; font-size: 10px; }
       </style>
 
@@ -18596,7 +18596,7 @@ function renderDetailSummary(stud) {
       `;
     } else if (status.key === 'frozen') {
       actionsBlock = `
-        <div style="margin-top: 10px; padding: 8px 12px; background: #DBEAFE; border-radius: 6px; font-size: 12px; color: #1E40AF;">
+        <div style="margin-top: 10px; padding: 8px 12px; background: #DBEAFE; border-radius: 6px; font-size: 12px; color: var(--info);">
           ${escape(p.freeze_reason || 'Paquete congelado')}
           <button class="btn btn-ghost" onclick="reactivatePackage('${p.id}')" style="margin-left: 8px; padding: 3px 10px; font-size: 11px;">Reactivar</button>
         </div>
@@ -18763,13 +18763,13 @@ function renderDetailSummary(stud) {
               <div style="background: #B45309; height: 100%; width: ${paidPct.toFixed(1)}%; border-radius: 2px;"></div>
             </div>
           </div>
-          <button onclick='openPaymentModal(${JSON.stringify(stud.id).replace(/'/g, "&#39;")}, ${JSON.stringify(activePkg.id).replace(/'/g, "&#39;")}, ${activePkgOwed})' style="background: #1A1419; color: white; border: none; padding: 10px 16px; border-radius: 10px; font-size: 13px; font-weight: 500; cursor: pointer; font-family: inherit; white-space: nowrap;">＋ Registrar pago</button>
+          <button onclick='openPaymentModal(${JSON.stringify(stud.id).replace(/'/g, "&#39;")}, ${JSON.stringify(activePkg.id).replace(/'/g, "&#39;")}, ${activePkgOwed})' style="background: var(--ink); color: white; border: none; padding: 10px 16px; border-radius: 10px; font-size: 13px; font-weight: 500; cursor: pointer; font-family: inherit; white-space: nowrap;">＋ Registrar pago</button>
         </div>
       `;
     } else if (activePkgPaid > 0) {
       paymentBlock = `
         <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 22px; padding: 10px 16px; background: #F8FBF6; border-radius: 12px;">
-          <span style="background: #DCFCE7; color: #15803D; font-size: 11px; font-weight: 700; padding: 5px 11px; border-radius: 999px;">✓ Pagado</span>
+          <span style="background: #DCFCE7; color: var(--good); font-size: 11px; font-weight: 700; padding: 5px 11px; border-radius: 999px;">✓ Pagado</span>
           <span style="font-family: var(--display); font-style: italic; font-size: 17px; color: var(--ink);">S/ ${activePkgPaid.toFixed(2)}</span>
         </div>
       `;
@@ -18830,7 +18830,7 @@ function renderDetailSummary(stud) {
         <div style="display: flex; gap: 8px; margin-top: 22px; padding-top: 18px; border-top: 1px solid var(--fit-lavender-pale); flex-wrap: wrap;">
           <button onclick="openStudentScheduleEditor('${stud.id}')" style="background: var(--fit-purple); color: white; border: none; padding: 9px 18px; border-radius: 10px; font-size: 13px; font-weight: 500; cursor: pointer; font-family: inherit; flex: 1; min-width: 140px;">Agendar clases →</button>
           <button onclick="openFreezeModal('${activePkg.id}')" style="background: white; color: var(--ink-soft); border: 1px solid var(--line); padding: 9px 14px; border-radius: 10px; font-size: 13px; cursor: pointer; font-family: inherit;">Congelar</button>
-          ${isCoord ? `<button onclick="openChangePackageWizard('${activePkg.id}')" style="background: #1A1419; color: white; border: none; padding: 9px 14px; border-radius: 10px; font-size: 13px; cursor: pointer; font-family: inherit;">⇄ Cambiar</button>` : ''}
+          ${isCoord ? `<button onclick="openChangePackageWizard('${activePkg.id}')" style="background: var(--ink); color: white; border: none; padding: 9px 14px; border-radius: 10px; font-size: 13px; cursor: pointer; font-family: inherit;">⇄ Cambiar</button>` : ''}
         </div>
       </div>
     `;
@@ -18887,7 +18887,7 @@ function renderDetailSummary(stud) {
     <div style="background: #FEF7E6; border: 1px solid #F4D58A; border-radius: 14px; padding: 16px 20px; margin-bottom: 28px;">
       <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;">
         <div style="font-size: 11px; color: #8B6F1A; text-transform: uppercase; letter-spacing: 0.6px; font-weight: 600;">Faltas justificadas (${recoverableAtts.length})</div>
-        <button onclick="openStudentScheduleEditor('${stud.id}')" style="background: #1A1419; color: white; border: none; padding: 7px 14px; border-radius: 8px; font-size: 12px; font-weight: 500; cursor: pointer; font-family: inherit;">Re-agendar →</button>
+        <button onclick="openStudentScheduleEditor('${stud.id}')" style="background: var(--ink); color: white; border: none; padding: 7px 14px; border-radius: 8px; font-size: 12px; font-weight: 500; cursor: pointer; font-family: inherit;">Re-agendar →</button>
       </div>
       ${recoverableAtts.slice(0, 3).map(a => {
         const sess = a.class_sessions;
@@ -18908,7 +18908,7 @@ function renderDetailSummary(stud) {
       <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 14px;">
         <h3 style="font-family: var(--display); font-style: italic; font-weight: 500; font-size: 22px; margin: 0; color: var(--ink);">Pagos</h3>
         <div style="text-align: right;">
-          <div style="font-family: var(--display); font-style: italic; font-size: 18px; color: #15803D; font-weight: 500;">S/ ${totalPayments.toFixed(2)}</div>
+          <div style="font-family: var(--display); font-style: italic; font-size: 18px; color: var(--good); font-weight: 500;">S/ ${totalPayments.toFixed(2)}</div>
           <div style="font-size: 11px; color: var(--ink-mute); text-transform: uppercase; letter-spacing: 0.6px;">${(data.payments || []).length} pago${(data.payments || []).length === 1 ? '' : 's'}</div>
         </div>
       </div>
@@ -18918,7 +18918,7 @@ function renderDetailSummary(stud) {
           const isLast = idx === arr.length - 1;
           return `
             <div style="padding: 14px 18px; display: flex; align-items: center; gap: 14px; ${!isLast ? 'border-bottom: 1px solid var(--fit-lavender-pale);' : ''}">
-              <div style="width: 8px; height: 8px; border-radius: 50%; background: #15803D; flex-shrink: 0;"></div>
+              <div style="width: 8px; height: 8px; border-radius: 50%; background: var(--good); flex-shrink: 0;"></div>
               <div style="flex: 1; min-width: 0;">
                 <div style="font-size: 14px; color: var(--ink); font-weight: 500;">S/ ${amt.toFixed(2)} · ${escape(p.method || '')}</div>
                 <div style="font-size: 12px; color: var(--ink-mute); margin-top: 2px;">${formatDate(p.payment_date)}${p.reference ? ' · Ref. ' + escape(p.reference) : ''}</div>
