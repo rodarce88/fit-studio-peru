@@ -357,7 +357,7 @@
   .cob-gauge svg { width: 100%; height: auto; max-height: 165px; }
   .cob-main { min-width: 0; }
   .cob-header { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; flex-wrap: wrap; }
-  .cob-chip { font-size: 11px; padding: 2px 8px; border-radius: var(--radius-pill); font-weight: 500; letter-spacing: 0.04em; background: #FEE2E2; color: #DC2626; }
+  .cob-chip { font-size: 11px; padding: 2px 8px; border-radius: var(--radius-pill); font-weight: 500; letter-spacing: 0.04em; background: #FEE2E2; color: var(--danger-bright); }
   .cob-amount { font-family: var(--display); font-size: 48px; font-weight: 500; line-height: 1; letter-spacing: -0.02em; color: var(--ink); }
   .cob-meta { font-size: 13px; color: var(--ink-mute); margin-top: 8px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
   .cob-stats { display: flex; flex-direction: column; gap: 16px; padding-left: 24px; border-left: 1px solid var(--line); }
@@ -4813,7 +4813,7 @@ function paintCobranzaWidget(d) {
     color = '#F59E0B'; chipBg = '#FEF3C7'; chipColor = '#D97706';
     chipText = `${Math.round(d.gap)} pp del ritmo`;
   } else {
-    color = '#EF4444'; chipBg = '#FEE2E2'; chipColor = '#DC2626';
+    color = '#EF4444'; chipBg = '#FEE2E2'; chipColor = 'var(--danger-bright)';
     chipText = `${Math.round(d.gap)} pp del ritmo`;
   }
 
@@ -5388,7 +5388,7 @@ async function loadFrozenRemindersList() {
     const remaining = Math.max(0, (p.classes_total || 0) - (p.classes_used || 0));
     return `
       <div class="alert-row" onclick="openStudentDetail('${stud.id}')">
-        <div class="alert-icon warn" style="background: #FEE2E2; color: #DC2626;">
+        <div class="alert-icon warn" style="background: #FEE2E2; color: var(--danger-bright);">
           <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
         </div>
         <div class="alert-content">
@@ -5430,7 +5430,7 @@ async function renderFrozenRemindersBanner() {
   const namesLabel = studentNames.join(', ') + (moreCount > 0 ? ` y ${moreCount} más` : '');
 
   banner.innerHTML = `
-    <div style="background: #FEF2F2; border-bottom: 1px solid #FCA5A5; border-left: 4px solid #DC2626; padding: 12px 22px; color: #7F1D1D; display: flex; align-items: center; gap: 12px; border-top-left-radius: var(--radius-lg); border-top-right-radius: var(--radius-lg);">
+    <div style="background: #FEF2F2; border-bottom: 1px solid #FCA5A5; border-left: 4px solid var(--danger-bright); padding: 12px 22px; color: #7F1D1D; display: flex; align-items: center; gap: 12px; border-top-left-radius: var(--radius-lg); border-top-right-radius: var(--radius-lg);">
       <span style="font-size: 16px;">⏰</span>
       <div style="flex: 1; font-size: 13px; line-height: 1.5;">
         <strong>${items.length} ${items.length === 1 ? 'paquete congelado' : 'paquetes congelados'} con recordatorio para hoy</strong>
@@ -13299,7 +13299,7 @@ function _renderInstructorDonut(filled, total, size) {
 
   // Paleta editorial de morados que se intensifican con la ocupación.
   // Al 100% pasa a champagne dorado (state .is-full controla el container también).
-  let strokeColor = '#D4CFE0'; // gris del track vacío
+  let strokeColor = 'var(--ink-faint)'; // gris del track vacío
   if (!isEmpty) {
     const pct = total > 0 ? filled / total : 0;
     if (isFull) strokeColor = BRAND.gold;                  // 9/9 → dorado champagne
@@ -18222,7 +18222,7 @@ function renderStudentDetail() {
     const todayIso = dateToIsoLocal(new Date());
     const remindOverdue = remindIso && remindIso <= todayIso;
     frozenBannerHTML = `
-      <div style="background: #FEF2F2; border: 1px solid #FCA5A5; border-left: 4px solid #DC2626; border-radius: var(--radius-md); padding: 14px 18px; margin-bottom: 16px; color: #7F1D1D;">
+      <div style="background: #FEF2F2; border: 1px solid #FCA5A5; border-left: 4px solid var(--danger-bright); border-radius: var(--radius-md); padding: 14px 18px; margin-bottom: 16px; color: #7F1D1D;">
         <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 4px;">
           <span style="font-size: 14px;">❄</span>
           <strong style="font-size: 14px;">Paquete congelado</strong>
@@ -18232,7 +18232,7 @@ function renderStudentDetail() {
           <strong>${remaining}</strong> ${remaining === 1 ? 'clase' : 'clases'} por re-agendar cuando reactive.
           ${remindLabel
             ? `${remindOverdue
-                ? `<span style="background: #DC2626; color: white; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 600; margin-left: 6px;">⏰ Recordatorio vencido · ${remindLabel}</span>`
+                ? `<span style="background: var(--danger-bright); color: white; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 600; margin-left: 6px;">⏰ Recordatorio vencido · ${remindLabel}</span>`
                 : `<span style="opacity: 0.8;">· Recordatorio: <strong>${remindLabel}</strong></span>`}`
             : ''}
         </div>
