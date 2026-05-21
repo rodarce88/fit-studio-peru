@@ -9249,17 +9249,27 @@ function profNavGoto(tab, btnEl) {
   profCloseMenu();
   if (tab === 'day') {
     showView('instructor-day', null);
-    if (typeof switchInstructorTab === 'function') {
-      // No usamos el switchInstructorTab porque ya hicimos showView; solo aseguramos estado
-      STATE.instTab = 'day';
+    STATE.instTab = 'day';
+    // Forzar fecha al día actual (es lo que el usuario espera al tocar "Hoy")
+    const todayIso = dateToIsoLocal(new Date());
+    if (STATE.instDayDate !== todayIso) {
+      instructorSetDateIso(todayIso);
+    } else if (typeof renderInstructorDay === 'function') {
+      renderInstructorDay();
     }
-    if (typeof renderInstructorDay === 'function') renderInstructorDay();
   } else if (tab === 'week') {
-    // No existe vista semana separada todavía; abrimos el date picker nativo
-    // para que el profe pueda saltar a cualquier fecha de su semana.
-    if (typeof instructorOpenDatePicker === 'function') {
-      instructorOpenDatePicker({ currentTarget: btnEl || document.querySelector('.mobile-bottom-bar-prof [data-prof-tab="week"]') });
+    // "Semana" abre el date picker nativo para saltar a cualquier fecha
+    showView('instructor-day', null);
+    STATE.instTab = 'day';
+    // Asegurarnos que el input exista (lo crea el render del strip al final del HTML)
+    if (!document.getElementById('inst-date-picker') && typeof renderInstructorDay === 'function') {
+      renderInstructorDay();
     }
+    setTimeout(() => {
+      if (typeof instructorOpenDatePicker === 'function') {
+        instructorOpenDatePicker({ currentTarget: btnEl || document.querySelector('.mobile-bottom-bar-prof [data-prof-tab="week"]') });
+      }
+    }, 50);
   } else if (tab === 'pay') {
     showView('instructor-pay', null);
     STATE.instTab = 'pay';
@@ -12012,6 +12022,41 @@ function renderInstructorGreetBlock() {
   `;
 }
 
+// Actualiza la selección del carrusel SIN re-rendear el HTML.
+// Solo cambia las clases is-selected y hace scroll smooth al centro.
+// Devuelve true si pudo actualizar (el día está visible en el carrusel), false si no.
+function instructorUpdateCarouselSelection(iso, animate = true) {
+  const scroll = document.getElementById('inst-month-track');
+  if (!scroll) return false;
+  const target = scroll.querySelector(`[data-iso="${iso}"]`);
+  if (!target) return false;
+
+  // Limpiar selección previa
+  scroll.querySelectorAll('.inst-month-day.is-selected').forEach(el => el.classList.remove('is-selected'));
+  target.classList.add('is-selected');
+
+  // Scroll smooth al centro (animación nativa del browser)
+  const scrollLeft = target.offsetLeft - (scroll.clientWidth / 2) + (target.clientWidth / 2);
+  scroll.scrollTo({ left: Math.max(0, scrollLeft), behavior: animate ? 'smooth' : 'instant' });
+
+  // Toggle del botón "ir a hoy" según corresponda
+  const todayIso = dateToIsoLocal(new Date());
+  const isToday = iso === todayIso;
+  const controls = document.querySelector('.inst-month-controls');
+  if (controls) {
+    const existingBtn = controls.querySelector('.inst-month-today-btn');
+    if (isToday && existingBtn) existingBtn.remove();
+    if (!isToday && !existingBtn) {
+      const btn = document.createElement('button');
+      btn.className = 'inst-month-today-btn';
+      btn.textContent = 'ir a hoy';
+      btn.onclick = () => instructorSetDateIso(todayIso);
+      controls.prepend(btn);
+    }
+  }
+  return true;
+}
+
 function renderInstructorDayStrip() {
   const block = document.querySelector('[data-inst-daystrip]');
   if (!block) return;
@@ -12039,13 +12084,6 @@ function renderInstructorDayStrip() {
   // Detectar si solo cambió el día (no el mes) para activar scroll smooth
   const oldTrack = document.getElementById('inst-month-track');
   const oldScrollLeft = oldTrack ? oldTrack.scrollLeft : 0;
-  let useSmoothScroll = false;
-  if (STATE._instLastRenderedDay && STATE._instLastRenderedDay !== STATE.instDayDate) {
-    const oldD = new Date(STATE._instLastRenderedDay + 'T12:00:00');
-    if (oldD.getMonth() === selDate.getMonth() && oldD.getFullYear() === selDate.getFullYear()) {
-      useSmoothScroll = true;
-    }
-  }
   STATE._instLastRenderedDay = STATE.instDayDate;
 
   // Construir días: 5 padding antes + todo el mes + 5 padding después
@@ -12109,16 +12147,11 @@ function renderInstructorDayStrip() {
     <input type="date" id="inst-date-picker" onchange="instructorSetCustomDate(this.value)" value="${STATE.instDayDate}" style="position: absolute; opacity: 0; pointer-events: none; width: 1px; height: 1px;" />
   `;
 
-  // Auto-scroll: animado si fue cambio de día dentro del mismo mes, instant en otros casos
+  // Auto-scroll: centrar el día seleccionado (instant — sin animación porque es rebuild)
+  // Para animar al cambiar de día sin rebuild, usar instructorUpdateCarouselSelection.
   requestAnimationFrame(() => {
     const scroll = document.getElementById('inst-month-track');
     if (!scroll) return;
-
-    // Si vamos a animar, restaurar scroll previo INSTANT primero (para que la animación parta de ahí)
-    if (useSmoothScroll) {
-      scroll.scrollLeft = oldScrollLeft;
-    }
-
     let target = scroll.querySelector(`[data-iso="${STATE.instDayDate}"]`);
     if (!target) {
       target = scroll.querySelector(`[data-iso="${todayIso}"]`);
@@ -12129,9 +12162,7 @@ function renderInstructorDayStrip() {
     }
     if (target) {
       const targetScrollLeft = target.offsetLeft - (scroll.clientWidth / 2) + (target.clientWidth / 2);
-      // Forzar reflow para que el scroll previo se aplique antes de animar
-      if (useSmoothScroll) void scroll.offsetHeight;
-      scroll.scrollTo({ left: Math.max(0, targetScrollLeft), behavior: useSmoothScroll ? 'smooth' : 'instant' });
+      scroll.scrollTo({ left: Math.max(0, targetScrollLeft), behavior: 'instant' });
     }
   });
 }
@@ -13818,16 +13849,30 @@ async function instructorSetDateIso(iso) {
   STATE.instDayFilter = (iso === todayIso) ? 'today' : (iso === tomorrowIso ? 'tomorrow' : 'other');
   STATE.instAbsenceMenuOpen = null;
   STATE.instShowPast = false;
-  // Re-render todo lo que cambia con la fecha
-  renderInstructorDayStrip();
+
+  // Si el día está visible en el carrusel (mismo mes), animar la selección sin rebuild.
+  // Si no, hacer rebuild completo (cambia el mes mostrado).
+  const newDate = new Date(iso + 'T12:00:00');
+  const viewMonth = STATE.instCarouselMonth ? new Date(STATE.instCarouselMonth) : null;
+  const inSameViewMonth = viewMonth
+    && newDate.getFullYear() === viewMonth.getFullYear()
+    && newDate.getMonth() === viewMonth.getMonth();
+
+  if (inSameViewMonth && instructorUpdateCarouselSelection(iso, true)) {
+    // Animación nativa — no tocamos nada más del DOM del carrusel
+  } else {
+    // Cambio de mes (o primer render): sincronizar mes y rebuild
+    STATE.instCarouselMonth = new Date(newDate.getFullYear(), newDate.getMonth(), 1).toISOString();
+    renderInstructorDayStrip();
+  }
+
   // Si tenemos cache para esta fecha, pinta de inmediato sin esperar
   const cached = (STATE.instClassesCache || {})[iso];
   if (cached) {
     renderInstructorNextClassBlock(cached);
     renderInstructorClassesBlock(cached);
   } else {
-    // Sin cache: skeletons en la sección de clases. El widget se MANTIENE con
-    // el contenido anterior (ahora siempre representa HOY, así que no necesita cambiar).
+    // Sin cache: skeletons en la sección de clases.
     const block = document.querySelector('[data-inst-classes]');
     const headerBlock = document.querySelector('[data-inst-classes-header]');
     const pastToggleBlock = document.querySelector('[data-inst-past-toggle]');
