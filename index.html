@@ -546,6 +546,7 @@
     border: none;
     background: transparent;
     font-family: var(--body);
+    position: relative; /* anchor para el badge de notificaciones */
   }
   .mobile-bottom-nav .m-nav-item:hover { color: rgba(255, 255, 255, 0.85); }
   .mobile-bottom-nav .m-nav-item.is-active {
@@ -554,6 +555,30 @@
   }
   .mobile-bottom-nav .m-nav-item svg { width: 19px; height: 19px; }
   .mobile-bottom-nav .m-nav-item span { font-size: 9.5px; font-weight: 500; }
+
+  /* Badge de notificación estilo industrial (Facebook/Instagram):
+     bolita roja con número de pendientes sobre el ícono, arriba-izquierda */
+  .menu-badge-red {
+    position: absolute;
+    top: 2px;
+    left: 4px;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    border-radius: 999px;
+    background: #DC2626;
+    color: #FFFFFF;
+    font-family: var(--body);
+    font-size: 10px;
+    font-weight: 700;
+    line-height: 18px;
+    text-align: center;
+    border: 2px solid #26215C;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+    pointer-events: none;
+    letter-spacing: 0;
+    z-index: 3;
+  }
 
   .mobile-fab {
     width: 50px;
@@ -809,7 +834,7 @@
 
   .mobile-bottom-bar-prof { display: none; }
 
-  /* Menu screen profesor (slide drawer: entra desde izquierda, sale por derecha) */
+  /* Menu screen profesor (slide drawer: entra desde derecha, sale por derecha) */
   #mobile-menu-prof {
     display: block;
     position: fixed;
@@ -818,7 +843,7 @@
     background: var(--fit-cream);
     overflow-y: auto;
     padding-bottom: 100px;
-    transform: translateX(-100%);
+    transform: translateX(100%);
     transition: transform 0.28s cubic-bezier(0.32, 0.72, 0.24, 1);
     visibility: hidden;
     will-change: transform;
@@ -3529,7 +3554,7 @@
     <button class="m-nav-item" type="button" data-prof-tab="menu" onclick="profToggleMenu(this)" aria-label="Menú">
       <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
       <span>Menú</span>
-      <span class="menu-badge-red" id="prof-menu-badge" style="display: none; position: absolute; top: -2px; left: 6px; width: 11px; height: 11px; border-radius: 50%; background: #DC2626; border: 2px solid #26215C; box-shadow: 0 0 0 1px rgba(220, 38, 38, 0.3), 0 1px 2px rgba(0, 0, 0, 0.2);"></span>
+      <span class="menu-badge-red" id="prof-menu-badge" style="display: none;">1</span>
     </button>
   </nav>
 </div>
@@ -9490,7 +9515,10 @@ function updateMobileProfMenuData() {
           foot.style.display = 'block';
         }
       }
-      if (badge) badge.style.display = 'block';
+      if (badge) {
+        badge.textContent = pending.length > 9 ? '9+' : String(pending.length);
+        badge.style.display = 'block';
+      }
     } else {
       if (wrap) wrap.style.display = 'none';
       if (badge) badge.style.display = 'none';
