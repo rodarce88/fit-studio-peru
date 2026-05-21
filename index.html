@@ -16124,28 +16124,20 @@ async function saveFreezePackage() {
   }
 
   const reasonLabels = { injury: 'Lesión', travel: 'Viaje', medical: 'Tema médico', personal: 'Motivo personal', other: 'Otro' };
-  const fullReason = `${reasonLabels[reason]}${notes ? ': '+notes : ''}`;
+  const baseReason = `${reasonLabels[reason]}${notes ? ': '+notes : ''}`;
 
-  // 1. Update del paquete
-  const { error } = await sb.from('student_packages').update({
-    is_frozen: true,
-    freeze_started_at: new Date().toISOString(),
-    freeze_reason: fullReason,
-    freeze_remind_at: remindAt,
-  }).eq('id', pkgId);
-  if (error) { showToast('Error: '+error.message, 'error'); return; }
-
-  // 2. Liberar session_bookings futuros del alumno: cancelarlos para que las
-  // clases vuelvan al pool de "por re-agendar". Las clases pasadas (con
-  // attendance ya procesada) NO se tocan — son historial.
+  // 1. Obtener student_id (lo necesitamos para liberar bookings y pausar fijos)
   const { data: pkg } = await sb.from('student_packages')
     .select('student_id')
     .eq('id', pkgId)
     .single();
 
   let liberadas = 0;
+  let pausados = 0;
+  let pausedFbIds = [];
+
   if (pkg && pkg.student_id) {
-    // Buscar bookings activos del alumno en sesiones futuras
+    // 2. Cancelar session_bookings futuros del alumno (vuelven al pool de "por re-agendar")
     const { data: futureBookings } = await sb.from('session_bookings')
       .select('id, session_id, class_sessions!inner(session_date)')
       .eq('student_id', pkg.student_id)
@@ -16160,9 +16152,44 @@ async function saveFreezePackage() {
       }).in('id', ids);
       if (!cancelErr) liberadas = ids.length;
     }
+
+    // 3. Pausar fixed_bookings activos del alumno (deja de aparecer en horarios).
+    // Guardamos los IDs para poder restaurarlos al reactivar.
+    const { data: activeFixed } = await sb.from('fixed_bookings')
+      .select('id')
+      .eq('student_id', pkg.student_id)
+      .eq('is_active', true);
+
+    if (activeFixed && activeFixed.length > 0) {
+      pausedFbIds = activeFixed.map(b => b.id);
+      const { error: pauseErr } = await sb.from('fixed_bookings').update({
+        is_active: false,
+      }).in('id', pausedFbIds);
+      if (!pauseErr) {
+        pausados = pausedFbIds.length;
+        // Sync local STATE para que el render no muestre estos fijos
+        (STATE.fixedBookings || []).forEach(fb => {
+          if (pausedFbIds.includes(fb.id)) fb.is_active = false;
+        });
+      }
+    }
   }
 
-  showToast(`Paquete congelado${liberadas > 0 ? ` · ${liberadas} clase${liberadas === 1 ? '' : 's'} liberada${liberadas === 1 ? '' : 's'}` : ''}`, 'success');
+  // 4. Update del paquete (con metadata de FB IDs pausados al final del reason)
+  const fullReason = baseReason + (pausedFbIds.length > 0 ? ` |FB:${pausedFbIds.join(',')}` : '');
+  const { error } = await sb.from('student_packages').update({
+    is_frozen: true,
+    freeze_started_at: new Date().toISOString(),
+    freeze_reason: fullReason,
+    freeze_remind_at: remindAt,
+  }).eq('id', pkgId);
+  if (error) { showToast('Error: '+error.message, 'error'); return; }
+
+  // 5. Toast informativo
+  const parts = [];
+  if (liberadas > 0) parts.push(`${liberadas} clase${liberadas === 1 ? '' : 's'} liberada${liberadas === 1 ? '' : 's'}`);
+  if (pausados > 0) parts.push(`${pausados} fijo${pausados === 1 ? '' : 's'} pausado${pausados === 1 ? '' : 's'}`);
+  showToast(`Paquete congelado${parts.length > 0 ? ` · ${parts.join(' · ')}` : ''}`, 'success');
   closeModals();
 
   // Refrescar perfil + listas del coord
@@ -16180,13 +16207,49 @@ async function saveFreezePackage() {
 async function reactivatePackage(pkgId) {
   if (!isOnline) { showToast('Conexión requerida', 'error'); return; }
   if (!confirm('¿Reactivar el paquete?\n\nLa alumna volverá a aparecer en horarios. Las clases que se cancelaron durante el congelamiento NO se recuperan automáticamente — tendrás que re-agendarlas manualmente.')) return;
+
+  // 1. Leer el paquete para extraer los FB IDs pausados de la metadata
+  const { data: pkgRow } = await sb.from('student_packages')
+    .select('freeze_reason')
+    .eq('id', pkgId)
+    .single();
+
+  let pausedFbIds = [];
+  let cleanReason = pkgRow?.freeze_reason || null;
+  if (cleanReason) {
+    const idx = cleanReason.indexOf('|FB:');
+    if (idx >= 0) {
+      const meta = cleanReason.slice(idx + 4).trim();
+      pausedFbIds = meta.split(',').map(s => s.trim()).filter(Boolean);
+      cleanReason = cleanReason.slice(0, idx).trim();
+    }
+  }
+
+  // 2. Restaurar fixed_bookings (volver a activarlos)
+  let restaurados = 0;
+  if (pausedFbIds.length > 0) {
+    const { error: restoreErr } = await sb.from('fixed_bookings').update({
+      is_active: true,
+    }).in('id', pausedFbIds);
+    if (!restoreErr) {
+      restaurados = pausedFbIds.length;
+      // Sync local STATE
+      (STATE.fixedBookings || []).forEach(fb => {
+        if (pausedFbIds.includes(fb.id)) fb.is_active = true;
+      });
+    }
+  }
+
+  // 3. Update del paquete (limpiar metadata FB del reason)
   const { error } = await sb.from('student_packages').update({
     is_frozen: false,
     freeze_started_at: null,
     freeze_remind_at: null,
+    freeze_reason: cleanReason || null,
   }).eq('id', pkgId);
   if (error) { showToast('Error: '+error.message, 'error'); return; }
-  showToast('Paquete reactivado', 'success');
+
+  showToast(`Paquete reactivado${restaurados > 0 ? ` · ${restaurados} fijo${restaurados === 1 ? '' : 's'} restaurado${restaurados === 1 ? '' : 's'}` : ''}`, 'success');
   const studentId = document.getElementById('f-student-id').value;
   if (studentId) {
     const s = STATE.students.find(x => x.id === studentId);
@@ -17696,6 +17759,69 @@ async function copyToClipboard(text) {
   }
 }
 
+// Repair de paquetes congelados con código viejo:
+// Si encuentra paquete congelado del alumno SIN metadata |FB: en freeze_reason
+// (señal de que se congeló antes del fix de fixed_bookings), aplica la limpieza:
+// 1. Cancela session_bookings futuros sin cancelar
+// 2. Pausa fixed_bookings activos del alumno
+// 3. Actualiza freeze_reason del paquete con la metadata para que reactivar funcione
+// Idempotente: si freeze_reason ya tiene |FB:, no hace nada.
+async function _repairFrozenPackageIfNeeded(studentId) {
+  if (!isOnline) return;
+  const { data: frozenPkgs } = await sb.from('student_packages')
+    .select('id, freeze_reason')
+    .eq('student_id', studentId)
+    .eq('is_frozen', true);
+  if (!frozenPkgs || frozenPkgs.length === 0) return;
+
+  // Buscar al menos uno que NO tenga metadata FB (necesita repair)
+  const needsRepair = frozenPkgs.find(p => !(p.freeze_reason || '').includes('|FB:'));
+  if (!needsRepair) return;
+
+  const todayIso = dateToIsoLocal(new Date());
+
+  // 1. Cancelar session_bookings futuros sin cancelar del alumno
+  const { data: openBookings } = await sb.from('session_bookings')
+    .select('id, session_id, class_sessions!inner(session_date)')
+    .eq('student_id', studentId)
+    .is('cancelled_at', null)
+    .gte('class_sessions.session_date', todayIso);
+
+  if (openBookings && openBookings.length > 0) {
+    const ids = openBookings.map(b => b.id);
+    await sb.from('session_bookings').update({
+      cancelled_at: new Date().toISOString(),
+      cancelled_reason: 'package_frozen_repair',
+    }).in('id', ids);
+  }
+
+  // 2. Pausar fixed_bookings activos del alumno
+  const { data: activeFixed } = await sb.from('fixed_bookings')
+    .select('id')
+    .eq('student_id', studentId)
+    .eq('is_active', true);
+
+  let pausedFbIds = [];
+  if (activeFixed && activeFixed.length > 0) {
+    pausedFbIds = activeFixed.map(b => b.id);
+    await sb.from('fixed_bookings').update({
+      is_active: false,
+    }).in('id', pausedFbIds);
+    (STATE.fixedBookings || []).forEach(fb => {
+      if (pausedFbIds.includes(fb.id)) fb.is_active = false;
+    });
+  }
+
+  // 3. Actualizar freeze_reason con metadata para que reactivar funcione
+  const baseReason = (needsRepair.freeze_reason || '').trim();
+  const newReason = baseReason + (pausedFbIds.length > 0 ? ` |FB:${pausedFbIds.join(',')}` : ' |FB:');
+  await sb.from('student_packages').update({
+    freeze_reason: newReason,
+  }).eq('id', needsRepair.id);
+
+  console.log(`[freeze-repair] student ${studentId}: ${openBookings?.length || 0} bookings cancelled, ${pausedFbIds.length} fijos pausados`);
+}
+
 // ============================================
 // STUDENT DETAIL VIEW (coordinador) — pantalla completa con tabs
 // ============================================
@@ -17743,8 +17869,11 @@ async function openStudentDetail(id) {
   if (isOnline) {
     try {
       await recalcPackageCounters(id);
+      // Auto-repair: si hay paquete congelado con código viejo (sin metadata |FB: en freeze_reason),
+      // aplicar la limpieza ahora: cancelar bookings futuros + pausar fixed_bookings.
+      await _repairFrozenPackageIfNeeded(id);
       // Recargar attendances y packages después del cleanup
-      const [attResp, pkgResp] = await Promise.all([
+      const [attResp, pkgResp, bkResp] = await Promise.all([
         sb.from('attendance')
           .select('*, class_sessions!attendance_session_id_fkey(id, session_date, hour, location_id, is_cancelled, instructor_id, actual_instructor_id)')
           .eq('student_id', id)
@@ -17753,9 +17882,13 @@ async function openStudentDetail(id) {
           .select('*, packages(name, price_pen)')
           .eq('student_id', id)
           .order('purchase_date', { ascending: false }),
+        sb.from('session_bookings')
+          .select('*, class_sessions(id, session_date, hour, location_id, is_cancelled, instructor_id)')
+          .eq('student_id', id),
       ]);
       if (attResp.data) STATE.studentDetailData.attendances = attResp.data;
       if (pkgResp.data) STATE.studentDetailData.packages = pkgResp.data;
+      if (bkResp.data) STATE.studentDetailData.bookings = bkResp.data;
     } catch (e) {
       console.error('[openStudentDetail] cleanup error:', e);
     }
@@ -17779,13 +17912,16 @@ function renderStudentDetail() {
       : '<span class="modality-pill modality-trial">✦ Prueba</span>');
 
   // Determinar si el botón "Agendar clases" debe estar deshabilitado.
-  // Lo está solo cuando NO hay paquete activo (es decir, no hay ningún paquete con clases libres).
+  // Lo está cuando NO hay paquete activo (todos los paquetes están agotados, expirados o congelados).
   const _data = STATE.studentDetailData || {};
   const _activePkg = getActivePackage(_data.packages || []);
   const _hasNoActivePkg = !_activePkg;
+  const _hasFrozenPkg = (_data.packages || []).some(p => p.is_frozen === true);
   const _agendarDisabled = _hasNoActivePkg;
   const _agendarTooltip = _hasNoActivePkg
-    ? 'Sin paquete activo. Asigna un paquete primero.'
+    ? (_hasFrozenPkg
+        ? 'Paquete congelado. Reactiva el paquete para poder agendar.'
+        : 'Sin paquete activo. Asigna un paquete primero.')
     : '';
   const _hasCompletedPkgs = (_data.packages || []).some(p => {
     const used = p.classes_used || 0;
@@ -17845,7 +17981,7 @@ function renderStudentDetail() {
                 : `<span style="opacity: 0.8;">· Recordatorio: <strong>${remindLabel}</strong></span>`}`
             : ''}
         </div>
-        ${frozenPkg.freeze_reason ? `<div style="font-size: 12px; opacity: 0.8; margin-top: 4px;">Motivo: ${escape(frozenPkg.freeze_reason)}</div>` : ''}
+        ${frozenPkg.freeze_reason ? `<div style="font-size: 12px; opacity: 0.8; margin-top: 4px;">Motivo: ${escape(frozenPkg.freeze_reason.split('|FB:')[0].trim())}</div>` : ''}
       </div>
     `;
   }
