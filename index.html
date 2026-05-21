@@ -17948,74 +17948,396 @@ function renderDetailSummary(stud) {
     </div>
   `;
 
-  return `
-    ${packagesBlock}
-    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; margin-bottom: 24px;">
-      ${cards.map(c => `
-        <div style="background: white; border: 1px solid var(--line); border-radius: var(--radius-md); padding: 18px;">
-          <div style="font-size: 11px; color: var(--ink-mute); text-transform: uppercase; letter-spacing: 0.5px; font-weight: 500;">${c.label}</div>
-          <div style="font-family: var(--display); font-size: 26px; margin-top: 6px; color: var(--fit-purple);">${c.value}</div>
-          <div style="font-size: 12px; color: var(--ink-soft); margin-top: 4px;">${c.sub}</div>
-        </div>
-      `).join('')}
-    </div>
+  // ============================================
+  // RENDER COMPLETO — Vista rediseñada (mockup v2 aprobado)
+  // ============================================
 
-    ${pendingToReschedule > 0 ? `
-      <div style="background: #FEF7E6; border: 1px solid #F4D58A; border-radius: var(--radius-md); padding: 18px; margin-bottom: 16px;">
-        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
-          <div style="font-size: 11px; color: #8B6F1A; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">Pendientes por re-agendar</div>
-          <button class="btn btn-primary" onclick="openStudentScheduleEditor('${stud.id}')" style="padding: 6px 14px; font-size: 11px;">Re-agendar →</button>
-        </div>
-        ${recoverableAtts.length > 0 ? recoverableAtts.slice(0, 5).map(a => {
-          const sess = a.class_sessions;
-          const lc = STATE.locations.find(l => l.id === sess.location_id);
-          const noteFirstLine = (a.notes || '').split('\n')[0] || '';
-          return `<div style="padding: 10px 0; border-top: 1px solid #F4D58A;">
-            <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px;">
-              <div style="flex: 1;">
-                <div style="font-weight: 500; font-size: 13px;">${formatDate(sess.session_date)} · ${formatHour(sess.hour)} <span style="font-weight: 400; color: var(--ink-mute);">· ${escape(lc?.name || '')}</span></div>
-                <div style="font-size: 11px; color: #8B6F1A; margin-top: 3px; font-style: italic;">${escape(noteFirstLine)}</div>
-              </div>
-              <span style="font-size: 10px; padding: 3px 9px; background: #F4D58A; color: #5C4910; border-radius: 999px; font-weight: 500; flex-shrink: 0;">Falta justificada</span>
+  // Datos para el calendario 3 meses
+  const attendedSet = new Set();
+  const bookedSet = new Set();
+  (data.attendances || []).forEach(a => {
+    if (!a.class_sessions) return;
+    const sd = a.class_sessions.session_date;
+    if (!sd) return;
+    // Asistió o cuenta como tomada
+    if (a.counts_against_package || a.status === 'attended' || a.status === 'lost' || a.status === 'no_show') {
+      attendedSet.add(sd);
+    }
+  });
+  upcomingClasses.forEach(b => {
+    if (b.class_sessions?.session_date) bookedSet.add(b.class_sessions.session_date);
+  });
+
+  // Helper: generar un mes del mini calendario
+  const renderMiniMonth = (year, monthIdx) => {
+    const monthNames = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+    const monthName = monthNames[monthIdx];
+    // 1ro del mes — día de semana (lunes=0)
+    const first = new Date(year, monthIdx, 1);
+    const firstDayMon = (first.getDay() + 6) % 7; // domingo=6
+    const lastDay = new Date(year, monthIdx + 1, 0).getDate();
+
+    const headers = ['L','M','M','J','V','S','D'];
+    let cells = headers.map(h => `<div style="text-align: center; color: var(--ink-mute); padding: 3px 0; font-weight: 500; font-size: 10px;">${h}</div>`).join('');
+    // huecos antes del 1ro
+    for (let i = 0; i < firstDayMon; i++) cells += '<div></div>';
+
+    for (let d = 1; d <= lastDay; d++) {
+      const iso = `${year}-${String(monthIdx+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+      const isToday = iso === todayIso;
+      const attended = attendedSet.has(iso);
+      const booked = bookedSet.has(iso) && !attended;
+
+      let bg = 'transparent', color = '#C5C2D5', fontWeight = '400';
+      let extraStyle = '';
+      if (attended) { bg = 'var(--fit-purple)'; color = 'white'; fontWeight = '600'; }
+      else if (booked) { bg = '#D9C5EB'; color = 'var(--fit-purple-deep)'; fontWeight = '600'; }
+      if (isToday) {
+        extraStyle = 'box-shadow: 0 0 0 2px #FFE066;';
+        if (!attended && !booked) { bg = 'white'; color = 'var(--fit-purple)'; fontWeight = '600'; }
+      }
+
+      const hasCircle = attended || booked || isToday;
+      if (hasCircle) {
+        cells += `<div style="text-align: center; padding: 3px 0;"><span style="display: inline-flex; width: 22px; height: 22px; align-items: center; justify-content: center; border-radius: 50%; background: ${bg}; color: ${color}; font-weight: ${fontWeight}; font-size: 10px; ${extraStyle}">${d}</span></div>`;
+      } else {
+        cells += `<div style="text-align: center; padding: 3px 0; color: ${color}; font-size: 10px;">${d}</div>`;
+      }
+    }
+
+    return `
+      <div>
+        <div style="font-family: var(--display); font-style: italic; font-size: 14px; text-align: center; margin-bottom: 10px; color: var(--fit-purple-deep);">${monthName} <span style="color: var(--ink-mute); font-style: normal; font-size: 11px; font-family: var(--body);">${year}</span></div>
+        <div style="display: grid; grid-template-columns: repeat(7, 1fr); gap: 1px;">${cells}</div>
+      </div>
+    `;
+  };
+
+  // 3 meses centrados en el actual
+  const now = new Date();
+  const months = [
+    { y: now.getFullYear(), m: now.getMonth() - 1 },
+    { y: now.getFullYear(), m: now.getMonth() },
+    { y: now.getFullYear(), m: now.getMonth() + 1 },
+  ].map(({y, m}) => {
+    if (m < 0) return { y: y - 1, m: 11 };
+    if (m > 11) return { y: y + 1, m: 0 };
+    return { y, m };
+  });
+
+  // Hero del paquete activo
+  const heroActivePkg = activePkg ? (() => {
+    const total = activePkg.classes_total || 0;
+    const used = liveUsed;
+    const remaining = Math.max(0, total - used);
+    const scheduled = Math.min(upcomingClasses.length, remaining); // agendadas del paquete activo (cap a remaining)
+    const unscheduled = Math.max(0, remaining - scheduled);
+    const pct = total > 0 ? (used / total) : 0;
+    const circumference = 2 * Math.PI * 42; // 263.89
+    const dashOffset = circumference * (1 - pct);
+    const name = escape(activePkg.packages?.name || `Paquete ${total} clases`);
+    const purchaseStr = formatDate(activePkg.purchase_date);
+    const startStr = activePkg.start_date ? formatDate(activePkg.start_date) : purchaseStr;
+    const datesLine = (activePkg.start_date && activePkg.start_date !== activePkg.purchase_date)
+      ? `Comprado <span style="color: var(--ink); font-weight: 500;">${purchaseStr}</span> · Iniciado <span style="color: var(--ink); font-weight: 500;">${startStr}</span>`
+      : `Comprado <span style="color: var(--ink); font-weight: 500;">${purchaseStr}</span>`;
+
+    // Banda de pago
+    let paymentBlock = '';
+    if (activePkgOwed > 0) {
+      const paidPct = activePkgPrice > 0 ? (activePkgPaid / activePkgPrice) * 100 : 0;
+      paymentBlock = `
+        <div style="background: #FFF6E5; border-radius: 12px; padding: 14px 18px; display: flex; align-items: center; gap: 16px; margin-bottom: 22px;">
+          <div style="font-size: 22px; line-height: 1;">⚠️</div>
+          <div style="flex: 1; min-width: 0;">
+            <div style="font-size: 13px; color: #7A4A06; font-weight: 600; margin-bottom: 2px;">Debe <span style="font-family: var(--display); font-style: italic; font-size: 17px; font-weight: 600;">S/ ${activePkgOwed.toFixed(2)}</span> de S/ ${activePkgPrice.toFixed(2)}</div>
+            <div style="font-size: 11px; color: var(--ink-mute);">Pagó S/ ${activePkgPaid.toFixed(2)}</div>
+            <div style="background: #F0E5D0; height: 4px; border-radius: 2px; margin-top: 7px; overflow: hidden;">
+              <div style="background: #B45309; height: 100%; width: ${paidPct.toFixed(1)}%; border-radius: 2px;"></div>
             </div>
-          </div>`;
-        }).join('') : ''}
-        ${pendingToReschedule > recoverableAtts.length ? `<div style="padding: 10px 0; border-top: 1px solid #F4D58A; font-size: 12px; color: #8B6F1A;">+ ${pendingToReschedule - recoverableAtts.length} clase${(pendingToReschedule - recoverableAtts.length) === 1 ? '' : 's'} del paquete sin agendar todavía</div>` : ''}
-      </div>
-    ` : ''}
-
-    ${lastPayment ? `
-      <div style="background: white; border: 1px solid var(--line); border-radius: var(--radius-md); padding: 18px; margin-bottom: 16px;">
-        <div style="font-size: 11px; color: var(--ink-mute); text-transform: uppercase; letter-spacing: 0.5px; font-weight: 500; margin-bottom: 8px;">Último pago</div>
-        <div style="display: flex; align-items: center; justify-content: space-between;">
-          <div>
-            <div style="font-weight: 500;">S/ ${lastPayment.amount_pen || lastPayment.amount} · ${escape(lastPayment.method || '')}</div>
-            <div style="font-size: 12px; color: var(--ink-mute); margin-top: 2px;">${formatDate(lastPayment.payment_date)} ${lastPayment.reference ? '· Ref. ' + escape(lastPayment.reference) : ''}</div>
           </div>
-          <button class="btn btn-ghost" onclick="setStudentDetailTab('payments')" style="padding: 6px 12px; font-size: 11px;">Ver historial →</button>
+          <button onclick='openPaymentModal(${JSON.stringify(stud.id).replace(/'/g, "&#39;")}, ${JSON.stringify(activePkg.id).replace(/'/g, "&#39;")}, ${activePkgOwed})' style="background: #1A1419; color: white; border: none; padding: 10px 16px; border-radius: 10px; font-size: 13px; font-weight: 500; cursor: pointer; font-family: inherit; white-space: nowrap;">＋ Registrar pago</button>
+        </div>
+      `;
+    } else if (activePkgPaid > 0) {
+      paymentBlock = `
+        <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 22px; padding: 10px 16px; background: #F8FBF6; border-radius: 12px;">
+          <span style="background: #DCFCE7; color: #15803D; font-size: 11px; font-weight: 700; padding: 5px 11px; border-radius: 999px;">✓ Pagado</span>
+          <span style="font-family: var(--display); font-style: italic; font-size: 17px; color: var(--ink);">S/ ${activePkgPaid.toFixed(2)}</span>
+        </div>
+      `;
+    }
+
+    const isCoord = CURRENT_USER?.role === 'coordinator';
+
+    return `
+      <div style="background: white; border-radius: 18px; border-left: 5px solid var(--fit-purple); padding: 24px 26px; margin-bottom: 28px;">
+        <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; gap: 12px; flex-wrap: wrap;">
+          <span style="background: var(--fit-lavender-pale); color: var(--fit-purple); font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 1.2px; padding: 5px 11px; border-radius: 999px;">★ Paquete activo</span>
+          <div style="font-size: 11px; color: var(--ink-mute);">${datesLine}</div>
+        </div>
+
+        <h2 style="font-family: var(--display); font-style: italic; font-weight: 500; font-size: 28px; margin: 0; color: var(--ink); letter-spacing: -0.3px;">${name}</h2>
+        <div style="font-size: 13px; color: var(--ink-soft); margin-top: 4px;">
+          <span style="font-family: var(--display); font-style: italic; font-weight: 500; color: var(--fit-purple); font-size: 15px;">${used}</span> tomadas de ${total} · vigente
+        </div>
+
+        <div style="height: 1px; background: linear-gradient(to right, transparent, var(--line) 20%, var(--line) 80%, transparent); margin: 20px 0;"></div>
+
+        ${paymentBlock}
+
+        <div style="display: grid; grid-template-columns: 1fr 160px; gap: 28px; align-items: center;" class="active-pkg-grid">
+          <div>
+            <div style="font-size: 10px; color: var(--ink-mute); text-transform: uppercase; letter-spacing: 1.2px; font-weight: 600; margin-bottom: 12px;">Cómo están sus ${remaining} restantes</div>
+            <div style="display: flex; flex-direction: column; gap: 8px;">
+              <div style="background: var(--fit-lavender-pale); padding: 14px 16px; border-radius: 12px; display: flex; align-items: center; justify-content: space-between;">
+                <div>
+                  <div style="font-size: 12px; color: var(--ink-soft);">Agendadas</div>
+                  <div style="font-size: 11px; color: var(--ink-mute); margin-top: 2px;">Ya tienen fecha</div>
+                </div>
+                <div style="font-family: var(--display); font-style: italic; font-weight: 500; font-size: 30px; color: var(--fit-purple-deep); line-height: 1;">${scheduled}</div>
+              </div>
+              <div onclick="openStudentScheduleEditor('${stud.id}')" style="background: ${unscheduled > 0 ? '#FFF6E5' : 'var(--fit-lavender-pale)'}; padding: 14px 16px; border-radius: 12px; display: flex; align-items: center; justify-content: space-between; ${unscheduled > 0 ? 'cursor: pointer;' : ''}">
+                <div>
+                  <div style="font-size: 12px; color: ${unscheduled > 0 ? '#7A4A06' : 'var(--ink-soft)'}; font-weight: ${unscheduled > 0 ? '600' : '400'};">Sin agendar</div>
+                  <div style="font-size: 11px; color: ${unscheduled > 0 ? '#B45309' : 'var(--ink-mute)'}; margin-top: 2px;">${unscheduled > 0 ? 'Pendientes de programar →' : 'Todo programado'}</div>
+                </div>
+                <div style="font-family: var(--display); font-style: italic; font-weight: 500; font-size: 30px; color: ${unscheduled > 0 ? '#B45309' : 'var(--fit-purple-deep)'}; line-height: 1;">${unscheduled}</div>
+              </div>
+            </div>
+          </div>
+
+          <div style="position: relative; width: 160px; height: 160px; margin: 0 auto;">
+            <svg viewBox="0 0 100 100" width="160" height="160" style="transform: rotate(-90deg);">
+              <circle cx="50" cy="50" r="42" fill="none" stroke="var(--fit-lavender-pale)" stroke-width="10"/>
+              <circle cx="50" cy="50" r="42" fill="none" stroke="var(--fit-purple)" stroke-width="10" stroke-dasharray="${circumference.toFixed(2)}" stroke-dashoffset="${dashOffset.toFixed(2)}" stroke-linecap="round"/>
+            </svg>
+            <div style="position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center;">
+              <div style="font-family: var(--display); font-style: italic; font-weight: 500; font-size: 52px; color: var(--fit-purple); line-height: 1;">${remaining}</div>
+              <div style="font-size: 10px; color: var(--ink-mute); text-transform: uppercase; letter-spacing: 1.2px; margin-top: 6px; font-weight: 600;">restantes</div>
+              <div style="font-size: 11px; color: var(--ink-soft); margin-top: 1px; font-style: italic; font-family: var(--display);">de ${total}</div>
+            </div>
+          </div>
+        </div>
+
+        <div style="display: flex; gap: 8px; margin-top: 22px; padding-top: 18px; border-top: 1px solid var(--fit-lavender-pale); flex-wrap: wrap;">
+          <button onclick="openStudentScheduleEditor('${stud.id}')" style="background: var(--fit-purple); color: white; border: none; padding: 9px 18px; border-radius: 10px; font-size: 13px; font-weight: 500; cursor: pointer; font-family: inherit; flex: 1; min-width: 140px;">Agendar clases →</button>
+          <button onclick="openFreezeModal('${activePkg.id}')" style="background: white; color: var(--ink-soft); border: 1px solid var(--line); padding: 9px 14px; border-radius: 10px; font-size: 13px; cursor: pointer; font-family: inherit;">Congelar</button>
+          ${isCoord ? `<button onclick="openChangePackageWizard('${activePkg.id}')" style="background: #1A1419; color: white; border: none; padding: 9px 14px; border-radius: 10px; font-size: 13px; cursor: pointer; font-family: inherit;">⇄ Cambiar</button>` : ''}
         </div>
       </div>
-    ` : ''}
+    `;
+  })() : `
+    <div style="background: #FEF7E6; border: 1px solid #F4D58A; border-radius: 16px; padding: 20px 24px; margin-bottom: 28px; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;">
+      <div>
+        <div style="font-family: var(--display); font-size: 17px; color: #633806; font-style: italic;">Sin paquete activo</div>
+        <div style="font-size: 12px; color: #854F0B; margin-top: 4px;">Asigna un paquete para que pueda agendar clases.</div>
+      </div>
+      <button onclick="openAssignPackageModal('${stud.id}')" style="background: var(--fit-purple); color: white; border: none; padding: 10px 18px; border-radius: 10px; font-size: 13px; font-weight: 500; cursor: pointer; font-family: inherit;">Asignar paquete</button>
+    </div>
+  `;
 
-    ${nextClass ? `
-      <div style="background: white; border: 1px solid var(--line); border-radius: var(--radius-md); padding: 18px;">
-        <div style="font-size: 11px; color: var(--ink-mute); text-transform: uppercase; letter-spacing: 0.5px; font-weight: 500; margin-bottom: 8px;">Próximas clases</div>
-        ${upcomingClasses.slice(0, 3).map(b => {
+  // Próximas clases (lista)
+  const upcomingBlock = upcomingClasses.length > 0 ? `
+    <div style="margin-bottom: 28px;">
+      <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 14px;">
+        <h3 style="font-family: var(--display); font-style: italic; font-weight: 500; font-size: 22px; margin: 0; color: var(--ink);">Próximas clases</h3>
+        <span style="font-size: 11px; color: var(--ink-mute); text-transform: uppercase; letter-spacing: 0.8px;">${upcomingClasses.length} agendada${upcomingClasses.length === 1 ? '' : 's'}</span>
+      </div>
+      <div style="background: white; border-radius: 14px; overflow: hidden; border: 1px solid var(--line);">
+        ${upcomingClasses.slice(0, 5).map((b, idx) => {
           const sess = b.class_sessions;
           const lc = STATE.locations.find(l => l.id === sess.location_id);
+          const sdObj = new Date(sess.session_date + 'T12:00:00');
+          const monthShort = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'][sdObj.getMonth()];
+          const isToday = sess.session_date === todayIso;
+          const inst = STATE.instructors.find(i => i.id === (sess.actual_instructor_id || sess.instructor_id));
+          const sourceLabel = b.source === 'flexible' ? 'Flexible' : (b.source === 'makeup' ? 'Recuperación' : 'Agendada');
+          const chipBg = isToday ? '#FFE066' : 'var(--fit-lavender-pale)';
+          const chipColor = isToday ? '#5A4200' : 'var(--fit-purple)';
+          const chipText = isToday ? 'Hoy' : sourceLabel;
           return `
-            <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--line);">
-              <div>
-                <div style="font-weight: 500; font-size: 14px;">${formatDate(sess.session_date)} · ${formatHour(sess.hour)}</div>
-                <div style="font-size: 11px; color: var(--ink-mute);">${escape(lc?.name || '')}</div>
+            <div style="padding: 14px 18px; display: flex; align-items: center; gap: 14px; ${idx < Math.min(upcomingClasses.length, 5) - 1 ? 'border-bottom: 1px solid var(--fit-lavender-pale);' : ''}">
+              <div style="text-align: center; min-width: 42px;">
+                <div style="font-family: var(--display); font-style: italic; font-size: 22px; color: var(--fit-purple); line-height: 1; font-weight: 500;">${sdObj.getDate()}</div>
+                <div style="font-size: 10px; color: var(--ink-mute); text-transform: uppercase; letter-spacing: 0.8px; margin-top: 2px; font-weight: 600;">${monthShort}</div>
               </div>
-              <span style="font-size: 11px; color: var(--ink-mute);">${b.source === 'flexible' ? 'Flexible' : (b.source === 'makeup' ? 'Recuperación' : 'Asignada')}</span>
+              <div style="flex: 1; min-width: 0;">
+                <div style="font-size: 14px; color: var(--ink); font-weight: 500;">${formatHour(sess.hour)} · ${escape(lc?.name || '')}</div>
+                <div style="font-size: 12px; color: var(--ink-mute); margin-top: 2px;">${escape(inst?.full_name || 'Sin asignar')}</div>
+              </div>
+              <span style="background: ${chipBg}; color: ${chipColor}; font-size: 10px; font-weight: 700; padding: 4px 10px; border-radius: 999px; text-transform: uppercase; letter-spacing: 0.8px; white-space: nowrap;">${chipText}</span>
             </div>
           `;
         }).join('')}
-        ${upcomingClasses.length > 3 ? `<div style="padding-top: 10px;"><button class="btn btn-ghost" onclick="setStudentDetailTab('classes')" style="padding: 6px 12px; font-size: 11px;">Ver todas (${upcomingClasses.length}) →</button></div>` : ''}
+        ${upcomingClasses.length > 5 ? `<div style="padding: 12px 18px; border-top: 1px solid var(--fit-lavender-pale); background: var(--cream);"><button onclick="setStudentDetailTab('classes')" style="background: transparent; border: none; color: var(--fit-purple); font-size: 12px; font-weight: 500; cursor: pointer; font-family: inherit; padding: 0;">Ver todas (${upcomingClasses.length}) →</button></div>` : ''}
       </div>
-    ` : ''}
+    </div>
+  ` : '';
+
+  // Pendientes recuperables (si hay)
+  const recoverableBlock = recoverableAtts.length > 0 ? `
+    <div style="background: #FEF7E6; border: 1px solid #F4D58A; border-radius: 14px; padding: 16px 20px; margin-bottom: 28px;">
+      <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;">
+        <div style="font-size: 11px; color: #8B6F1A; text-transform: uppercase; letter-spacing: 0.6px; font-weight: 600;">Faltas justificadas (${recoverableAtts.length})</div>
+        <button onclick="openStudentScheduleEditor('${stud.id}')" style="background: #1A1419; color: white; border: none; padding: 7px 14px; border-radius: 8px; font-size: 12px; font-weight: 500; cursor: pointer; font-family: inherit;">Re-agendar →</button>
+      </div>
+      ${recoverableAtts.slice(0, 3).map(a => {
+        const sess = a.class_sessions;
+        const lc = STATE.locations.find(l => l.id === sess.location_id);
+        const noteFirstLine = (a.notes || '').split('\n')[0] || '';
+        return `<div style="padding: 8px 0; border-top: 1px solid #F4D58A; font-size: 12px;">
+          <div style="color: var(--ink); font-weight: 500;">${formatDate(sess.session_date)} · ${formatHour(sess.hour)} <span style="font-weight: 400; color: var(--ink-mute);">· ${escape(lc?.name || '')}</span></div>
+          ${noteFirstLine ? `<div style="font-size: 11px; color: #8B6F1A; margin-top: 2px; font-style: italic;">${escape(noteFirstLine)}</div>` : ''}
+        </div>`;
+      }).join('')}
+      ${recoverableAtts.length > 3 ? `<div style="padding: 8px 0; border-top: 1px solid #F4D58A; font-size: 12px; color: #8B6F1A;">+ ${recoverableAtts.length - 3} más</div>` : ''}
+    </div>
+  ` : '';
+
+  // Sección de Pagos
+  const paymentsBlock = (data.payments || []).length > 0 ? `
+    <div style="margin-bottom: 28px;">
+      <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 14px;">
+        <h3 style="font-family: var(--display); font-style: italic; font-weight: 500; font-size: 22px; margin: 0; color: var(--ink);">Pagos</h3>
+        <div style="text-align: right;">
+          <div style="font-family: var(--display); font-style: italic; font-size: 18px; color: #15803D; font-weight: 500;">S/ ${totalPayments.toFixed(2)}</div>
+          <div style="font-size: 11px; color: var(--ink-mute); text-transform: uppercase; letter-spacing: 0.6px;">${(data.payments || []).length} pago${(data.payments || []).length === 1 ? '' : 's'}</div>
+        </div>
+      </div>
+      <div style="background: white; border-radius: 14px; overflow: hidden; border: 1px solid var(--line);">
+        ${(data.payments || []).slice(0, 3).map((p, idx, arr) => {
+          const amt = parseFloat(p.amount_pen || p.amount || 0);
+          const isLast = idx === arr.length - 1;
+          return `
+            <div style="padding: 14px 18px; display: flex; align-items: center; gap: 14px; ${!isLast ? 'border-bottom: 1px solid var(--fit-lavender-pale);' : ''}">
+              <div style="width: 8px; height: 8px; border-radius: 50%; background: #15803D; flex-shrink: 0;"></div>
+              <div style="flex: 1; min-width: 0;">
+                <div style="font-size: 14px; color: var(--ink); font-weight: 500;">S/ ${amt.toFixed(2)} · ${escape(p.method || '')}</div>
+                <div style="font-size: 12px; color: var(--ink-mute); margin-top: 2px;">${formatDate(p.payment_date)}${p.reference ? ' · Ref. ' + escape(p.reference) : ''}</div>
+              </div>
+            </div>
+          `;
+        }).join('')}
+        ${(data.payments || []).length > 3 ? `<div style="padding: 12px 18px; border-top: 1px solid var(--fit-lavender-pale); background: var(--cream);"><button onclick="setStudentDetailTab('payments')" style="background: transparent; border: none; color: var(--fit-purple); font-size: 12px; font-weight: 500; cursor: pointer; font-family: inherit; padding: 0;">Ver historial completo →</button></div>` : ''}
+      </div>
+    </div>
+  ` : '';
+
+  // Historia con FIT — todos los paquetes que no son el activo
+  const historicalPkgs = allPkgsSorted.filter(p => !activePkg || p.id !== activePkg.id);
+
+  const renderHistoryCard = (p) => {
+    const status = getPkgStatus(p);
+    const total = p.classes_total || 0;
+    const used = p.classes_used || 0;
+    const recoverable = p.classes_recoverable || 0;
+    const price = parseFloat(p.price_paid || p.packages?.price_pen || 0);
+    const paid = (data.payments || [])
+      .filter(pm => pm.student_package_id === p.id)
+      .reduce((s, pm) => s + parseFloat(pm.amount_pen || pm.amount || 0) + parseFloat(pm.discount_amount || 0), 0);
+    const name = escape(p.packages?.name || `Paquete ${total} clases`);
+    const transferred = p.transferred_count || 0;
+    const isChanged = p.status === 'changed';
+    const isFrozen = !!p.is_frozen;
+
+    // Buscar paquete que lo reemplaza (si fue cambiado)
+    let replacedByName = '';
+    if (isChanged && p.replaced_by_id) {
+      const rep = allPackages.find(x => x.id === p.replaced_by_id);
+      if (rep) replacedByName = escape(rep.packages?.name || `Paquete ${rep.classes_total} clases`);
+    }
+
+    // Fechas
+    const startStr = formatDate(p.purchase_date);
+    const closedStr = p.closed_at ? formatDate(p.closed_at.slice(0, 10)) : '';
+    const datesLine = isChanged && closedStr ? `Comprado ${startStr} · cerrado ${closedStr}` : `Comprado ${startStr}`;
+
+    // Acción según estado: próximos pueden activarse, frozen reactivar
+    let actionLine = '';
+    if (isFrozen) {
+      actionLine = `<div style="margin-top: 10px; padding-top: 10px; border-top: 1px dashed #D1C5E0; font-size: 12px; display: flex; justify-content: space-between; align-items: center;">
+        <span style="color: var(--ink-soft);">${escape(p.freeze_reason || 'Congelado')}</span>
+        <button onclick="reactivatePackage('${p.id}')" style="background: white; border: 1px solid var(--line); padding: 5px 10px; border-radius: 6px; font-size: 11px; cursor: pointer; font-family: inherit; color: var(--fit-purple);">Reactivar</button>
+      </div>`;
+    } else if (isChanged) {
+      actionLine = `<div style="margin-top: 10px; padding-top: 10px; border-top: 1px dashed #D1C5E0; font-size: 11px; color: var(--ink-soft);">
+        ${replacedByName ? `<span style="color: var(--ink-mute);">→ reemplazado por</span> <span style="font-weight: 500; color: var(--fit-purple);">${replacedByName}</span>` : '<span style="color: var(--ink-mute);">Paquete cambiado</span>'}
+      </div>`;
+    }
+
+    // Stats grid
+    const statsFields = [];
+    statsFields.push({ label: 'Tomadas', value: `${used} / ${total}` });
+    if (transferred > 0) statsFields.push({ label: 'Transferidas', value: `${transferred}` });
+    if (recoverable > 0) statsFields.push({ label: 'Recuperables', value: `${recoverable}` });
+    if (statsFields.length < 4 && paid > 0 && paid !== price) statsFields.push({ label: 'Pagado', value: `S/ ${paid.toFixed(2)}` });
+
+    const titleStyle = isChanged
+      ? 'text-decoration: line-through; text-decoration-color: #B4A7C9; color: var(--ink-soft);'
+      : 'color: var(--ink-soft);';
+
+    return `
+      <div style="background: var(--fit-lavender-pale); border-radius: 14px; padding: 16px 20px; margin-bottom: 10px; border-left: 4px solid var(--fit-purple-soft);">
+        <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px; gap: 12px; flex-wrap: wrap;">
+          <div style="min-width: 0; flex: 1;">
+            <span style="background: white; color: ${status.color}; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; padding: 4px 10px; border-radius: 999px;">${status.label}</span>
+            <h4 style="font-family: var(--display); font-style: italic; font-weight: 500; font-size: 18px; margin: 8px 0 2px; ${titleStyle}">${name}</h4>
+            <div style="font-size: 11px; color: var(--ink-mute);">${datesLine}</div>
+          </div>
+          <div style="text-align: right;">
+            <div style="font-family: var(--display); font-style: italic; font-size: 15px; color: var(--ink-soft);">S/ ${price.toFixed(2)}</div>
+            <div style="font-size: 10px; color: var(--ink-mute);">${isChanged ? 'pago original' : (paid >= price ? 'pagado' : `pagado S/ ${paid.toFixed(2)}`)}</div>
+          </div>
+        </div>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(80px, 1fr)); gap: 8px; padding-top: 10px; border-top: 1px solid #E0D4F0; font-size: 11px;">
+          ${statsFields.map(f => `<div><span style="color: var(--ink-mute);">${f.label}</span><br><span style="font-weight: 600; color: var(--ink-soft); font-size: 12px;">${f.value}</span></div>`).join('')}
+        </div>
+        ${actionLine}
+      </div>
+    `;
+  };
+
+  const historyBlock = historicalPkgs.length > 0 ? `
+    <div style="margin-bottom: 16px;">
+      <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 14px;">
+        <h3 style="font-family: var(--display); font-style: italic; font-weight: 500; font-size: 22px; margin: 0; color: var(--ink-soft);">Historia con FIT</h3>
+        <span style="font-size: 11px; color: var(--ink-mute); text-transform: uppercase; letter-spacing: 0.8px;">${historicalPkgs.length} paquete${historicalPkgs.length === 1 ? '' : 's'} anterior${historicalPkgs.length === 1 ? '' : 'es'}</span>
+      </div>
+      ${historicalPkgs.map(p => renderHistoryCard(p)).join('')}
+    </div>
+  ` : '';
+
+  // Botón asignar nuevo (siempre disponible para coordinador)
+  const assignNewBtn = `
+    <div style="display: flex; justify-content: flex-end; margin-bottom: 16px;">
+      <button onclick="openAssignPackageModal('${stud.id}')" style="background: var(--fit-purple); color: white; border: none; padding: 8px 16px; border-radius: 10px; font-size: 12px; font-weight: 500; cursor: pointer; font-family: inherit;">＋ Asignar nuevo paquete</button>
+    </div>
+  `;
+
+  return `
+    ${activePkg ? assignNewBtn : ''}
+    ${heroActivePkg}
+    ${recoverableBlock}
+
+    <div style="margin-bottom: 28px;">
+      <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 14px;">
+        <h3 style="font-family: var(--display); font-style: italic; font-weight: 500; font-size: 22px; margin: 0; color: var(--ink);">Su trimestre</h3>
+        <span style="font-size: 11px; color: var(--ink-mute); text-transform: uppercase; letter-spacing: 0.8px;">3 meses · todas las clases</span>
+      </div>
+      <div style="background: white; border-radius: 14px; padding: 20px; border: 1px solid var(--line); display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 22px;">
+        ${months.map(({y, m}) => renderMiniMonth(y, m)).join('')}
+      </div>
+      <div style="display: flex; gap: 16px; margin-top: 12px; font-size: 11px; color: var(--ink-soft); flex-wrap: wrap; padding-left: 4px;">
+        <span style="display: flex; align-items: center; gap: 5px;"><span style="width: 10px; height: 10px; border-radius: 50%; background: var(--fit-purple);"></span>Asistió</span>
+        <span style="display: flex; align-items: center; gap: 5px;"><span style="width: 10px; height: 10px; border-radius: 50%; background: #D9C5EB;"></span>Próxima clase</span>
+        <span style="display: flex; align-items: center; gap: 5px;"><span style="width: 10px; height: 10px; border-radius: 50%; background: var(--fit-purple); box-shadow: 0 0 0 2px #FFE066;"></span>Hoy</span>
+      </div>
+    </div>
+
+    ${upcomingBlock}
+    ${paymentsBlock}
+    ${historyBlock}
   `;
 }
 
