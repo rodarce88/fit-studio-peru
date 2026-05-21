@@ -1175,8 +1175,36 @@
     vertical-align: middle;
   }
 
-  /* Check button inline */
-  .inst-check-btn { width: 36px; height: 36px; border-radius: 50%; border: 1.5px solid var(--line); background: white; display: flex; align-items: center; justify-content: center; font-size: 14px; color: var(--ink-mute); cursor: pointer; flex-shrink: 0; transition: all 0.15s; position: relative; }
+  /* Check button inline — círculo perfecto con reset de browser */
+  .inst-check-btn {
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    padding: 0;
+    margin: 0;
+    outline: none;
+    font: inherit;
+    box-sizing: border-box;
+    width: 36px;
+    height: 36px;
+    min-width: 36px;
+    border-radius: 50%;
+    border: 1.5px solid var(--line);
+    background: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    color: var(--ink-mute);
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: background 0.3s ease, border-color 0.3s ease, color 0.3s ease, transform 0.2s ease;
+    position: relative;
+    overflow: visible;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .inst-check-btn:focus { outline: none; }
+  .inst-check-btn:focus-visible { outline: 2px solid var(--fit-purple); outline-offset: 2px; }
   .inst-check-btn:hover { border-color: var(--good); color: var(--good); }
   .inst-check-btn:active { transform: scale(0.92); }
   .inst-check-btn.is-attended { background: var(--good); border-color: var(--good); color: white; }
@@ -1195,6 +1223,43 @@
   .inst-check-btn.is-saving.is-attended { background: var(--good); border-color: var(--good); }
   .inst-check-btn.is-saving.is-attended::after { border-color: rgba(255,255,255,0.32); border-top-color: white; border-right-color: white; }
   @keyframes check-spin { to { transform: rotate(360deg); } }
+
+  /* Pop bouncy al confirmar attended (Supabase OK) */
+  .inst-check-btn.is-popping { animation: inst-check-pop 0.55s cubic-bezier(0.34, 1.56, 0.64, 1); }
+  @keyframes inst-check-pop {
+    0%   { transform: scale(0.7); }
+    60%  { transform: scale(1.18); }
+    100% { transform: scale(1); }
+  }
+
+  /* Confetti circular — 8 partículas a 45° cada una, paleta FIT */
+  .inst-confetti { position: absolute; inset: 0; pointer-events: none; z-index: 3; }
+  .inst-confetti > span {
+    position: absolute; top: 50%; left: 50%; width: 5px; height: 5px;
+    border-radius: 50%; opacity: 0; transform: translate(-50%, -50%);
+  }
+  .inst-confetti > span:nth-child(1) { background: #5DCAA5; }
+  .inst-confetti > span:nth-child(2) { background: #5B2A8F; }
+  .inst-confetti > span:nth-child(3) { background: #EF9F27; }
+  .inst-confetti > span:nth-child(4) { background: #8B5FBF; }
+  .inst-confetti > span:nth-child(5) { background: #5DCAA5; }
+  .inst-confetti > span:nth-child(6) { background: #401D6B; }
+  .inst-confetti > span:nth-child(7) { background: #EF9F27; }
+  .inst-confetti > span:nth-child(8) { background: #B89DC9; }
+  .inst-check-btn.is-popping .inst-confetti > span { animation: inst-conf-out 0.7s cubic-bezier(0.22, 0.61, 0.36, 1) forwards; }
+  .inst-check-btn.is-popping .inst-confetti > span:nth-child(1) { --angle: 0deg; }
+  .inst-check-btn.is-popping .inst-confetti > span:nth-child(2) { --angle: 45deg; }
+  .inst-check-btn.is-popping .inst-confetti > span:nth-child(3) { --angle: 90deg; }
+  .inst-check-btn.is-popping .inst-confetti > span:nth-child(4) { --angle: 135deg; }
+  .inst-check-btn.is-popping .inst-confetti > span:nth-child(5) { --angle: 180deg; }
+  .inst-check-btn.is-popping .inst-confetti > span:nth-child(6) { --angle: 225deg; }
+  .inst-check-btn.is-popping .inst-confetti > span:nth-child(7) { --angle: 270deg; }
+  .inst-check-btn.is-popping .inst-confetti > span:nth-child(8) { --angle: 315deg; }
+  @keyframes inst-conf-out {
+    0%   { transform: translate(-50%, -50%) rotate(var(--angle)) translateX(0) scale(0.6); opacity: 0; }
+    20%  { opacity: 1; transform: translate(-50%, -50%) rotate(var(--angle)) translateX(8px) scale(1); }
+    100% { opacity: 0; transform: translate(-50%, -50%) rotate(var(--angle)) translateX(24px) scale(0.4); }
+  }
 
   /* Empty slot */
   .inst-empty-slot { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-top: 1px dashed var(--line); color: var(--ink-mute); font-size: 12px; cursor: pointer; transition: all 0.15s; }
@@ -13572,8 +13637,8 @@ function renderInstructorStudentRow(item, classCtx) {
   // El check inline solo se muestra si NO está ya marcada como attended
   const isAttended = status === 'attended';
   const checkBtnHtml = isAttended
-    ? `<button class="inst-check-btn is-attended" onclick="event.stopPropagation(); instructorConfirmUndoAttendance('${s.id}', '${classCtx.dateIso}', ${classCtx.hour}, '${classCtx.location.id}')" title="Tap para deshacer asistencia">✓</button>`
-    : `<button class="inst-check-btn" onclick="event.stopPropagation(); instructorMarkAttended('${s.id}', '${classCtx.dateIso}', ${classCtx.hour}, '${classCtx.location.id}')" title="Marcar asistencia">✓</button>`;
+    ? `<button class="inst-check-btn is-attended" onclick="event.stopPropagation(); instructorConfirmUndoAttendance('${s.id}', '${classCtx.dateIso}', ${classCtx.hour}, '${classCtx.location.id}')" title="Tap para deshacer asistencia"><span class="inst-confetti"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span>✓</button>`
+    : `<button class="inst-check-btn" onclick="event.stopPropagation(); instructorMarkAttended('${s.id}', '${classCtx.dateIso}', ${classCtx.hour}, '${classCtx.location.id}')" title="Marcar asistencia"><span class="inst-confetti"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span>✓</button>`;
 
   return `
     <div class="inst-stud-row ${rowKlass}">
@@ -14496,6 +14561,20 @@ async function instructorWriteAttendance(studentId, dateIso, hour, locationId, s
       // Re-render local (instantáneo, sin queries)
       if (typeof renderInstructorClassesBlock === 'function') renderInstructorClassesBlock(cachedNow);
       if (typeof renderInstructorNextClassBlock === 'function') renderInstructorNextClassBlock(cachedNow);
+    }
+
+    // 13.5. Confetti animation: solo cuando el guardado fue exitoso Y status='attended'.
+    // Buscar el botón NUEVO en el DOM (después del re-render) y dispararle la animación de pop.
+    if (status === 'attended') {
+      requestAnimationFrame(() => {
+        const newBtn = document.querySelector(
+          `.inst-check-btn[onclick*="${studentId}"][onclick*="${dateIso}"][onclick*="${hour}"][onclick*="${locationId}"]`
+        );
+        if (newBtn) {
+          newBtn.classList.add('is-popping');
+          setTimeout(() => newBtn.classList.remove('is-popping'), 720);
+        }
+      });
     }
 
     // 14. Invalidar stats del mes (se recalculan en background al refrescar)
