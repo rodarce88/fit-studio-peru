@@ -777,7 +777,7 @@
      Mismo patrón que el coord, pero sin FAB, sin Buscar/Alumnos.
      La alerta y la próxima clase pasan al menú overview.
      ============================================================== */
-  #mobile-menu-prof { display: none; }
+  /* #mobile-menu-prof: regla principal está más abajo (con animación slide) */
 
   @media (max-width: 800px) {
     /* Solo en profesor: mostrar bottom bar y compactar header */
@@ -809,8 +809,8 @@
 
   .mobile-bottom-bar-prof { display: none; }
 
-  /* Menu screen profesor (full-screen overlay) */
-  #mobile-menu-prof.is-open {
+  /* Menu screen profesor (slide drawer: entra desde izquierda, sale por derecha) */
+  #mobile-menu-prof {
     display: block;
     position: fixed;
     inset: 0;
@@ -818,6 +818,19 @@
     background: var(--fit-cream);
     overflow-y: auto;
     padding-bottom: 100px;
+    transform: translateX(-100%);
+    transition: transform 0.28s cubic-bezier(0.32, 0.72, 0.24, 1);
+    visibility: hidden;
+    will-change: transform;
+  }
+  #mobile-menu-prof.is-open {
+    transform: translateX(0);
+    visibility: visible;
+  }
+  #mobile-menu-prof.is-closing {
+    transform: translateX(100%);
+    visibility: visible;
+  }
     animation: mobileMenuIn 0.22s ease-out;
   }
   .mob-prof-next {
@@ -3516,7 +3529,7 @@
     <button class="m-nav-item" type="button" data-prof-tab="menu" onclick="profToggleMenu(this)" aria-label="Menú">
       <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
       <span>Menú</span>
-      <span class="menu-badge-red" id="prof-menu-badge" style="display: none; position: absolute; top: 4px; right: 14px; width: 7px; height: 7px; border-radius: 50%; background: #E24B4A; border: 1.5px solid #26215C;"></span>
+      <span class="menu-badge-red" id="prof-menu-badge" style="display: none; position: absolute; top: -2px; left: 6px; width: 11px; height: 11px; border-radius: 50%; background: #DC2626; border: 2px solid #26215C; box-shadow: 0 0 0 1px rgba(220, 38, 38, 0.3), 0 1px 2px rgba(0, 0, 0, 0.2);"></span>
     </button>
   </nav>
 </div>
@@ -3547,13 +3560,13 @@
   <!-- Alerta de clases pendientes (oculta si no hay) -->
   <div id="prof-menu-alert-wrap" style="display: none;">
     <div class="mob-menu-section-label" style="margin-top: 6px;">requiere atención</div>
-    <div class="mob-prof-alert">
+    <div class="mob-prof-alert" onclick="profMenuJumpToAlert()" style="cursor: pointer;">
       <div class="mob-prof-alert-head">
         <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="14" height="14"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-        <span id="prof-menu-alert-title">— clases pendientes de marcar</span>
+        <span id="prof-menu-alert-title">— clase pendiente de marcar</span>
       </div>
-      <div class="mob-prof-alert-body">Tienes 3 días desde la fecha de cada clase para confirmar asistencia. Si no, la clase queda como no dictada.</div>
-      <button class="mob-prof-alert-cta" onclick="profMenuJumpToAlert()">Ir a marcar <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="11" height="11"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></button>
+      <div class="mob-prof-alert-body" id="prof-menu-alert-body">Marca la asistencia de tu clase. Tienes 3 días desde la fecha para hacerlo.</div>
+      <div class="mob-prof-alert-foot" id="prof-menu-alert-foot" style="display: none;"></div>
     </div>
   </div>
 
@@ -9355,6 +9368,8 @@ function profToggleMenu(btnEl) {
 function profOpenMenu(btnEl) {
   const screen = document.getElementById('mobile-menu-prof');
   if (!screen) return;
+  // Limpiar cualquier estado de cierre previo
+  screen.classList.remove('is-closing');
   screen.classList.add('is-open');
   screen.setAttribute('aria-hidden', 'false');
   document.body.style.overflow = 'hidden';
@@ -9367,10 +9382,18 @@ function profOpenMenu(btnEl) {
 function profCloseMenu() {
   const screen = document.getElementById('mobile-menu-prof');
   if (!screen) return;
+  // Si no estaba abierto, no hacer nada
+  if (!screen.classList.contains('is-open')) return;
+  // Iniciar animación de salida hacia la derecha
   screen.classList.remove('is-open');
-  screen.setAttribute('aria-hidden', 'true');
-  document.body.style.overflow = '';
-  // Restaurar activo según vista actual
+  screen.classList.add('is-closing');
+  // Al terminar la transición (≈280ms), limpiar clases para que vuelva al estado default (off-screen izquierda)
+  setTimeout(() => {
+    screen.classList.remove('is-closing');
+    screen.setAttribute('aria-hidden', 'true');
+    document.body.style.overflow = '';
+  }, 290);
+  // Restaurar activo según vista actual (esto se hace al inicio, no esperamos la animación)
   const activeView = document.querySelector('.view.is-active');
   const viewId = activeView ? activeView.id.replace('view-', '') : '';
   document.querySelectorAll('.mobile-bottom-bar-prof .m-nav-item').forEach(b => b.classList.remove('is-active'));
@@ -9442,7 +9465,31 @@ function updateMobileProfMenuData() {
     if (pending.length > 0) {
       if (wrap) wrap.style.display = 'block';
       const title = document.getElementById('prof-menu-alert-title');
+      const body = document.getElementById('prof-menu-alert-body');
+      const foot = document.getElementById('prof-menu-alert-foot');
+      // Encabezado con conteo
       if (title) title.textContent = pending.length + ' clase' + (pending.length === 1 ? '' : 's') + ' pendiente' + (pending.length === 1 ? '' : 's') + ' de marcar';
+      // Detalle: si es 1 sola, mostrar fecha+hora. Si son varias, listar las 3 primeras.
+      const dowFull = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
+      const monthShort = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+      const formatPending = (p) => {
+        const d = new Date(p.session_date + 'T12:00:00');
+        const h = p.hour;
+        const hourLabel = (h === 0) ? '12am' : (h < 12 ? `${h}am` : (h === 12 ? '12pm' : `${h-12}pm`));
+        return `${dowFull[d.getDay()]} ${d.getDate()} ${monthShort[d.getMonth()]} · ${hourLabel}`;
+      };
+      if (pending.length === 1) {
+        if (body) body.innerHTML = `Tu clase del <strong>${formatPending(pending[0])}</strong>. Marca quién asistió.`;
+        if (foot) foot.style.display = 'none';
+      } else {
+        if (body) body.innerHTML = 'Marca asistencia de las siguientes clases:';
+        if (foot) {
+          const items = pending.slice(0, 3).map(p => `<div style="padding: 4px 0; font-size: 12.5px;">• <strong>${formatPending(p)}</strong></div>`).join('');
+          const extra = pending.length > 3 ? `<div style="padding: 4px 0; font-size: 12px; opacity: 0.7;">+ ${pending.length - 3} más</div>` : '';
+          foot.innerHTML = items + extra;
+          foot.style.display = 'block';
+        }
+      }
       if (badge) badge.style.display = 'block';
     } else {
       if (wrap) wrap.style.display = 'none';
