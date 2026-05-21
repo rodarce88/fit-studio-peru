@@ -9091,6 +9091,11 @@ function showView(name, btn) {
   window.scrollTo({ top: 0, behavior: 'smooth' });
   // Sincronizar bottom bar mobile (coord) con la vista activa
   if (typeof syncMobileBottomNav === 'function') syncMobileBottomNav(name);
+  // Re-renderear Mi día automáticamente al volver — garantiza datos frescos
+  // (importante después de auto-repair de paquetes congelados, freezes, cancelaciones, etc.)
+  if (name === 'dashboard' && typeof renderDashboard === 'function') {
+    renderDashboard();
+  }
 }
 
 // ============================================
@@ -16167,10 +16172,10 @@ async function saveFreezePackage() {
       }).in('id', pausedFbIds);
       if (!pauseErr) {
         pausados = pausedFbIds.length;
-        // Sync local STATE para que el render no muestre estos fijos
-        (STATE.fixedBookings || []).forEach(fb => {
-          if (pausedFbIds.includes(fb.id)) fb.is_active = false;
-        });
+        // Remover del STATE (mantener invariante: STATE.fixedBookings solo contiene activos)
+        if (STATE.fixedBookings) {
+          STATE.fixedBookings = STATE.fixedBookings.filter(fb => !pausedFbIds.includes(fb.id));
+        }
       }
     }
   }
@@ -16233,10 +16238,16 @@ async function reactivatePackage(pkgId) {
     }).in('id', pausedFbIds);
     if (!restoreErr) {
       restaurados = pausedFbIds.length;
-      // Sync local STATE
-      (STATE.fixedBookings || []).forEach(fb => {
-        if (pausedFbIds.includes(fb.id)) fb.is_active = true;
-      });
+      // Re-fetch los fb restaurados y agregarlos a STATE (mantener invariante: solo activos)
+      const { data: restoredFbs } = await sb.from('fixed_bookings')
+        .select('*')
+        .in('id', pausedFbIds);
+      if (restoredFbs && restoredFbs.length > 0) {
+        // Remover por si quedó alguno duplicado (con is_active=false) y agregar los frescos
+        const restoredIds = new Set(restoredFbs.map(f => f.id));
+        STATE.fixedBookings = (STATE.fixedBookings || []).filter(fb => !restoredIds.has(fb.id));
+        STATE.fixedBookings.push(...restoredFbs);
+      }
     }
   }
 
@@ -17807,9 +17818,10 @@ async function _repairFrozenPackageIfNeeded(studentId) {
     await sb.from('fixed_bookings').update({
       is_active: false,
     }).in('id', pausedFbIds);
-    (STATE.fixedBookings || []).forEach(fb => {
-      if (pausedFbIds.includes(fb.id)) fb.is_active = false;
-    });
+    // Remover del STATE (la invariante es que STATE.fixedBookings solo contiene activos)
+    if (STATE.fixedBookings) {
+      STATE.fixedBookings = STATE.fixedBookings.filter(fb => !pausedFbIds.includes(fb.id));
+    }
   }
 
   // 3. Actualizar freeze_reason con metadata para que reactivar funcione
