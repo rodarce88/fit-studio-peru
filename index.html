@@ -27,19 +27,25 @@
 <script src="https://cdn.jsdelivr.net/npm/html2pdf.js@0.10.1/dist/html2pdf.bundle.min.js"></script>
 <style>
   /* ============================================
-     DESIGN TOKENS — same brand from mockup
+     DESIGN TOKENS — sistema de color v2 (4 capas según UI color theory)
+
+     CAPA 1 · NEUTROS — fondos, strokes, textos
+     CAPA 2 · BRAND — rampa morada 50→900 + estados
+     CAPA 3 · SEMÁNTICOS — good/danger/warn/info con variantes
+     CAPA 4 · OPCIONAL — dorado (acento de premio/celebración)
      ============================================ */
   :root {
+    /* ====== LEGACY (compatibilidad con código existente) ====== */
     --fit-purple: #5B2A8F;
     --fit-purple-deep: #401D6B;
     --fit-purple-soft: #8B5FBF;
     --fit-lavender: #E8DFF5;
     --fit-lavender-pale: #F4EFFB;
     --fit-cream: #FAF8F5;
-    --ink: #1A1419;
-    --ink-soft: #4A4350;
-    --ink-mute: #8B8493;
-    --ink-faint: #C9C3D1;
+    --ink: #1A1419;            /* 10% L · headings importantes */
+    --ink-soft: #2D2730;       /* 17% L · body text (era 4A4350=29%, demasiado claro para body) */
+    --ink-mute: #6B6473;       /* 40% L · subtext (era 8B8493=53%, demasiado claro para legibilidad) */
+    --ink-faint: #C9C3D1;      /* 80% L · decorativo */
     --line: #EBE5F0;
     --line-soft: #F2EDF5;
     --bg: #FBFAFC;
@@ -52,6 +58,51 @@
     --good-soft: #ECFDF3;
     --info: #1E40AF;
     --info-soft: #EAF0FE;
+
+    /* ====== CAPAS DE SUPERFICIE (elevación) ======
+       4 capas para crear profundidad sin sombras pesadas */
+    --surface-base:     #FBFAFC;   /* = bg, fondo de página */
+    --surface-card:     #FFFFFF;   /* = white, cards principales */
+    --surface-elevated: #FFFFFF;   /* modales/popovers — mismo blanco pero CON sombra fuerte */
+    --surface-overlay:  #FFFFFF;   /* tooltips/dropdowns — blanco con sombra y borde */
+    --shadow-elevated:  0 12px 32px -8px rgba(64, 29, 107, 0.18), 0 4px 12px -2px rgba(64, 29, 107, 0.08);
+    --shadow-overlay:   0 8px 24px -6px rgba(64, 29, 107, 0.16), 0 2px 6px -1px rgba(64, 29, 107, 0.08);
+
+    /* ====== RAMPA MORADA COMPLETA (50→900) ======
+       Permite hovers/actives sin saltos visuales abruptos.
+       Cada paso son ~10% de luminosidad de diferencia. */
+    --fit-purple-50:  #FAF7FD;
+    --fit-purple-100: #F4EFFB;  /* = lavender-pale */
+    --fit-purple-200: #E8DFF5;  /* = lavender */
+    --fit-purple-300: #B89DC9;  /* lavanda viva */
+    --fit-purple-400: #8B5FBF;  /* = purple-soft */
+    --fit-purple-500: #5B2A8F;  /* = purple (BRAND) */
+    --fit-purple-600: #4E2480;  /* HOVER */
+    --fit-purple-700: #401D6B;  /* = purple-deep (ACTIVE) */
+    --fit-purple-800: #2E1450;
+    --fit-purple-900: #1A0930;
+
+    /* ====== ESTADOS DEL BRAND ====== */
+    --fit-purple-hover:    #4E2480;  /* = 600 */
+    --fit-purple-active:   #401D6B;  /* = 700 */
+    --fit-purple-disabled: #E8DFF5;  /* = 200 (desaturado visual) */
+
+    /* ====== SEMÁNTICOS — versiones extra ====== */
+    /* Verde: deep (badges sólidos), medium (dots/indicators), light (confetti, hover soft) */
+    --good-medium: #1D9E75;  /* dot pulsante online */
+    --good-light:  #5DCAA5;  /* confetti, estado "done" del check */
+
+    /* Rojo: bright (notification badges) además del danger (acciones destructivas) */
+    --danger-bright: #DC2626;  /* badge de notificación, alertas vibrantes */
+
+    /* ====== ACENTO DORADO (capa 4: celebración) ======
+       Para indicar logro/capacidad máxima/premio (ej. donut 9/9 alumnos) */
+    --gold:       #A87B2A;  /* dorado oscuro (stroke, texto) */
+    --gold-light: #EF9F27;  /* dorado vivo (confetti) */
+    --gold-soft:  #FFF6E1;  /* fondo cálido (donut lleno) */
+    --gold-deep:  #6B4A0A;  /* texto sobre fondo dorado */
+
+    /* ====== TIPOGRAFÍA, SPACING, RADIUS, SHADOWS ====== */
     --display: 'Fraunces', Georgia, serif;
     --body: 'Outfit', -apple-system, BlinkMacSystemFont, sans-serif;
     --sidebar-w: 240px;
@@ -181,7 +232,7 @@
     width: 7px;
     height: 7px;
     border-radius: 50%;
-    background: var(--good);
+    background: var(--good-medium);
     flex-shrink: 0;
     box-shadow: 0 0 0 2px rgba(29, 158, 117, 0.18);
     animation: conn-pulse-dot 2.4s ease-in-out infinite;
@@ -190,7 +241,7 @@
     0%, 100% { box-shadow: 0 0 0 2px rgba(29, 158, 117, 0.18); }
     50%      { box-shadow: 0 0 0 4px rgba(29, 158, 117, 0.06); }
   }
-  .location-conn-line.conn-offline { background: #C9C3D1; box-shadow: none; animation: none; }
+  .location-conn-line.conn-offline { background: var(--ink-faint); box-shadow: none; animation: none; }
   .location-conn-line.conn-error { background: var(--danger); box-shadow: 0 0 0 2px rgba(226, 75, 74, 0.20); animation: conn-pulse-error 1.4s ease-in-out infinite; }
   @keyframes conn-pulse-error {
     0%, 100% { box-shadow: 0 0 0 2px rgba(226, 75, 74, 0.20); }
@@ -632,8 +683,8 @@
     height: 18px;
     padding: 0 5px;
     border-radius: 999px;
-    background: #DC2626;
-    color: #FFFFFF;
+    background: var(--danger-bright);
+    color: var(--white);
     font-family: var(--body);
     font-size: 10px;
     font-weight: 700;
@@ -1069,13 +1120,13 @@
 
   /* Estado "lleno" — tratamiento dorado champagne */
   .inst-donut.is-full {
-    background: radial-gradient(circle at 30% 25%, #FFF6E1 0%, #F4E5BF 60%, #E5CF8A 100%);
+    background: radial-gradient(circle at 30% 25%, var(--gold-soft) 0%, #F4E5BF 60%, #E5CF8A 100%);
     box-shadow:
       inset 0 1px 2px rgba(132, 89, 22, 0.12),
       inset 0 -1px 1px rgba(255, 250, 230, 0.7),
       0 2px 5px rgba(168, 123, 42, 0.12);
   }
-  .inst-donut.is-full .lbl { color: #6B4A0A; }
+  .inst-donut.is-full .lbl { color: var(--gold-deep); }
   .inst-donut.is-full .lbl .of { color: #8B6418; opacity: 0.8; }
   .inst-donut.is-full .track { stroke: #E5CF8A; }
   .inst-donut.is-full .fill { filter: drop-shadow(0 0 1.5px rgba(168, 123, 42, 0.4)); }
@@ -1304,14 +1355,14 @@
     position: absolute; top: 50%; left: 50%; width: 5px; height: 5px;
     border-radius: 50%; opacity: 0; transform: translate(-50%, -50%);
   }
-  .inst-confetti > span:nth-child(1) { background: #5DCAA5; }
-  .inst-confetti > span:nth-child(2) { background: #5B2A8F; }
-  .inst-confetti > span:nth-child(3) { background: #EF9F27; }
-  .inst-confetti > span:nth-child(4) { background: #8B5FBF; }
-  .inst-confetti > span:nth-child(5) { background: #5DCAA5; }
-  .inst-confetti > span:nth-child(6) { background: #401D6B; }
-  .inst-confetti > span:nth-child(7) { background: #EF9F27; }
-  .inst-confetti > span:nth-child(8) { background: #B89DC9; }
+  .inst-confetti > span:nth-child(1) { background: var(--good-light); }
+  .inst-confetti > span:nth-child(2) { background: var(--fit-purple-500); }
+  .inst-confetti > span:nth-child(3) { background: var(--gold-light); }
+  .inst-confetti > span:nth-child(4) { background: var(--fit-purple-400); }
+  .inst-confetti > span:nth-child(5) { background: var(--good-light); }
+  .inst-confetti > span:nth-child(6) { background: var(--fit-purple-700); }
+  .inst-confetti > span:nth-child(7) { background: var(--gold-light); }
+  .inst-confetti > span:nth-child(8) { background: var(--fit-purple-300); }
   .inst-check-btn.is-popping .inst-confetti > span { animation: inst-conf-out 0.7s cubic-bezier(0.22, 0.61, 0.36, 1) forwards; }
   .inst-check-btn.is-popping .inst-confetti > span:nth-child(1) { --angle: 0deg; }
   .inst-check-btn.is-popping .inst-confetti > span:nth-child(2) { --angle: 45deg; }
@@ -4035,6 +4086,50 @@ function bookingShouldBeVisible(booking, attendance) {
   if (attendance && ATTENDANCE_PROCESSED.includes(attendance.status)) return true;
   return false;
 }
+
+// ============================================
+// SISTEMA DE COLOR · sincroniza JS con tokens CSS del :root
+// Lee los CSS variables UNA vez al cargar para usarlos en SVGs/canvas/strokes
+// inline. Si los tokens cambian en el CSS, también cambian acá automáticamente.
+// ============================================
+const BRAND = (() => {
+  const root = getComputedStyle(document.documentElement);
+  const v = (name, fallback) => (root.getPropertyValue(name).trim() || fallback);
+  return {
+    // Rampa morada
+    purple50:  v('--fit-purple-50',  '#FAF7FD'),
+    purple100: v('--fit-purple-100', '#F4EFFB'),
+    purple200: v('--fit-purple-200', '#E8DFF5'),
+    purple300: v('--fit-purple-300', '#B89DC9'),
+    purple400: v('--fit-purple-400', '#8B5FBF'),
+    purple500: v('--fit-purple-500', '#5B2A8F'),
+    purple600: v('--fit-purple-600', '#4E2480'),
+    purple700: v('--fit-purple-700', '#401D6B'),
+    purple800: v('--fit-purple-800', '#2E1450'),
+    purple900: v('--fit-purple-900', '#1A0930'),
+    // Estados
+    purpleHover:  v('--fit-purple-hover',  '#4E2480'),
+    purpleActive: v('--fit-purple-active', '#401D6B'),
+    // Semánticos
+    good:         v('--good',         '#15803D'),
+    goodMedium:   v('--good-medium',  '#1D9E75'),
+    goodLight:    v('--good-light',   '#5DCAA5'),
+    danger:       v('--danger',       '#B91C1C'),
+    dangerBright: v('--danger-bright','#DC2626'),
+    warn:         v('--warn',         '#C2410C'),
+    info:         v('--info',         '#1E40AF'),
+    // Dorado
+    gold:      v('--gold',      '#A87B2A'),
+    goldLight: v('--gold-light','#EF9F27'),
+    goldDeep:  v('--gold-deep', '#6B4A0A'),
+    // Neutros
+    ink:      v('--ink',       '#1A1419'),
+    inkSoft:  v('--ink-soft',  '#4A4350'),
+    inkMute:  v('--ink-mute',  '#8B8493'),
+    inkFaint: v('--ink-faint', '#C9C3D1'),
+    line:     v('--line',      '#EBE5F0'),
+  };
+})();
 
 const STATE = {
   locations: [],
@@ -13204,14 +13299,14 @@ function _renderInstructorDonut(filled, total, size) {
 
   // Paleta editorial de morados que se intensifican con la ocupación.
   // Al 100% pasa a champagne dorado (state .is-full controla el container también).
-  let strokeColor = '#D4CFE0';
+  let strokeColor = '#D4CFE0'; // gris del track vacío
   if (!isEmpty) {
     const pct = total > 0 ? filled / total : 0;
-    if (isFull) strokeColor = '#A87B2A';        // dorado champagne
-    else if (pct >= 0.7) strokeColor = '#401D6B'; // morado profundo
-    else if (pct >= 0.4) strokeColor = '#5B2A8F'; // fit-purple
-    else if (pct >= 0.2) strokeColor = '#8B5FBF'; // morado soft
-    else strokeColor = '#B89DC9';                 // lavanda viva
+    if (isFull) strokeColor = BRAND.gold;                  // 9/9 → dorado champagne
+    else if (pct >= 0.7) strokeColor = BRAND.purple700;     // 70%+ → morado profundo
+    else if (pct >= 0.4) strokeColor = BRAND.purple500;     // 40-70% → morado brand
+    else if (pct >= 0.2) strokeColor = BRAND.purple400;     // 20-40% → morado soft
+    else strokeColor = BRAND.purple300;                     // 1-20% → lavanda viva
   }
 
   const dashArray = isEmpty ? '0 999' : `${(filled / total) * circumference} ${circumference}`;
