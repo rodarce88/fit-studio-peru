@@ -14223,10 +14223,12 @@ async function instructorOpenAddStudent(dateIso, hour, locationId) {
   modal.classList.add('is-open');
   instructorRenderAddSearch('', { mode: 'list' });
 
-  // Refrescar STATE.students en background — el cache local puede estar stale
-  // si el coordinador agregó alumnos durante esta sesión del profesor.
+  // Refrescar STATE.students en background — sin filtro status='active' para que
+  // el profesor pueda encontrar a cualquier alumno (incluso los que tienen status
+  // raro/NULL por bugs del flujo de creación). El filtro de "alumnos válidos"
+  // se aplica más adelante en el flujo según el caso.
   try {
-    const { data: freshStudents } = await sb.from('students').select('*').eq('status', 'active').order('first_name');
+    const { data: freshStudents } = await sb.from('students').select('*').order('first_name');
     if (freshStudents) {
       STATE.students = freshStudents;
       // Re-rendear si el modal sigue abierto y el usuario no escribió todavía
