@@ -357,7 +357,7 @@
   .cob-gauge svg { width: 100%; height: auto; max-height: 165px; }
   .cob-main { min-width: 0; }
   .cob-header { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; flex-wrap: wrap; }
-  .cob-chip { font-size: 11px; padding: 2px 8px; border-radius: var(--radius-pill); font-weight: 500; letter-spacing: 0.04em; background: #FEE2E2; color: var(--danger-bright); }
+  .cob-chip { font-size: 11px; padding: 2px 8px; border-radius: var(--radius-pill); font-weight: 500; letter-spacing: 0.04em; background: var(--danger-soft); color: var(--danger-bright); }
   .cob-amount { font-family: var(--display); font-size: 48px; font-weight: 500; line-height: 1; letter-spacing: -0.02em; color: var(--ink); }
   .cob-meta { font-size: 13px; color: var(--ink-mute); margin-top: 8px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
   .cob-stats { display: flex; flex-direction: column; gap: 16px; padding-left: 24px; border-left: 1px solid var(--line); }
@@ -439,7 +439,7 @@
   .class-occupancy { display: flex; align-items: center; gap: 12px; min-width: 120px; justify-content: flex-end; }
   .occupancy-bar { width: 60px; height: 6px; background: var(--line); border-radius: var(--radius-pill); overflow: hidden; }
   .occupancy-fill { height: 100%; background: linear-gradient(90deg, var(--fit-purple), var(--fit-purple-soft)); border-radius: inherit; transition: width 0.3s; }
-  .occupancy-fill.warn { background: linear-gradient(90deg, var(--warn), #F59E0B); }
+  .occupancy-fill.warn { background: linear-gradient(90deg, var(--warn), var(--gold-light)); }
   .occupancy-fill.full { background: linear-gradient(90deg, var(--good), #22C55E); }
   .occupancy-num { font-family: var(--display); font-size: 18px; font-weight: 400; color: var(--fit-purple); }
   .occupancy-num span { color: var(--ink-mute); font-size: 13px; }
@@ -1146,7 +1146,7 @@
 
   /* Iconos de alerta inline en alumnos (en lugar del tag Fijo) */
   .inst-stud-alert { display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; border-radius: 50%; font-size: 10px; flex-shrink: 0; line-height: 1; }
-  .inst-stud-alert.is-health { background: #FEF3C7; color: #92400E; }
+  .inst-stud-alert.is-health { background: var(--gold-soft); color: var(--warn); }
   .inst-stud-alert.is-note { background: var(--fit-lavender-pale); color: var(--fit-purple); }
 
   /* Carrusel mensual del profesor */
@@ -1228,7 +1228,7 @@
   .inst-hour-card.is-collapsed .inst-hour-body { display: none; }
   .inst-hour-caret { width: 12px; text-align: center; color: var(--ink-mute); font-size: 11px; flex-shrink: 0; user-select: none; transition: transform 0.15s; }
   .inst-hour-head:hover { background: var(--fit-cream); }
-  .inst-stud-notes-flag { display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; color: #B8860B; font-size: 13px; margin-left: 4px; cursor: help; }
+  .inst-stud-notes-flag { display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; color: var(--gold); font-size: 13px; margin-left: 4px; cursor: help; }
   .inst-hour-card.is-now { border-color: var(--fit-purple); box-shadow: 0 4px 16px rgba(91, 42, 143, 0.1); }
   .inst-hour-card.is-past { opacity: 0.55; }
   .inst-hour-card.is-not-delivered { opacity: 0.45; background: repeating-linear-gradient(45deg, white, white 14px, rgba(150,150,150,0.06) 14px, rgba(150,150,150,0.06) 16px); }
@@ -1939,7 +1939,7 @@
     letter-spacing: 0.5px;
     flex-shrink: 0;
   }
-  .log-role-coord { background: #FEF3C7; color: #92400E; }
+  .log-role-coord { background: var(--gold-soft); color: var(--warn); }
   .log-role-instr { background: var(--fit-lavender-pale); color: var(--fit-purple); }
   .log-role-stud  { background: #DCFCE7; color: #166534; }
   .log-role-agent { background: #DBEAFE; color: var(--info); }
@@ -2047,7 +2047,7 @@
   .alerts-banner.is-ok .alerts-sub { font-size: 11.5px; color: var(--ink-soft); margin-top: 2px; }
 
   .alerts-banner.is-critical { border-color: var(--bad); }
-  .alerts-banner.is-warn { border-color: #F59E0B; }
+  .alerts-banner.is-warn { border-color: var(--gold-light); }
 
   .alerts-banner-head {
     display: flex; align-items: center; gap: 13px;
@@ -2066,7 +2066,7 @@
     flex-shrink: 0;
   }
   .alerts-banner.is-warn .alerts-banner-head .alerts-icon {
-    background: #F59E0B;
+    background: var(--gold-light);
   }
 
   .alerts-banner-text { flex: 1; }
@@ -2603,12 +2603,12 @@
       <div class="cob-gauge">
         <svg viewBox="0 0 220 165" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
           <path d="M 20 130 A 90 90 0 0 1 200 130" fill="none" stroke="var(--line)" stroke-width="16" stroke-linecap="round"/>
-          <path id="cob-arc-progress" d="M 20 130 A 90 90 0 0 1 20 130" fill="none" stroke="#EF4444" stroke-width="16" stroke-linecap="round"/>
-          <circle id="cob-arc-tip" cx="20" cy="130" r="6" fill="#EF4444"/>
+          <path id="cob-arc-progress" d="M 20 130 A 90 90 0 0 1 20 130" fill="none" stroke="var(--danger-bright)" stroke-width="16" stroke-linecap="round"/>
+          <circle id="cob-arc-tip" cx="20" cy="130" r="6" fill="var(--danger-bright)"/>
           <line id="cob-tick-expected" x1="0" y1="0" x2="0" y2="0" stroke="var(--ink-faint)" stroke-width="2" stroke-linecap="round"/>
           <text x="155" y="32" text-anchor="start" font-size="11" fill="var(--ink-mute)">esperado</text>
           <text x="155" y="45" text-anchor="start" font-size="11" fill="var(--ink-mute)" id="cob-expected-text">hoy: —</text>
-          <text id="cob-pct" x="110" y="102" text-anchor="middle" font-size="34" font-weight="500" fill="#EF4444" letter-spacing="-0.5" font-family="var(--display)">—</text>
+          <text id="cob-pct" x="110" y="102" text-anchor="middle" font-size="34" font-weight="500" fill="var(--danger-bright)" letter-spacing="-0.5" font-family="var(--display)">—</text>
           <text x="110" y="124" text-anchor="middle" font-size="12" fill="var(--ink-mute)">cobrado del mes</text>
           <text x="20" y="158" text-anchor="middle" font-size="11" fill="var(--ink-faint)">S/ 0</text>
           <text id="cob-total-label" x="200" y="158" text-anchor="middle" font-size="11" fill="var(--ink-faint)">S/ —</text>
@@ -2625,7 +2625,7 @@
       <div class="cob-stats">
         <div>
           <div class="kpi-label" style="font-size: 10px; margin-bottom: 4px;">Ya cobrado</div>
-          <div class="cob-stat-value" id="cob-paid" style="color: #10B981;">S/ —</div>
+          <div class="cob-stat-value" id="cob-paid" style="color: var(--good);">S/ —</div>
           <div class="cob-stat-sub" id="cob-paid-sub">— alumnos</div>
         </div>
         <div>
@@ -4804,16 +4804,23 @@ async function renderCobranzaWidget() {
 }
 
 function paintCobranzaWidget(d) {
-  // Colores tech (Tailwind) según gap — sin buffer
+  // Paleta editorial del sistema según gap. Los hex Tailwind se reemplazan por tokens
+  // para que respeten el sistema y permitan tematización futura.
   let color, chipBg, chipColor, chipText;
   if (d.gap >= 0) {
-    color = '#10B981'; chipBg = '#D1FAE5'; chipColor = '#059669';
+    color = 'var(--good-bright)';  // verde editorial vivo
+    chipBg = 'var(--good-soft)';
+    chipColor = 'var(--good)';
     chipText = d.gap > 0.5 ? `+${d.gap.toFixed(0)} pp adelantada` : 'Al día';
   } else if (d.gap > -10) {
-    color = '#F59E0B'; chipBg = '#FEF3C7'; chipColor = '#D97706';
+    color = 'var(--gold-light)';    // ámbar editorial cálido (no naranja chillón)
+    chipBg = 'var(--gold-soft)';
+    chipColor = 'var(--gold-deep)';
     chipText = `${Math.round(d.gap)} pp del ritmo`;
   } else {
-    color = '#EF4444'; chipBg = '#FEE2E2'; chipColor = 'var(--danger-bright)';
+    color = 'var(--danger-bright)';
+    chipBg = 'var(--danger-soft)';
+    chipColor = 'var(--danger)';
     chipText = `${Math.round(d.gap)} pp del ritmo`;
   }
 
@@ -5388,7 +5395,7 @@ async function loadFrozenRemindersList() {
     const remaining = Math.max(0, (p.classes_total || 0) - (p.classes_used || 0));
     return `
       <div class="alert-row" onclick="openStudentDetail('${stud.id}')">
-        <div class="alert-icon warn" style="background: #FEE2E2; color: var(--danger-bright);">
+        <div class="alert-icon warn" style="background: var(--danger-soft); color: var(--danger-bright);">
           <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
         </div>
         <div class="alert-content">
@@ -5637,7 +5644,21 @@ function renderTimeline() {
         ${hoursData.map(d => {
           const pct = d.enrolled === 0 ? 0 : Math.round((d.confirmedCount / d.enrolled) * 100);
           const isComplete = d.confirmedCount === d.enrolled && d.enrolled > 0;
-          const fillColor = isComplete ? '#639922' : (d.confirmedCount > 0 ? 'var(--fit-purple)' : 'var(--ink-faint)');
+          // Paleta editorial graduada según ocupación de confirmados, consistente con los donuts grandes.
+          // 100% → dorado champagne (celebración de "todos asistieron")
+          // <100% → escala morada (intensidad según %)
+          let fillColor;
+          if (d.enrolled === 0) {
+            fillColor = 'var(--ink-faint)';
+          } else if (isComplete) {
+            fillColor = 'var(--gold)';
+          } else if (pct >= 70) {
+            fillColor = 'var(--fit-purple-deep)';
+          } else if (pct >= 40) {
+            fillColor = 'var(--fit-purple)';
+          } else {
+            fillColor = 'var(--fit-purple-soft)';
+          }
           return `
             <div class="mi-dia-hour-item ${d.isExpanded ? 'is-active' : ''} ${d.isPast ? 'is-past' : ''}"
                  onclick="onMiDiaHourClick(${d.hour})">
@@ -6376,7 +6397,7 @@ function renderSchedule() {
         if (confirmed === count) {
           confirmMini = `<div style="margin-top: 4px; font-size: 9.5px; color: var(--good); font-weight: 600;">✓ ${confirmed}/${count}</div>`;
         } else if (confirmed > 0) {
-          confirmMini = `<div style="margin-top: 4px; font-size: 9.5px; color: #B8860B; font-weight: 600;">✓ ${confirmed}/${count}</div>`;
+          confirmMini = `<div style="margin-top: 4px; font-size: 9.5px; color: var(--gold); font-weight: 600;">✓ ${confirmed}/${count}</div>`;
         } else {
           confirmMini = `<div style="margin-top: 4px; font-size: 9.5px; color: var(--ink-faint);">— sin confirmar</div>`;
         }
@@ -6466,7 +6487,7 @@ function renderScheduleCellDrawer(locationId, dateIso, hour) {
   let progressBg = 'var(--fit-cream)';
   if (students.length > 0) {
     if (confirmedCount === students.length) { progressColor = 'var(--good)'; progressBg = '#dcfce7'; }
-    else if (confirmedCount > 0) { progressColor = '#B8860B'; progressBg = '#FEF3C7'; }
+    else if (confirmedCount > 0) { progressColor = 'var(--gold)'; progressBg = 'var(--gold-soft)'; }
   }
 
   let body = `
@@ -16043,7 +16064,7 @@ function recalcPaymentSummary() {
   if (base > 0) {
     summary.innerHTML = `
       <div style="display: flex; justify-content: space-between;"><span>Precio original:</span><span>S/ ${base.toFixed(2)}</span></div>
-      <div style="display: flex; justify-content: space-between; color: #92400E;"><span>Descuento (${pct.toFixed(1)}%):</span><span>−S/ ${discount.toFixed(2)}</span></div>
+      <div style="display: flex; justify-content: space-between; color: var(--warn);"><span>Descuento (${pct.toFixed(1)}%):</span><span>−S/ ${discount.toFixed(2)}</span></div>
       <div style="display: flex; justify-content: space-between; font-weight: 600; padding-top: 6px; margin-top: 4px; border-top: 1px solid var(--fit-lavender); color: var(--fit-purple);"><span>Total a cobrar:</span><span>S/ ${finalAmount.toFixed(2)}</span></div>
     `;
   } else {
@@ -18539,7 +18560,7 @@ function renderDetailSummary(stud) {
     if (p.status === 'expired') return { key: 'expired', label: '⏱ Vencido', color: '#5F5E5A', bgSoft: '#F1EFE8' };
     if (used >= total && total > 0) return { key: 'completed', label: '🏁 Completado', color: '#3B6D11', bgSoft: '#EAF3DE' };
     if (activePkg && p.id === activePkg.id) return { key: 'active', label: '★ Activo', color: '#7c3aed', bgSoft: 'var(--fit-lavender-pale)' };
-    return { key: 'upcoming', label: 'Próximo', color: '#92400E', bgSoft: '#FEF7E6' };
+    return { key: 'upcoming', label: 'Próximo', color: 'var(--warn)', bgSoft: '#FEF7E6' };
   };
 
   const renderPkgCard = (p) => {
@@ -20952,7 +20973,7 @@ function renderReportsHTML() {
               <td style="text-align: right; padding: 10px 6px;">${r.count}</td>
               <td style="text-align: right; padding: 10px 6px;">S/ ${r.nominal.toFixed(2)}</td>
               <td style="text-align: right; padding: 10px 6px;">S/ ${r.cobrado.toFixed(2)}</td>
-              <td style="text-align: right; padding: 10px 6px; color: #92400E;">S/ ${r.descuento.toFixed(2)}</td>
+              <td style="text-align: right; padding: 10px 6px; color: var(--warn);">S/ ${r.descuento.toFixed(2)}</td>
               <td style="text-align: right; padding: 10px 6px;">${r.nominal > 0 ? (r.descuento / r.nominal * 100).toFixed(1) : '0.0'}%</td>
             </tr>
           `).join('')}
@@ -20961,7 +20982,7 @@ function renderReportsHTML() {
             <td style="text-align: right; padding: 10px 6px;">${sizeRows.reduce((s, r) => s + r.count, 0)}</td>
             <td style="text-align: right; padding: 10px 6px;">S/ ${sizeRows.reduce((s, r) => s + r.nominal, 0).toFixed(2)}</td>
             <td style="text-align: right; padding: 10px 6px;">S/ ${sizeRows.reduce((s, r) => s + r.cobrado, 0).toFixed(2)}</td>
-            <td style="text-align: right; padding: 10px 6px; color: #92400E;">S/ ${sizeRows.reduce((s, r) => s + r.descuento, 0).toFixed(2)}</td>
+            <td style="text-align: right; padding: 10px 6px; color: var(--warn);">S/ ${sizeRows.reduce((s, r) => s + r.descuento, 0).toFixed(2)}</td>
             <td style="text-align: right; padding: 10px 6px;">${pctPromedio.toFixed(1)}%</td>
           </tr>
         </tbody>
@@ -20987,7 +21008,7 @@ function renderReportsHTML() {
             <tr style="border-bottom: 1px solid var(--line);">
               <td style="padding: 10px 6px;">${escape(reasonLabels[r.key] || r.key)}</td>
               <td style="text-align: right; padding: 10px 6px;">${r.count}</td>
-              <td style="text-align: right; padding: 10px 6px; color: #92400E;">S/ ${r.total.toFixed(2)}</td>
+              <td style="text-align: right; padding: 10px 6px; color: var(--warn);">S/ ${r.total.toFixed(2)}</td>
               <td style="text-align: right; padding: 10px 6px;">${totalFacturado > 0 ? (r.total / totalFacturado * 100).toFixed(1) : '0.0'}%</td>
             </tr>
           `).join('')}
@@ -21013,7 +21034,7 @@ function renderReportsHTML() {
               <td style="padding: 10px 6px;">${escape(reasonLabels[r] || r)}</td>
               ${sizesInCross.map(s => {
                 const v = cross.get(`${s}|${r}`) || 0;
-                return `<td style="text-align: right; padding: 10px 6px; ${v > 0 ? 'color: #92400E;' : 'color: var(--ink-faint);'}">${v > 0 ? `S/ ${v.toFixed(0)}` : '—'}</td>`;
+                return `<td style="text-align: right; padding: 10px 6px; ${v > 0 ? 'color: var(--warn);' : 'color: var(--ink-faint);'}">${v > 0 ? `S/ ${v.toFixed(0)}` : '—'}</td>`;
               }).join('')}
             </tr>
           `).join('')}
@@ -21039,7 +21060,7 @@ function renderReportsHTML() {
             <tr style="border-bottom: 1px solid var(--line);">
               <td style="padding: 10px 6px;">${escape(s.name)}</td>
               <td style="text-align: right; padding: 10px 6px;">${s.count}</td>
-              <td style="text-align: right; padding: 10px 6px; color: #92400E;">S/ ${s.total.toFixed(2)}</td>
+              <td style="text-align: right; padding: 10px 6px; color: var(--warn);">S/ ${s.total.toFixed(2)}</td>
             </tr>
           `).join('')}
         </tbody>
