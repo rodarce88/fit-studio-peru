@@ -999,6 +999,9 @@
   .inst-past-toggle:hover { border-color: var(--fit-purple); background: var(--fit-lavender-pale); color: var(--fit-purple); }
   .inst-past-toggle strong { color: var(--fit-purple); font-weight: 500; }
   .inst-past-toggle.is-open { background: var(--fit-lavender-pale); border-color: var(--fit-purple); border-style: solid; color: var(--fit-purple); }
+  .inst-past-toggle.is-loading { background: var(--fit-lavender-pale); border-color: var(--fit-purple-soft); border-style: solid; color: var(--fit-purple); opacity: 0.85; cursor: default; }
+  .inst-toggle-spinner { width: 14px; height: 14px; border: 2px solid var(--fit-lavender-pale); border-top-color: var(--fit-purple); border-radius: 50%; display: inline-block; animation: inst-toggle-spin 0.7s linear infinite; vertical-align: middle; flex-shrink: 0; }
+  @keyframes inst-toggle-spin { to { transform: rotate(360deg); } }
 
   .inst-section-title { font-size: 11px; text-transform: uppercase; letter-spacing: 1.3px; color: var(--ink-mute); font-weight: 500; margin: 4px 0 10px; display: flex; justify-content: space-between; align-items: center; }
   .inst-section-title .pill { font-size: 10px; background: var(--fit-lavender-pale); color: var(--fit-purple); padding: 3px 8px; border-radius: 999px; letter-spacing: 0.5px; text-transform: none; font-weight: 500; }
@@ -12611,13 +12614,56 @@ function instructorToggleHour(hour) {
 }
 
 function instructorTogglePast() {
-  STATE.instShowPast = !STATE.instShowPast;
-  // Re-render solo las clases (más rápido que re-cargar)
+  // Prevenir clicks múltiples mientras procesa
+  if (STATE._togglePastBusy) return;
+  STATE._togglePastBusy = true;
+
+  // 1. Feedback INMEDIATO en el toggle (antes de tocar nada más)
+  const willOpen = !STATE.instShowPast; // estamos a punto de abrir/cerrar
+  const toggleEl = document.querySelector('.inst-past-toggle');
+  if (toggleEl) {
+    toggleEl.classList.add('is-loading');
+    toggleEl.style.pointerEvents = 'none';
+    const label = willOpen ? 'Mostrando clases anteriores' : 'Ocultando';
+    toggleEl.innerHTML = `
+      <span><strong>${label}</strong></span>
+      <span class="inst-toggle-spinner" aria-label="cargando"></span>
+    `;
+  }
+
+  // 2. Cambiar el estado
+  STATE.instShowPast = willOpen;
+
+  // 3. Render rápido si tenemos cache; sino skeleton + cargar de BD
   const inst = CURRENT_USER && CURRENT_USER.record;
-  if (!inst) return;
-  loadInstructorClassesForDate(inst, STATE.instDayDate).then(classes => {
-    renderInstructorClassesBlock(classes);
-  });
+  if (!inst) { STATE._togglePastBusy = false; return; }
+
+  const cached = (STATE.instClassesCache || {})[STATE.instDayDate];
+  if (cached) {
+    // Cache disponible: render en el próximo frame para que se vea el feedback del toggle
+    requestAnimationFrame(() => {
+      renderInstructorClassesBlock(cached);
+      STATE._togglePastBusy = false;
+    });
+  } else {
+    // Sin cache: skeleton en la lista mientras carga
+    const block = document.querySelector('[data-inst-classes]');
+    if (block) block.innerHTML = instClassesSkeletonHTML();
+    loadInstructorClassesForDate(inst, STATE.instDayDate).then(classes => {
+      STATE.instClassesCache = STATE.instClassesCache || {};
+      STATE.instClassesCache[STATE.instDayDate] = classes;
+      renderInstructorClassesBlock(classes);
+      STATE._togglePastBusy = false;
+    }).catch(err => {
+      console.error('[togglePast] load failed:', err);
+      STATE._togglePastBusy = false;
+      // Restaurar UI del toggle si falló
+      if (toggleEl) {
+        toggleEl.classList.remove('is-loading');
+        toggleEl.style.pointerEvents = '';
+      }
+    });
+  }
 }
 
 async function loadInstructorMonthStats(instructorId) {
