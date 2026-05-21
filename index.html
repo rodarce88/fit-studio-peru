@@ -803,8 +803,7 @@
     body.role-instructor [data-inst-pending-banner] { display: none; }
     body.role-instructor [data-inst-next] { display: none; }
 
-    /* Compactar el day strip: ocultar banner "VIENDO Hoy..." y nav-bar de semana */
-    body.role-instructor [data-inst-daystrip] > div:first-child { display: none; }
+    /* Compactar el day strip: nav-bar de semana legacy (ya no existe pero por si acaso) */
     body.role-instructor .inst-week-nav { display: none; }
   }
 
@@ -941,7 +940,9 @@
   .inst-month-carousel { width: 100%; font-family: var(--body); margin-bottom: 16px; }
   .inst-month-carousel-header { display: flex; align-items: center; justify-content: space-between; padding: 0 4px; margin-bottom: 12px; }
   .inst-month-title { font-family: var(--display); font-style: italic; font-weight: 400; font-size: 20px; color: var(--ink); letter-spacing: -0.005em; margin: 0; }
-  .inst-month-controls { display: flex; gap: 6px; }
+  .inst-month-controls { display: flex; gap: 6px; align-items: center; }
+  .inst-month-today-btn { padding: 5px 12px; background: var(--fit-lavender-pale); color: var(--fit-purple); border: 1px solid var(--fit-lavender); border-radius: 999px; font-size: 11px; cursor: pointer; font-family: var(--body); font-weight: 500; transition: all 0.15s; line-height: 1.2; }
+  .inst-month-today-btn:hover { background: var(--fit-lavender); border-color: var(--fit-purple-soft); }
   .inst-month-chev { width: 32px; height: 32px; border-radius: 50%; border: 1px solid var(--line); background: transparent; color: var(--fit-purple); font-size: 18px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s; font-family: inherit; line-height: 1; padding: 0; }
   .inst-month-chev:hover:not(:disabled) { background: var(--fit-lavender-pale); border-color: var(--fit-purple-soft); }
   .inst-month-chev:disabled { opacity: 0.3; cursor: not-allowed; }
@@ -12007,10 +12008,6 @@ function renderInstructorGreetBlock() {
         <div class="inst-greet-tag">${greet}, ${escape(firstName)}${hh >= 6 ? ` · ${hh > 12 ? hh-12 : (hh === 0 ? 12 : hh)}:${now.getMinutes().toString().padStart(2,'0')} ${hh >= 12 ? 'pm' : 'am'}` : ''}</div>
         <div class="inst-greet-title">Tu día${locName ? ` en <em>${escape(locName)}</em>` : ''}</div>
       </div>
-      <div class="inst-tabs-inline">
-        <button class="inst-tab-pill ${activeTab === 'day' ? 'is-active' : ''}" onclick="switchInstructorTab('day', this)">Mi día</button>
-        <button class="inst-tab-pill ${activeTab === 'pay' ? 'is-active' : ''}" onclick="switchInstructorTab('pay', this)">Dashboard</button>
-      </div>
     </div>
   `;
 }
@@ -12023,7 +12020,6 @@ function renderInstructorDayStrip() {
   const dowLong = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
   const monthShort = ['ENE','FEB','MAR','ABR','MAY','JUN','JUL','AGO','SEP','OCT','NOV','DIC'];
   const monthLong = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
-  const monthLowerShort = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
 
   const today = new Date(); today.setHours(0,0,0,0);
   const todayMonth = new Date(today.getFullYear(), today.getMonth(), 1);
@@ -12034,12 +12030,23 @@ function renderInstructorDayStrip() {
     STATE.instCarouselMonth = new Date(selDate.getFullYear(), selDate.getMonth(), 1).toISOString();
   }
   let viewMonth = new Date(STATE.instCarouselMonth);
-  // Reset si quedó fuera de rango por navegación previa
   const initialDiff = (viewMonth.getFullYear() - todayMonth.getFullYear()) * 12 + (viewMonth.getMonth() - todayMonth.getMonth());
   if (initialDiff < -1 || initialDiff > 1) {
     viewMonth = new Date(todayMonth);
     STATE.instCarouselMonth = viewMonth.toISOString();
   }
+
+  // Detectar si solo cambió el día (no el mes) para activar scroll smooth
+  const oldTrack = document.getElementById('inst-month-track');
+  const oldScrollLeft = oldTrack ? oldTrack.scrollLeft : 0;
+  let useSmoothScroll = false;
+  if (STATE._instLastRenderedDay && STATE._instLastRenderedDay !== STATE.instDayDate) {
+    const oldD = new Date(STATE._instLastRenderedDay + 'T12:00:00');
+    if (oldD.getMonth() === selDate.getMonth() && oldD.getFullYear() === selDate.getFullYear()) {
+      useSmoothScroll = true;
+    }
+  }
+  STATE._instLastRenderedDay = STATE.instDayDate;
 
   // Construir días: 5 padding antes + todo el mes + 5 padding después
   const PADDING = 5;
@@ -12083,25 +12090,14 @@ function renderInstructorDayStrip() {
   const diff = (viewMonth.getFullYear() - todayMonth.getFullYear()) * 12 + (viewMonth.getMonth() - todayMonth.getMonth());
   const canPrev = diff > -1;
   const canNext = diff < 1;
-
-  // Banner pequeño (Viendo + ir a hoy)
   const isViewingToday = STATE.instDayDate === todayIso;
-  const banner = `
-    <div style="font-size: 12px; color: var(--ink-mute); margin-bottom: 10px; display: flex; align-items: center; gap: 8px;">
-      <span style="text-transform: uppercase; letter-spacing: 1px; font-size: 10px;">Viendo</span>
-      <span style="font-weight: 500; color: ${isViewingToday ? 'var(--fit-purple)' : 'var(--ink)'};">
-        ${isViewingToday ? 'Hoy · ' : ''}${dowLong[selDate.getDay()]} ${selDate.getDate()} ${monthLowerShort[selDate.getMonth()]}
-      </span>
-      ${!isViewingToday ? `<button onclick="instructorSetDateIso('${todayIso}')" style="margin-left: auto; padding: 3px 10px; background: var(--fit-lavender-pale); color: var(--fit-purple); border: 1px solid var(--fit-lavender); border-radius: 999px; font-size: 11px; cursor: pointer; font-family: var(--body);">ir a hoy</button>` : ''}
-    </div>
-  `;
 
   block.innerHTML = `
-    ${banner}
     <div class="inst-month-carousel">
       <div class="inst-month-carousel-header">
         <h3 class="inst-month-title">${monthLong[viewMonth.getMonth()]} ${viewMonth.getFullYear()}</h3>
         <div class="inst-month-controls">
+          ${!isViewingToday ? `<button onclick="instructorSetDateIso('${todayIso}')" class="inst-month-today-btn">ir a hoy</button>` : ''}
           <button class="inst-month-chev" onclick="instructorNavMonth(-1)" ${!canPrev ? 'disabled' : ''} aria-label="Mes anterior">‹</button>
           <button class="inst-month-chev" onclick="instructorNavMonth(1)" ${!canNext ? 'disabled' : ''} aria-label="Mes siguiente">›</button>
         </div>
@@ -12113,13 +12109,18 @@ function renderInstructorDayStrip() {
     <input type="date" id="inst-date-picker" onchange="instructorSetCustomDate(this.value)" value="${STATE.instDayDate}" style="position: absolute; opacity: 0; pointer-events: none; width: 1px; height: 1px;" />
   `;
 
-  // Auto-scroll: centrar el día seleccionado (o el primero del mes si selected está en otro mes)
+  // Auto-scroll: animado si fue cambio de día dentro del mismo mes, instant en otros casos
   requestAnimationFrame(() => {
     const scroll = document.getElementById('inst-month-track');
     if (!scroll) return;
+
+    // Si vamos a animar, restaurar scroll previo INSTANT primero (para que la animación parta de ahí)
+    if (useSmoothScroll) {
+      scroll.scrollLeft = oldScrollLeft;
+    }
+
     let target = scroll.querySelector(`[data-iso="${STATE.instDayDate}"]`);
     if (!target) {
-      // Si el seleccionado no está en este mes, centrar hoy si está; sino el 1ro
       target = scroll.querySelector(`[data-iso="${todayIso}"]`);
       if (!target) {
         const firstIso = dateToIsoLocal(firstOfMonth);
@@ -12127,8 +12128,10 @@ function renderInstructorDayStrip() {
       }
     }
     if (target) {
-      const scrollLeft = target.offsetLeft - (scroll.clientWidth / 2) + (target.clientWidth / 2);
-      scroll.scrollTo({ left: Math.max(0, scrollLeft), behavior: 'instant' });
+      const targetScrollLeft = target.offsetLeft - (scroll.clientWidth / 2) + (target.clientWidth / 2);
+      // Forzar reflow para que el scroll previo se aplique antes de animar
+      if (useSmoothScroll) void scroll.offsetHeight;
+      scroll.scrollTo({ left: Math.max(0, targetScrollLeft), behavior: useSmoothScroll ? 'smooth' : 'instant' });
     }
   });
 }
