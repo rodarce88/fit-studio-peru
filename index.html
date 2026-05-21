@@ -906,12 +906,11 @@
     .inst-tab-pill { padding: 4px 9px; font-size: 11px; }
   }
 
-  /* Carrusel de fechas: scrolleable horizontal */
-  .inst-day-strip-wrap { margin: 0 -16px 16px; }
-  .inst-day-strip-scroll { display: flex; gap: 8px; padding: 4px 16px 10px; overflow-x: auto; scroll-snap-type: x mandatory; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
-  .inst-day-strip-scroll::-webkit-scrollbar { display: none; }
-  .inst-day-strip-scroll .inst-day-pill { flex-shrink: 0; width: 58px; padding: 9px 0 11px; scroll-snap-align: center; }
-  .inst-day-strip-scroll .inst-day-pill .num { font-size: 20px; }
+  /* Carrusel mensual (mobile overrides) */
+  .inst-month-track { padding: 6px 12px 14px !important; }
+  .inst-month-track-wrap { margin: 0 -16px !important; }
+  .inst-month-day { min-width: 72px !important; padding: 9px 6px 8px !important; }
+  .inst-month-day .num { font-size: 26px !important; }
 
   /* Donut chart para cada hora */
   .inst-donut { position: relative; width: 44px; height: 44px; flex-shrink: 0; }
@@ -938,23 +937,41 @@
   .inst-stud-alert.is-health { background: #FEF3C7; color: #92400E; }
   .inst-stud-alert.is-note { background: var(--fit-lavender-pale); color: var(--fit-purple); }
 
-  .inst-day-strip { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; margin-bottom: 16px; }
-  .inst-day-strip::-webkit-scrollbar { display: none; }
-  .inst-day-pill { position: relative; padding: 8px 0; border-radius: 10px; background: white; border: 1px solid var(--line); text-align: center; cursor: pointer; transition: all 0.15s; }
-  .inst-day-pill:hover { border-color: var(--fit-purple); }
-  .inst-day-pill.is-active { background: var(--fit-purple); border-color: var(--fit-purple); color: white; }
-  .inst-day-pill.is-today:not(.is-active) { border-color: var(--fit-purple); border-width: 1.5px; color: var(--fit-purple); }
-  .inst-day-pill .dow { font-size: 9px; text-transform: uppercase; letter-spacing: 0.5px; opacity: 0.7; }
-  .inst-day-pill .num { font-family: var(--display); font-size: 16px; font-weight: 600; margin-top: 2px; }
-  .inst-day-pill .today-dot { position: absolute; bottom: 4px; left: 50%; transform: translateX(-50%); width: 4px; height: 4px; border-radius: 50%; background: var(--fit-purple); }
-  .inst-day-pill.is-active .today-dot { background: white; }
+  /* Carrusel mensual del profesor */
+  .inst-month-carousel { width: 100%; font-family: var(--body); margin-bottom: 16px; }
+  .inst-month-carousel-header { display: flex; align-items: center; justify-content: space-between; padding: 0 4px; margin-bottom: 12px; }
+  .inst-month-title { font-family: var(--display); font-style: italic; font-weight: 400; font-size: 20px; color: var(--ink); letter-spacing: -0.005em; margin: 0; }
+  .inst-month-controls { display: flex; gap: 6px; }
+  .inst-month-chev { width: 32px; height: 32px; border-radius: 50%; border: 1px solid var(--line); background: transparent; color: var(--fit-purple); font-size: 18px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s; font-family: inherit; line-height: 1; padding: 0; }
+  .inst-month-chev:hover:not(:disabled) { background: var(--fit-lavender-pale); border-color: var(--fit-purple-soft); }
+  .inst-month-chev:disabled { opacity: 0.3; cursor: not-allowed; }
+  .inst-month-track-wrap { position: relative; margin: 0 -4px; }
+  .inst-month-track { display: flex; gap: 8px; overflow-x: auto; scroll-snap-type: x mandatory; padding: 6px 4px 14px; scrollbar-width: none; -webkit-overflow-scrolling: touch; scroll-behavior: smooth; }
+  .inst-month-track::-webkit-scrollbar { display: none; }
+  .inst-month-track-wrap::before, .inst-month-track-wrap::after { content: ''; position: absolute; top: 0; bottom: 14px; width: 24px; pointer-events: none; z-index: 2; }
+  .inst-month-track-wrap::before { left: 0; background: linear-gradient(to right, var(--cream), transparent); }
+  .inst-month-track-wrap::after { right: 0; background: linear-gradient(to left, var(--cream), transparent); }
 
-  /* Barra de navegación semanal */
-  .inst-week-nav { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; }
-  .inst-week-nav-btn { width: 30px; height: 30px; border-radius: 50%; border: 1px solid var(--line); background: white; display: grid; place-items: center; cursor: pointer; color: var(--fit-purple); font-size: 14px; font-family: var(--body); transition: all 0.12s; flex-shrink: 0; }
-  .inst-week-nav-btn:hover { background: var(--fit-lavender-pale); border-color: var(--fit-purple-soft); }
-  .inst-week-nav-btn.is-picker { background: var(--fit-lavender-pale); border-color: var(--fit-lavender); font-size: 13px; }
-  .inst-week-label { flex: 1; text-align: center; font-family: var(--display); font-style: italic; font-size: 14px; color: var(--fit-purple-deep); font-weight: 500; }
+  .inst-month-day { flex: 0 0 auto; min-width: 80px; max-width: 96px; aspect-ratio: 1 / 1.08; scroll-snap-align: center; background: white; border: 1px solid var(--line); border-radius: 14px; padding: 11px 6px 9px; text-align: center; cursor: pointer; transition: transform 0.25s cubic-bezier(0.34, 1.4, 0.64, 1), border-color 0.2s, background 0.2s, box-shadow 0.2s; position: relative; user-select: none; -webkit-tap-highlight-color: transparent; font-family: inherit; }
+  .inst-month-day:hover { transform: translateY(-1px); border-color: var(--fit-purple-soft); box-shadow: 0 6px 16px -8px rgba(91, 42, 143, 0.2); }
+  .inst-month-day.is-today { background: var(--fit-lavender-pale); border-color: var(--fit-lavender); }
+  .inst-month-day.is-selected { background: linear-gradient(135deg, var(--fit-purple), var(--fit-purple-deep)); border-color: transparent; transform: translateY(-2px); box-shadow: 0 10px 22px -8px rgba(64, 29, 107, 0.40); }
+  .inst-month-day.is-past { opacity: 0.5; }
+  .inst-month-day.is-adjacent { opacity: 0.4; }
+  .inst-month-day .dow { font-size: 10px; font-weight: 600; letter-spacing: 0.16em; text-transform: uppercase; color: var(--ink-mute); margin-bottom: 5px; transition: color 0.2s; }
+  .inst-month-day.is-selected .dow { color: rgba(255, 255, 255, 0.72); }
+  .inst-month-day .num { font-family: var(--display); font-style: normal; font-weight: 400; font-size: 28px; line-height: 1; color: var(--ink); letter-spacing: -0.02em; margin-bottom: 4px; transition: color 0.2s; }
+  .inst-month-day.is-selected .num { color: white; }
+  .inst-month-day .mo { font-size: 9px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-mute); font-weight: 500; transition: color 0.2s; }
+  .inst-month-day.is-selected .mo { color: rgba(255, 255, 255, 0.65); }
+  .inst-month-day.is-adjacent .mo { color: var(--fit-purple-soft); }
+  .inst-month-day .today-pip { position: absolute; top: 7px; right: 9px; width: 5px; height: 5px; border-radius: 50%; background: var(--fit-purple); }
+  .inst-month-day.is-selected .today-pip { background: var(--fit-lavender); }
+
+  /* Skeletons */
+  .inst-month-day-skeleton { flex: 0 0 auto; min-width: 80px; max-width: 96px; aspect-ratio: 1 / 1.08; border-radius: 14px; background: linear-gradient(90deg, var(--fit-lavender-pale) 0%, #F8F4FA 50%, var(--fit-lavender-pale) 100%); background-size: 200% 100%; animation: inst-skel 1.4s ease-in-out infinite; }
+  .inst-skel-line { background: linear-gradient(90deg, var(--fit-lavender-pale) 0%, #F8F4FA 50%, var(--fit-lavender-pale) 100%); background-size: 200% 100%; animation: inst-skel 1.4s ease-in-out infinite; border-radius: 6px; }
+  @keyframes inst-skel { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
 
   /* Loading spinner inline */
   .inst-loading { padding: 30px 20px; text-align: center; color: var(--ink-mute); font-size: 13px; }
@@ -11820,6 +11837,8 @@ async function renderInstructorDay() {
 
 // Helpers de skeletons para la vista profesor
 function showInstructorSkeletons() {
+  // Carrusel mensual de fechas (lo primero que se ve)
+  renderInstructorDayStripSkeleton();
   const nextBlock = document.querySelector('[data-inst-next]');
   if (nextBlock) nextBlock.innerHTML = instNextSkeletonHTML();
   const classesBlock = document.querySelector('[data-inst-classes]');
@@ -12000,86 +12019,152 @@ function renderInstructorDayStrip() {
   const block = document.querySelector('[data-inst-daystrip]');
   if (!block) return;
   const todayIso = dateToIsoLocal(new Date());
-  const dowLabels = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
-  const dowLabelsCap = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
-  const monthLabels = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+  const dowShort = ['DOM','LUN','MAR','MIE','JUE','VIE','SAB'];
+  const dowLong = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
+  const monthShort = ['ENE','FEB','MAR','ABR','MAY','JUN','JUL','AGO','SEP','OCT','NOV','DIC'];
+  const monthLong = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+  const monthLowerShort = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
 
-  // Calcular el lunes de la semana del día seleccionado
+  const today = new Date(); today.setHours(0,0,0,0);
+  const todayMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+
+  // Mes que se está viendo. Default: mes del día seleccionado, pero forzar a mes actual ±1.
   const selDate = new Date(STATE.instDayDate + 'T12:00:00');
-  const selDow = selDate.getDay(); // 0 dom .. 6 sab
-  const daysFromMonday = selDow === 0 ? 6 : selDow - 1;
-  const monday = new Date(selDate);
-  monday.setDate(selDate.getDate() - daysFromMonday);
-  monday.setHours(0, 0, 0, 0);
-
-  // 21 días: 7 antes + 7 actuales + 7 después (para que se pueda swipe en ambas direcciones)
-  const pills = [];
-  let activePillIdx = -1;
-  for (let i = -7; i < 14; i++) {
-    const d = new Date(monday);
-    d.setDate(monday.getDate() + i);
-    const iso = dateToIsoLocal(d);
-    const isToday = iso === todayIso;
-    const isActive = iso === STATE.instDayDate;
-    if (isActive) activePillIdx = pills.length;
-    pills.push(`
-      <div class="inst-day-pill ${isActive ? 'is-active' : ''} ${isToday && !isActive ? 'is-today' : ''}" data-pill-iso="${iso}" onclick="instructorSetDateIso('${iso}')">
-        <div class="dow">${dowLabels[d.getDay()]}</div>
-        <div class="num">${d.getDate()}</div>
-        ${isToday ? '<div class="today-dot"></div>' : ''}
-      </div>
-    `);
+  if (!STATE.instCarouselMonth) {
+    STATE.instCarouselMonth = new Date(selDate.getFullYear(), selDate.getMonth(), 1).toISOString();
+  }
+  let viewMonth = new Date(STATE.instCarouselMonth);
+  // Reset si quedó fuera de rango por navegación previa
+  const initialDiff = (viewMonth.getFullYear() - todayMonth.getFullYear()) * 12 + (viewMonth.getMonth() - todayMonth.getMonth());
+  if (initialDiff < -1 || initialDiff > 1) {
+    viewMonth = new Date(todayMonth);
+    STATE.instCarouselMonth = viewMonth.toISOString();
   }
 
-  // Etiqueta de la semana visible
-  const sunday = new Date(monday);
-  sunday.setDate(monday.getDate() + 6);
-  const sameMonth = monday.getMonth() === sunday.getMonth();
-  const weekLabel = sameMonth
-    ? `Sem. del ${monday.getDate()} al ${sunday.getDate()} ${monthLabels[monday.getMonth()]}`
-    : `${monday.getDate()} ${monthLabels[monday.getMonth()]} – ${sunday.getDate()} ${monthLabels[sunday.getMonth()]}`;
+  // Construir días: 5 padding antes + todo el mes + 5 padding después
+  const PADDING = 5;
+  const firstOfMonth = new Date(viewMonth.getFullYear(), viewMonth.getMonth(), 1);
+  const lastOfMonth = new Date(viewMonth.getFullYear(), viewMonth.getMonth() + 1, 0);
 
-  // Banner: fecha seleccionada con "ir a hoy" si aplica
-  const isToday = STATE.instDayDate === todayIso;
+  const days = [];
+  for (let i = PADDING; i > 0; i--) {
+    const d = new Date(firstOfMonth); d.setDate(d.getDate() - i);
+    days.push({ date: d, isAdjacent: true });
+  }
+  for (let i = 1; i <= lastOfMonth.getDate(); i++) {
+    days.push({ date: new Date(viewMonth.getFullYear(), viewMonth.getMonth(), i), isAdjacent: false });
+  }
+  for (let i = 1; i <= PADDING; i++) {
+    const d = new Date(lastOfMonth); d.setDate(d.getDate() + i);
+    days.push({ date: d, isAdjacent: true });
+  }
+
+  const pillsHTML = days.map(({date, isAdjacent}) => {
+    const iso = dateToIsoLocal(date);
+    const isToday = iso === todayIso;
+    const isSelected = iso === STATE.instDayDate;
+    const isPast = date < today && !isToday;
+    const classes = ['inst-month-day'];
+    if (isToday) classes.push('is-today');
+    if (isSelected) classes.push('is-selected');
+    if (isPast) classes.push('is-past');
+    if (isAdjacent) classes.push('is-adjacent');
+    return `
+      <button class="${classes.join(' ')}" data-iso="${iso}" onclick="instructorSetDateIso('${iso}')" aria-label="${dowLong[date.getDay()]} ${date.getDate()} de ${monthLong[date.getMonth()].toLowerCase()}">
+        ${isToday ? '<span class="today-pip"></span>' : ''}
+        <div class="dow">${dowShort[date.getDay()]}</div>
+        <div class="num">${date.getDate()}</div>
+        <div class="mo">${monthShort[date.getMonth()]}</div>
+      </button>
+    `;
+  }).join('');
+
+  // Restricción de navegación: solo mes actual ±1
+  const diff = (viewMonth.getFullYear() - todayMonth.getFullYear()) * 12 + (viewMonth.getMonth() - todayMonth.getMonth());
+  const canPrev = diff > -1;
+  const canNext = diff < 1;
+
+  // Banner pequeño (Viendo + ir a hoy)
+  const isViewingToday = STATE.instDayDate === todayIso;
   const banner = `
-    <div style="font-size: 12px; color: var(--ink-mute); margin-bottom: 6px; display: flex; align-items: center; gap: 8px;">
+    <div style="font-size: 12px; color: var(--ink-mute); margin-bottom: 10px; display: flex; align-items: center; gap: 8px;">
       <span style="text-transform: uppercase; letter-spacing: 1px; font-size: 10px;">Viendo</span>
-      <span style="font-weight: 500; color: ${isToday ? 'var(--fit-purple)' : 'var(--ink)'};">
-        ${isToday ? 'Hoy · ' : ''}${dowLabelsCap[selDate.getDay()]} ${selDate.getDate()} ${monthLabels[selDate.getMonth()]}
+      <span style="font-weight: 500; color: ${isViewingToday ? 'var(--fit-purple)' : 'var(--ink)'};">
+        ${isViewingToday ? 'Hoy · ' : ''}${dowLong[selDate.getDay()]} ${selDate.getDate()} ${monthLowerShort[selDate.getMonth()]}
       </span>
-      ${!isToday ? `<button onclick="instructorSetDateIso('${todayIso}')" style="margin-left: auto; padding: 3px 10px; background: var(--fit-lavender-pale); color: var(--fit-purple); border: 1px solid var(--fit-lavender); border-radius: 999px; font-size: 11px; cursor: pointer; font-family: var(--body);">ir a hoy</button>` : ''}
-    </div>
-  `;
-
-  // Barra de navegación: flecha ‹ + label semana + flecha › + 📅 picker
-  const navBar = `
-    <div class="inst-week-nav">
-      <button class="inst-week-nav-btn" onclick="instructorNavWeek(-1)" title="Semana anterior">‹</button>
-      <div class="inst-week-label">${weekLabel}</div>
-      <button class="inst-week-nav-btn" onclick="instructorNavWeek(1)" title="Semana siguiente">›</button>
-      <button class="inst-week-nav-btn is-picker" onclick="instructorOpenDatePicker(event)" title="Elegir fecha">📅</button>
+      ${!isViewingToday ? `<button onclick="instructorSetDateIso('${todayIso}')" style="margin-left: auto; padding: 3px 10px; background: var(--fit-lavender-pale); color: var(--fit-purple); border: 1px solid var(--fit-lavender); border-radius: 999px; font-size: 11px; cursor: pointer; font-family: var(--body);">ir a hoy</button>` : ''}
     </div>
   `;
 
   block.innerHTML = `
     ${banner}
-    ${navBar}
-    <div class="inst-day-strip-wrap">
-      <div class="inst-day-strip-scroll" id="inst-day-strip-scroll">${pills.join('')}</div>
+    <div class="inst-month-carousel">
+      <div class="inst-month-carousel-header">
+        <h3 class="inst-month-title">${monthLong[viewMonth.getMonth()]} ${viewMonth.getFullYear()}</h3>
+        <div class="inst-month-controls">
+          <button class="inst-month-chev" onclick="instructorNavMonth(-1)" ${!canPrev ? 'disabled' : ''} aria-label="Mes anterior">‹</button>
+          <button class="inst-month-chev" onclick="instructorNavMonth(1)" ${!canNext ? 'disabled' : ''} aria-label="Mes siguiente">›</button>
+        </div>
+      </div>
+      <div class="inst-month-track-wrap">
+        <div class="inst-month-track" id="inst-month-track">${pillsHTML}</div>
+      </div>
     </div>
     <input type="date" id="inst-date-picker" onchange="instructorSetCustomDate(this.value)" value="${STATE.instDayDate}" style="position: absolute; opacity: 0; pointer-events: none; width: 1px; height: 1px;" />
   `;
 
-  // Auto-scroll para centrar la fecha activa
+  // Auto-scroll: centrar el día seleccionado (o el primero del mes si selected está en otro mes)
   requestAnimationFrame(() => {
-    const scroll = document.getElementById('inst-day-strip-scroll');
+    const scroll = document.getElementById('inst-month-track');
     if (!scroll) return;
-    const activePill = scroll.querySelector('.inst-day-pill.is-active');
-    if (activePill) {
-      const scrollLeft = activePill.offsetLeft - (scroll.clientWidth / 2) + (activePill.clientWidth / 2);
+    let target = scroll.querySelector(`[data-iso="${STATE.instDayDate}"]`);
+    if (!target) {
+      // Si el seleccionado no está en este mes, centrar hoy si está; sino el 1ro
+      target = scroll.querySelector(`[data-iso="${todayIso}"]`);
+      if (!target) {
+        const firstIso = dateToIsoLocal(firstOfMonth);
+        target = scroll.querySelector(`[data-iso="${firstIso}"]`);
+      }
+    }
+    if (target) {
+      const scrollLeft = target.offsetLeft - (scroll.clientWidth / 2) + (target.clientWidth / 2);
       scroll.scrollTo({ left: Math.max(0, scrollLeft), behavior: 'instant' });
     }
   });
+}
+
+// Navegar mes en el carrusel del profesor — limitado a mes actual ±1
+function instructorNavMonth(delta) {
+  const todayMonth = new Date();
+  todayMonth.setDate(1); todayMonth.setHours(0,0,0,0);
+  const current = STATE.instCarouselMonth ? new Date(STATE.instCarouselMonth) : new Date(todayMonth);
+  const next = new Date(current.getFullYear(), current.getMonth() + delta, 1);
+  const monthDiff = (next.getFullYear() - todayMonth.getFullYear()) * 12 + (next.getMonth() - todayMonth.getMonth());
+  if (monthDiff < -1 || monthDiff > 1) return;
+  STATE.instCarouselMonth = next.toISOString();
+  renderInstructorDayStrip();
+}
+
+// Skeleton del carrusel del profesor — se muestra antes de la primera carga real
+function renderInstructorDayStripSkeleton() {
+  const block = document.querySelector('[data-inst-daystrip]');
+  if (!block) return;
+  const skeletons = Array.from({length: 10}).map(() => `<div class="inst-month-day-skeleton"></div>`).join('');
+  block.innerHTML = `
+    <div class="inst-skel-line" style="height: 14px; width: 220px; margin-bottom: 12px;"></div>
+    <div class="inst-month-carousel">
+      <div class="inst-month-carousel-header">
+        <div class="inst-skel-line" style="height: 22px; width: 150px;"></div>
+        <div class="inst-month-controls">
+          <div class="inst-skel-line" style="width: 32px; height: 32px; border-radius: 50%;"></div>
+          <div class="inst-skel-line" style="width: 32px; height: 32px; border-radius: 50%;"></div>
+        </div>
+      </div>
+      <div class="inst-month-track-wrap">
+        <div class="inst-month-track" style="overflow: hidden;">${skeletons}</div>
+      </div>
+    </div>
+  `;
 }
 
 // Navegar a la semana anterior o siguiente (mantiene mismo día de la semana cuando se puede)
