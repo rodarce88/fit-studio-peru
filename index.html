@@ -2370,6 +2370,88 @@
     .full-row-name { font-size: 13px; }
     .full-row-btn { padding: 6px 11px; font-size: 11.5px; }
   }
+
+  /* ============================================
+     EDITOR MENSUAL DE HORARIOS DE PROFESOR (ISE = Instructor Schedule Editor)
+     ============================================ */
+  .ise-body { padding: 20px 24px 24px; }
+  .ise-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 18px; flex-wrap: wrap; }
+  .ise-loc-pick { display: flex; flex-direction: column; gap: 4px; }
+  .ise-loc-pick label { font-size: 10.5px; color: var(--ink-mute); text-transform: uppercase; letter-spacing: 1.2px; font-weight: 500; }
+  .ise-loc-pick select { appearance: none; background: var(--white); border: 1px solid var(--line); border-radius: var(--radius-pill); padding: 8px 32px 8px 14px; font-family: inherit; font-size: 13px; color: var(--ink); cursor: pointer; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6' fill='none' stroke='%236B6473' stroke-width='1.5'%3E%3Cpath d='M1 1l4 4 4-4'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 12px center; }
+  .ise-month-nav { display: flex; align-items: center; gap: 8px; }
+  .ise-month-nav button { appearance: none; background: var(--white); border: 1px solid var(--line); width: 34px; height: 34px; border-radius: 50%; cursor: pointer; display: grid; place-items: center; color: var(--ink-soft); font-size: 16px; line-height: 1; transition: all 0.15s; }
+  .ise-month-nav button:hover { background: var(--fit-lavender-pale); border-color: var(--fit-purple-soft); color: var(--fit-purple); }
+  .ise-month-pill { font-family: var(--display); font-style: italic; font-size: 17px; color: var(--fit-purple-deep); padding: 6px 14px; background: var(--fit-lavender-pale); border-radius: var(--radius-pill); white-space: nowrap; }
+
+  .ise-main { display: grid; grid-template-columns: 1fr 320px; gap: 18px; }
+
+  /* Calendario */
+  .ise-cal { background: var(--fit-cream); border-radius: var(--radius-md); padding: 16px; }
+  .ise-dow { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; margin-bottom: 6px; }
+  .ise-dow span { text-align: center; font-size: 9.5px; color: var(--ink-mute); text-transform: uppercase; letter-spacing: 1.2px; padding: 4px 0; font-weight: 500; }
+  .ise-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+  .ise-day { aspect-ratio: 1/1; background: var(--white); border-radius: 10px; padding: 5px; display: flex; flex-direction: column; cursor: pointer; transition: all 0.15s; position: relative; border: 1.5px solid transparent; overflow: hidden; }
+  .ise-day:hover { border-color: var(--fit-purple-soft); }
+  .ise-day.is-other { background: transparent; opacity: 0.32; cursor: default; pointer-events: none; }
+  .ise-day.is-today { border-color: var(--gold-light); }
+  .ise-day.is-selected { background: var(--fit-purple); border-color: var(--fit-purple); }
+  .ise-day .ise-num { font-family: var(--display); font-style: italic; font-size: 15px; color: var(--ink); line-height: 1; }
+  .ise-day.is-selected .ise-num { color: var(--white); }
+  .ise-day.is-today .ise-num { color: var(--gold); }
+  .ise-day .ise-chips { display: flex; flex-wrap: wrap; gap: 2px; margin-top: auto; }
+  .ise-day .ise-chip { font-size: 8.5px; padding: 1px 4px; border-radius: 3px; background: var(--fit-lavender); color: var(--fit-purple-deep); font-weight: 500; line-height: 1.3; font-family: var(--body); }
+  .ise-day.is-selected .ise-chip { background: rgba(255,255,255,0.22); color: var(--white); }
+  .ise-day.has-light { background: var(--fit-lavender-pale); }
+  .ise-day.has-medium { background: var(--fit-lavender); }
+  .ise-day.has-heavy { background: var(--fit-purple-300); }
+  .ise-day.has-heavy .ise-chip { background: rgba(255,255,255,0.55); color: var(--fit-purple-deep); }
+  .ise-day.has-heavy.is-selected .ise-chip { background: rgba(255,255,255,0.22); color: var(--white); }
+
+  /* Side: bloques + detalle */
+  .ise-side { display: flex; flex-direction: column; gap: 10px; }
+  .ise-side-h { font-size: 10px; color: var(--ink-mute); text-transform: uppercase; letter-spacing: 1.2px; font-weight: 500; margin: 2px 0; }
+  .ise-block { background: var(--white); border: 1.5px solid var(--line); border-radius: 12px; padding: 12px 14px; cursor: pointer; transition: all 0.15s; }
+  .ise-block:hover { border-color: var(--fit-purple-soft); }
+  .ise-block.is-active { border-color: var(--fit-purple); background: var(--fit-lavender-pale); }
+  .ise-block-range { font-family: var(--display); font-style: italic; font-size: 14.5px; color: var(--fit-purple-deep); line-height: 1.2; }
+  .ise-block-meta { font-size: 12px; color: var(--ink-soft); margin-top: 4px; line-height: 1.4; }
+  .ise-block-stats { display: flex; gap: 10px; margin-top: 6px; font-size: 11px; color: var(--ink-mute); }
+  .ise-block-stats span { display: inline-flex; align-items: center; gap: 4px; }
+  .ise-add-block { appearance: none; background: var(--white); border: 1.5px dashed var(--fit-purple-soft); color: var(--fit-purple); padding: 11px; border-radius: 12px; cursor: pointer; font-family: inherit; font-size: 13px; font-weight: 500; transition: all 0.15s; display: flex; align-items: center; justify-content: center; gap: 6px; }
+  .ise-add-block:hover { background: var(--fit-lavender-pale); border-style: solid; }
+  .ise-add-block:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  /* Detail panel del día */
+  .ise-detail { background: var(--white); border-radius: 12px; padding: 14px; border: 1.5px solid var(--fit-purple); margin-top: 8px; }
+  .ise-detail-h { font-family: var(--display); font-style: italic; font-size: 16px; color: var(--fit-purple-deep); }
+  .ise-detail-sub { font-size: 12px; color: var(--ink-mute); margin: 2px 0 10px; line-height: 1.4; }
+  .ise-detail-empty { font-size: 12px; color: var(--ink-mute); padding: 10px 0; text-align: center; font-style: italic; }
+  .ise-hour-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px; }
+  .ise-hour-pill { padding: 7px 4px; text-align: center; font-size: 11.5px; border-radius: 8px; background: var(--fit-cream); color: var(--ink-mute); border: 1px solid var(--line); font-family: var(--body); }
+  .ise-hour-pill.is-on { background: var(--fit-purple); color: var(--white); border-color: var(--fit-purple); font-weight: 500; }
+
+  /* Timeline horizontal */
+  .ise-tl-wrap { margin-top: 16px; }
+  .ise-tl-h { font-size: 10px; color: var(--ink-mute); text-transform: uppercase; letter-spacing: 1.2px; font-weight: 500; margin-bottom: 6px; }
+  .ise-tl { background: var(--fit-cream); border-radius: 12px; padding: 12px; }
+  .ise-tl-bar { display: flex; align-items: stretch; gap: 1px; height: 32px; border-radius: 6px; overflow: hidden; background: var(--white); }
+  .ise-tl-seg { flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 500; padding: 0 6px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; min-width: 0; }
+  .ise-tl-seg.is-gap { background: var(--line-soft); color: var(--ink-mute); }
+  .ise-tl-seg.seg-1 { background: var(--fit-purple); color: var(--white); }
+  .ise-tl-seg.seg-2 { background: var(--fit-purple-soft); color: var(--white); }
+  .ise-tl-seg.seg-3 { background: var(--gold-light); color: var(--gold-deep, #6B4A0A); }
+  .ise-tl-axis { display: flex; margin-top: 6px; font-size: 9.5px; color: var(--ink-mute); }
+  .ise-tl-axis span { flex: 1; text-align: center; }
+  .ise-tl-axis span:nth-child(3n) { color: var(--ink-soft); font-weight: 500; }
+
+  /* Banner aviso modo lectura */
+  .ise-readonly-banner { background: var(--gold-soft); border: 1px solid var(--gold-light); border-radius: 10px; padding: 10px 14px; font-size: 12px; color: var(--gold-deep, #6B4A0A); margin-bottom: 14px; display: flex; align-items: center; gap: 8px; }
+
+  @media (max-width: 800px) {
+    .ise-main { grid-template-columns: 1fr; }
+    .ise-side { order: 2; }
+  }
 </style>
 </head>
 <body>
@@ -3290,44 +3372,66 @@
 
 <!-- INSTRUCTOR SCHEDULE MODAL (editar horarios fijos del profesor) -->
 <div class="modal-backdrop" id="instructor-schedule-modal" onclick="if(event.target===this) closeModals()">
-  <div class="modal-card" style="width: 720px;">
+  <div class="modal-card" style="width: 1080px; max-width: 96vw;">
     <div class="modal-header">
       <div class="modal-title" id="schedule-modal-title">Horarios de <em>profesor</em></div>
       <button class="modal-close" onclick="closeModals()">✕</button>
     </div>
-    <div class="modal-body">
-      <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-bottom: 16px;">
-        <div class="form-row">
-          <label>Sede</label>
-          <select id="sched-location"></select>
+    <div class="modal-body ise-body" style="max-height: calc(100vh - 140px); overflow-y: auto;">
+
+      <div class="ise-readonly-banner">
+        <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg>
+        <span>Modo vista — la edición se habilita en el siguiente paso. Por ahora puedes navegar meses y ver los bloques de horario.</span>
+      </div>
+
+      <div class="ise-head">
+        <div class="ise-loc-pick">
+          <label for="sched-location">Sede</label>
+          <select id="sched-location" onchange="onISELocationChange()"></select>
         </div>
-        <div class="form-row">
-          <label>Vigente desde</label>
-          <input type="date" id="sched-from" />
-        </div>
-        <div class="form-row">
-          <label>Vigente hasta (opcional)</label>
-          <input type="date" id="sched-to" />
+        <div class="ise-month-nav">
+          <button type="button" onclick="navigateScheduleMonth(-1)" aria-label="Mes anterior">‹</button>
+          <span class="ise-month-pill" id="ise-month-pill">—</span>
+          <button type="button" onclick="navigateScheduleMonth(1)" aria-label="Mes siguiente">›</button>
         </div>
       </div>
 
-      <div style="font-size: 12px; color: var(--ink-mute); margin-bottom: 8px;">
-        Marca los horarios donde dicta clases. Click para activar/desactivar.
+      <div class="ise-main">
+        <!-- CALENDARIO -->
+        <div class="ise-cal">
+          <div class="ise-dow">
+            <span>L</span><span>M</span><span>M</span><span>J</span><span>V</span><span>S</span><span>D</span>
+          </div>
+          <div class="ise-grid" id="ise-grid"></div>
+        </div>
+
+        <!-- SIDE: BLOQUES + DETALLE -->
+        <div class="ise-side">
+          <div class="ise-side-h">Bloques de horario</div>
+          <div id="ise-blocks-list"></div>
+          <button class="ise-add-block" type="button" id="ise-add-block-btn" disabled title="Disponible en el siguiente paso">+ Nuevo bloque de horario</button>
+          <div id="ise-day-detail"></div>
+        </div>
       </div>
 
-      <div id="schedule-grid-editor" style="border: 1px solid var(--line); border-radius: var(--radius-md); overflow: hidden;"></div>
-
-      <div style="margin-top: 16px; display: flex; gap: 10px; align-items: center;">
-        <button class="btn btn-ghost" style="font-size: 12px; padding: 6px 12px;" onclick="schedulePreset('mornings')">Lun-Vie 6-11am</button>
-        <button class="btn btn-ghost" style="font-size: 12px; padding: 6px 12px;" onclick="schedulePreset('afternoons')">Lun-Vie 4-8pm</button>
-        <button class="btn btn-ghost" style="font-size: 12px; padding: 6px 12px;" onclick="schedulePreset('weekends')">Fines de semana</button>
-        <button class="btn btn-ghost" style="font-size: 12px; padding: 6px 12px;" onclick="schedulePreset('clear')">Limpiar todo</button>
+      <!-- TIMELINE HORIZONTAL DEL MES -->
+      <div class="ise-tl-wrap">
+        <div class="ise-tl-h">Línea del mes — transiciones</div>
+        <div class="ise-tl">
+          <div class="ise-tl-bar" id="ise-tl-bar"></div>
+          <div class="ise-tl-axis" id="ise-tl-axis"></div>
+        </div>
       </div>
+
+      <!-- Inputs ocultos para retrocompatibilidad con saveInstructorSchedule existente -->
+      <input type="hidden" id="sched-from" />
+      <input type="hidden" id="sched-to" />
+      <div id="schedule-grid-editor" style="display: none;"></div>
     </div>
     <div class="modal-footer">
-      <button class="btn btn-ghost" onclick="closeModals()">Cancelar</button>
+      <button class="btn btn-ghost" onclick="closeModals()">Cerrar</button>
       <button class="btn btn-danger" id="schedule-delete-all" onclick="deleteAllSchedulesForInstructor()" style="display:none;">Eliminar todos</button>
-      <button class="btn btn-primary" onclick="saveInstructorSchedule()">Guardar horarios</button>
+      <button class="btn btn-primary" id="ise-save-btn" onclick="saveInstructorSchedule()" style="display:none;">Guardar horarios</button>
     </div>
   </div>
 </div>
@@ -9073,8 +9177,359 @@ async function applyInstructorChange() {
 // ============================================
 let SCHEDULE_CTX = { instructorId: null, marks: new Set() };
 
+// ============================================
+// EDITOR MENSUAL DE HORARIOS — PASO 1 (read-only + navegación)
+// ============================================
+// Esta vista reemplaza al grid abstracto Lun-Dom × horas.
+// Lee de STATE.schedules (NO modifica) y pinta el calendario del mes,
+// los bloques laterales, y la timeline de transiciones.
+// La edición se habilita en el Paso 2.
+
+const ISE_DOW_FULL = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
+const ISE_DOW_SHORT = ['D','L','M','M','J','V','S'];
+const ISE_MONTHS = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+const ISE_HOURS_AVAILABLE = [6,7,8,9,10,11,12,13,14,15,16,17,18,19,20];
+
+// Trae los schedules del profesor + sede + fecha (ISO yyyy-mm-dd)
+function iseSchedulesForDay(instructorId, locationId, dateIso) {
+  const dow = new Date(dateIso + 'T12:00:00').getDay();
+  return (STATE.schedules || []).filter(s =>
+    s.instructor_id === instructorId &&
+    s.location_id === locationId &&
+    s.day_of_week === dow &&
+    (!s.effective_from || dateIso >= s.effective_from) &&
+    (!s.effective_to || dateIso <= s.effective_to)
+  );
+}
+
+// Agrupa schedules en "bloques" por effective_from/effective_to compartidos.
+// Devuelve: [{from, to, dows: Set, hours: Set, schedules: [...]}, ...]
+function iseGroupBlocks(schedules) {
+  const groups = new Map();
+  schedules.forEach(s => {
+    const key = `${s.effective_from || 'PERM'}__${s.effective_to || 'PERM'}`;
+    if (!groups.has(key)) {
+      groups.set(key, {
+        from: s.effective_from || null,
+        to: s.effective_to || null,
+        dows: new Set(),
+        hours: new Set(),
+        schedules: []
+      });
+    }
+    const g = groups.get(key);
+    g.dows.add(s.day_of_week);
+    g.hours.add(s.hour);
+    g.schedules.push(s);
+  });
+  // Ordenar bloques: primero los que tienen fecha de inicio más temprana
+  // Los permanentes (sin from) al final
+  const arr = [...groups.values()];
+  arr.sort((a, b) => {
+    if (!a.from && !b.from) return 0;
+    if (!a.from) return 1;
+    if (!b.from) return -1;
+    return a.from.localeCompare(b.from);
+  });
+  return arr;
+}
+
+// Formatea rango de días (ej: Lun-Vie, o Lun, Mié, Vie)
+function iseFormatDows(dowsSet) {
+  const arr = [...dowsSet].sort((a,b) => {
+    // Lun=1, Mar=2... Sáb=6, Dom=0 → reorden visual a 1-6, luego 0
+    const ord = (d) => d === 0 ? 7 : d;
+    return ord(a) - ord(b);
+  });
+  if (arr.length === 0) return '—';
+  // Detectar rango consecutivo (ej: 1,2,3,4,5 → Lun-Vie)
+  const allConsecutive = arr.every((d, i) => i === 0 || d === arr[i-1] + 1);
+  if (allConsecutive && arr.length >= 2) {
+    return `${ISE_DOW_FULL[arr[0]]} a ${ISE_DOW_FULL[arr[arr.length-1]]}`;
+  }
+  return arr.map(d => ISE_DOW_FULL[d]).join(', ');
+}
+
+// Formatea rango de horas
+function iseFormatHours(hoursSet) {
+  const arr = [...hoursSet].sort((a,b) => a - b);
+  if (arr.length === 0) return '—';
+  const allConsecutive = arr.every((h, i) => i === 0 || h === arr[i-1] + 1);
+  if (allConsecutive && arr.length >= 2) {
+    return `${formatHour(arr[0])} – ${formatHour(arr[arr.length-1] + 1)}`;
+  }
+  return arr.map(h => formatHour(h)).join(', ');
+}
+
+// Formatea rango de fechas del bloque (ej: "1 — 14 mayo", "desde 16 jun", "permanente")
+function iseFormatRange(from, to) {
+  if (!from && !to) return 'Horario permanente';
+  const fmt = (iso) => {
+    const d = new Date(iso + 'T12:00:00');
+    return `${d.getDate()} ${ISE_MONTHS[d.getMonth()].slice(0,3)}`;
+  };
+  if (from && to) return `${fmt(from)} — ${fmt(to)}`;
+  if (from) return `Desde el ${fmt(from)}`;
+  return `Hasta el ${fmt(to)}`;
+}
+
+// Calcula días lectivos y clases del bloque en el rango efectivo
+function iseBlockStats(block) {
+  // Hacemos cálculo aproximado: si hay rango, contamos días; si no, omitimos
+  if (!block.from && !block.to) {
+    return { days: '∞', classes: `${block.dows.size * block.hours.size}/sem` };
+  }
+  const from = new Date((block.from || dateToIsoLocal(new Date())) + 'T12:00:00');
+  const to = new Date((block.to || block.from || dateToIsoLocal(new Date())) + 'T12:00:00');
+  if (!block.to && block.from) {
+    // Solo from → estimamos hasta fin del mes corriente o un horizonte razonable (90 días)
+    to.setDate(from.getDate() + 90);
+  }
+  let days = 0;
+  const cursor = new Date(from);
+  while (cursor <= to) {
+    if (block.dows.has(cursor.getDay())) days++;
+    cursor.setDate(cursor.getDate() + 1);
+  }
+  const classes = days * block.hours.size;
+  return { days, classes };
+}
+
+// Render principal de la vista mensual
+function iseRender() {
+  const inst = STATE.instructors.find(i => i.id === SCHEDULE_CTX.instructorId);
+  if (!inst) return;
+  const locId = SCHEDULE_CTX.locationId;
+  if (!locId) return;
+
+  // Header del mes
+  const monthName = ISE_MONTHS[SCHEDULE_CTX.viewMonth];
+  document.getElementById('ise-month-pill').innerHTML = `<em>${monthName}</em> ${SCHEDULE_CTX.viewYear}`;
+
+  // Calendar grid
+  const grid = document.getElementById('ise-grid');
+  if (!grid) return;
+  const firstDay = new Date(SCHEDULE_CTX.viewYear, SCHEDULE_CTX.viewMonth, 1);
+  const lastDay = new Date(SCHEDULE_CTX.viewYear, SCHEDULE_CTX.viewMonth + 1, 0);
+  // Lunes como primer día: getDay() devuelve 0=Dom, 1=Lun... convertimos a 0=Lun, 6=Dom
+  const startDow = (firstDay.getDay() + 6) % 7;
+  const todayIso = dateToIsoLocal(new Date());
+
+  let html = '';
+  // Días del mes anterior (placeholders gris)
+  for (let i = 0; i < startDow; i++) {
+    const d = new Date(firstDay);
+    d.setDate(d.getDate() - (startDow - i));
+    html += `<div class="ise-day is-other"><span class="ise-num">${d.getDate()}</span></div>`;
+  }
+  // Días del mes actual
+  for (let day = 1; day <= lastDay.getDate(); day++) {
+    const dateIso = `${SCHEDULE_CTX.viewYear}-${String(SCHEDULE_CTX.viewMonth+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+    const daySchedules = iseSchedulesForDay(SCHEDULE_CTX.instructorId, locId, dateIso);
+    const hourCount = daySchedules.length;
+    let intensityClass = '';
+    if (hourCount >= 5) intensityClass = 'has-heavy';
+    else if (hourCount >= 3) intensityClass = 'has-medium';
+    else if (hourCount >= 1) intensityClass = 'has-light';
+    const isToday = dateIso === todayIso;
+    const isSelected = dateIso === SCHEDULE_CTX.selectedDate;
+    const cls = ['ise-day', intensityClass, isToday ? 'is-today' : '', isSelected ? 'is-selected' : ''].filter(Boolean).join(' ');
+    // Chips de horas (máx 4 visibles + "+N")
+    const sortedHours = daySchedules.map(s => s.hour).sort((a,b) => a-b);
+    const visibleHours = sortedHours.slice(0, 4);
+    const extraCount = sortedHours.length - visibleHours.length;
+    const chipsHtml = visibleHours.map(h => `<span class="ise-chip">${formatHour(h)}</span>`).join('') +
+                      (extraCount > 0 ? `<span class="ise-chip" style="background: var(--ink-faint); color: var(--white);">+${extraCount}</span>` : '');
+    html += `<div class="${cls}" onclick="iseSelectDay('${dateIso}')">
+      <span class="ise-num">${day}</span>
+      ${chipsHtml ? `<div class="ise-chips">${chipsHtml}</div>` : ''}
+    </div>`;
+  }
+  // Rellenar resto de la última semana
+  const totalCells = startDow + lastDay.getDate();
+  const remaining = (7 - (totalCells % 7)) % 7;
+  for (let i = 1; i <= remaining; i++) {
+    html += `<div class="ise-day is-other"><span class="ise-num">${i}</span></div>`;
+  }
+  grid.innerHTML = html;
+
+  // Bloques laterales (filtrados por sede actual)
+  const allSchedules = (STATE.schedules || []).filter(s =>
+    s.instructor_id === SCHEDULE_CTX.instructorId && s.location_id === locId
+  );
+  const blocks = iseGroupBlocks(allSchedules);
+  const blocksEl = document.getElementById('ise-blocks-list');
+  if (blocks.length === 0) {
+    blocksEl.innerHTML = `<div style="padding: 16px; text-align: center; color: var(--ink-mute); font-size: 12.5px; background: var(--fit-cream); border-radius: 12px; font-style: italic;">Este profesor no tiene horarios asignados en esta sede todavía.</div>`;
+  } else {
+    blocksEl.innerHTML = blocks.map(b => {
+      const stats = iseBlockStats(b);
+      // Marcar como activo si el día seleccionado cae dentro del rango
+      const isActive = SCHEDULE_CTX.selectedDate && (
+        (!b.from || SCHEDULE_CTX.selectedDate >= b.from) &&
+        (!b.to || SCHEDULE_CTX.selectedDate <= b.to)
+      );
+      return `<div class="ise-block ${isActive ? 'is-active' : ''}">
+        <div class="ise-block-range"><em>${iseFormatRange(b.from, b.to)}</em></div>
+        <div class="ise-block-meta">${iseFormatDows(b.dows)} · ${iseFormatHours(b.hours)}</div>
+        <div class="ise-block-stats">
+          <span>📅 ${stats.days} ${typeof stats.days === 'number' ? 'días' : ''}</span>
+          <span>🕐 ${stats.classes} ${typeof stats.classes === 'number' ? 'clases' : ''}</span>
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  // Detalle del día seleccionado
+  iseRenderDayDetail();
+
+  // Timeline horizontal
+  iseRenderTimeline(blocks);
+}
+
+function iseRenderDayDetail() {
+  const el = document.getElementById('ise-day-detail');
+  if (!el) return;
+  if (!SCHEDULE_CTX.selectedDate) {
+    el.innerHTML = '';
+    return;
+  }
+  const d = new Date(SCHEDULE_CTX.selectedDate + 'T12:00:00');
+  const dayLabel = `${ISE_DOW_FULL[d.getDay()]} ${d.getDate()} de ${ISE_MONTHS[d.getMonth()]}`;
+  const schedules = iseSchedulesForDay(SCHEDULE_CTX.instructorId, SCHEDULE_CTX.locationId, SCHEDULE_CTX.selectedDate);
+  const activeHours = new Set(schedules.map(s => s.hour));
+
+  if (schedules.length === 0) {
+    el.innerHTML = `<div class="ise-detail">
+      <div class="ise-detail-h">${dayLabel}</div>
+      <div class="ise-detail-empty">Sin clases asignadas este día</div>
+    </div>`;
+    return;
+  }
+
+  // Horas para mostrar: las activas + un buffer alrededor
+  const minH = Math.min(...activeHours) - 1;
+  const maxH = Math.max(...activeHours) + 1;
+  const hoursToShow = ISE_HOURS_AVAILABLE.filter(h => h >= Math.max(6, minH) && h <= Math.min(20, maxH));
+  // Si el rango es muy chico, mostrar siempre al menos 8 horas
+  if (hoursToShow.length < 8) {
+    const start = Math.max(6, [...activeHours][0] - 2);
+    for (let h = start; h < start + 8 && h <= 20; h++) {
+      if (!hoursToShow.includes(h)) hoursToShow.push(h);
+    }
+    hoursToShow.sort((a,b) => a-b);
+  }
+
+  el.innerHTML = `<div class="ise-detail">
+    <div class="ise-detail-h">${dayLabel}</div>
+    <div class="ise-detail-sub">${schedules.length} ${schedules.length === 1 ? 'hora asignada' : 'horas asignadas'} en esta sede.</div>
+    <div class="ise-hour-grid">
+      ${hoursToShow.map(h => `<div class="ise-hour-pill ${activeHours.has(h) ? 'is-on' : ''}">${formatHour(h)}</div>`).join('')}
+    </div>
+  </div>`;
+}
+
+function iseRenderTimeline(blocks) {
+  // Línea del mes con segmentos según los bloques que cubren días del mes
+  const barEl = document.getElementById('ise-tl-bar');
+  const axisEl = document.getElementById('ise-tl-axis');
+  if (!barEl || !axisEl) return;
+
+  const lastDay = new Date(SCHEDULE_CTX.viewYear, SCHEDULE_CTX.viewMonth + 1, 0).getDate();
+  // Para cada día del mes, determinar si algún bloque lo cubre y cuál
+  const dayCoverage = [];
+  const colorClassMap = {};
+  blocks.forEach((b, idx) => {
+    colorClassMap[idx] = `seg-${(idx % 3) + 1}`;
+  });
+
+  for (let day = 1; day <= lastDay; day++) {
+    const dateIso = `${SCHEDULE_CTX.viewYear}-${String(SCHEDULE_CTX.viewMonth+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+    const dow = new Date(dateIso + 'T12:00:00').getDay();
+    let coveredByIdx = -1;
+    blocks.forEach((b, idx) => {
+      if (coveredByIdx >= 0) return;
+      if (!b.dows.has(dow)) return;
+      if (b.from && dateIso < b.from) return;
+      if (b.to && dateIso > b.to) return;
+      coveredByIdx = idx;
+    });
+    dayCoverage.push(coveredByIdx);
+  }
+
+  // Compactar a segmentos contiguos
+  let html = '';
+  let currentIdx = dayCoverage[0];
+  let segmentLength = 1;
+  let segmentStart = 1;
+  for (let i = 1; i < dayCoverage.length; i++) {
+    if (dayCoverage[i] === currentIdx) {
+      segmentLength++;
+    } else {
+      // Cierra segmento
+      const segCls = currentIdx >= 0 ? colorClassMap[currentIdx] : 'is-gap';
+      const label = currentIdx >= 0 ? `${segmentStart}–${segmentStart + segmentLength - 1}` : '';
+      html += `<div class="ise-tl-seg ${segCls}" style="flex: ${segmentLength};" title="${label}">${segmentLength > 3 ? label : ''}</div>`;
+      currentIdx = dayCoverage[i];
+      segmentStart = i + 1;
+      segmentLength = 1;
+    }
+  }
+  // Cierra el último
+  const segCls = currentIdx >= 0 ? colorClassMap[currentIdx] : 'is-gap';
+  const label = currentIdx >= 0 ? `${segmentStart}–${segmentStart + segmentLength - 1}` : '';
+  html += `<div class="ise-tl-seg ${segCls}" style="flex: ${segmentLength};" title="${label}">${segmentLength > 3 ? label : ''}</div>`;
+
+  barEl.innerHTML = html;
+  // Eje con marcas cada 5 días
+  let axisHtml = '';
+  for (let i = 1; i <= lastDay; i++) {
+    axisHtml += `<span>${i % 5 === 0 || i === 1 ? i : ''}</span>`;
+  }
+  axisEl.innerHTML = axisHtml;
+}
+
+function iseSelectDay(dateIso) {
+  SCHEDULE_CTX.selectedDate = dateIso;
+  iseRender();
+}
+
+function navigateScheduleMonth(delta) {
+  SCHEDULE_CTX.viewMonth += delta;
+  if (SCHEDULE_CTX.viewMonth < 0) {
+    SCHEDULE_CTX.viewMonth = 11;
+    SCHEDULE_CTX.viewYear--;
+  } else if (SCHEDULE_CTX.viewMonth > 11) {
+    SCHEDULE_CTX.viewMonth = 0;
+    SCHEDULE_CTX.viewYear++;
+  }
+  // Si el día seleccionado ya no está en el mes visible, limpiarlo
+  if (SCHEDULE_CTX.selectedDate) {
+    const sd = new Date(SCHEDULE_CTX.selectedDate + 'T12:00:00');
+    if (sd.getMonth() !== SCHEDULE_CTX.viewMonth || sd.getFullYear() !== SCHEDULE_CTX.viewYear) {
+      SCHEDULE_CTX.selectedDate = null;
+    }
+  }
+  iseRender();
+}
+
+function onISELocationChange() {
+  SCHEDULE_CTX.locationId = document.getElementById('sched-location').value;
+  // Limpiar selección — la sede cambió
+  SCHEDULE_CTX.selectedDate = null;
+  iseRender();
+}
+
 function openInstructorScheduleModal(instructorId) {
-  SCHEDULE_CTX = { instructorId, marks: new Set() };
+  const today = new Date();
+  SCHEDULE_CTX = {
+    instructorId,
+    locationId: STATE.currentLocationId,
+    viewMonth: today.getMonth(),
+    viewYear: today.getFullYear(),
+    selectedDate: dateToIsoLocal(today),
+    marks: new Set() // se mantiene para retrocompatibilidad; el Paso 2 la usa
+  };
   const inst = STATE.instructors.find(i => i.id === instructorId);
   document.getElementById('schedule-modal-title').innerHTML = `Horarios de <em>${escape(inst.full_name)}</em>`;
 
@@ -9082,15 +9537,11 @@ function openInstructorScheduleModal(instructorId) {
   const sedeSel = document.getElementById('sched-location');
   sedeSel.innerHTML = STATE.locations.map(l => `<option value="${l.id}">${escape(l.name)}</option>`).join('');
   sedeSel.value = STATE.currentLocationId;
-  sedeSel.onchange = () => loadScheduleEditorMarks();
+  SCHEDULE_CTX.locationId = sedeSel.value;
 
-  // Fechas default
-  document.getElementById('sched-from').value = dateToIsoLocal(new Date());
-  document.getElementById('sched-to').value = '';
+  // Render principal de la vista mensual
+  iseRender();
 
-  loadScheduleEditorMarks();
-  renderInstructorScheduleEditor();
-  document.getElementById('schedule-delete-all').style.display = 'inline-flex';
   document.getElementById('instructor-schedule-modal').classList.add('is-open');
 }
 
