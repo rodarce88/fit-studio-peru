@@ -5764,6 +5764,42 @@ function togglePastHours() {
   renderTimeline();
 }
 
+// Calcula las horas operativas de una sede para un día específico, basándose en
+// schedules vigentes + fixed_bookings + class_sessions existentes.
+// Reemplaza el hardcoding viejo (Dom=8,9 / Sáb=7-11 / Lun-Vie=6-11,16-20) por valores
+// que se adaptan automáticamente al estado real de los profesores y bookings.
+// Si no hay nada, devuelve [] → el caller decide si mostrar "sede cerrada".
+function getLocationHoursForDow(loc, dow, dateIso) {
+  if (!loc) return [];
+  const hoursSet = new Set();
+
+  // 1. Schedules vigentes para esa sede + día
+  (STATE.schedules || []).forEach(s => {
+    if (s.location_id !== loc.id) return;
+    if (s.day_of_week !== dow) return;
+    if (s.effective_from && dateIso < s.effective_from) return;
+    if (s.effective_to && dateIso > s.effective_to) return;
+    hoursSet.add(s.hour);
+  });
+
+  // 2. Fixed bookings activos (alumnos con turno fijo, aunque no haya profesor)
+  (STATE.fixedBookings || []).forEach(b => {
+    if (b.is_active === false) return;
+    if (b.location_id !== loc.id) return;
+    if (b.day_of_week !== dow) return;
+    hoursSet.add(b.hour);
+  });
+
+  // 3. Class sessions existentes para esa fecha (incluye suplencias manuales)
+  (STATE.classSessions || []).forEach(s => {
+    if (s.location_id !== loc.id) return;
+    if (s.session_date !== dateIso) return;
+    hoursSet.add(s.hour);
+  });
+
+  return [...hoursSet].sort((a,b) => a-b);
+}
+
 function renderTimeline() {
   const body = document.getElementById('timeline-body');
   const loc = getCurrentLocation();
@@ -5786,13 +5822,11 @@ function renderTimeline() {
   else titleText = `${dayLabel} ${dateLabel}`;
   document.getElementById('timeline-day-title').textContent = titleText;
 
-  // Hours del día según día de la semana
-  const isSunday = dow === 0;
-  const isSaturday = dow === 6;
-  let hours = [];
-  if (isSunday) hours = [8, 9];
-  else if (isSaturday) hours = [7, 8, 9, 10, 11];
-  else hours = [6, 7, 8, 9, 10, 11, 16, 17, 18, 19, 20];
+  // Hours del día: dinámicas según schedules vigentes + bookings fijos + sesiones existentes.
+  // Antes estaban hardcoded (Sáb: 7-11, Dom: 8-9) lo que impedía que apareciera todo el horario
+  // de un nuevo profesor en días que antes solo tenían unas pocas horas.
+  const dateStrForHours = dateToIsoLocal(STATE.currentDate);
+  const hours = getLocationHoursForDow(loc, dow, dateStrForHours);
 
   const todayBookings = STATE.fixedBookings.filter(b => b.location_id === loc.id && b.day_of_week === dow);
 
@@ -11500,11 +11534,9 @@ function refreshMoveHourOptions() {
   if (!dateStr) return;
   const date = new Date(dateStr + 'T12:00:00');
   const dow = date.getDay();
-  // Determinar horas según día
-  let hours = [];
-  if (dow === 0) hours = [8, 9];                                      // Dom 8-10
-  else if (dow === 6) hours = [7, 8, 9, 10, 11];                      // Sáb 7-12
-  else hours = [6, 7, 8, 9, 10, 11, 16, 17, 18, 19, 20];              // Lun-Vie
+  // Horas dinámicas según schedules + bookings + sessions de la sede actual
+  const loc = getCurrentLocation();
+  const hours = loc ? getLocationHoursForDow(loc, dow, dateStr) : [];
 
   const sel = document.getElementById('move-hour');
   sel.innerHTML = hours.map(h => `<option value="${h}">${formatHour(h)}</option>`).join('');
