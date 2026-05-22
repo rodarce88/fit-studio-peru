@@ -9202,6 +9202,69 @@ function iseSchedulesForDay(instructorId, locationId, dateIso) {
   );
 }
 
+// Carga las class_sessions del mes visible (para detectar suplencias y cambios puntuales)
+async function iseLoadMonthSessions() {
+  if (!SCHEDULE_CTX.locationId) return;
+  const y = SCHEDULE_CTX.viewYear;
+  const m = SCHEDULE_CTX.viewMonth;
+  const start = `${y}-${String(m+1).padStart(2,'0')}-01`;
+  const lastDayNum = new Date(y, m+1, 0).getDate();
+  const end = `${y}-${String(m+1).padStart(2,'0')}-${String(lastDayNum).padStart(2,'0')}`;
+  try {
+    const { data } = await sb.from('class_sessions')
+      .select('session_date, hour, location_id, instructor_id, actual_instructor_id, is_cancelled')
+      .eq('location_id', SCHEDULE_CTX.locationId)
+      .gte('session_date', start)
+      .lte('session_date', end);
+    SCHEDULE_CTX.monthSessions = data || [];
+  } catch (e) {
+    console.warn('iseLoadMonthSessions: error', e);
+    SCHEDULE_CTX.monthSessions = [];
+  }
+}
+
+// Resuelve QUIÉN dicta cada hora de un día (considerando schedule base + overrides en class_sessions).
+// Devuelve las horas asignadas al instructorId pasado (combinando ambas capas).
+function iseResolvedHoursForDay(instructorId, locationId, dateIso) {
+  const dow = new Date(dateIso + 'T12:00:00').getDay();
+  // Mapa: hora -> instructor_id resuelto (null = vacante / cancelada)
+  const hourMap = new Map();
+
+  // 1. Capa base: schedules vigentes
+  (STATE.schedules || []).forEach(s => {
+    if (s.location_id !== locationId) return;
+    if (s.day_of_week !== dow) return;
+    if (s.effective_from && dateIso < s.effective_from) return;
+    if (s.effective_to && dateIso > s.effective_to) return;
+    if (!hourMap.has(s.hour)) hourMap.set(s.hour, s.instructor_id);
+  });
+
+  // 2. Capa override: class_sessions del mes (suplencias, cambios manuales, cancelaciones)
+  const sessionsForDay = (SCHEDULE_CTX.monthSessions || []).filter(sess =>
+    sess.session_date === dateIso && sess.location_id === locationId
+  );
+  sessionsForDay.forEach(sess => {
+    if (sess.is_cancelled) {
+      hourMap.set(sess.hour, null);
+      return;
+    }
+    // actual_instructor_id (suplencia) tiene precedencia sobre instructor_id
+    if (sess.actual_instructor_id != null) {
+      hourMap.set(sess.hour, sess.actual_instructor_id);
+    } else if (sess.instructor_id !== undefined) {
+      // instructor_id puede ser null explícito (= vacante) o un id (= asignado)
+      hourMap.set(sess.hour, sess.instructor_id);
+    }
+  });
+
+  // 3. Devolver horas donde el dueño resuelto coincide con instructorId
+  const result = [];
+  hourMap.forEach((id, hour) => {
+    if (id === instructorId) result.push(hour);
+  });
+  return result.sort((a,b) => a-b);
+}
+
 // Agrupa schedules en "bloques" por effective_from/effective_to compartidos.
 // Devuelve: [{from, to, dows: Set, hours: Set, schedules: [...]}, ...]
 function iseGroupBlocks(schedules) {
@@ -9296,7 +9359,7 @@ function iseBlockStats(block) {
 }
 
 // Render principal de la vista mensual
-function iseRender() {
+async function iseRender() {
   const inst = STATE.instructors.find(i => i.id === SCHEDULE_CTX.instructorId);
   if (!inst) return;
   const locId = SCHEDULE_CTX.locationId;
@@ -9305,6 +9368,9 @@ function iseRender() {
   // Header del mes
   const monthName = ISE_MONTHS[SCHEDULE_CTX.viewMonth];
   document.getElementById('ise-month-pill').innerHTML = `<em>${monthName}</em> ${SCHEDULE_CTX.viewYear}`;
+
+  // Cargar overrides del mes desde BD (suplencias y cambios puntuales)
+  await iseLoadMonthSessions();
 
   // Calendar grid
   const grid = document.getElementById('ise-grid');
@@ -9325,8 +9391,8 @@ function iseRender() {
   // Días del mes actual
   for (let day = 1; day <= lastDay.getDate(); day++) {
     const dateIso = `${SCHEDULE_CTX.viewYear}-${String(SCHEDULE_CTX.viewMonth+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
-    const daySchedules = iseSchedulesForDay(SCHEDULE_CTX.instructorId, locId, dateIso);
-    const hourCount = daySchedules.length;
+    const resolvedHours = iseResolvedHoursForDay(SCHEDULE_CTX.instructorId, locId, dateIso);
+    const hourCount = resolvedHours.length;
     let intensityClass = '';
     if (hourCount >= 5) intensityClass = 'has-heavy';
     else if (hourCount >= 3) intensityClass = 'has-medium';
@@ -9335,9 +9401,8 @@ function iseRender() {
     const isSelected = dateIso === SCHEDULE_CTX.selectedDate;
     const cls = ['ise-day', intensityClass, isToday ? 'is-today' : '', isSelected ? 'is-selected' : ''].filter(Boolean).join(' ');
     // Chips de horas (máx 4 visibles + "+N")
-    const sortedHours = daySchedules.map(s => s.hour).sort((a,b) => a-b);
-    const visibleHours = sortedHours.slice(0, 4);
-    const extraCount = sortedHours.length - visibleHours.length;
+    const visibleHours = resolvedHours.slice(0, 4);
+    const extraCount = resolvedHours.length - visibleHours.length;
     const chipsHtml = visibleHours.map(h => `<span class="ise-chip">${formatHour(h)}</span>`).join('') +
                       (extraCount > 0 ? `<span class="ise-chip" style="background: var(--ink-faint); color: var(--white);">+${extraCount}</span>` : '');
     html += `<div class="${cls}" onclick="iseSelectDay('${dateIso}')">
@@ -9358,13 +9423,28 @@ function iseRender() {
     s.instructor_id === SCHEDULE_CTX.instructorId && s.location_id === locId
   );
   const blocks = iseGroupBlocks(allSchedules);
+
+  // Detectar si tiene suplencias en el mes (sin tener bloque base)
+  const monthSuplencias = (SCHEDULE_CTX.monthSessions || []).filter(sess =>
+    !sess.is_cancelled && (sess.actual_instructor_id === SCHEDULE_CTX.instructorId ||
+    (sess.actual_instructor_id == null && sess.instructor_id === SCHEDULE_CTX.instructorId))
+  );
+  // Contar suplencias que NO están en bloques base
+  const suplenciasOutsideBlocks = monthSuplencias.filter(sess => {
+    const dow = new Date(sess.session_date + 'T12:00:00').getDay();
+    return !allSchedules.some(s =>
+      s.day_of_week === dow && s.hour === sess.hour &&
+      (!s.effective_from || sess.session_date >= s.effective_from) &&
+      (!s.effective_to || sess.session_date <= s.effective_to)
+    );
+  });
+
   const blocksEl = document.getElementById('ise-blocks-list');
-  if (blocks.length === 0) {
+  if (blocks.length === 0 && suplenciasOutsideBlocks.length === 0) {
     blocksEl.innerHTML = `<div style="padding: 16px; text-align: center; color: var(--ink-mute); font-size: 12.5px; background: var(--fit-cream); border-radius: 12px; font-style: italic;">Este profesor no tiene horarios asignados en esta sede todavía.</div>`;
   } else {
-    blocksEl.innerHTML = blocks.map(b => {
+    let listHtml = blocks.map(b => {
       const stats = iseBlockStats(b);
-      // Marcar como activo si el día seleccionado cae dentro del rango
       const isActive = SCHEDULE_CTX.selectedDate && (
         (!b.from || SCHEDULE_CTX.selectedDate >= b.from) &&
         (!b.to || SCHEDULE_CTX.selectedDate <= b.to)
@@ -9378,6 +9458,22 @@ function iseRender() {
         </div>
       </div>`;
     }).join('');
+
+    // Si hay suplencias fuera de bloques, mostrar una card adicional
+    if (suplenciasOutsideBlocks.length > 0) {
+      const uniqueDates = [...new Set(suplenciasOutsideBlocks.map(s => s.session_date))];
+      const datesLabel = uniqueDates.map(d => {
+        const dt = new Date(d + 'T12:00:00');
+        return `${dt.getDate()} ${ISE_MONTHS[dt.getMonth()].slice(0,3)}`;
+      }).join(' · ');
+      listHtml += `<div class="ise-block" style="border-style: dashed; background: var(--gold-soft); border-color: var(--gold-light);">
+        <div class="ise-block-range" style="color: var(--gold-deep, #6B4A0A);"><em>Suplencias del mes</em></div>
+        <div class="ise-block-meta">${suplenciasOutsideBlocks.length} ${suplenciasOutsideBlocks.length === 1 ? 'clase cubierta' : 'clases cubiertas'} fuera de su horario base</div>
+        <div class="ise-block-stats"><span>📅 ${datesLabel}</span></div>
+      </div>`;
+    }
+
+    blocksEl.innerHTML = listHtml;
   }
 
   // Detalle del día seleccionado
@@ -9396,13 +9492,21 @@ function iseRenderDayDetail() {
   }
   const d = new Date(SCHEDULE_CTX.selectedDate + 'T12:00:00');
   const dayLabel = `${ISE_DOW_FULL[d.getDay()]} ${d.getDate()} de ${ISE_MONTHS[d.getMonth()]}`;
-  const schedules = iseSchedulesForDay(SCHEDULE_CTX.instructorId, SCHEDULE_CTX.locationId, SCHEDULE_CTX.selectedDate);
-  const activeHours = new Set(schedules.map(s => s.hour));
+  const resolvedHours = iseResolvedHoursForDay(SCHEDULE_CTX.instructorId, SCHEDULE_CTX.locationId, SCHEDULE_CTX.selectedDate);
+  const activeHours = new Set(resolvedHours);
 
-  if (schedules.length === 0) {
+  // Detectar si este día es una suplencia (no tiene schedule base pero sí horas resueltas)
+  const baseSchedulesThisDay = iseSchedulesForDay(SCHEDULE_CTX.instructorId, SCHEDULE_CTX.locationId, SCHEDULE_CTX.selectedDate);
+  const isSuplencia = resolvedHours.length > 0 && baseSchedulesThisDay.length === 0;
+  const hadBaseButLost = resolvedHours.length === 0 && baseSchedulesThisDay.length > 0;
+
+  if (resolvedHours.length === 0) {
+    const emptyMsg = hadBaseButLost
+      ? 'Estaba asignado pero otro profesor cubre este día'
+      : 'Sin clases asignadas este día';
     el.innerHTML = `<div class="ise-detail">
       <div class="ise-detail-h">${dayLabel}</div>
-      <div class="ise-detail-empty">Sin clases asignadas este día</div>
+      <div class="ise-detail-empty">${emptyMsg}</div>
     </div>`;
     return;
   }
@@ -9420,9 +9524,13 @@ function iseRenderDayDetail() {
     hoursToShow.sort((a,b) => a-b);
   }
 
+  const subLabel = isSuplencia
+    ? `<span style="color: var(--gold-deep, #6B4A0A); font-weight: 500;">Suplencia</span> · ${resolvedHours.length} ${resolvedHours.length === 1 ? 'hora cubierta' : 'horas cubiertas'} en esta sede`
+    : `${resolvedHours.length} ${resolvedHours.length === 1 ? 'hora asignada' : 'horas asignadas'} en esta sede`;
+
   el.innerHTML = `<div class="ise-detail">
     <div class="ise-detail-h">${dayLabel}</div>
-    <div class="ise-detail-sub">${schedules.length} ${schedules.length === 1 ? 'hora asignada' : 'horas asignadas'} en esta sede.</div>
+    <div class="ise-detail-sub">${subLabel}</div>
     <div class="ise-hour-grid">
       ${hoursToShow.map(h => `<div class="ise-hour-pill ${activeHours.has(h) ? 'is-on' : ''}">${formatHour(h)}</div>`).join('')}
     </div>
