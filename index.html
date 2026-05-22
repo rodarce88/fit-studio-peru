@@ -764,6 +764,76 @@
   .mob-menu-divider { height: 1px; background: var(--line); margin: 10px 20px; }
 
   /* ==============================================================
+     COORD CONFIRM (mobile) — vista para confirmar clases del día
+     ============================================================== */
+  .cc-wrap { max-width: 720px; margin: 0 auto; padding: 14px 14px 100px; }
+  .cc-head { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+  .cc-head-info { flex: 1; min-width: 0; }
+  .cc-head-title { font-family: var(--display); font-style: italic; font-size: 18px; color: var(--ink); line-height: 1.15; }
+  .cc-head-title em { color: var(--fit-purple-deep); font-style: italic; }
+  .cc-head-sub { font-size: 11.5px; color: var(--ink-mute); margin-top: 2px; }
+  .cc-badge-f { width: 36px; height: 36px; border-radius: 50%; background: linear-gradient(135deg, var(--fit-purple), var(--fit-purple-deep)); display: grid; place-items: center; color: white; font-family: var(--display); font-style: italic; font-size: 17px; flex-shrink: 0; }
+
+  /* Daystrip horizontal */
+  .cc-daystrip { display: flex; gap: 6px; overflow-x: auto; -webkit-overflow-scrolling: touch; padding: 4px 14px 14px; margin: 0 -14px 4px; scrollbar-width: none; }
+  .cc-daystrip::-webkit-scrollbar { display: none; }
+  .cc-day-pill { flex-shrink: 0; min-width: 52px; padding: 8px 8px 7px; border-radius: 14px; background: white; border: 1.5px solid var(--line); text-align: center; cursor: pointer; transition: all 0.15s; font-family: var(--body); }
+  .cc-day-pill .cc-dow { font-size: 10px; color: var(--ink-mute); text-transform: uppercase; letter-spacing: 0.6px; font-weight: 500; }
+  .cc-day-pill .cc-num { font-family: var(--display); font-style: italic; font-size: 20px; color: var(--ink); line-height: 1.05; margin-top: 1px; }
+  .cc-day-pill .cc-meta { font-size: 9.5px; color: var(--ink-mute); margin-top: 2px; }
+  .cc-day-pill.is-today { border-color: var(--gold-light); }
+  .cc-day-pill.is-today .cc-num { color: var(--gold); }
+  .cc-day-pill.is-selected { background: var(--fit-purple); border-color: var(--fit-purple); }
+  .cc-day-pill.is-selected .cc-dow,
+  .cc-day-pill.is-selected .cc-num,
+  .cc-day-pill.is-selected .cc-meta { color: white; }
+
+  /* Hour cards */
+  .cc-hour-card { background: white; border: 1px solid var(--line); border-radius: 14px; margin-bottom: 12px; overflow: hidden; }
+  .cc-hour-card.is-past { opacity: 0.78; }
+  .cc-hour-card.is-cancelled { opacity: 0.6; }
+  .cc-hour-head { display: flex; align-items: center; justify-content: space-between; padding: 11px 14px; background: var(--fit-cream); border-bottom: 1px solid var(--line); gap: 10px; }
+  .cc-hour-time { font-family: var(--display); font-style: italic; font-size: 20px; color: var(--ink); line-height: 1; }
+  .cc-hour-card.is-past .cc-hour-time { color: var(--ink-mute); }
+  .cc-hour-prof { font-size: 11.5px; color: var(--ink-soft); margin-top: 3px; }
+  .cc-hour-prof strong { color: var(--fit-purple-deep); font-family: var(--display); font-style: italic; font-weight: 500; }
+  .cc-count-chip { background: white; border: 1px solid var(--line); padding: 4px 10px; border-radius: 999px; font-size: 11px; font-weight: 500; color: var(--ink-soft); white-space: nowrap; }
+  .cc-count-chip.is-full { background: var(--fit-purple); color: white; border-color: var(--fit-purple); }
+  .cc-count-chip.is-confirmed { background: #dcfce7; color: var(--good); border-color: var(--good); }
+
+  /* Student rows */
+  .cc-students { padding: 4px 0; }
+  .cc-student-row { display: grid; grid-template-columns: 32px 1fr auto; gap: 10px; align-items: center; padding: 10px 14px; border-bottom: 1px solid #F2EDF5; }
+  .cc-student-row:last-child { border-bottom: none; }
+  .cc-avatar { width: 32px; height: 32px; border-radius: 50%; background: var(--fit-lavender); color: var(--fit-purple-deep); display: grid; place-items: center; font-size: 10px; font-weight: 600; }
+  .cc-s-name { font-size: 13.5px; color: var(--ink); line-height: 1.15; font-weight: 500; }
+  .cc-s-meta { font-size: 10.5px; color: var(--ink-mute); margin-top: 2px; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+  .cc-pill { padding: 1px 5px; border-radius: 4px; font-size: 9.5px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.3px; }
+  .cc-pill-fija { background: var(--fit-lavender-pale); color: var(--fit-purple); }
+  .cc-pill-prueba { background: #F0E6FF; color: #6B21A8; }
+  .cc-pill-flex { background: var(--gold-soft); color: var(--gold); }
+  .cc-pill-makeup { background: #dbeafe; color: var(--info); }
+
+  /* Action buttons */
+  .cc-actions { display: flex; gap: 6px; align-items: center; }
+  .cc-btn-copy { width: 34px; height: 34px; border-radius: 50%; border: 1px solid var(--line); background: white; cursor: pointer; display: grid; place-items: center; color: var(--ink-soft); font-size: 14px; padding: 0; }
+  .cc-btn-copy:active { background: var(--fit-lavender-pale); }
+  .cc-btn-confirm { border: 1.5px solid var(--line); background: white; color: var(--ink-mute); padding: 7px 13px; border-radius: 999px; font-size: 12px; cursor: pointer; font-family: var(--body); font-weight: 500; display: inline-flex; align-items: center; gap: 6px; min-height: 34px; white-space: nowrap; }
+  .cc-btn-confirm:disabled { opacity: 0.5; cursor: not-allowed; }
+  .cc-btn-confirm .cc-dot { width: 14px; height: 14px; border-radius: 50%; border: 1.5px solid var(--ink-faint); background: white; display: grid; place-items: center; color: transparent; font-size: 9px; }
+  .cc-btn-confirm.is-confirmed { background: #dcfce7; border-color: var(--good); color: var(--good); font-weight: 600; }
+  .cc-btn-confirm.is-confirmed .cc-dot { background: var(--good); border-color: var(--good); color: white; }
+
+  /* Empty states */
+  .cc-empty-hour { padding: 16px 14px; text-align: center; font-size: 12px; color: var(--ink-mute); font-style: italic; }
+  .cc-empty-day { padding: 60px 20px; text-align: center; color: var(--ink-mute); font-size: 13px; }
+  .cc-empty-day h3 { font-family: var(--display); font-style: italic; color: var(--ink-soft); font-size: 18px; margin-bottom: 6px; }
+
+  /* Loading skeleton */
+  .cc-skeleton { background: linear-gradient(90deg, #F0EBE3 0%, #F8F4ED 50%, #F0EBE3 100%); background-size: 200% 100%; animation: cc-shimmer 1.4s infinite; border-radius: 10px; }
+  @keyframes cc-shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+
+  /* ==============================================================
      COORD MOBILE — Simplificación de cards de alumno + Action Sheet
      ============================================================== */
   /* Botón ⋮ que reemplaza los 3 botones att-btn en mobile */
@@ -2985,6 +3055,11 @@
     <div id="logs-container"></div>
   </section>
 
+  <!-- COORD CONFIRM VIEW (mobile-first) — vista para confirmar clases del día -->
+  <section class="view" id="view-coord-confirm">
+    <div id="coord-confirm-container"></div>
+  </section>
+
   <!-- STUDENT DAY VIEW (vista alumno) -->
   <section class="view" id="view-student-home">
     <div class="page-header">
@@ -3858,6 +3933,10 @@
       <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
       <span>Mi día</span>
     </button>
+    <button class="m-nav-item" type="button" data-mob-tab="coord-confirm" onclick="mobileNavGoto('coord-confirm', this)" aria-label="Confirmar">
+      <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+      <span>Confirmar</span>
+    </button>
     <button class="m-nav-item" type="button" data-mob-tab="students" onclick="mobileNavGoto('students', this)" aria-label="Alumnos">
       <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
       <span>Alumnos</span>
@@ -3919,6 +3998,10 @@
     <button class="mob-menu-link" type="button" onclick="mobileNavGoto('dashboard')">
       <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
       <span class="mob-menu-link-text">Mi día</span>
+    </button>
+    <button class="mob-menu-link" type="button" onclick="mobileNavGoto('coord-confirm')">
+      <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+      <span class="mob-menu-link-text">Confirmar clases</span>
     </button>
     <button class="mob-menu-link" type="button" onclick="mobileNavGoto('students')">
       <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/></svg>
@@ -10526,6 +10609,7 @@ function showView(name, btn) {
 function syncMobileBottomNav(viewName) {
   const map = {
     'dashboard': 'dashboard',
+    'coord-confirm': 'coord-confirm',
     'students': 'students',
     'student-detail': 'students',
     'full-payment': 'menu',
@@ -10548,6 +10632,21 @@ function syncMobileBottomNav(viewName) {
 
 function mobileNavGoto(viewName, btnEl) {
   mobileCloseMenu();
+  // Vista coord-confirm: no tiene botón en sidebar, llamamos directo
+  if (viewName === 'coord-confirm') {
+    showView('coord-confirm', null);
+    if (typeof renderCoordConfirmView === 'function') renderCoordConfirmView();
+    if (btnEl) {
+      document.querySelectorAll('.mobile-bottom-nav .m-nav-item').forEach(b => b.classList.remove('is-active'));
+      btnEl.classList.add('is-active');
+    } else {
+      // Si vino desde el menú: marcar Confirmar en bottom bar
+      document.querySelectorAll('.mobile-bottom-nav .m-nav-item').forEach(b => b.classList.remove('is-active'));
+      const ccBtn = document.querySelector('.mobile-bottom-nav [data-mob-tab="coord-confirm"]');
+      if (ccBtn) ccBtn.classList.add('is-active');
+    }
+    return;
+  }
   // Mapear a sidebar button real (para mantener consistencia con showView)
   const sidebarBtn = document.querySelector('.sidebar .nav-item[data-view="' + viewName + '"]');
   if (sidebarBtn) {
@@ -22012,6 +22111,316 @@ function humanizeAction(action) {
   return map[action] || `<code style="font-family:monospace;font-size:11px;color:var(--ink-soft);">${escape(action || '')}</code>`;
 }
 
+
+// ============================================
+// COORD CONFIRM VIEW (mobile-first)
+// Vista de confirmación de clases del día para la coordinadora.
+// Reutiliza getCellStudents/scheduleWeekSessions/scheduleWeekBookings del calendario semanal,
+// pero presentada como cards de hora con botones grandes para mobile.
+// ============================================
+
+async function renderCoordConfirmView() {
+  if (!CURRENT_USER || CURRENT_USER.role !== 'coordinator') return;
+  const container = document.getElementById('coord-confirm-container');
+  if (!container) return;
+  if (!isOnline) {
+    container.innerHTML = `
+      <div class="cc-wrap">
+        <div class="cc-empty-day">
+          <h3>Sin <em>conexión</em></h3>
+          <p>La confirmación de clases requiere conexión a internet.</p>
+        </div>
+      </div>`;
+    return;
+  }
+
+  // Init date al día actual si no hay fecha previa
+  if (!STATE.ccDate) STATE.ccDate = dateToIsoLocal(new Date());
+
+  // Skeleton mientras carga (solo si es primer render)
+  if (!container.querySelector('.cc-wrap')) {
+    container.innerHTML = `
+      <div class="cc-wrap">
+        <div class="cc-skeleton" style="height: 50px; margin-bottom: 14px;"></div>
+        <div class="cc-skeleton" style="height: 80px; margin-bottom: 14px;"></div>
+        <div class="cc-skeleton" style="height: 200px; margin-bottom: 12px;"></div>
+        <div class="cc-skeleton" style="height: 200px;"></div>
+      </div>
+    `;
+  }
+
+  // Cargar la semana de la fecha seleccionada (para tener scheduleWeekSessions/Bookings)
+  const ccDateObj = new Date(STATE.ccDate + 'T12:00:00');
+  STATE.scheduleWeekStart = getWeekStart(ccDateObj);
+  await loadScheduleWeekData();
+
+  ccRenderShell();
+}
+
+function ccRenderShell() {
+  const container = document.getElementById('coord-confirm-container');
+  if (!container) return;
+  const dateIso = STATE.ccDate;
+  const dateObj = new Date(dateIso + 'T12:00:00');
+  const dow = dateObj.getDay();
+  const todayIso = dateToIsoLocal(new Date());
+  const isToday = dateIso === todayIso;
+  const monthsShort = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+  const daysShort = ['dom','lun','mar','mié','jue','vie','sáb'];
+
+  const loc = STATE.locations.find(l => l.id === STATE.currentLocationId);
+  const locName = loc?.name || '';
+  const cap = loc?.capacity || 9;
+
+  // ===== DAYSTRIP =====
+  const weekStart = getWeekStart(dateObj);
+  const dayPills = [];
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(weekStart);
+    d.setDate(weekStart.getDate() + i);
+    const iso = dateToIsoLocal(d);
+    const isSel = iso === dateIso;
+    const isTodayPill = iso === todayIso;
+    const dHours = loc ? getLocationHoursForDow(loc, d.getDay(), iso) : [];
+    const numClasses = dHours.length;
+    dayPills.push(`
+      <div class="cc-day-pill ${isTodayPill ? 'is-today' : ''} ${isSel ? 'is-selected' : ''}"
+           onclick="ccSelectDay('${iso}')">
+        <div class="cc-dow">${daysShort[d.getDay()]}</div>
+        <div class="cc-num">${d.getDate()}</div>
+        <div class="cc-meta">${numClasses} ${numClasses === 1 ? 'clase' : 'clases'}</div>
+      </div>
+    `);
+  }
+
+  // ===== HORAS DEL DÍA =====
+  const hours = loc ? getLocationHoursForDow(loc, dow, dateIso) : [];
+  const nowDate = new Date();
+  const isViewingToday = dateIso === todayIso;
+  const currentHourNow = nowDate.getHours();
+
+  let totalConfirmed = 0;
+  let totalStudents = 0;
+
+  const hourCards = [];
+  for (const hour of hours) {
+    const session = (STATE.scheduleWeekSessions || []).find(s =>
+      s.location_id === STATE.currentLocationId && s.session_date === dateIso && s.hour === hour
+    );
+    const isCancelled = !!session?.is_cancelled;
+    // "Pasada" en mobile: si es hoy y la hora ya pasó (basado en hora actual), o si la fecha es anterior a hoy
+    const isPast = isViewingToday ? (hour < currentHourNow) : (dateIso < todayIso);
+
+    const instructor = ccResolveInstructor(STATE.currentLocationId, dateObj, dow, hour);
+    const instName = instructor?.full_name || 'sin profesor asignado';
+
+    const students = getCellStudents(STATE.currentLocationId, dateObj, hour);
+    const confirmedCount = students.filter(s => s.confirmedAt).length;
+    totalConfirmed += confirmedCount;
+    totalStudents += students.length;
+
+    const countClass = students.length >= cap ? 'is-full' :
+                       (students.length > 0 && confirmedCount === students.length) ? 'is-confirmed' : '';
+
+    let cardBody = '';
+    if (isCancelled) {
+      cardBody = `<div class="cc-empty-hour" style="color: var(--danger);">Clase cancelada</div>`;
+    } else if (students.length === 0) {
+      cardBody = `<div class="cc-empty-hour">Sin alumnas agendadas</div>`;
+    } else {
+      cardBody = `<div class="cc-students">`;
+      for (const sd of students) {
+        const { student, label, type, confirmedAt } = sd;
+        const isConfirmed = !!confirmedAt;
+        const initialsStr = initials(student);
+        const phone = student.phone || '';
+        const phoneClean = phone.replace(/[^0-9+]/g, '');
+        const hasPhone = phoneClean.length > 5;
+        const pillClass = type === 'trial' ? 'cc-pill-prueba' :
+                          type === 'flexible' ? 'cc-pill-flex' :
+                          type === 'makeup' ? 'cc-pill-makeup' :
+                          'cc-pill-fija';
+        const metaText = hasPhone ? escape(phone) : 'sin teléfono';
+        cardBody += `
+          <div class="cc-student-row">
+            <div class="cc-avatar">${initialsStr}</div>
+            <div style="min-width:0;">
+              <div class="cc-s-name">${escape(student.first_name || '')} ${escape(student.last_name || '')}</div>
+              <div class="cc-s-meta">
+                <span class="cc-pill ${pillClass}">${label}</span>
+                <span style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${metaText}</span>
+              </div>
+            </div>
+            <div class="cc-actions">
+              <button class="cc-btn-copy" onclick="copyConfirmMessageForCell('${student.id}', '${dateIso}', ${hour}, '${STATE.currentLocationId}')" title="Copiar mensaje al portapapeles" aria-label="Copiar mensaje">📋</button>
+              <button class="cc-btn-confirm ${isConfirmed ? 'is-confirmed' : ''}"
+                onclick="ccToggleConfirm('${student.id}', '${dateIso}', ${hour})"
+                data-cc-confirm-btn="${student.id}-${hour}"
+                ${isPast ? 'disabled' : ''}>
+                <span class="cc-dot">${isConfirmed ? '✓' : ''}</span>
+                ${isConfirmed ? 'Confirmada' : 'Marcar confirmada'}
+              </button>
+            </div>
+          </div>
+        `;
+      }
+      cardBody += `</div>`;
+    }
+
+    const chipLabel = students.length === 0 ? '—' : `${confirmedCount}/${students.length}`;
+
+    hourCards.push(`
+      <div class="cc-hour-card ${isPast ? 'is-past' : ''} ${isCancelled ? 'is-cancelled' : ''}">
+        <div class="cc-hour-head">
+          <div style="min-width:0;">
+            <div class="cc-hour-time">${formatHour(hour)}</div>
+            <div class="cc-hour-prof">con <strong>${escape(instName)}</strong></div>
+          </div>
+          <div class="cc-count-chip ${countClass}">${chipLabel}</div>
+        </div>
+        ${cardBody}
+      </div>
+    `);
+  }
+
+  // ===== HEADER =====
+  const headerTitle = isToday
+    ? `Confirmar <em>hoy</em>`
+    : `Confirmar <em>${daysShort[dow]} ${dateObj.getDate()} ${monthsShort[dateObj.getMonth()]}</em>`;
+  const headerSub = hours.length === 0
+    ? `${escape(locName)} · sin clases programadas`
+    : `${escape(locName)} · ${hours.length} ${hours.length === 1 ? 'clase' : 'clases'} · ${totalConfirmed}/${totalStudents} confirmadas`;
+
+  container.innerHTML = `
+    <div class="cc-wrap">
+      <div class="cc-head">
+        <div class="cc-badge-f"><em>F</em></div>
+        <div class="cc-head-info">
+          <div class="cc-head-title">${headerTitle}</div>
+          <div class="cc-head-sub">${headerSub}</div>
+        </div>
+      </div>
+      <div class="cc-daystrip">${dayPills.join('')}</div>
+      ${hours.length === 0 ? `
+        <div class="cc-empty-day">
+          <h3>Sede <em>cerrada</em></h3>
+          <p>No hay clases programadas este día.</p>
+        </div>
+      ` : hourCards.join('')}
+    </div>
+  `;
+}
+
+async function ccSelectDay(dateIso) {
+  STATE.ccDate = dateIso;
+  // Si la fecha está fuera de la semana cargada, recargar
+  const newWeekStartIso = dateToIsoLocal(getWeekStart(new Date(dateIso + 'T12:00:00')));
+  const currentWeekStartIso = STATE.scheduleWeekStart ? dateToIsoLocal(STATE.scheduleWeekStart) : null;
+  if (newWeekStartIso !== currentWeekStartIso) {
+    STATE.scheduleWeekStart = getWeekStart(new Date(dateIso + 'T12:00:00'));
+    await loadScheduleWeekData();
+  }
+  ccRenderShell();
+}
+
+// Toggle de confirmación. Replica la lógica de toggleConfirmedForCell pero re-renderea solo esta vista.
+async function ccToggleConfirm(studentId, dateIso, hour) {
+  if (!isOnline) { showToast('Necesita conexión', 'error'); return; }
+  const locationId = STATE.currentLocationId;
+  const btnKey = `${studentId}-${hour}`;
+  const btn = document.querySelector(`[data-cc-confirm-btn="${btnKey}"]`);
+  if (btn) btn.disabled = true;
+
+  try {
+    // Buscar o crear class_session
+    let session = (STATE.scheduleWeekSessions || []).find(s =>
+      s.location_id === locationId && s.session_date === dateIso && s.hour === hour
+    );
+    if (!session) {
+      const { data: newSession, error: sErr } = await sb.from('class_sessions').insert({
+        location_id: locationId,
+        session_date: dateIso,
+        hour: hour,
+      }).select().single();
+      if (sErr) throw sErr;
+      session = newSession;
+      STATE.scheduleWeekSessions = STATE.scheduleWeekSessions || [];
+      STATE.scheduleWeekSessions.push(session);
+    }
+
+    // Buscar booking activo
+    let booking = (STATE.scheduleWeekBookings || []).find(b =>
+      b.session_id === session.id && b.student_id === studentId && !b.cancelled_at
+    );
+
+    if (!booking) {
+      // Alumna fija sin booking puntual → crear con confirmed_at
+      const { data: newBooking, error: bErr } = await sb.from('session_bookings').insert({
+        session_id: session.id,
+        student_id: studentId,
+        source: 'fixed',
+        confirmed_at: new Date().toISOString(),
+      }).select().single();
+      if (bErr) throw bErr;
+      booking = newBooking;
+      STATE.scheduleWeekBookings = STATE.scheduleWeekBookings || [];
+      STATE.scheduleWeekBookings.push(booking);
+      showToast('✓ Confirmada', 'success');
+    } else if (booking.confirmed_at) {
+      // Ya está confirmada → desmarcar
+      const { error } = await sb.from('session_bookings').update({ confirmed_at: null }).eq('id', booking.id);
+      if (error) throw error;
+      booking.confirmed_at = null;
+      showToast('Confirmación quitada');
+    } else {
+      // Existe pero no está confirmada → marcar
+      const nowIso = new Date().toISOString();
+      const { error } = await sb.from('session_bookings').update({ confirmed_at: nowIso }).eq('id', booking.id);
+      if (error) throw error;
+      booking.confirmed_at = nowIso;
+      showToast('✓ Confirmada', 'success');
+    }
+
+    ccRenderShell();
+  } catch (err) {
+    console.error('ccToggleConfirm:', err);
+    showToast('Error: ' + (err.message || 'desconocido'), 'error');
+    if (btn) btn.disabled = false;
+  }
+}
+
+// Resolver profesor de una hora usando STATE.scheduleWeekSessions (no STATE.classSessions).
+// No usamos resolveInstructor() global porque depende de STATE.classSessions del día.
+function ccResolveInstructor(locationId, date, dow, hour) {
+  const dateKey = dateToIsoLocal(date);
+  const session = (STATE.scheduleWeekSessions || []).find(s =>
+    s.location_id === locationId && s.session_date === dateKey && s.hour === hour
+  );
+  if (session) {
+    if (session.is_cancelled) {
+      return { id: null, _isCancelled: true, full_name: 'Clase cancelada' };
+    }
+    if (session.instructor_id) {
+      const inst = STATE.instructors.find(i => i.id === session.instructor_id);
+      if (inst) return inst;
+    }
+  }
+  // Fallback: instructor_schedules vigentes
+  const candidates = (STATE.schedules || []).filter(s => {
+    if (s.location_id !== locationId) return false;
+    if (s.day_of_week !== dow) return false;
+    if (s.hour !== hour) return false;
+    if (s.is_active === false) return false;
+    if (s.effective_from && s.effective_from > dateKey) return false;
+    if (s.effective_to && s.effective_to < dateKey) return false;
+    return true;
+  });
+  if (candidates.length > 0) {
+    const inst = STATE.instructors.find(i => i.id === candidates[0].instructor_id);
+    if (inst) return inst;
+  }
+  return null;
+}
 
 async function renderReportsView() {
   initReportsState();
