@@ -2448,6 +2448,18 @@
   /* Banner aviso modo lectura */
   .ise-readonly-banner { background: var(--gold-soft); border: 1px solid var(--gold-light); border-radius: 10px; padding: 10px 14px; font-size: 12px; color: var(--gold-deep, #6B4A0A); margin-bottom: 14px; display: flex; align-items: center; gap: 8px; }
 
+  /* Modal "Nuevo bloque" — chips toggleables */
+  .ise-chip-row { display: flex; flex-wrap: wrap; gap: 6px; }
+  .ise-chip-toggle { padding: 8px 14px; border-radius: var(--radius-pill); background: var(--fit-cream); color: var(--ink-mute); border: 1.5px solid var(--line); cursor: pointer; font-family: var(--body); font-size: 13px; font-weight: 500; transition: all 0.15s; user-select: none; line-height: 1; display: inline-flex; align-items: center; }
+  .ise-chip-toggle:hover { border-color: var(--fit-purple-soft); color: var(--fit-purple); }
+  .ise-chip-toggle.is-on { background: var(--fit-purple); color: var(--white); border-color: var(--fit-purple); }
+  .ise-chip-toggle.is-on:hover { background: var(--fit-purple-hover); border-color: var(--fit-purple-hover); color: var(--white); }
+  .ise-preset-row { display: flex; flex-wrap: wrap; gap: 6px; }
+  .ise-preset-btn { padding: 5px 10px; border-radius: var(--radius-pill); background: transparent; color: var(--fit-purple); border: 1px dashed var(--fit-purple-soft); cursor: pointer; font-family: var(--body); font-size: 11.5px; font-weight: 500; transition: all 0.15s; }
+  .ise-preset-btn:hover { background: var(--fit-lavender-pale); border-style: solid; }
+  .ise-summary { background: var(--fit-lavender-pale); border-radius: 10px; padding: 12px 14px; font-size: 12.5px; color: var(--fit-purple-deep); line-height: 1.5; margin-top: 4px; }
+  .ise-summary strong { font-family: var(--display); font-style: italic; font-weight: 500; }
+
   @media (max-width: 800px) {
     .ise-main { grid-template-columns: 1fr; }
     .ise-side { order: 2; }
@@ -3379,11 +3391,6 @@
     </div>
     <div class="modal-body ise-body" style="max-height: calc(100vh - 140px); overflow-y: auto;">
 
-      <div class="ise-readonly-banner">
-        <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg>
-        <span>Modo vista — la edición se habilita en el siguiente paso. Por ahora puedes navegar meses y ver los bloques de horario.</span>
-      </div>
-
       <div class="ise-head">
         <div class="ise-loc-pick">
           <label for="sched-location">Sede</label>
@@ -3409,7 +3416,7 @@
         <div class="ise-side">
           <div class="ise-side-h">Bloques de horario</div>
           <div id="ise-blocks-list"></div>
-          <button class="ise-add-block" type="button" id="ise-add-block-btn" disabled title="Disponible en el siguiente paso">+ Nuevo bloque de horario</button>
+          <button class="ise-add-block" type="button" id="ise-add-block-btn" onclick="iseOpenNewBlockModal()">+ Nuevo bloque de horario</button>
           <div id="ise-day-detail"></div>
         </div>
       </div>
@@ -3432,6 +3439,73 @@
       <button class="btn btn-ghost" onclick="closeModals()">Cerrar</button>
       <button class="btn btn-danger" id="schedule-delete-all" onclick="deleteAllSchedulesForInstructor()" style="display:none;">Eliminar todos</button>
       <button class="btn btn-primary" id="ise-save-btn" onclick="saveInstructorSchedule()" style="display:none;">Guardar horarios</button>
+    </div>
+  </div>
+</div>
+
+<!-- NUEVO BLOQUE DE HORARIO MODAL -->
+<div class="modal-backdrop" id="ise-new-block-modal" onclick="if(event.target===this) iseCloseBlockModal()">
+  <div class="modal-card" style="width: 580px; max-width: 96vw;">
+    <div class="modal-header">
+      <div class="modal-title">Nuevo <em>bloque de horario</em></div>
+      <button class="modal-close" onclick="iseCloseBlockModal()">✕</button>
+    </div>
+    <div class="modal-body" style="max-height: calc(100vh - 200px); overflow-y: auto;">
+
+      <div style="display: grid; grid-template-columns: 1fr; gap: 16px;">
+
+        <div class="form-row">
+          <label>Sede</label>
+          <select id="ise-nb-location"></select>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+          <div class="form-row">
+            <label>Vigente desde</label>
+            <input type="date" id="ise-nb-from" />
+          </div>
+          <div class="form-row">
+            <label>Vigente hasta <span style="color: var(--ink-mute); font-size: 11px; font-weight: 400;">(opcional)</span></label>
+            <input type="date" id="ise-nb-to" />
+          </div>
+        </div>
+
+        <div class="form-row">
+          <label>Días de la semana</label>
+          <div class="ise-chip-row" id="ise-nb-dows">
+            <span class="ise-chip-toggle" data-dow="1" onclick="iseToggleDow(1)">Lun</span>
+            <span class="ise-chip-toggle" data-dow="2" onclick="iseToggleDow(2)">Mar</span>
+            <span class="ise-chip-toggle" data-dow="3" onclick="iseToggleDow(3)">Mié</span>
+            <span class="ise-chip-toggle" data-dow="4" onclick="iseToggleDow(4)">Jue</span>
+            <span class="ise-chip-toggle" data-dow="5" onclick="iseToggleDow(5)">Vie</span>
+            <span class="ise-chip-toggle" data-dow="6" onclick="iseToggleDow(6)">Sáb</span>
+            <span class="ise-chip-toggle" data-dow="0" onclick="iseToggleDow(0)">Dom</span>
+          </div>
+          <div class="ise-preset-row" style="margin-top: 8px;">
+            <button type="button" class="ise-preset-btn" onclick="iseDowPreset('weekdays')">Lun a Vie</button>
+            <button type="button" class="ise-preset-btn" onclick="iseDowPreset('weekends')">Sáb y Dom</button>
+            <button type="button" class="ise-preset-btn" onclick="iseDowPreset('all')">Todos los días</button>
+            <button type="button" class="ise-preset-btn" onclick="iseDowPreset('clear')">Limpiar</button>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <label>Horas</label>
+          <div class="ise-chip-row" id="ise-nb-hours"></div>
+          <div class="ise-preset-row" style="margin-top: 8px;">
+            <button type="button" class="ise-preset-btn" onclick="iseHourPreset('morning')">6am – 11am</button>
+            <button type="button" class="ise-preset-btn" onclick="iseHourPreset('afternoon')">4pm – 8pm</button>
+            <button type="button" class="ise-preset-btn" onclick="iseHourPreset('clear')">Limpiar</button>
+          </div>
+        </div>
+
+        <div class="ise-summary" id="ise-nb-summary">Selecciona días y horas para ver el resumen.</div>
+
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="iseCloseBlockModal()">Cancelar</button>
+      <button class="btn btn-primary" id="ise-nb-save-btn" onclick="iseSaveNewBlock()" disabled>Guardar bloque</button>
     </div>
   </div>
 </div>
@@ -9176,6 +9250,176 @@ async function applyInstructorChange() {
 // INSTRUCTOR SCHEDULE MODAL — editar horario fijo
 // ============================================
 let SCHEDULE_CTX = { instructorId: null, marks: new Set() };
+
+// ============================================
+// NUEVO BLOQUE DE HORARIO — PASO 2
+// ============================================
+// Modal para crear un nuevo bloque (n_days × n_hours filas en instructor_schedules).
+// Genera filas con el contrato estándar (instructor_id, location_id, day_of_week,
+// hour, effective_from, effective_to, is_active). Compatible con todos los consumers.
+
+const NB_CTX = {
+  dows: new Set(),
+  hours: new Set(),
+};
+
+function iseOpenNewBlockModal() {
+  NB_CTX.dows = new Set();
+  NB_CTX.hours = new Set();
+
+  // Llenar sede (default: la sede actual del editor)
+  const sel = document.getElementById('ise-nb-location');
+  sel.innerHTML = STATE.locations.map(l => `<option value="${l.id}">${escape(l.name)}</option>`).join('');
+  sel.value = SCHEDULE_CTX.locationId;
+
+  // Default dates: si hay día seleccionado, ese es el desde
+  document.getElementById('ise-nb-from').value = SCHEDULE_CTX.selectedDate || dateToIsoLocal(new Date());
+  document.getElementById('ise-nb-to').value = '';
+
+  // Renderear chips de horas (dinámico desde ISE_HOURS_AVAILABLE)
+  const hoursWrap = document.getElementById('ise-nb-hours');
+  hoursWrap.innerHTML = ISE_HOURS_AVAILABLE.map(h =>
+    `<span class="ise-chip-toggle" data-hour="${h}" onclick="iseToggleHour(${h})">${formatHour(h)}</span>`
+  ).join('');
+
+  // Reset visual de chips de días
+  document.querySelectorAll('#ise-nb-dows .ise-chip-toggle').forEach(c => c.classList.remove('is-on'));
+
+  iseUpdateBlockSummary();
+  document.getElementById('ise-new-block-modal').classList.add('is-open');
+}
+
+function iseCloseBlockModal() {
+  document.getElementById('ise-new-block-modal').classList.remove('is-open');
+}
+
+function iseToggleDow(dow) {
+  if (NB_CTX.dows.has(dow)) NB_CTX.dows.delete(dow);
+  else NB_CTX.dows.add(dow);
+  const el = document.querySelector(`#ise-nb-dows [data-dow="${dow}"]`);
+  if (el) el.classList.toggle('is-on');
+  iseUpdateBlockSummary();
+}
+
+function iseToggleHour(hour) {
+  if (NB_CTX.hours.has(hour)) NB_CTX.hours.delete(hour);
+  else NB_CTX.hours.add(hour);
+  const el = document.querySelector(`#ise-nb-hours [data-hour="${hour}"]`);
+  if (el) el.classList.toggle('is-on');
+  iseUpdateBlockSummary();
+}
+
+function iseDowPreset(preset) {
+  const apply = (dows) => {
+    NB_CTX.dows = new Set(dows);
+    document.querySelectorAll('#ise-nb-dows .ise-chip-toggle').forEach(c => {
+      const d = parseInt(c.dataset.dow);
+      c.classList.toggle('is-on', NB_CTX.dows.has(d));
+    });
+  };
+  if (preset === 'weekdays') apply([1,2,3,4,5]);
+  else if (preset === 'weekends') apply([6,0]);
+  else if (preset === 'all') apply([1,2,3,4,5,6,0]);
+  else if (preset === 'clear') apply([]);
+  iseUpdateBlockSummary();
+}
+
+function iseHourPreset(preset) {
+  const apply = (hours) => {
+    NB_CTX.hours = new Set(hours);
+    document.querySelectorAll('#ise-nb-hours .ise-chip-toggle').forEach(c => {
+      const h = parseInt(c.dataset.hour);
+      c.classList.toggle('is-on', NB_CTX.hours.has(h));
+    });
+  };
+  if (preset === 'morning') apply([6,7,8,9,10,11]);
+  else if (preset === 'afternoon') apply([16,17,18,19,20]);
+  else if (preset === 'clear') apply([]);
+  iseUpdateBlockSummary();
+}
+
+function iseUpdateBlockSummary() {
+  const dows = [...NB_CTX.dows].sort((a,b) => (a===0?7:a) - (b===0?7:b));
+  const hours = [...NB_CTX.hours].sort((a,b) => a-b);
+  const summaryEl = document.getElementById('ise-nb-summary');
+  const btn = document.getElementById('ise-nb-save-btn');
+
+  if (dows.length === 0 || hours.length === 0) {
+    summaryEl.innerHTML = 'Selecciona días y horas para ver el resumen.';
+    btn.disabled = true;
+    return;
+  }
+
+  const dowLabel = iseFormatDows(new Set(dows));
+  const hoursLabel = iseFormatHours(new Set(hours));
+  const totalSlots = dows.length * hours.length;
+  summaryEl.innerHTML = `<strong>${dowLabel}</strong> · <strong>${hoursLabel}</strong><br>
+    ${totalSlots} ${totalSlots === 1 ? 'clase' : 'clases'} por semana en esta sede.`;
+  btn.disabled = false;
+}
+
+async function iseSaveNewBlock() {
+  if (typeof isOnline !== 'undefined' && !isOnline) {
+    showToast('Necesita conexión a Supabase para guardar horarios', 'error');
+    return;
+  }
+  if (NB_CTX.dows.size === 0 || NB_CTX.hours.size === 0) {
+    showToast('Selecciona al menos un día y una hora', 'error');
+    return;
+  }
+
+  const locId = document.getElementById('ise-nb-location').value;
+  const effFrom = document.getElementById('ise-nb-from').value || null;
+  const effTo = document.getElementById('ise-nb-to').value || null;
+
+  // Validación: si hay ambas fechas, desde debe ser <= hasta
+  if (effFrom && effTo && effFrom > effTo) {
+    showToast('La fecha "desde" no puede ser posterior a "hasta"', 'error');
+    return;
+  }
+
+  // Generar las filas (una por cada dow × hour)
+  const rows = [];
+  for (const dow of NB_CTX.dows) {
+    for (const hour of NB_CTX.hours) {
+      rows.push({
+        instructor_id: SCHEDULE_CTX.instructorId,
+        location_id: locId,
+        day_of_week: dow,
+        hour: hour,
+        effective_from: effFrom,
+        effective_to: effTo,
+        is_active: true,
+      });
+    }
+  }
+
+  // Loading state
+  const btn = document.getElementById('ise-nb-save-btn');
+  const originalText = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = 'Guardando...';
+
+  try {
+    const { error: insErr } = await sb.from('instructor_schedules').insert(rows);
+    if (insErr) throw insErr;
+
+    // Re-fetch STATE.schedules — todos los consumers verán los cambios
+    const { data: refreshed, error: fetchErr } = await sb.from('instructor_schedules')
+      .select('*').eq('is_active', true);
+    if (fetchErr) throw fetchErr;
+    STATE.schedules = refreshed || [];
+
+    showToast(`Bloque guardado · ${rows.length} ${rows.length === 1 ? 'clase' : 'clases'}/semana`, 'success');
+    iseCloseBlockModal();
+    iseRender(); // Re-render del editor mensual con los nuevos datos
+  } catch (e) {
+    console.error('iseSaveNewBlock error:', e);
+    showToast('Error al guardar: ' + (e.message || 'desconocido'), 'error');
+    btn.disabled = false;
+    btn.textContent = originalText;
+  }
+}
 
 // ============================================
 // EDITOR MENSUAL DE HORARIOS — PASO 1 (read-only + navegación)
