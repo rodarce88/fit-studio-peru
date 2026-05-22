@@ -16933,13 +16933,14 @@ async function openAssignPackageModal(studentId) {
   const student = STATE.students.find(s => s.id === studentId);
   if (!student) return;
 
-  // Si ya tiene un paquete con clases libres, confirmar antes de asignar otro
+  // Si ya tiene un paquete con clases libres, confirmar antes de asignar otro.
+  // Usar la MISMA lógica que el resto del sistema (isPkgAlive) para evitar inconsistencias
+  // entre "no hay paquete activo" en el perfil y "ya tiene paquete" aquí.
   if (isOnline) {
-    const { data: livePkgs } = await sb.from('student_packages')
-      .select('id, classes_total, classes_used, packages(name)')
-      .eq('student_id', studentId)
-      .eq('is_frozen', false);
-    const stillLive = (livePkgs || []).filter(p => (p.classes_used || 0) < (p.classes_total || 0));
+    const { data: allPkgs } = await sb.from('student_packages')
+      .select('id, classes_total, classes_used, is_active, status, is_frozen, packages(name)')
+      .eq('student_id', studentId);
+    const stillLive = (allPkgs || []).filter(isPkgAlive);
     if (stillLive.length > 0) {
       const totalRest = stillLive.reduce((s, p) => s + ((p.classes_total || 0) - (p.classes_used || 0)), 0);
       const pkgList = stillLive.map(p => `• ${p.packages?.name || `Paquete ${p.classes_total}`} — ${(p.classes_total||0) - (p.classes_used||0)} libre${((p.classes_total||0) - (p.classes_used||0)) === 1 ? '' : 's'}`).join('\n');
