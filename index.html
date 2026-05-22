@@ -2460,6 +2460,26 @@
   .ise-summary { background: var(--fit-lavender-pale); border-radius: 10px; padding: 12px 14px; font-size: 12.5px; color: var(--fit-purple-deep); line-height: 1.5; margin-top: 4px; }
   .ise-summary strong { font-family: var(--display); font-style: italic; font-weight: 500; }
 
+  /* Modal de conflicto (Paso 3) */
+  .ise-conf-header { padding: 22px 24px 16px; border-bottom: 1px solid var(--line); display: flex; align-items: flex-start; gap: 14px; }
+  .ise-conf-ico { width: 40px; height: 40px; border-radius: 50%; background: var(--gold-soft); color: var(--gold-light); display: grid; place-items: center; flex-shrink: 0; }
+  .ise-conf-title { font-family: var(--display); font-style: italic; font-size: 22px; color: var(--fit-purple-deep); line-height: 1.15; margin: 2px 0 4px; }
+  .ise-conf-sub { font-size: 13px; color: var(--ink-mute); line-height: 1.5; }
+  .ise-conf-body { padding: 22px 24px; background: var(--fit-cream); }
+  .ise-conf-section-h { font-size: 10px; color: var(--ink-mute); text-transform: uppercase; letter-spacing: 1.2px; font-weight: 500; margin-bottom: 10px; }
+  .ise-conf-new-card { background: var(--white); border-radius: 12px; padding: 14px; border: 1.5px solid var(--good-bright); margin-bottom: 18px; }
+  .ise-conf-new-card .name { font-family: var(--display); font-style: italic; font-size: 16px; color: var(--ink); }
+  .ise-conf-new-card .meta { font-size: 13px; color: var(--ink-soft); margin-top: 4px; }
+  .ise-conf-new-card .range { font-size: 12px; color: var(--ink-mute); margin-top: 6px; padding: 6px 10px; background: var(--good-soft); border-radius: 8px; }
+  .ise-conf-row { display: grid; grid-template-columns: 32px 1fr; gap: 14px; align-items: flex-start; margin-bottom: 14px; }
+  .ise-conf-row:last-child { margin-bottom: 0; }
+  .ise-conf-av { width: 32px; height: 32px; border-radius: 50%; background: linear-gradient(135deg, var(--fit-purple), var(--fit-purple-deep)); display: grid; place-items: center; color: var(--white); font-weight: 600; font-size: 11px; flex-shrink: 0; }
+  .ise-conf-content { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+  .ise-conf-name { font-family: var(--display); font-style: italic; font-size: 16px; color: var(--ink); }
+  .ise-conf-horario { font-size: 13px; color: var(--ink-soft); }
+  .ise-conf-change { font-size: 12px; color: var(--ink-mute); margin-top: 6px; padding: 8px 12px; background: var(--white); border-radius: 8px; border: 1px solid var(--line); line-height: 1.5; }
+  .ise-conf-change strong { color: var(--warn); font-weight: 500; }
+
   @media (max-width: 800px) {
     .ise-main { grid-template-columns: 1fr; }
     .ise-side { order: 2; }
@@ -3506,6 +3526,44 @@
     <div class="modal-footer">
       <button class="btn btn-ghost" onclick="iseCloseBlockModal()">Cancelar</button>
       <button class="btn btn-primary" id="ise-nb-save-btn" onclick="iseSaveNewBlock()" disabled>Guardar bloque</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL DE CONFLICTO DE HORARIO (Paso 3) -->
+<div class="modal-backdrop" id="ise-conflict-modal" onclick="if(event.target===this) iseCloseConflictModal()">
+  <div class="modal-card" style="width: 560px; max-width: 96vw;">
+
+    <div class="ise-conf-header">
+      <div class="ise-conf-ico">
+        <svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><circle cx="12" cy="16" r="0.6" fill="currentColor"/></svg>
+      </div>
+      <div style="flex: 1;">
+        <div class="ise-conf-title">Reemplazo de horario</div>
+        <div class="ise-conf-sub">Este nuevo bloque va a cubrir horas que ya tienen otros profesores asignados. Esto es lo que va a pasar:</div>
+      </div>
+      <button class="modal-close" onclick="iseCloseConflictModal()" style="background: transparent;">✕</button>
+    </div>
+
+    <div class="ise-conf-body">
+
+      <!-- Card del nuevo bloque (entrando) -->
+      <div class="ise-conf-section-h">Nuevo bloque que estás creando</div>
+      <div class="ise-conf-new-card">
+        <div class="name" id="ise-conflict-new-name">—</div>
+        <div class="meta" id="ise-conflict-new-meta">—</div>
+        <div class="range" id="ise-conflict-new-range">—</div>
+      </div>
+
+      <!-- Lista de profesores afectados -->
+      <div class="ise-conf-section-h">Profesores afectados</div>
+      <div id="ise-conflict-affected-list"></div>
+
+    </div>
+
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="iseCloseConflictModal()">Cancelar — volver a editar</button>
+      <button class="btn btn-primary" id="ise-conflict-confirm-btn" onclick="iseConfirmReplacement()">Confirmar reemplazo</button>
     </div>
   </div>
 </div>
@@ -9252,6 +9310,192 @@ async function applyInstructorChange() {
 let SCHEDULE_CTX = { instructorId: null, marks: new Set() };
 
 // ============================================
+// PASO 3 — DETECCIÓN DE CONFLICTOS Y REEMPLAZO INTELIGENTE
+// ============================================
+
+const CONFLICT_CTX = {
+  conflicts: [],      // [{existing, newRow}, ...]
+  groupedByInst: [],  // [{instructorId, instructorName, dows, hours, affectedExisting, ...}]
+  pendingRows: [],    // las filas que el usuario quiere insertar
+  pendingFromIso: null,
+  pendingToIso: null,
+  pendingLocId: null,
+};
+
+// Detecta schedules existentes que se solapan con las nuevas filas a insertar.
+// Considera: misma sede + mismo dow + misma hora + rangos de fechas que se cruzan,
+// pero SOLO de otros profesores (el mismo profesor no es conflicto consigo mismo).
+function iseFindConflicts(newRows, newFromIso, newToIso) {
+  const conflicts = [];
+  const nuFrom = newFromIso || '0001-01-01';
+  const nuTo = newToIso || '9999-12-31';
+
+  newRows.forEach(newRow => {
+    (STATE.schedules || []).forEach(existing => {
+      if (existing.instructor_id === newRow.instructor_id) return;
+      if (existing.location_id !== newRow.location_id) return;
+      if (existing.day_of_week !== newRow.day_of_week) return;
+      if (existing.hour !== newRow.hour) return;
+
+      const exFrom = existing.effective_from || '0001-01-01';
+      const exTo = existing.effective_to || '9999-12-31';
+
+      // Overlap si: nuFrom <= exTo && nuTo >= exFrom
+      if (nuFrom <= exTo && nuTo >= exFrom) {
+        conflicts.push({ existing, newRow });
+      }
+    });
+  });
+
+  return conflicts;
+}
+
+// Agrupa los conflictos por profesor afectado (uno por uno con sus dows/hours)
+function iseGroupConflictsByInstructor(conflicts) {
+  const groups = new Map();
+  conflicts.forEach(c => {
+    const id = c.existing.instructor_id;
+    if (!groups.has(id)) {
+      const inst = STATE.instructors.find(i => i.id === id);
+      groups.set(id, {
+        instructorId: id,
+        instructorName: inst ? inst.full_name : 'Profesor desconocido',
+        initials: inst ? inst.initials : '?',
+        dows: new Set(),
+        hours: new Set(),
+        affectedExistingMap: new Map(), // id -> existing
+      });
+    }
+    const g = groups.get(id);
+    g.dows.add(c.existing.day_of_week);
+    g.hours.add(c.existing.hour);
+    if (!g.affectedExistingMap.has(c.existing.id)) {
+      g.affectedExistingMap.set(c.existing.id, c.existing);
+    }
+  });
+  // Convertir mapa a array al final
+  return [...groups.values()].map(g => ({
+    ...g,
+    affectedExisting: [...g.affectedExistingMap.values()],
+  }));
+}
+
+// Devuelve el día anterior a una fecha ISO (yyyy-mm-dd)
+function iseDayBeforeIso(dateIso) {
+  const d = new Date(dateIso + 'T12:00:00');
+  d.setDate(d.getDate() - 1);
+  return dateToIsoLocal(d);
+}
+
+// Formato corto de fecha: "31 may"
+function iseFormatShortDate(dateIso) {
+  const d = new Date(dateIso + 'T12:00:00');
+  return `${d.getDate()} ${ISE_MONTHS[d.getMonth()].slice(0,3)}`;
+}
+
+function iseShowConflictModal(conflicts, newRows, newFromIso, newToIso, locId) {
+  CONFLICT_CTX.conflicts = conflicts;
+  CONFLICT_CTX.groupedByInst = iseGroupConflictsByInstructor(conflicts);
+  CONFLICT_CTX.pendingRows = newRows;
+  CONFLICT_CTX.pendingFromIso = newFromIso;
+  CONFLICT_CTX.pendingToIso = newToIso;
+  CONFLICT_CTX.pendingLocId = locId;
+
+  // Render del modal
+  const newInst = STATE.instructors.find(i => i.id === SCHEDULE_CTX.instructorId);
+  document.getElementById('ise-conflict-new-name').textContent = newInst ? newInst.full_name : '—';
+  document.getElementById('ise-conflict-new-meta').textContent =
+    `${iseFormatDows(new Set(newRows.map(r => r.day_of_week)))} · ${iseFormatHours(new Set(newRows.map(r => r.hour)))} · ${(STATE.locations.find(l => l.id === locId) || {}).name || ''}`;
+
+  const newRangeLabel = newFromIso
+    ? `Empieza el <span style="color: var(--good); font-weight: 500;">${iseFormatShortDate(newFromIso)}</span>${newToIso ? ` hasta ${iseFormatShortDate(newToIso)}` : ' sin fecha de fin'}`
+    : 'Sin fecha de inicio (aplica desde siempre)';
+  document.getElementById('ise-conflict-new-range').innerHTML = newRangeLabel;
+
+  // Listado de profesores afectados
+  const affectedListEl = document.getElementById('ise-conflict-affected-list');
+  affectedListEl.innerHTML = CONFLICT_CTX.groupedByInst.map(g => {
+    const dowLabel = iseFormatDows(g.dows);
+    const hoursLabel = iseFormatHours(g.hours);
+    let changeLabel;
+    if (!newFromIso) {
+      changeLabel = `Se desactivarán <strong>completamente</strong> en estos días/horas (el nuevo bloque aplica desde siempre)`;
+    } else {
+      const cutoffDate = iseDayBeforeIso(newFromIso);
+      changeLabel = `Sus horarios en estos días terminarán el <strong>${iseFormatShortDate(cutoffDate)}</strong>${newToIso ? ` y se reactivarán después del ${iseFormatShortDate(newToIso)}` : ''} — el resto de sus horarios queda intacto`;
+    }
+    return `<div class="ise-conf-row">
+      <div class="ise-conf-av">${escape(g.initials)}</div>
+      <div class="ise-conf-content">
+        <div class="ise-conf-name">${escape(g.instructorName)}</div>
+        <div class="ise-conf-horario">${dowLabel} · ${hoursLabel}</div>
+        <div class="ise-conf-change">${changeLabel}</div>
+      </div>
+    </div>`;
+  }).join('');
+
+  document.getElementById('ise-new-block-modal').classList.remove('is-open');
+  document.getElementById('ise-conflict-modal').classList.add('is-open');
+}
+
+function iseCloseConflictModal() {
+  document.getElementById('ise-conflict-modal').classList.remove('is-open');
+  // Re-abrir el modal de nuevo bloque para que pueda corregir
+  document.getElementById('ise-new-block-modal').classList.add('is-open');
+}
+
+async function iseConfirmReplacement() {
+  const btn = document.getElementById('ise-conflict-confirm-btn');
+  const originalText = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = 'Aplicando reemplazo...';
+
+  try {
+    const newFromIso = CONFLICT_CTX.pendingFromIso;
+    const newToIso = CONFLICT_CTX.pendingToIso;
+
+    // 1. Por cada existing conflictivo: actualizar effective_to (o desactivar si nuevo es "siempre")
+    const updates = new Map(); // existing.id -> { effective_to | is_active }
+    CONFLICT_CTX.conflicts.forEach(c => {
+      const ex = c.existing;
+      if (!newFromIso) {
+        // El nuevo bloque es "desde siempre" — desactivar el viejo
+        updates.set(ex.id, { is_active: false });
+      } else {
+        const cutoff = iseDayBeforeIso(newFromIso);
+        // Si el viejo ya termina antes del cutoff, no hace falta cambio
+        if (ex.effective_to && ex.effective_to < cutoff) return;
+        updates.set(ex.id, { effective_to: cutoff });
+      }
+    });
+
+    for (const [id, data] of updates) {
+      const { error } = await sb.from('instructor_schedules').update(data).eq('id', id);
+      if (error) throw error;
+    }
+
+    // 2. Insertar los nuevos rows
+    const { error: insErr } = await sb.from('instructor_schedules').insert(CONFLICT_CTX.pendingRows);
+    if (insErr) throw insErr;
+
+    // 3. Re-fetch STATE.schedules
+    const { data: refreshed, error: fetchErr } = await sb.from('instructor_schedules')
+      .select('*').eq('is_active', true);
+    if (fetchErr) throw fetchErr;
+    STATE.schedules = refreshed || [];
+
+    showToast(`Reemplazo aplicado · ${CONFLICT_CTX.groupedByInst.length} ${CONFLICT_CTX.groupedByInst.length === 1 ? 'profesor recortado' : 'profesores recortados'}`, 'success');
+    document.getElementById('ise-conflict-modal').classList.remove('is-open');
+    iseRender();
+  } catch (e) {
+    console.error('iseConfirmReplacement error:', e);
+    showToast('Error al aplicar reemplazo: ' + (e.message || 'desconocido'), 'error');
+    btn.disabled = false;
+    btn.textContent = originalText;
+  }
+}
+
+// ============================================
 // NUEVO BLOQUE DE HORARIO — PASO 2
 // ============================================
 // Modal para crear un nuevo bloque (n_days × n_hours filas en instructor_schedules).
@@ -9394,7 +9638,15 @@ async function iseSaveNewBlock() {
     }
   }
 
-  // Loading state
+  // 🚨 DETECCIÓN DE CONFLICTOS (Paso 3)
+  const conflicts = iseFindConflicts(rows, effFrom, effTo);
+  if (conflicts.length > 0) {
+    // Mostrar modal de confirmación — el guardado real se hace en iseConfirmReplacement
+    iseShowConflictModal(conflicts, rows, effFrom, effTo, locId);
+    return;
+  }
+
+  // Sin conflictos → guardado directo
   const btn = document.getElementById('ise-nb-save-btn');
   const originalText = btn.textContent;
   btn.disabled = true;
@@ -9412,7 +9664,7 @@ async function iseSaveNewBlock() {
 
     showToast(`Bloque guardado · ${rows.length} ${rows.length === 1 ? 'clase' : 'clases'}/semana`, 'success');
     iseCloseBlockModal();
-    iseRender(); // Re-render del editor mensual con los nuevos datos
+    iseRender();
   } catch (e) {
     console.error('iseSaveNewBlock error:', e);
     showToast('Error al guardar: ' + (e.message || 'desconocido'), 'error');
