@@ -2384,7 +2384,22 @@
   .ise-month-nav button:hover { background: var(--fit-lavender-pale); border-color: var(--fit-purple-soft); color: var(--fit-purple); }
   .ise-month-pill { font-family: var(--display); font-style: italic; font-size: 17px; color: var(--fit-purple-deep); padding: 6px 14px; background: var(--fit-lavender-pale); border-radius: var(--radius-pill); white-space: nowrap; }
 
-  .ise-main { display: grid; grid-template-columns: 1fr 320px; gap: 18px; }
+  .ise-main { display: grid; grid-template-columns: 200px minmax(0, 1fr) 300px; gap: 16px; }
+
+  /* Lista de profesores (columna izquierda) */
+  .ise-instructors-panel { background: var(--fit-cream); border-radius: var(--radius-md); padding: 10px; overflow-y: auto; max-height: calc(100vh - 280px); display: flex; flex-direction: column; gap: 2px; }
+  .ise-instructors-panel .ise-side-h { padding: 2px 6px 6px; margin: 0; }
+  .ise-instructor-row { display: grid; grid-template-columns: 30px 1fr; gap: 10px; align-items: center; padding: 8px 10px; border-radius: 9px; cursor: pointer; transition: background 0.15s; }
+  .ise-instructor-row:hover { background: var(--white); }
+  .ise-instructor-row.is-active { background: var(--fit-purple); }
+  .ise-instructor-row .ise-inst-avatar { width: 30px; height: 30px; border-radius: 50%; background: linear-gradient(135deg, var(--fit-purple), var(--fit-purple-deep)); display: grid; place-items: center; color: var(--white); font-weight: 600; font-size: 10.5px; flex-shrink: 0; }
+  .ise-instructor-row.is-active .ise-inst-avatar { background: var(--white); color: var(--fit-purple-deep); }
+  .ise-instructor-row.is-inactive .ise-inst-avatar { background: var(--ink-faint); }
+  .ise-instructor-row .ise-inst-name { font-family: var(--display); font-style: italic; font-size: 13px; color: var(--ink); line-height: 1.2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ise-instructor-row.is-active .ise-inst-name { color: var(--white); }
+  .ise-instructor-row .ise-inst-meta { font-size: 10px; color: var(--ink-mute); margin-top: 1px; line-height: 1.2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ise-instructor-row.is-active .ise-inst-meta { color: rgba(255,255,255,0.7); }
+  .ise-instructor-row.is-inactive .ise-inst-name { color: var(--ink-mute); }
 
   /* Calendario */
   .ise-cal { background: var(--fit-cream); border-radius: var(--radius-md); padding: 16px; }
@@ -2480,9 +2495,10 @@
   .ise-conf-change { font-size: 12px; color: var(--ink-mute); margin-top: 6px; padding: 8px 12px; background: var(--white); border-radius: 8px; border: 1px solid var(--line); line-height: 1.5; }
   .ise-conf-change strong { color: var(--warn); font-weight: 500; }
 
-  @media (max-width: 800px) {
+  @media (max-width: 900px) {
     .ise-main { grid-template-columns: 1fr; }
     .ise-side { order: 2; }
+    .ise-instructors-panel { max-height: 200px; }
   }
 </style>
 </head>
@@ -3404,7 +3420,7 @@
 
 <!-- INSTRUCTOR SCHEDULE MODAL (editar horarios fijos del profesor) -->
 <div class="modal-backdrop" id="instructor-schedule-modal" onclick="if(event.target===this) closeModals()">
-  <div class="modal-card" style="width: 1080px; max-width: 96vw;">
+  <div class="modal-card" style="width: 1240px; max-width: 96vw;">
     <div class="modal-header">
       <div class="modal-title" id="schedule-modal-title">Horarios de <em>profesor</em></div>
       <button class="modal-close" onclick="closeModals()">✕</button>
@@ -3424,6 +3440,12 @@
       </div>
 
       <div class="ise-main">
+        <!-- LISTA DE PROFESORES -->
+        <div class="ise-instructors-panel">
+          <div class="ise-side-h">Profesores</div>
+          <div id="ise-instructors-list"></div>
+        </div>
+
         <!-- CALENDARIO -->
         <div class="ise-cal">
           <div class="ise-dow">
@@ -9520,6 +9542,7 @@ async function iseConfirmReplacement() {
 
     showToast(`Reemplazo aplicado · ${CONFLICT_CTX.groupedByInst.length} ${CONFLICT_CTX.groupedByInst.length === 1 ? 'profesor recortado' : 'profesores recortados'}`, 'success');
     document.getElementById('ise-conflict-modal').classList.remove('is-open');
+    iseRenderInstructorsList();
     iseRender();
   } catch (e) {
     console.error('iseConfirmReplacement error:', e);
@@ -9698,6 +9721,7 @@ async function iseSaveNewBlock() {
 
     showToast(`Bloque guardado · ${rows.length} ${rows.length === 1 ? 'clase' : 'clases'}/semana`, 'success');
     iseCloseBlockModal();
+    iseRenderInstructorsList();
     iseRender();
   } catch (e) {
     console.error('iseSaveNewBlock error:', e);
@@ -10132,6 +10156,58 @@ function iseSelectDay(dateIso) {
   iseRender();
 }
 
+// Renderea la lista de profesores en la columna izquierda
+function iseRenderInstructorsList() {
+  const el = document.getElementById('ise-instructors-list');
+  if (!el) return;
+
+  // Mostrar todos los instructors, ordenados: activos primero, luego inactivos
+  const allInst = [...(STATE.instructors || [])].sort((a, b) => {
+    const aActive = a.is_active !== false;
+    const bActive = b.is_active !== false;
+    if (aActive !== bActive) return aActive ? -1 : 1;
+    return (a.full_name || '').localeCompare(b.full_name || '');
+  });
+
+  if (allInst.length === 0) {
+    el.innerHTML = `<div style="padding: 10px; font-size: 11.5px; color: var(--ink-mute); font-style: italic;">No hay profesores cargados.</div>`;
+    return;
+  }
+
+  el.innerHTML = allInst.map(i => {
+    const isActiveInst = i.id === SCHEDULE_CTX.instructorId;
+    const isInactive = i.is_active === false;
+    const locId = SCHEDULE_CTX.locationId;
+    // Contar bloques que tiene en la sede actual
+    const blocksCount = locId
+      ? (STATE.schedules || []).filter(s => s.instructor_id === i.id && s.location_id === locId).length
+      : 0;
+    const metaText = isInactive
+      ? 'Sin activar'
+      : (blocksCount > 0 ? `${blocksCount} ${blocksCount === 1 ? 'slot' : 'slots'} en sede` : 'Sin horario aquí');
+    return `<div class="ise-instructor-row ${isActiveInst ? 'is-active' : ''} ${isInactive ? 'is-inactive' : ''}" onclick="iseSelectInstructor('${i.id}')" title="${escape(i.full_name)}">
+      <div class="ise-inst-avatar">${escape(i.initials || '?')}</div>
+      <div>
+        <div class="ise-inst-name">${escape(i.full_name)}</div>
+        <div class="ise-inst-meta">${metaText}</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// Cambia el profesor activo dentro del modal (sin cerrarlo)
+function iseSelectInstructor(instructorId) {
+  if (SCHEDULE_CTX.instructorId === instructorId) return;
+  SCHEDULE_CTX.instructorId = instructorId;
+  SCHEDULE_CTX.selectedDate = dateToIsoLocal(new Date()); // reset al hoy
+
+  const inst = STATE.instructors.find(i => i.id === instructorId);
+  document.getElementById('schedule-modal-title').innerHTML = `Horarios de <em>${escape(inst ? inst.full_name : 'profesor')}</em>`;
+
+  iseRenderInstructorsList(); // actualizar highlight de "activo"
+  iseRender();
+}
+
 function navigateScheduleMonth(delta) {
   SCHEDULE_CTX.viewMonth += delta;
   if (SCHEDULE_CTX.viewMonth < 0) {
@@ -10155,6 +10231,7 @@ function onISELocationChange() {
   SCHEDULE_CTX.locationId = document.getElementById('sched-location').value;
   // Limpiar selección — la sede cambió
   SCHEDULE_CTX.selectedDate = null;
+  iseRenderInstructorsList(); // el conteo de slots por profesor depende de la sede
   iseRender();
 }
 
@@ -10166,7 +10243,7 @@ function openInstructorScheduleModal(instructorId) {
     viewMonth: today.getMonth(),
     viewYear: today.getFullYear(),
     selectedDate: dateToIsoLocal(today),
-    marks: new Set() // se mantiene para retrocompatibilidad; el Paso 2 la usa
+    marks: new Set() // retrocompatibilidad
   };
   const inst = STATE.instructors.find(i => i.id === instructorId);
   document.getElementById('schedule-modal-title').innerHTML = `Horarios de <em>${escape(inst.full_name)}</em>`;
@@ -10176,6 +10253,9 @@ function openInstructorScheduleModal(instructorId) {
   sedeSel.innerHTML = STATE.locations.map(l => `<option value="${l.id}">${escape(l.name)}</option>`).join('');
   sedeSel.value = STATE.currentLocationId;
   SCHEDULE_CTX.locationId = sedeSel.value;
+
+  // Render lista de profesores (columna izquierda)
+  iseRenderInstructorsList();
 
   // Render principal de la vista mensual
   iseRender();
