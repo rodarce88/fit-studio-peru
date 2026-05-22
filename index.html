@@ -21785,10 +21785,12 @@ function initReportsState() {
 // LOGS VIEW (solo coordinador)
 // ============================================
 const LOGS_STATE = {
-  rows: [],
-  filter: { role: '', action: '', text: '', days: 7 },
+  rows: [],          // rows del filtro de días
+  searchRows: [],    // rows de búsqueda (sin filtro de días)
+  filter: { role: '', action: '', text: '', days: 1 },  // default: solo hoy
   expanded: new Set(),
   loading: false,
+  searchTimer: null, // debounce del input de búsqueda
 };
 
 async function renderLogsView() {
@@ -21810,7 +21812,11 @@ async function renderLogsView() {
 async function loadLogsData() {
   LOGS_STATE.loading = true;
   const sinceDate = new Date();
-  sinceDate.setDate(sinceDate.getDate() - (LOGS_STATE.filter.days || 7));
+  sinceDate.setDate(sinceDate.getDate() - (LOGS_STATE.filter.days || 1));
+  // Si es solo "hoy" (days=1), recortar al inicio del día
+  if (LOGS_STATE.filter.days === 1) {
+    sinceDate.setHours(0, 0, 0, 0);
+  }
   try {
     let q = sb.from('activity_log').select('*').order('created_at', { ascending: false }).limit(500);
     q = q.gte('created_at', sinceDate.toISOString());
@@ -21823,23 +21829,77 @@ async function loadLogsData() {
   LOGS_STATE.loading = false;
 }
 
+// Búsqueda en TODO el historial (sin filtro de días).
+// Filtra por role/action si están seleccionados, y matchea texto en actor_name, target_label, action.
+async function loadLogsSearchData(text) {
+  if (!text) return [];
+  try {
+    // Escapar caracteres especiales del query para la búsqueda con .or()
+    const safe = text.replace(/[%,]/g, ' ').trim();
+    if (!safe) return [];
+    let q = sb.from('activity_log').select('*').order('created_at', { ascending: false }).limit(500);
+    if (LOGS_STATE.filter.role) q = q.eq('actor_role', LOGS_STATE.filter.role);
+    if (LOGS_STATE.filter.action) q = q.ilike('action', `%${LOGS_STATE.filter.action}%`);
+    q = q.or(`actor_name.ilike.%${safe}%,target_label.ilike.%${safe}%,action.ilike.%${safe}%`);
+    const { data, error } = await q;
+    if (error) { console.error('loadLogsSearch', error); return []; }
+    return data || [];
+  } catch (e) { console.error('loadLogsSearch', e); return []; }
+}
+
+// Handler del input de búsqueda. Debounced 300ms.
+// Solo actualiza la lista de items, NO los filtros (el input mantiene su focus).
+function onLogsSearchInput(value) {
+  LOGS_STATE.filter.text = value;
+  if (LOGS_STATE.searchTimer) clearTimeout(LOGS_STATE.searchTimer);
+  if (!value.trim()) {
+    LOGS_STATE.searchRows = [];
+    renderLogsItems();
+    return;
+  }
+  // Indicador de carga inmediato
+  const summaryEl = document.getElementById('logs-summary');
+  if (summaryEl) summaryEl.innerHTML = `<span style="color: var(--ink-mute); font-style: italic;">Buscando…</span>`;
+  LOGS_STATE.searchTimer = setTimeout(async () => {
+    LOGS_STATE.searchRows = await loadLogsSearchData(value.trim());
+    renderLogsItems();
+  }, 300);
+}
+
+// Renderea solo los items y el resumen, sin tocar los filtros (preserva el focus del input).
+function renderLogsItems() {
+  const listEl = document.getElementById('logs-list');
+  const summaryEl = document.getElementById('logs-summary');
+  if (!listEl || !summaryEl) return;
+
+  const text = (LOGS_STATE.filter.text || '').trim();
+  const displayRows = text ? LOGS_STATE.searchRows : LOGS_STATE.rows;
+
+  // Resumen contextual
+  const countLabel = `<span class="logs-count">${displayRows.length}</span> ${displayRows.length === 1 ? 'registro' : 'registros'}`;
+  const scopeLabel = text
+    ? '· buscando en todo el historial'
+    : `· ${LOGS_STATE.filter.days === 1 ? 'hoy' : `últimos ${LOGS_STATE.filter.days} días`}`;
+  summaryEl.innerHTML = `${countLabel} ${scopeLabel}`;
+
+  // Lista
+  if (displayRows.length === 0) {
+    listEl.innerHTML = '<div class="empty-state" style="padding:60px 20px;">Sin registros.</div>';
+    return;
+  }
+  listEl.innerHTML = displayRows.map(r => renderLogRow(r)).join('');
+}
+
 function renderLogsHTML() {
   const container = document.getElementById('logs-container');
   if (!container) return;
-  const rows = LOGS_STATE.rows;
-  const text = (LOGS_STATE.filter.text || '').trim().toLowerCase();
-  const filtered = !text ? rows : rows.filter(r =>
-    (r.actor_name || '').toLowerCase().includes(text) ||
-    (r.target_label || '').toLowerCase().includes(text) ||
-    (r.action || '').toLowerCase().includes(text)
-  );
 
-  // Filtros
+  // Filtros (HTML estructural — solo se renderean al cambiar role/action/days, no al teclear)
   const filtersHtml = `
     <div class="logs-filters">
-      <input type="text" class="logs-input" placeholder="Buscar por nombre, acción, target…"
+      <input type="text" class="logs-input" id="logs-search-input" placeholder="Buscar por nombre, acción, target…"
         value="${escape(LOGS_STATE.filter.text || '')}"
-        oninput="LOGS_STATE.filter.text = this.value; renderLogsHTML();" />
+        oninput="onLogsSearchInput(this.value)" />
       <select class="logs-select" onchange="LOGS_STATE.filter.role = this.value; renderLogsView();">
         <option value="">Todos los roles</option>
         <option value="coordinator" ${LOGS_STATE.filter.role === 'coordinator' ? 'selected':''}>Coordinador</option>
@@ -21863,19 +21923,17 @@ function renderLogsHTML() {
         <option value="90" ${LOGS_STATE.filter.days === 90 ? 'selected':''}>Últimos 90 días</option>
       </select>
     </div>
-    <div class="logs-summary">
-      <span class="logs-count">${filtered.length}</span>
-      ${filtered.length === 1 ? 'registro' : 'registros'} · últimos ${LOGS_STATE.filter.days} ${LOGS_STATE.filter.days === 1 ? 'día' : 'días'}
-    </div>
+    <div class="logs-summary" id="logs-summary"></div>
+    <div class="logs-list" id="logs-list"></div>
   `;
 
-  if (filtered.length === 0) {
-    container.innerHTML = filtersHtml + '<div class="empty-state" style="padding:60px 20px;">Sin registros para los filtros aplicados.</div>';
-    return;
-  }
+  container.innerHTML = filtersHtml;
+  renderLogsItems();
 
-  const itemsHtml = filtered.map(r => renderLogRow(r)).join('');
-  container.innerHTML = filtersHtml + `<div class="logs-list">${itemsHtml}</div>`;
+  // Si había texto de búsqueda (volviendo a la vista), re-ejecutar la búsqueda
+  if ((LOGS_STATE.filter.text || '').trim()) {
+    onLogsSearchInput(LOGS_STATE.filter.text);
+  }
 }
 
 function renderLogRow(r) {
