@@ -4734,11 +4734,14 @@ function getCurrentLocation() {
 // ============================================
 function resolveInstructor(locationId, date, dow, hour) {
   const dateKey = dateToIsoLocal(date);
+  const overrideKey = `${dateKey}-${locationId}-${hour}`;
 
-  // 0. Si existe class_sessions del día con instructor_id explícito (incluido NULL = quitado)
+  // 0. Si existe class_sessions del día con instructor_id explícito (incluido NULL = quitado).
+  // BD es fuente única de verdad: si la session existe, se respeta lo que dice.
   const session = STATE.classSessions && STATE.classSessions.find(s =>
     s.location_id === locationId && s.session_date === dateKey && s.hour === hour
   );
+  let sessionExistsButUnassigned = false;
   if (session) {
     if (session.is_cancelled) {
       return { id: null, initials: '✗', full_name: 'Clase cancelada', certifications: session.notes || '', _isUnassigned: true, _isCancelled: true };
@@ -4747,28 +4750,32 @@ function resolveInstructor(locationId, date, dow, hour) {
       const inst = STATE.instructors.find(i => i.id === session.instructor_id);
       if (inst) return inst;
     }
-    // Si la session existe pero instructor_id es null -> sin asignar (fue quitado)
+    // Si la session existe pero instructor_id es null -> BD dice explícitamente "sin override"
+    // → IGNORAR localStorage classOverrides y caer al schedule base.
     if (session.instructor_id === null) {
-      // continuar al schedule fijo solo si NO hay override "__none__"
-      const overrideKey = `${dateKey}-${locationId}-${hour}`;
+      sessionExistsButUnassigned = true;
+      // Solo respetamos el "__none__" del localStorage como afirmación explícita de "sin asignar"
       if (STATE.classOverrides[overrideKey] === '__none__') {
         return { id: null, initials: '?', full_name: 'Sin asignar', certifications: 'Asignar profesor', _isUnassigned: true };
       }
     }
   }
 
-  // 1. Override puntual del día
-  const overrideKey = `${dateKey}-${locationId}-${hour}`;
-  if (STATE.classOverrides[overrideKey] && STATE.classOverrides[overrideKey] !== '__none__') {
-    const overrideId = STATE.classOverrides[overrideKey];
-    const inst = STATE.instructors.find(i => i.id === overrideId);
-    if (inst) return { ...inst, _isOverride: true };
-  }
-  if (STATE.classOverrides[overrideKey] === '__none__') {
-    return { id: null, initials: '?', full_name: 'Sin asignar', certifications: 'Asignar profesor', _isUnassigned: true };
+  // 1. Override puntual del localStorage (legacy).
+  // SOLO se consulta si BD NO tiene la session con instructor_id=NULL explícito.
+  // Esto evita que un localStorage cacheado sobreescriba decisiones de BD.
+  if (!sessionExistsButUnassigned) {
+    if (STATE.classOverrides[overrideKey] && STATE.classOverrides[overrideKey] !== '__none__') {
+      const overrideId = STATE.classOverrides[overrideKey];
+      const inst = STATE.instructors.find(i => i.id === overrideId);
+      if (inst) return { ...inst, _isOverride: true };
+    }
+    if (STATE.classOverrides[overrideKey] === '__none__') {
+      return { id: null, initials: '?', full_name: 'Sin asignar', certifications: 'Asignar profesor', _isUnassigned: true };
+    }
   }
 
-  // 2. Buscar en instructor_schedules vigentes
+  // 2. Buscar en instructor_schedules vigentes (schedule base)
   const dateStr = dateKey;
   const candidates = STATE.schedules.filter(s => {
     if (s.location_id !== locationId) return false;
@@ -9563,13 +9570,13 @@ const CONFLICT_CTX = {
 // Considera: misma sede + mismo dow + misma hora + rangos de fechas que se cruzan,
 // pero SOLO de otros profesores (el mismo profesor no es conflicto consigo mismo).
 function iseFindConflicts(newRows, newFromIso, newToIso) {
-  const conflicts = [];
+  const conflicts = [];                  // Otros profesores que se traslapan (requieren reemplazo)
+  const sameInstructorDuplicates = [];   // El MISMO profesor con rows traslapados (sería duplicación)
   const nuFrom = newFromIso || '0001-01-01';
   const nuTo = newToIso || '9999-12-31';
 
   newRows.forEach(newRow => {
     (STATE.schedules || []).forEach(existing => {
-      if (existing.instructor_id === newRow.instructor_id) return;
       if (existing.location_id !== newRow.location_id) return;
       if (existing.day_of_week !== newRow.day_of_week) return;
       if (existing.hour !== newRow.hour) return;
@@ -9579,12 +9586,16 @@ function iseFindConflicts(newRows, newFromIso, newToIso) {
 
       // Overlap si: nuFrom <= exTo && nuTo >= exFrom
       if (nuFrom <= exTo && nuTo >= exFrom) {
-        conflicts.push({ existing, newRow });
+        if (existing.instructor_id === newRow.instructor_id) {
+          sameInstructorDuplicates.push({ existing, newRow });
+        } else {
+          conflicts.push({ existing, newRow });
+        }
       }
     });
   });
 
-  return conflicts;
+  return { conflicts, sameInstructorDuplicates };
 }
 
 // Agrupa los conflictos por profesor afectado (uno por uno con sus dows/hours)
@@ -9683,9 +9694,14 @@ function iseCloseConflictModal() {
 
 async function iseConfirmReplacement() {
   const btn = document.getElementById('ise-conflict-confirm-btn');
-  const originalText = btn.textContent;
-  btn.disabled = true;
-  btn.textContent = 'Aplicando reemplazo...';
+
+  // Protección anti-double-click
+  if (btn && btn.disabled) return;
+  const originalText = btn ? btn.textContent : '';
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = 'Aplicando reemplazo...';
+  }
 
   try {
     const newFromIso = CONFLICT_CTX.pendingFromIso;
@@ -9721,6 +9737,16 @@ async function iseConfirmReplacement() {
     if (fetchErr) throw fetchErr;
     STATE.schedules = refreshed || [];
 
+    // 4. Limpiar class_sessions.instructor_id y classOverrides del profesor recortado
+    //    en el rango del nuevo bloque (evita que overrides viejos sobreescriban el nuevo schedule).
+    const newInstId = CONFLICT_CTX.pendingRows[0]?.instructor_id;
+    const locId = CONFLICT_CTX.pendingLocId;
+    const dowsSet = new Set(CONFLICT_CTX.pendingRows.map(r => r.day_of_week));
+    const hoursSet = new Set(CONFLICT_CTX.pendingRows.map(r => r.hour));
+    if (newInstId && locId) {
+      await iseClearOverridesForRange(newInstId, locId, dowsSet, hoursSet, newFromIso, newToIso);
+    }
+
     showToast(`Reemplazo aplicado · ${CONFLICT_CTX.groupedByInst.length} ${CONFLICT_CTX.groupedByInst.length === 1 ? 'profesor recortado' : 'profesores recortados'}`, 'success');
     document.getElementById('ise-conflict-modal').classList.remove('is-open');
     iseRenderInstructorsList();
@@ -9728,8 +9754,7 @@ async function iseConfirmReplacement() {
   } catch (e) {
     console.error('iseConfirmReplacement error:', e);
     showToast('Error al aplicar reemplazo: ' + (e.message || 'desconocido'), 'error');
-    btn.disabled = false;
-    btn.textContent = originalText;
+    if (btn) { btn.disabled = false; btn.textContent = originalText; }
   }
 }
 
@@ -9841,12 +9866,23 @@ function iseUpdateBlockSummary() {
 }
 
 async function iseSaveNewBlock() {
+  const btn = document.getElementById('ise-nb-save-btn');
+
+  // Protección anti-double-click: si ya estaba deshabilitado, no procesar
+  if (btn && btn.disabled) return;
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = 'Validando...';
+  }
+
   if (typeof isOnline !== 'undefined' && !isOnline) {
     showToast('Necesita conexión a Supabase para guardar horarios', 'error');
+    if (btn) { btn.disabled = false; btn.textContent = 'Guardar bloque'; }
     return;
   }
   if (NB_CTX.dows.size === 0 || NB_CTX.hours.size === 0) {
     showToast('Selecciona al menos un día y una hora', 'error');
+    if (btn) { btn.disabled = false; btn.textContent = 'Guardar bloque'; }
     return;
   }
 
@@ -9857,6 +9893,7 @@ async function iseSaveNewBlock() {
   // Validación: si hay ambas fechas, desde debe ser <= hasta
   if (effFrom && effTo && effFrom > effTo) {
     showToast('La fecha "desde" no puede ser posterior a "hasta"', 'error');
+    if (btn) { btn.disabled = false; btn.textContent = 'Guardar bloque'; }
     return;
   }
 
@@ -9876,19 +9913,35 @@ async function iseSaveNewBlock() {
     }
   }
 
-  // 🚨 DETECCIÓN DE CONFLICTOS (Paso 3)
-  const conflicts = iseFindConflicts(rows, effFrom, effTo);
+  // 🚨 DETECCIÓN DE CONFLICTOS Y DUPLICADOS
+  const { conflicts, sameInstructorDuplicates } = iseFindConflicts(rows, effFrom, effTo);
+
+  // (a) Si el MISMO profesor ya tiene rows traslapados → avisar antes de duplicar
+  if (sameInstructorDuplicates.length > 0) {
+    const dupDows = new Set(sameInstructorDuplicates.map(d => d.existing.day_of_week));
+    const dupHours = new Set(sameInstructorDuplicates.map(d => d.existing.hour));
+    const inst = STATE.instructors.find(i => i.id === SCHEDULE_CTX.instructorId);
+    const instName = inst ? inst.full_name : 'Este profesor';
+    const msg = `${instName} ya tiene clases asignadas en este rango:\n\n` +
+                `${iseFormatDows(dupDows)} · ${iseFormatHours(dupHours)}\n\n` +
+                `Si continúas, se crearán filas DUPLICADAS en la base de datos. ` +
+                `¿Estás seguro? (Normalmente esto es un error.)`;
+    if (!confirm(msg)) {
+      if (btn) { btn.disabled = false; btn.textContent = 'Guardar bloque'; }
+      return;
+    }
+  }
+
+  // (b) Si hay conflictos con OTROS profesores → modal de reemplazo
   if (conflicts.length > 0) {
-    // Mostrar modal de confirmación — el guardado real se hace en iseConfirmReplacement
+    // Re-habilitar el botón porque el flujo continúa en otro modal
+    if (btn) { btn.disabled = false; btn.textContent = 'Guardar bloque'; }
     iseShowConflictModal(conflicts, rows, effFrom, effTo, locId);
     return;
   }
 
-  // Sin conflictos → guardado directo
-  const btn = document.getElementById('ise-nb-save-btn');
-  const originalText = btn.textContent;
-  btn.disabled = true;
-  btn.textContent = 'Guardando...';
+  // (c) Sin conflictos → guardado directo
+  if (btn) btn.textContent = 'Guardando...';
 
   try {
     const { error: insErr } = await sb.from('instructor_schedules').insert(rows);
@@ -9900,6 +9953,9 @@ async function iseSaveNewBlock() {
     if (fetchErr) throw fetchErr;
     STATE.schedules = refreshed || [];
 
+    // Limpiar class_sessions y classOverrides que pudieran sobreescribir el nuevo schedule
+    await iseClearOverridesForRange(SCHEDULE_CTX.instructorId, locId, NB_CTX.dows, NB_CTX.hours, effFrom, effTo);
+
     showToast(`Bloque guardado · ${rows.length} ${rows.length === 1 ? 'clase' : 'clases'}/semana`, 'success');
     iseCloseBlockModal();
     iseRenderInstructorsList();
@@ -9907,8 +9963,82 @@ async function iseSaveNewBlock() {
   } catch (e) {
     console.error('iseSaveNewBlock error:', e);
     showToast('Error al guardar: ' + (e.message || 'desconocido'), 'error');
-    btn.disabled = false;
-    btn.textContent = originalText;
+    if (btn) { btn.disabled = false; btn.textContent = 'Guardar bloque'; }
+  }
+}
+
+// Limpia class_sessions.instructor_id y classOverrides en el rango del nuevo bloque,
+// para que el nuevo schedule base "tome control" sin overrides antiguos sobre-escribiendo.
+// Solo limpia las sessions/overrides que tienen un instructor distinto al que se acaba de asignar.
+async function iseClearOverridesForRange(newInstId, locId, dowsSet, hoursSet, effFrom, effTo) {
+  try {
+    // 1. Limpiar class_sessions.instructor_id en BD para las dow/hour del nuevo bloque,
+    //    dentro del rango del nuevo schedule, donde el instructor_id NO sea el nuevo.
+    const dows = [...dowsSet];
+    const hours = [...hoursSet];
+    if (dows.length === 0 || hours.length === 0) return;
+
+    let q = sb.from('class_sessions')
+      .select('id, session_date, hour, instructor_id')
+      .eq('location_id', locId)
+      .in('hour', hours)
+      .not('instructor_id', 'is', null)
+      .neq('instructor_id', newInstId);
+    if (effFrom) q = q.gte('session_date', effFrom);
+    if (effTo) q = q.lte('session_date', effTo);
+
+    const { data: sessions, error } = await q;
+    if (error) { console.warn('iseClearOverridesForRange query:', error); return; }
+
+    const toClear = (sessions || []).filter(s => {
+      const sDate = new Date(s.session_date + 'T12:00:00');
+      return dows.includes(sDate.getDay());
+    });
+
+    if (toClear.length > 0) {
+      const ids = toClear.map(s => s.id);
+      const { error: upErr } = await sb.from('class_sessions').update({ instructor_id: null }).in('id', ids);
+      if (upErr) { console.warn('iseClearOverridesForRange update:', upErr); }
+
+      // Refrescar STATE.classSessions del día actual si está cargado
+      if (STATE.classSessions) {
+        STATE.classSessions.forEach(cs => {
+          if (toClear.find(t => t.id === cs.id)) cs.instructor_id = null;
+        });
+      }
+    }
+
+    // 2. Limpiar localStorage classOverrides correspondiente
+    let changedLS = false;
+    const keysToRemove = [];
+    for (const key of Object.keys(STATE.classOverrides || {})) {
+      // key format: 'YYYY-MM-DD-locId-hour'
+      const parts = key.split('-');
+      if (parts.length < 5) continue; // minimum YYYY-MM-DD- locId-hour (locId is uuid with dashes)
+      // Reconstruir desde el final: la hora es el último, locId es el penúltimo grupo (uuid),
+      // la fecha es el resto. Más simple: parse desde el inicio.
+      const dateIso = parts.slice(0, 3).join('-');
+      const hour = parseInt(parts[parts.length - 1], 10);
+      const lockey = parts.slice(3, parts.length - 1).join('-'); // locId con sus dashes
+      if (lockey !== locId) continue;
+      if (!hours.includes(hour)) continue;
+      const d = new Date(dateIso + 'T12:00:00');
+      if (!dows.includes(d.getDay())) continue;
+      if (effFrom && dateIso < effFrom) continue;
+      if (effTo && dateIso > effTo) continue;
+      // Solo limpiar si el override es de OTRO profesor (no el nuevo)
+      if (STATE.classOverrides[key] === newInstId) continue;
+      keysToRemove.push(key);
+    }
+    for (const k of keysToRemove) {
+      delete STATE.classOverrides[k];
+      changedLS = true;
+    }
+    if (changedLS) {
+      try { localStorage.setItem('classOverrides', JSON.stringify(STATE.classOverrides)); } catch(e) {}
+    }
+  } catch (e) {
+    console.warn('iseClearOverridesForRange exception:', e);
   }
 }
 
