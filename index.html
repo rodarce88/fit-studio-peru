@@ -315,26 +315,26 @@
   .nav-system-popover {
     position: fixed;
     width: 260px;
-    background: white;
+    background: #ffffff;
     border: 1px solid var(--line);
     border-radius: 12px;
-    box-shadow: 0 12px 32px rgba(64, 29, 107, 0.18);
+    box-shadow: 0 20px 48px rgba(64, 29, 107, 0.22), 0 6px 16px rgba(0, 0, 0, 0.08);
     padding: 6px;
     z-index: 9999;
     opacity: 0;
     visibility: hidden;
-    transform: translateY(4px);
-    transition: opacity 0.15s, visibility 0.15s, transform 0.15s;
+    transform: translateY(6px);
+    transition: opacity 0.18s, visibility 0.18s, transform 0.18s;
   }
   .nav-system-popover.is-open { opacity: 1; visibility: visible; transform: translateY(0); }
   .nav-system-popover::before {
     content: '';
     position: absolute;
-    left: -6px;
-    top: var(--tail-top, 50%);
+    bottom: -7px;
+    left: var(--tail-left, 30px);
     width: 12px; height: 12px;
-    background: white;
-    border-left: 1px solid var(--line);
+    background: #ffffff;
+    border-right: 1px solid var(--line);
     border-bottom: 1px solid var(--line);
     transform: rotate(45deg);
   }
@@ -22456,21 +22456,30 @@ function toggleSystemMenu(event) {
     popover.classList.remove('is-open');
     btn.classList.remove('is-active');
   } else {
-    // Posicionar dinámicamente: a la derecha del botón, alineado al fondo
-    const rect = btn.getBoundingClientRect();
-    popover.style.left = (rect.right + 8) + 'px';
-    popover.style.top = (rect.bottom - popover.offsetHeight) + 'px';
-    // Ajustar el "tail" (flecha) para que apunte al centro vertical del botón
-    const btnCenterFromTop = rect.top + rect.height / 2;
-    // Después de mostrar, calcular el offset relativo al popover
-    requestAnimationFrame(() => {
-      const popRect = popover.getBoundingClientRect();
-      const tailFromTop = Math.max(12, Math.min(popRect.height - 24, btnCenterFromTop - popRect.top - 6));
-      // Setea la posición del "tail" usando una CSS var
-      popover.style.setProperty('--tail-top', tailFromTop + 'px');
-    });
+    // Mostrar primero para poder medir altura
     popover.classList.add('is-open');
     btn.classList.add('is-active');
+
+    requestAnimationFrame(() => {
+      const btnRect = btn.getBoundingClientRect();
+      const popHeight = popover.offsetHeight;
+      const popWidth = popover.offsetWidth;
+      // Posicionar ARRIBA del botón, alineado a la izquierda
+      let left = btnRect.left;
+      // Si el popover se sale por la derecha, ajustar
+      if (left + popWidth > window.innerWidth - 12) {
+        left = window.innerWidth - popWidth - 12;
+      }
+      // 10px de separación entre el popover y el botón (espacio para la flecha)
+      const top = btnRect.top - popHeight - 10;
+      popover.style.left = left + 'px';
+      popover.style.top = top + 'px';
+      // Flecha apunta al centro horizontal del botón
+      const btnCenterX = btnRect.left + btnRect.width / 2;
+      const tailLeft = btnCenterX - left - 6; // 6 = mitad del width de la flecha
+      popover.style.setProperty('--tail-left', Math.max(16, Math.min(popWidth - 28, tailLeft)) + 'px');
+    });
+
     // Cerrar al hacer click fuera
     setTimeout(() => {
       document.addEventListener('click', closeSystemMenuOnOutsideClick, { once: true });
