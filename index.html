@@ -305,6 +305,85 @@
   }
   .nav-group { margin-bottom: 28px; }
   .nav-group-title { font-size: 10px; color: var(--ink-mute); text-transform: uppercase; letter-spacing: 0.14em; padding: 0 12px 8px; font-weight: 500; }
+
+  /* === SISTEMA (engranaje) — botón sticky al fondo del sidebar con popover === */
+  .nav-system-wrapper { position: relative; margin-top: auto; padding: 12px 0 4px; }
+  .nav-system-btn { display: flex; align-items: center; gap: 12px; padding: 10px 14px; border-radius: 10px; cursor: pointer; border: none; background: transparent; width: 100%; text-align: left; color: var(--ink-mute); font-family: var(--body); font-size: 13px; transition: all 0.15s; }
+  .nav-system-btn:hover { background: var(--fit-lavender-pale); color: var(--fit-purple); }
+  .nav-system-btn.is-active { background: var(--fit-lavender); color: var(--fit-purple); }
+  .nav-system-btn svg { flex-shrink: 0; }
+  .nav-system-popover {
+    position: absolute;
+    left: calc(100% + 8px);
+    bottom: 0;
+    width: 250px;
+    background: white;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    box-shadow: 0 8px 28px rgba(64, 29, 107, 0.14);
+    padding: 6px;
+    z-index: 100;
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(4px);
+    transition: opacity 0.15s, visibility 0.15s, transform 0.15s;
+  }
+  .nav-system-popover.is-open { opacity: 1; visibility: visible; transform: translateY(0); }
+  .nav-system-popover::before {
+    content: '';
+    position: absolute;
+    left: -6px;
+    bottom: 22px;
+    width: 12px; height: 12px;
+    background: white;
+    border-left: 1px solid var(--line);
+    border-bottom: 1px solid var(--line);
+    transform: rotate(45deg);
+  }
+  .nav-system-item {
+    display: grid;
+    grid-template-columns: 28px 1fr;
+    gap: 10px;
+    width: 100%;
+    padding: 10px 10px;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    border-radius: 8px;
+    text-align: left;
+    align-items: center;
+    transition: background 0.12s;
+    font-family: var(--body);
+  }
+  .nav-system-item:hover { background: var(--fit-lavender-pale); }
+  .nav-system-item svg { color: var(--fit-purple); justify-self: center; }
+  .nav-system-label { font-size: 13px; color: var(--ink); font-weight: 500; line-height: 1.2; }
+  .nav-system-desc { font-size: 11px; color: var(--ink-mute); margin-top: 2px; }
+  /* Sidebar es flex column para que .nav-system-wrapper haga margin-top: auto */
+  .sidebar { display: flex; flex-direction: column; }
+
+  /* === TABLA DE LOGINS RECIENTES === */
+  .logins-card { background: white; border-radius: 14px; border: 1px solid var(--line); overflow: hidden; }
+  .logins-summary { padding: 12px 18px; background: var(--fit-cream); border-bottom: 1px solid var(--line); font-size: 12px; color: var(--ink-soft); display: flex; gap: 16px; flex-wrap: wrap; }
+  .logins-summary strong { color: var(--ink); font-weight: 600; }
+  .logins-row { display: grid; grid-template-columns: 40px 1fr auto; gap: 14px; padding: 14px 18px; border-bottom: 1px solid var(--line); align-items: center; }
+  .logins-row:last-child { border-bottom: none; }
+  .logins-row:hover { background: var(--fit-cream); }
+  .logins-row.is-suspicious { background: var(--gold-soft); }
+  .logins-row.is-suspicious:hover { background: #FFEFC9; }
+  .logins-avatar { width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; font-size: 14px; font-weight: 600; }
+  .logins-avatar.ok { background: var(--fit-lavender); color: var(--fit-purple-deep); }
+  .logins-avatar.warn { background: var(--gold-light); color: white; }
+  .logins-name { font-size: 14.5px; color: var(--ink); font-weight: 500; }
+  .logins-email { font-size: 12px; color: var(--ink-mute); margin-top: 2px; }
+  .logins-meta { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 5px; font-size: 11.5px; color: var(--ink-soft); align-items: center; }
+  .logins-chip { padding: 2px 8px; border-radius: 999px; font-size: 10.5px; font-weight: 500; background: var(--fit-lavender-pale); color: var(--fit-purple); }
+  .logins-chip.warn { background: var(--gold-soft); color: var(--gold); }
+  .logins-chip.google { background: #FEF3E2; color: #B45309; }
+  .logins-chip.pass { background: var(--fit-lavender-pale); color: var(--fit-purple); }
+  .logins-btn-danger { background: white; border: 1px solid var(--danger); color: var(--danger); padding: 6px 12px; border-radius: 999px; font-size: 12px; cursor: pointer; font-weight: 500; font-family: var(--body); }
+  .logins-btn-danger:hover { background: var(--danger); color: white; }
+
   .nav-item {
     display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: var(--radius-sm);
     font-size: 14px; color: var(--ink-soft); margin-bottom: 2px; transition: all 0.15s;
@@ -2803,10 +2882,30 @@
       <span class="nav-icon"><svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="m7.5 4.27 9 5.15"/><path d="M21 8 12 13 3 8"/><path d="M3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8z"/></svg></span>
       Paquetes
     </button>
-    <button class="nav-item" data-view="logs" onclick="showView('logs', this); renderLogsView();">
-      <span class="nav-icon"><svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><line x1="10" y1="9" x2="8" y2="9"/></svg></span>
-      Logs
+  </div>
+
+  <!-- Botón Sistema (engranaje) con popover. Sticky al fondo del sidebar. -->
+  <div class="nav-system-wrapper" data-coord-only>
+    <button class="nav-system-btn" id="nav-system-btn" onclick="toggleSystemMenu(event)" aria-label="Sistema" title="Sistema">
+      <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+      <span>Sistema</span>
     </button>
+    <div class="nav-system-popover" id="nav-system-popover">
+      <button class="nav-system-item" onclick="navSystemSelect('logs')">
+        <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><line x1="10" y1="9" x2="8" y2="9"/></svg>
+        <div>
+          <div class="nav-system-label">Actividad</div>
+          <div class="nav-system-desc">Quién hizo qué y cuándo</div>
+        </div>
+      </button>
+      <button class="nav-system-item" onclick="navSystemSelect('logins')">
+        <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.79 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/></svg>
+        <div>
+          <div class="nav-system-label">Logins recientes</div>
+          <div class="nav-system-desc">Quién entró al sistema</div>
+        </div>
+      </button>
+    </div>
   </div>
 </aside>
 
@@ -3103,6 +3202,20 @@
       </div>
     </div>
     <div id="logs-container"></div>
+  </section>
+
+  <!-- LOGINS VIEW (coordinador) — Auditoría de accesos al sistema -->
+  <section class="view" id="view-logins">
+    <div class="page-header">
+      <div>
+        <h1 class="page-title">Logins <em>recientes</em></h1>
+        <div class="page-sub">Quién ha entrado al sistema, cuándo y con qué método.</div>
+      </div>
+      <div class="page-actions">
+        <button class="btn btn-ghost" onclick="renderLoginsView()">↻ Actualizar</button>
+      </div>
+    </div>
+    <div id="logins-container"></div>
   </section>
 
   <!-- COORD CONFIRM VIEW (mobile-first) — vista para confirmar clases del día -->
@@ -10854,6 +10967,7 @@ function syncMobileBottomNav(viewName) {
     'packages': 'menu',
     'reports': 'menu',
     'logs': 'menu',
+    'logins': 'menu',
   };
   const target = map[viewName] || null;
   document.querySelectorAll('.mobile-bottom-nav .m-nav-item').forEach(b => {
@@ -22330,6 +22444,176 @@ const LOGS_STATE = {
   loading: false,
   searchTimer: null, // debounce del input de búsqueda
 };
+
+// ============================================
+// SISTEMA — popover menu + navegación
+// ============================================
+function toggleSystemMenu(event) {
+  if (event) event.stopPropagation();
+  const popover = document.getElementById('nav-system-popover');
+  const btn = document.getElementById('nav-system-btn');
+  if (!popover || !btn) return;
+  const isOpen = popover.classList.contains('is-open');
+  if (isOpen) {
+    popover.classList.remove('is-open');
+    btn.classList.remove('is-active');
+  } else {
+    popover.classList.add('is-open');
+    btn.classList.add('is-active');
+    // Cerrar al hacer click fuera
+    setTimeout(() => {
+      document.addEventListener('click', closeSystemMenuOnOutsideClick, { once: true });
+    }, 0);
+  }
+}
+function closeSystemMenuOnOutsideClick(e) {
+  const popover = document.getElementById('nav-system-popover');
+  const btn = document.getElementById('nav-system-btn');
+  if (!popover) return;
+  if (popover.contains(e.target) || btn?.contains(e.target)) {
+    // Click dentro: re-armar listener
+    document.addEventListener('click', closeSystemMenuOnOutsideClick, { once: true });
+    return;
+  }
+  popover.classList.remove('is-open');
+  btn?.classList.remove('is-active');
+}
+function navSystemSelect(target) {
+  document.getElementById('nav-system-popover')?.classList.remove('is-open');
+  document.getElementById('nav-system-btn')?.classList.remove('is-active');
+  if (target === 'logs') {
+    showView('logs', null);
+    renderLogsView();
+  } else if (target === 'logins') {
+    showView('logins', null);
+    renderLoginsView();
+  }
+  // Quitar highlight de items del sidebar (sistema no es uno de ellos)
+  document.querySelectorAll('.sidebar .nav-item').forEach(b => b.classList.remove('is-active'));
+}
+
+// ============================================
+// LOGINS VIEW — auditoría de accesos al sistema
+// ============================================
+async function renderLoginsView() {
+  const container = document.getElementById('logins-container');
+  if (!container) return;
+  if (!CURRENT_USER || CURRENT_USER.role !== 'coordinator') {
+    container.innerHTML = '<div style="padding:40px; text-align:center; color:var(--ink-mute);">Solo coordinación puede ver los logins.</div>';
+    return;
+  }
+  if (!isOnline) {
+    container.innerHTML = '<div style="padding:40px; text-align:center; color:var(--ink-mute);">Conexión requerida.</div>';
+    return;
+  }
+
+  container.innerHTML = '<div style="padding:40px; text-align:center; color:var(--ink-mute);">Cargando logins...</div>';
+
+  try {
+    const { data, error } = await sb.rpc('get_recent_logins', { days_back: 30 });
+    if (error) throw error;
+
+    const rows = data || [];
+    if (rows.length === 0) {
+      container.innerHTML = '<div style="padding:60px 20px; text-align:center; color:var(--ink-mute);">Sin logins en los últimos 30 días.</div>';
+      return;
+    }
+
+    const known = rows.filter(r => r.is_known).length;
+    const unknown = rows.filter(r => !r.is_known).length;
+
+    const summaryHtml = `
+      <div class="logins-summary">
+        <div><strong>${rows.length}</strong> cuentas en últimos 30 días</div>
+        <div><strong>${known}</strong> conocidas</div>
+        ${unknown > 0 ? `<div style="color:var(--gold)"><strong>${unknown}</strong> sin rol asignado ⚠️</div>` : ''}
+      </div>
+    `;
+
+    const rowsHtml = rows.map(r => loginsRowHtml(r)).join('');
+
+    container.innerHTML = `<div class="logins-card">${summaryHtml}${rowsHtml}</div>`;
+  } catch (e) {
+    console.error('renderLoginsView error:', e);
+    const msg = String(e?.message || '').toLowerCase();
+    if (msg.includes('access denied') || msg.includes('coordinator')) {
+      container.innerHTML = '<div style="padding:40px; text-align:center; color:var(--danger);">Acceso denegado. Solo el coordinador puede ver los logins.</div>';
+    } else if (msg.includes('function') && msg.includes('does not exist')) {
+      container.innerHTML = `
+        <div style="padding:30px; text-align:center; color:var(--ink-mute);">
+          <h3 style="font-family: var(--display); font-style: italic; color: var(--gold); margin-bottom: 10px;">Función no instalada</h3>
+          <p>La función <code>get_recent_logins</code> aún no se creó en Supabase.</p>
+          <p style="font-size:12px; margin-top:10px;">Pídele al desarrollador el SQL de instalación.</p>
+        </div>`;
+    } else {
+      container.innerHTML = `<div style="padding:40px; text-align:center; color:var(--danger);">Error al cargar: ${escape(e.message || 'desconocido')}</div>`;
+    }
+  }
+}
+
+function loginsRowHtml(r) {
+  const initials = (r.full_name || r.email || '?').split(/\s+/).map(w => w[0]).filter(Boolean).slice(0, 2).join('').toUpperCase() || '?';
+  const isSuspicious = !r.is_known;
+  const providerLabel = r.provider === 'Google' ? '🔴 Google' : '✉️ Email';
+  const providerClass = r.provider === 'Google' ? 'google' : 'pass';
+
+  const lastSignIn = r.last_sign_in ? humanRelTime(r.last_sign_in) : 'nunca';
+  const created = r.account_created ? new Date(r.account_created).toLocaleDateString('es-PE', { day: 'numeric', month: 'short', year: 'numeric' }) : '';
+
+  const roleText = r.role_label === 'sin rol asignado'
+    ? `<span class="logins-chip warn">⚠️ Sin rol</span>`
+    : `<span class="logins-chip">${escape(r.role_label)}</span>`;
+
+  const deleteBtn = isSuspicious
+    ? `<button class="logins-btn-danger" onclick="deleteAuthUser('${r.user_id}', '${escape((r.email||'').replace(/'/g, "\\'"))}')">Borrar cuenta</button>`
+    : '';
+
+  return `
+    <div class="logins-row ${isSuspicious ? 'is-suspicious' : ''}">
+      <div class="logins-avatar ${isSuspicious ? 'warn' : 'ok'}">${initials}</div>
+      <div>
+        <div class="logins-name">${escape(r.full_name || '—')}</div>
+        <div class="logins-email">${escape(r.email || '—')}</div>
+        <div class="logins-meta">
+          ${roleText}
+          <span class="logins-chip ${providerClass}">${providerLabel}</span>
+          <span>Último login: ${lastSignIn}</span>
+          ${created ? `<span>· Creada: ${created}</span>` : ''}
+        </div>
+      </div>
+      <div>${deleteBtn}</div>
+    </div>
+  `;
+}
+
+function humanRelTime(iso) {
+  const date = new Date(iso);
+  const now = new Date();
+  const diffMs = now - date;
+  const diffMin = Math.floor(diffMs / 60000);
+  const diffHr = Math.floor(diffMin / 60);
+  const diffDay = Math.floor(diffHr / 24);
+  if (diffMin < 1) return 'hace segundos';
+  if (diffMin < 60) return `hace ${diffMin} min`;
+  if (diffHr < 24) return `hace ${diffHr} h`;
+  if (diffDay < 7) return `hace ${diffDay} día${diffDay === 1 ? '' : 's'}`;
+  return date.toLocaleDateString('es-PE', { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
+async function deleteAuthUser(userId, emailLabel) {
+  if (!isOnline) { showToast('Conexión requerida', 'error'); return; }
+  const sure = confirm(`¿Borrar cuenta de "${emailLabel}"?\n\nEsta acción es irreversible. La persona ya no podrá entrar.\n\n(Solo se permite borrar cuentas sin rol asignado.)`);
+  if (!sure) return;
+  try {
+    const { data, error } = await sb.rpc('delete_auth_user', { target_user_id: userId });
+    if (error) throw error;
+    showToast('Cuenta borrada ✓', 'success');
+    renderLoginsView();
+  } catch (e) {
+    console.error('deleteAuthUser error:', e);
+    showToast('Error: ' + (e.message || 'desconocido'), 'error');
+  }
+}
 
 async function renderLogsView() {
   const container = document.getElementById('logs-container');
