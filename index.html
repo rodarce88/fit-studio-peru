@@ -636,6 +636,12 @@
     /* Mi día sin sidebar de horas en mobile */
     body:not(.no-sidebar) .mi-dia-layout { grid-template-columns: 1fr; gap: 0; }
     body:not(.no-sidebar) .mi-dia-sidebar { display: none; }
+
+    /* Ocultar bottom bar + FAB cuando hay un modal abierto (no obstruir botones del modal).
+       Aplica a coord, profesor y cualquier modal global. */
+    body:has(.modal-backdrop.is-open) .mobile-bottom-bar,
+    body:has(.modal-backdrop.is-open) .mobile-bottom-bar-prof,
+    body:has(.modal-backdrop.is-open) .mobile-fab { display: none !important; }
   }
 
   .mobile-bottom-nav {
@@ -775,18 +781,24 @@
   .cc-badge-f { width: 36px; height: 36px; border-radius: 50%; background: linear-gradient(135deg, var(--fit-purple), var(--fit-purple-deep)); display: grid; place-items: center; color: white; font-family: var(--display); font-style: italic; font-size: 17px; flex-shrink: 0; }
 
   /* Daystrip horizontal */
-  .cc-daystrip { display: flex; gap: 6px; overflow-x: auto; -webkit-overflow-scrolling: touch; padding: 4px 14px 14px; margin: 0 -14px 4px; scrollbar-width: none; }
+  .cc-daystrip { display: flex; gap: 5px; overflow-x: auto; -webkit-overflow-scrolling: touch; padding: 4px 14px 14px; margin: 0 -14px 4px; scrollbar-width: none; scroll-behavior: smooth; }
   .cc-daystrip::-webkit-scrollbar { display: none; }
-  .cc-day-pill { flex-shrink: 0; min-width: 52px; padding: 8px 8px 7px; border-radius: 14px; background: white; border: 1.5px solid var(--line); text-align: center; cursor: pointer; transition: all 0.15s; font-family: var(--body); }
-  .cc-day-pill .cc-dow { font-size: 10px; color: var(--ink-mute); text-transform: uppercase; letter-spacing: 0.6px; font-weight: 500; }
-  .cc-day-pill .cc-num { font-family: var(--display); font-style: italic; font-size: 20px; color: var(--ink); line-height: 1.05; margin-top: 1px; }
-  .cc-day-pill .cc-meta { font-size: 9.5px; color: var(--ink-mute); margin-top: 2px; }
+  .cc-day-pill { flex-shrink: 0; min-width: 46px; padding: 7px 6px 6px; border-radius: 12px; background: white; border: 1.5px solid var(--line); text-align: center; cursor: pointer; transition: all 0.15s; font-family: var(--body); }
+  .cc-day-pill .cc-dow { font-size: 9.5px; color: var(--ink-mute); text-transform: uppercase; letter-spacing: 0.5px; font-weight: 500; }
+  .cc-day-pill .cc-num { font-family: var(--display); font-style: italic; font-size: 19px; color: var(--ink); line-height: 1.05; margin-top: 1px; }
+  .cc-day-pill .cc-meta { font-size: 9.5px; color: var(--ink-mute); margin-top: 2px; line-height: 1; }
   .cc-day-pill.is-today { border-color: var(--gold-light); }
   .cc-day-pill.is-today .cc-num { color: var(--gold); }
   .cc-day-pill.is-selected { background: var(--fit-purple); border-color: var(--fit-purple); }
   .cc-day-pill.is-selected .cc-dow,
   .cc-day-pill.is-selected .cc-num,
   .cc-day-pill.is-selected .cc-meta { color: white; }
+
+  /* Month navigation */
+  .cc-month-nav { display: flex; align-items: center; justify-content: space-between; padding: 6px 0 4px; margin-bottom: 2px; }
+  .cc-month-label { font-family: var(--display); font-style: italic; font-size: 16px; color: var(--fit-purple-deep); font-weight: 500; flex: 1; text-align: center; text-transform: capitalize; }
+  .cc-month-btn { width: 34px; height: 34px; border-radius: 50%; border: 1px solid var(--line); background: white; color: var(--fit-purple); font-size: 18px; cursor: pointer; display: grid; place-items: center; padding: 0; font-family: var(--body); line-height: 1; }
+  .cc-month-btn:active { background: var(--fit-lavender-pale); }
 
   /* Hour cards */
   .cc-hour-card { background: white; border: 1px solid var(--line); border-radius: 14px; margin-bottom: 12px; overflow: hidden; }
@@ -22137,6 +22149,12 @@ async function renderCoordConfirmView() {
   // Init date al día actual si no hay fecha previa
   if (!STATE.ccDate) STATE.ccDate = dateToIsoLocal(new Date());
 
+  // Init mes a mostrar (basado en la fecha seleccionada)
+  if (!STATE.ccMonth) {
+    const d = new Date(STATE.ccDate + 'T12:00:00');
+    STATE.ccMonth = { year: d.getFullYear(), monthIndex: d.getMonth() };
+  }
+
   // Skeleton mientras carga (solo si es primer render)
   if (!container.querySelector('.cc-wrap')) {
     container.innerHTML = `
@@ -22149,10 +22167,11 @@ async function renderCoordConfirmView() {
     `;
   }
 
-  // Cargar la semana de la fecha seleccionada (para tener scheduleWeekSessions/Bookings)
-  const ccDateObj = new Date(STATE.ccDate + 'T12:00:00');
-  STATE.scheduleWeekStart = getWeekStart(ccDateObj);
-  await loadScheduleWeekData();
+  // Cargar el mes completo (sessions+bookings) — reusa STATE.scheduleWeekSessions/Bookings
+  // para mantener compatibilidad con getCellStudents (que filtra por fecha exacta).
+  await ccLoadMonthData(STATE.ccMonth.year, STATE.ccMonth.monthIndex);
+  // Recalcular weekStart para que toggleConfirmedForCell/loadScheduleWeekData no rompa si se llama luego
+  STATE.scheduleWeekStart = getWeekStart(new Date(STATE.ccDate + 'T12:00:00'));
 
   ccRenderShell();
 }
@@ -22166,18 +22185,20 @@ function ccRenderShell() {
   const todayIso = dateToIsoLocal(new Date());
   const isToday = dateIso === todayIso;
   const monthsShort = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+  const monthsLong = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
   const daysShort = ['dom','lun','mar','mié','jue','vie','sáb'];
 
   const loc = STATE.locations.find(l => l.id === STATE.currentLocationId);
   const locName = loc?.name || '';
   const cap = loc?.capacity || 9;
 
-  // ===== DAYSTRIP =====
-  const weekStart = getWeekStart(dateObj);
+  // ===== DAYSTRIP del MES completo =====
+  const year = STATE.ccMonth.year;
+  const monthIdx = STATE.ccMonth.monthIndex;
+  const daysInMonth = new Date(year, monthIdx + 1, 0).getDate();
   const dayPills = [];
-  for (let i = 0; i < 7; i++) {
-    const d = new Date(weekStart);
-    d.setDate(weekStart.getDate() + i);
+  for (let day = 1; day <= daysInMonth; day++) {
+    const d = new Date(year, monthIdx, day, 12, 0, 0);
     const iso = dateToIsoLocal(d);
     const isSel = iso === dateIso;
     const isTodayPill = iso === todayIso;
@@ -22185,10 +22206,11 @@ function ccRenderShell() {
     const numClasses = dHours.length;
     dayPills.push(`
       <div class="cc-day-pill ${isTodayPill ? 'is-today' : ''} ${isSel ? 'is-selected' : ''}"
+           data-cc-day="${iso}"
            onclick="ccSelectDay('${iso}')">
         <div class="cc-dow">${daysShort[d.getDay()]}</div>
-        <div class="cc-num">${d.getDate()}</div>
-        <div class="cc-meta">${numClasses} ${numClasses === 1 ? 'clase' : 'clases'}</div>
+        <div class="cc-num">${day}</div>
+        <div class="cc-meta">${numClasses === 0 ? '—' : numClasses}</div>
       </div>
     `);
   }
@@ -22291,6 +22313,9 @@ function ccRenderShell() {
     ? `${escape(locName)} · sin clases programadas`
     : `${escape(locName)} · ${hours.length} ${hours.length === 1 ? 'clase' : 'clases'} · ${totalConfirmed}/${totalStudents} confirmadas`;
 
+  // Mes label (Enero 2026)
+  const monthLabel = `${monthsLong[monthIdx]} ${year}`;
+
   container.innerHTML = `
     <div class="cc-wrap">
       <div class="cc-head">
@@ -22300,7 +22325,12 @@ function ccRenderShell() {
           <div class="cc-head-sub">${headerSub}</div>
         </div>
       </div>
-      <div class="cc-daystrip">${dayPills.join('')}</div>
+      <div class="cc-month-nav">
+        <button class="cc-month-btn" onclick="ccNavMonth(-1)" aria-label="Mes anterior">‹</button>
+        <div class="cc-month-label">${monthLabel}</div>
+        <button class="cc-month-btn" onclick="ccNavMonth(1)" aria-label="Mes siguiente">›</button>
+      </div>
+      <div class="cc-daystrip" id="cc-daystrip">${dayPills.join('')}</div>
       ${hours.length === 0 ? `
         <div class="cc-empty-day">
           <h3>Sede <em>cerrada</em></h3>
@@ -22309,17 +22339,98 @@ function ccRenderShell() {
       ` : hourCards.join('')}
     </div>
   `;
+
+  // Auto-scroll del daystrip al día seleccionado (centrarlo)
+  requestAnimationFrame(() => {
+    const strip = document.getElementById('cc-daystrip');
+    const selPill = strip?.querySelector(`[data-cc-day="${dateIso}"]`);
+    if (strip && selPill) {
+      const stripRect = strip.getBoundingClientRect();
+      const pillRect = selPill.getBoundingClientRect();
+      const targetScroll = selPill.offsetLeft - (stripRect.width / 2) + (pillRect.width / 2);
+      strip.scrollTo({ left: Math.max(0, targetScroll), behavior: 'smooth' });
+    }
+  });
+}
+
+// Cargar sessions+bookings de un mes completo.
+// Reusa STATE.scheduleWeekSessions/Bookings para mantener compatibilidad con getCellStudents.
+async function ccLoadMonthData(year, monthIndex) {
+  if (!isOnline) {
+    STATE.scheduleWeekSessions = [];
+    STATE.scheduleWeekBookings = [];
+    return;
+  }
+  const startIso = dateToIsoLocal(new Date(year, monthIndex, 1, 12, 0, 0));
+  const lastDay = new Date(year, monthIndex + 1, 0).getDate();
+  const endIso = dateToIsoLocal(new Date(year, monthIndex, lastDay, 12, 0, 0));
+
+  const { data: sessions } = await sb.from('class_sessions')
+    .select('id, session_date, hour, location_id, is_cancelled, instructor_id')
+    .gte('session_date', startIso)
+    .lte('session_date', endIso);
+  STATE.scheduleWeekSessions = sessions || [];
+
+  const sessionIds = (sessions || []).map(s => s.id);
+  if (sessionIds.length > 0) {
+    const { data: bookings } = await sb.from('session_bookings')
+      .select('*')
+      .in('session_id', sessionIds);
+    STATE.scheduleWeekBookings = bookings || [];
+  } else {
+    STATE.scheduleWeekBookings = [];
+  }
+}
+
+// Navegación entre meses (-1 = anterior, +1 = siguiente)
+async function ccNavMonth(direction) {
+  if (!STATE.ccMonth) return;
+  let { year, monthIndex } = STATE.ccMonth;
+  monthIndex += direction;
+  if (monthIndex < 0) { monthIndex = 11; year--; }
+  else if (monthIndex > 11) { monthIndex = 0; year++; }
+  STATE.ccMonth = { year, monthIndex };
+
+  // Cambiar el día seleccionado:
+  // - Si HOY está dentro de este nuevo mes → seleccionar hoy
+  // - Si no → seleccionar el día 1 del mes
+  const today = new Date();
+  if (today.getFullYear() === year && today.getMonth() === monthIndex) {
+    STATE.ccDate = dateToIsoLocal(today);
+  } else {
+    STATE.ccDate = dateToIsoLocal(new Date(year, monthIndex, 1, 12, 0, 0));
+  }
+
+  // Mostrar skeleton mientras carga
+  const container = document.getElementById('coord-confirm-container');
+  if (container) {
+    container.innerHTML = `
+      <div class="cc-wrap">
+        <div class="cc-skeleton" style="height: 50px; margin-bottom: 14px;"></div>
+        <div class="cc-skeleton" style="height: 60px; margin-bottom: 14px;"></div>
+        <div class="cc-skeleton" style="height: 60px; margin-bottom: 14px;"></div>
+        <div class="cc-skeleton" style="height: 200px;"></div>
+      </div>
+    `;
+  }
+
+  await ccLoadMonthData(year, monthIndex);
+  STATE.scheduleWeekStart = getWeekStart(new Date(STATE.ccDate + 'T12:00:00'));
+  ccRenderShell();
 }
 
 async function ccSelectDay(dateIso) {
   STATE.ccDate = dateIso;
-  // Si la fecha está fuera de la semana cargada, recargar
-  const newWeekStartIso = dateToIsoLocal(getWeekStart(new Date(dateIso + 'T12:00:00')));
-  const currentWeekStartIso = STATE.scheduleWeekStart ? dateToIsoLocal(STATE.scheduleWeekStart) : null;
-  if (newWeekStartIso !== currentWeekStartIso) {
-    STATE.scheduleWeekStart = getWeekStart(new Date(dateIso + 'T12:00:00'));
-    await loadScheduleWeekData();
+  const newDateObj = new Date(dateIso + 'T12:00:00');
+  const newYear = newDateObj.getFullYear();
+  const newMonthIdx = newDateObj.getMonth();
+  const curr = STATE.ccMonth || {};
+  // Si la fecha está en otro mes, recargar el mes
+  if (curr.year !== newYear || curr.monthIndex !== newMonthIdx) {
+    STATE.ccMonth = { year: newYear, monthIndex: newMonthIdx };
+    await ccLoadMonthData(newYear, newMonthIdx);
   }
+  STATE.scheduleWeekStart = getWeekStart(newDateObj);
   ccRenderShell();
 }
 
