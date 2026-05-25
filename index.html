@@ -449,10 +449,20 @@
   /* Cuando contiene el layout de Mi día: overflow visible (para que sticky funcione) + header y sidebar sticky */
   .timeline-card:has(.mi-dia-layout) { overflow: visible; }
   .timeline-card:has(.mi-dia-layout) .timeline-header { 
-    position: sticky; top: var(--topbar-h); z-index: 10;
+    position: sticky; top: calc(var(--topbar-h) + var(--dash-search-sticky-h, 76px)); z-index: 10;
     border-top-left-radius: var(--radius-lg); border-top-right-radius: var(--radius-lg);
   }
   .timeline-card:has(.mi-dia-layout) .timeline-body { border-bottom-left-radius: var(--radius-lg); border-bottom-right-radius: var(--radius-lg); }
+
+  /* Buscador sticky del dashboard (Mi día) — queda fijo al hacer scroll */
+  .dash-search-wrap {
+    position: sticky;
+    top: var(--topbar-h);
+    z-index: 11;
+    background: var(--bg);
+    padding-top: 12px;
+    padding-bottom: 12px;
+  }
   .timeline-header { padding: 22px 26px; border-bottom: 1px solid var(--line-soft); display: flex; align-items: center; justify-content: space-between; background: var(--fit-cream); }
   .timeline-title { display: flex; align-items: baseline; gap: 10px; }
   .timeline-title h2 { font-family: var(--display); font-size: 24px; font-weight: 400; }
@@ -471,9 +481,9 @@
   .mi-dia-layout { display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: 14px; align-items: start; }
   .mi-dia-sidebar { 
     position: sticky; 
-    top: calc(var(--topbar-h) + var(--mi-dia-header-h, 84px) + 12px);
+    top: calc(var(--topbar-h) + var(--dash-search-sticky-h, 76px) + var(--mi-dia-header-h, 84px) + 12px);
     align-self: start; 
-    max-height: calc(100vh - var(--topbar-h) - var(--mi-dia-header-h, 84px) - 32px); 
+    max-height: calc(100vh - var(--topbar-h) - var(--dash-search-sticky-h, 76px) - var(--mi-dia-header-h, 84px) - 32px); 
     overflow-y: auto; 
     padding-top: 4px; padding-right: 2px;
   }
@@ -2930,7 +2940,7 @@
     <!-- Banner de alertas de horarios (solo coordinador) -->
     <div id="schedule-alerts-banner" data-coord-only></div>
 
-    <div class="dash-search-wrap" style="position: relative; margin-bottom: 24px;">
+    <div class="dash-search-wrap">
       <div style="position: relative;">
         <svg style="position: absolute; left: 14px; top: 50%; transform: translateY(-50%); color: var(--ink-mute); pointer-events: none;" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
         <input
@@ -10996,13 +11006,72 @@ function setFilter(btn) {
   renderStudents();
 }
 
+// ============================================
+// BÚSQUEDAS RECIENTES DE ALUMNAS (Mi día)
+// Se guardan en localStorage POR USUARIO logueado y POR dispositivo.
+// O sea: cada coord en cada laptop tiene su propia lista.
+// ============================================
+function _recentStudentSearchKey() {
+  const userId = (CURRENT_USER && CURRENT_USER.id) || 'anon';
+  return `fit_recent_student_searches__${userId}`;
+}
+function addRecentStudentSearch(studentId) {
+  if (!studentId) return;
+  const key = _recentStudentSearchKey();
+  let recent = [];
+  try { recent = JSON.parse(localStorage.getItem(key) || '[]'); } catch(e) { recent = []; }
+  if (!Array.isArray(recent)) recent = [];
+  // Quitar si ya estaba, agregar al inicio, limitar a 10
+  recent = recent.filter(id => id !== studentId);
+  recent.unshift(studentId);
+  if (recent.length > 10) recent = recent.slice(0, 10);
+  try { localStorage.setItem(key, JSON.stringify(recent)); } catch(e) {}
+}
+function getRecentStudentSearches() {
+  const key = _recentStudentSearchKey();
+  let ids = [];
+  try { ids = JSON.parse(localStorage.getItem(key) || '[]'); } catch(e) { ids = []; }
+  if (!Array.isArray(ids)) return [];
+  // Resolver IDs a alumnas reales, descartar las que ya no existen
+  return ids
+    .map(id => (STATE.students || []).find(s => s.id === id))
+    .filter(Boolean);
+}
+function _renderDashStudentSearchRow(s) {
+  const loc = STATE.locations.find(l => l.id === s.location_id);
+  const modalityBadge = `<span class="modality-pill modality-${s.modality}" style="font-size:10px; padding:2px 7px; flex-shrink:0;">${getModalityIcon(s.modality)} ${getModalityShortLabel(s.modality)}</span>`;
+  const contact = s.email || s.phone || s.document_number || '';
+  return `<div onclick="addRecentStudentSearch('${s.id}'); openStudentDetail('${s.id}'); document.getElementById('dash-student-search').value=''; document.getElementById('dash-student-search-results').style.display='none';" style="display: flex; align-items: center; gap: 12px; padding: 10px 14px; cursor: pointer; border-bottom: 1px solid var(--line-soft); transition: background 0.1s;" onmouseover="this.style.background='var(--fit-cream)'" onmouseout="this.style.background='white'">
+    <div class="student-avatar" style="width: 32px; height: 32px; font-size: 11px; flex-shrink: 0;">${initials(s)}</div>
+    <div style="flex: 1; min-width: 0;">
+      <div style="font-size: 13px; font-weight: 500; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${escape(s.first_name)} ${escape(s.last_name || '')}</div>
+      <div style="font-size: 11px; color: var(--ink-mute); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${escape(loc?.name || 'Sin sede')}${contact ? ' · ' + escape(contact) : ''}</div>
+    </div>
+    ${modalityBadge}
+  </div>`;
+}
+
 function renderDashStudentSearch(query) {
   const results = document.getElementById('dash-student-search-results');
   if (!results) return;
   const q = (query || '').trim().toLowerCase();
+
+  // Input vacío → mostrar últimas 10 búsquedas recientes (de este usuario en este dispositivo)
   if (!q) {
-    results.style.display = 'none';
-    results.innerHTML = '';
+    const recents = getRecentStudentSearches();
+    if (recents.length === 0) {
+      results.style.display = 'none';
+      results.innerHTML = '';
+      return;
+    }
+    results.innerHTML = `
+      <div style="padding: 10px 14px 8px; font-size: 10px; color: var(--ink-mute); text-transform: uppercase; letter-spacing: 0.06em; font-weight: 600; border-bottom: 1px solid var(--line-soft); display: flex; align-items: center; justify-content: space-between;">
+        <span>⌛ Búsquedas recientes</span>
+        <button onclick="event.stopPropagation(); clearRecentStudentSearches();" style="background:none;border:none;font-size:10px;color:var(--ink-mute);cursor:pointer;text-transform:none;letter-spacing:0;font-weight:500;text-decoration:underline;">limpiar</button>
+      </div>
+      ${recents.map(_renderDashStudentSearchRow).join('')}
+    `;
+    results.style.display = 'block';
     return;
   }
 
@@ -11023,27 +11092,19 @@ function renderDashStudentSearch(query) {
     return;
   }
 
-  const html = matches.map(s => {
-    const loc = STATE.locations.find(l => l.id === s.location_id);
-    const modalityBadge = s.modality === 'fixed'
-      ? '<span style="font-size: 10px; padding: 2px 7px; background: var(--fit-lavender-pale); color: var(--fit-purple); border-radius: 999px; font-weight: 500;">Fijo</span>'
-      : (s.modality === 'trial'
-          ? '<span style="font-size: 10px; padding: 2px 7px; background: #FCEBA8; color: #8B6F1A; border-radius: 999px; font-weight: 500;">Trial</span>'
-          : '<span style="font-size: 10px; padding: 2px 7px; background: var(--fit-cream); color: var(--ink-soft); border-radius: 999px; font-weight: 500;">Flexible</span>');
-    const contact = s.email || s.phone || s.document_number || '';
-
-    return `<div onclick="openStudentDetail('${s.id}'); document.getElementById('dash-student-search').value=''; document.getElementById('dash-student-search-results').style.display='none';" style="display: flex; align-items: center; gap: 12px; padding: 10px 14px; cursor: pointer; border-bottom: 1px solid var(--line-soft); transition: background 0.1s;" onmouseover="this.style.background='var(--fit-cream)'" onmouseout="this.style.background='white'">
-      <div class="student-avatar" style="width: 32px; height: 32px; font-size: 11px; flex-shrink: 0;">${initials(s)}</div>
-      <div style="flex: 1; min-width: 0;">
-        <div style="font-size: 13px; font-weight: 500; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${escape(s.first_name)} ${escape(s.last_name || '')}</div>
-        <div style="font-size: 11px; color: var(--ink-mute); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${escape(loc?.name || 'Sin sede')}${contact ? ' · ' + escape(contact) : ''}</div>
-      </div>
-      ${modalityBadge}
-    </div>`;
-  }).join('');
-
-  results.innerHTML = html;
+  results.innerHTML = matches.map(_renderDashStudentSearchRow).join('');
   results.style.display = 'block';
+}
+
+function clearRecentStudentSearches() {
+  const key = _recentStudentSearchKey();
+  try { localStorage.removeItem(key); } catch(e) {}
+  // Cerrar el dropdown si está abierto
+  const r = document.getElementById('dash-student-search-results');
+  if (r) { r.style.display = 'none'; r.innerHTML = ''; }
+  // Volver el foco al input
+  const inp = document.getElementById('dash-student-search');
+  if (inp) inp.blur();
 }
 
 function showView(name, btn) {
