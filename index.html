@@ -18983,7 +18983,8 @@ function _pdfBuildHTML(stud, data) {
     const method = PDF_PAYMENT_LABELS[p.method] || p.method || '';
     const discount = parseFloat(p.discount_amount || 0);
     const discountPct = parseFloat(p.discount_pct || 0);
-    const ref = p.reference ? `Ref. ${escape(p.reference)}` : (p.notes ? escape(p.notes) : '');
+    // Solo mostrar la referencia (nro. operación). Las notas internas no van al PDF del cliente.
+    const ref = p.reference ? `Ref. ${escape(p.reference)}` : '';
     const discountChip = discount > 0
       ? `<span class="pay-discount">${discountPct > 0 ? discountPct + '% desc · ' : ''}−S/ ${discount.toFixed(2)}</span>`
       : '';
