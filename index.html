@@ -19035,13 +19035,14 @@ function _pdfBuildHTML(stud, data) {
   }).join('');
 
   // ============ CLASES TOMADAS (consumen cupo: attended | lost | no_show) ============
+  // Se agrupan visualmente por paquete para que se entienda qué clases pertenecen a cuál.
   const takenAtts = (data.attendances || []).filter(a => {
     if (!a.class_sessions) return false;
     return a.counts_against_package || ['attended', 'lost', 'no_show'].includes(a.status);
   }).sort((a, b) => {
     const da = (a.class_sessions.session_date || '') + String(a.class_sessions.hour || 0).padStart(2, '0');
     const db = (b.class_sessions.session_date || '') + String(b.class_sessions.hour || 0).padStart(2, '0');
-    return da.localeCompare(db); // asc
+    return da.localeCompare(db); // asc dentro del grupo
   });
 
   const attendedCount = takenAtts.filter(a => a.status === 'attended').length;
@@ -19051,7 +19052,8 @@ function _pdfBuildHTML(stud, data) {
     takenSubtitle = `${takenAtts.length} consumida${takenAtts.length === 1 ? '' : 's'} · ${attendedCount} asistida${attendedCount === 1 ? '' : 's'} · ${lostCount} perdida${lostCount === 1 ? '' : 's'}`;
   }
 
-  const takenRowsHTML = takenAtts.map(a => {
+  // Helper para renderizar una fila de clase tomada
+  const renderTakenRow = (a) => {
     const sess = a.class_sessions;
     const isLost = a.status === 'lost' || a.status === 'no_show';
     const checkSym = isLost ? '✗' : '✓';
@@ -19066,18 +19068,80 @@ function _pdfBuildHTML(stud, data) {
         <span class="class-check">${checkSym}</span>
       </div>
     `;
+  };
+
+  // Agrupar attendances por student_package_id
+  const attsByPkg = new Map();
+  const orphanAtts = [];
+  takenAtts.forEach(a => {
+    const pkgId = a.student_package_id;
+    if (!pkgId) { orphanAtts.push(a); return; }
+    if (!attsByPkg.has(pkgId)) attsByPkg.set(pkgId, []);
+    attsByPkg.get(pkgId).push(a);
+  });
+
+  // Ordenar grupos: paquete activo primero, luego completados por fecha de compra desc
+  // (allPkgsSorted ya está ordenado por fecha de compra desc)
+  const orderedGroups = [];
+  // Activo siempre arriba
+  if (activePkg && attsByPkg.has(activePkg.id)) {
+    orderedGroups.push({ pkg: activePkg, atts: attsByPkg.get(activePkg.id) });
+  }
+  // Resto en orden de fecha de compra desc
+  allPkgsSorted.forEach(p => {
+    if (p.id === activePkgId) return; // ya agregado
+    if (attsByPkg.has(p.id)) {
+      orderedGroups.push({ pkg: p, atts: attsByPkg.get(p.id) });
+    }
+  });
+
+  // Renderizar cada grupo como un sub-bloque con su header
+  const groupBlocksHTML = orderedGroups.map(({ pkg, atts }) => {
+    const pkgName = pkg.packages?.name || 'Paquete';
+    const used = pkg.classes_used || 0;
+    const total = pkg.classes_total || 0;
+    const statusKey = _pdfPkgStatusKey(pkg, activePkgId);
+    const meta = PDF_PKG_STATUS[statusKey] || PDF_PKG_STATUS.active;
+    const purchaseDate = pkg.purchase_date ? _pdfFmtDateShort(pkg.purchase_date) : '';
+    const rowsHTML = atts.map(renderTakenRow).join('');
+    const rowsCount = Math.max(1, Math.ceil(atts.length / 2));
+    return `
+      <div class="pkg-classes-group">
+        <div class="pkg-classes-head">
+          <span class="pkg-classes-name">${escape(pkgName)}</span>
+          <span class="pkg-classes-status ${statusKey}">
+            <span class="dot">${meta.dot}</span> ${escape(meta.label)} · ${used}/${total}${purchaseDate ? ` · Desde ${escape(purchaseDate)}` : ''}
+          </span>
+        </div>
+        <div class="classes-grid" style="grid-template-rows: repeat(${rowsCount}, auto);">
+          ${rowsHTML}
+        </div>
+      </div>
+    `;
   }).join('');
 
-  const takenRowsCount = Math.max(1, Math.ceil(takenAtts.length / 2));
+  // Bloque para attendances huérfanas (sin paquete asignado) — caso edge
+  const orphanRowsCount = Math.max(1, Math.ceil(orphanAtts.length / 2));
+  const orphanBlockHTML = orphanAtts.length > 0 ? `
+    <div class="pkg-classes-group">
+      <div class="pkg-classes-head">
+        <span class="pkg-classes-name">Sin paquete asignado</span>
+        <span class="pkg-classes-status">${orphanAtts.length} clase${orphanAtts.length === 1 ? '' : 's'}</span>
+      </div>
+      <div class="classes-grid" style="grid-template-rows: repeat(${orphanRowsCount}, auto);">
+        ${orphanAtts.map(renderTakenRow).join('')}
+      </div>
+    </div>
+  ` : '';
+
   const takenSection = takenAtts.length > 0 ? `
     <section class="section">
       <div class="section-head">
         <h2 class="section-title">Clases tomadas</h2>
         <span class="section-sub">${escape(takenSubtitle)}</span>
       </div>
-      <div class="classes-grid" style="grid-template-rows: repeat(${takenRowsCount}, auto);">
-        ${takenRowsHTML}
-      </div>
+      ${groupBlocksHTML}
+      ${orphanBlockHTML}
     </section>
   ` : '';
 
@@ -19359,6 +19423,33 @@ function _pdfBuildHTML(stud, data) {
           display: grid; grid-template-columns: 1fr 1fr;
           grid-auto-flow: column; gap: 0 32px;
         }
+        .pdf-page .pkg-classes-group {
+          margin-bottom: 16px;
+        }
+        .pdf-page .pkg-classes-group:last-child { margin-bottom: 0; }
+        .pdf-page .pkg-classes-head {
+          display: flex; align-items: baseline; justify-content: space-between;
+          gap: 12px; padding: 6px 10px; margin-bottom: 4px;
+          background: var(--fit-lavender-pale); border-radius: 6px;
+        }
+        .pdf-page .pkg-classes-name {
+          font-family: 'Fraunces', Georgia, serif;
+          font-style: italic;
+          font-size: 13px; font-weight: 500;
+          color: var(--fit-purple-deep);
+        }
+        .pdf-page .pkg-classes-status {
+          font-size: 10.5px; color: var(--ink-mute);
+          text-transform: uppercase; letter-spacing: 0.05em;
+          font-weight: 500;
+        }
+        .pdf-page .pkg-classes-status .dot { font-size: 11px; margin-right: 2px; }
+        .pdf-page .pkg-classes-status.active,
+        .pdf-page .pkg-classes-status.active .dot { color: var(--good); }
+        .pdf-page .pkg-classes-status.completed,
+        .pdf-page .pkg-classes-status.completed .dot { color: var(--ink-mute); }
+        .pdf-page .pkg-classes-status.frozen,
+        .pdf-page .pkg-classes-status.frozen .dot { color: var(--info); }
         .pdf-page .class-row {
           display: grid; grid-template-columns: 64px 38px 1fr auto;
           align-items: center; gap: 10px;
