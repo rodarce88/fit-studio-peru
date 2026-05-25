@@ -535,6 +535,8 @@
   .modality-fixed { background: var(--info-soft); color: var(--info); }
   .modality-flexible { background: var(--warn-soft); color: var(--warn); }
   .modality-trial { background: #F0E6FF; color: #6B21A8; }
+  .modality-interested { background: #FFEFE0; color: #B45309; }
+  .modality-monkeyfit { background: #DBEAFE; color: #1E40AF; }
 
   .attendance-toggle { display: flex; gap: 4px; }
   .att-btn { width: 32px; height: 32px; border-radius: 50%; border: 1.5px solid var(--line); display: grid; place-items: center; color: var(--ink-faint); transition: all 0.15s; }
@@ -3476,11 +3478,20 @@
           </div>
           <div class="form-row">
             <label>Modalidad <span class="req">*</span></label>
-            <select id="f-modality" required>
+            <select id="f-modality" required onchange="toggleMonkeyfitField()">
               <option value="flexible">Flexible (avisa por WhatsApp)</option>
               <option value="fixed">Fija (siempre mismo horario)</option>
               <option value="trial">Clase de prueba</option>
+              <option value="interested">Cliente interesada</option>
+              <option value="monkeyfit">MonkeyFit</option>
             </select>
+          </div>
+          <div class="form-row" id="f-monkeyfit-classes-row" style="display:none;">
+            <label>Clases adquiridas por MonkeyFit <span class="req">*</span></label>
+            <input type="number" id="f-monkeyfit-classes" min="1" max="60" step="1" placeholder="Ej: 8" />
+            <div style="font-size: 11.5px; color: var(--ink-mute); margin-top: 4px;">
+              Se creará automáticamente un paquete MonkeyFit con estas clases disponibles.
+            </div>
           </div>
           <div class="form-row">
             <label>Contacto de emergencia (nombre)</label>
@@ -6308,8 +6319,8 @@ function renderTimeline() {
       else if (status === 'rescheduled') { statusBadge = makeBadge('↔', 'MOVIDA', '#8b5cf6', 'white'); rowStyle = 'background: #faf5ff;'; }
       else if (isConfirmed) { statusBadge = makeBadge('✓', 'CONFIRMADA', '#dcfce7', 'var(--good)'); rowStyle = 'background: rgba(86, 161, 96, 0.05);'; }
 
-      const modalityIcon = s.modality === 'fixed' ? '★' : (s.modality === 'flexible' ? '↻' : '✦');
-      const modalityLabel = s.modality === 'fixed' ? 'Fijo' : (s.modality === 'flexible' ? 'Flexible' : 'Prueba');
+      const modalityIcon = getModalityIcon(s.modality);
+      const modalityLabel = getModalityLabel(s.modality);
       const fullName = (escape(s.first_name) + ' ' + escape(s.last_name || '')).trim();
 
       return `
@@ -8828,6 +8839,10 @@ function openStudentModal(id) {
   f('f-doc-num').value = s?.document_number || '';
   f('f-birth-date').value = s?.birth_date || '';
   f('f-modality').value = s?.modality || 'flexible';
+  // Si es edit y la alumna ya tiene modalidad monkeyfit, no le pedimos clases otra vez (ya tiene paquete creado)
+  // Si es nuevo y se selecciona monkeyfit, mostramos el campo. Reset valor.
+  f('f-monkeyfit-classes').value = '';
+  toggleMonkeyfitField();
   f('f-emergency-name').value = s?.emergency_contact_name || '';
   f('f-emergency-phone').value = s?.emergency_contact_phone || '';
   f('f-medical').value = s?.medical_notes || '';
@@ -9075,10 +9090,68 @@ function formatDate(isoStr) {
 // ============================================
 // CRUD — STUDENTS
 // ============================================
+// Muestra/oculta el campo de "clases MonkeyFit" según la modalidad seleccionada
+// Solo se muestra al CREAR alumna nueva (en edit, el paquete ya está creado).
+function toggleMonkeyfitField() {
+  const sel = document.getElementById('f-modality');
+  const row = document.getElementById('f-monkeyfit-classes-row');
+  const studentId = document.getElementById('f-student-id')?.value || '';
+  if (!sel || !row) return;
+  const isEdit = !!studentId;
+  if (sel.value === 'monkeyfit' && !isEdit) {
+    row.style.display = '';
+  } else {
+    row.style.display = 'none';
+  }
+}
+
+// Helpers centralizados de modalidad
+function getModalityLabel(modality) {
+  switch (modality) {
+    case 'fixed': return 'Fijo';
+    case 'flexible': return 'Flexible';
+    case 'trial': return 'Prueba';
+    case 'interested': return 'Interesada';
+    case 'monkeyfit': return 'MonkeyFit';
+    default: return modality || '—';
+  }
+}
+function getModalityIcon(modality) {
+  switch (modality) {
+    case 'fixed': return '★';
+    case 'flexible': return '↻';
+    case 'trial': return '✦';
+    case 'interested': return '💬';
+    case 'monkeyfit': return '🐵';
+    default: return '?';
+  }
+}
+function getModalityShortLabel(modality) {
+  switch (modality) {
+    case 'fixed': return 'Fijo';
+    case 'flexible': return 'Flex';
+    case 'trial': return 'Prueba';
+    case 'interested': return 'Interesada';
+    case 'monkeyfit': return 'MonkeyFit';
+    default: return modality || '—';
+  }
+}
+
 async function saveStudent() {
   const f = (k) => document.getElementById(k);
   const id = f('f-student-id').value;
   const isEdit = !!id;
+  const modality = f('f-modality').value;
+
+  // Validación específica MonkeyFit: requerir clases adquiridas
+  let mfClasses = 0;
+  if (modality === 'monkeyfit' && !isEdit) {
+    mfClasses = parseInt(f('f-monkeyfit-classes').value || '0', 10);
+    if (!mfClasses || mfClasses < 1) {
+      showToast('Indica cuántas clases adquirió por MonkeyFit', 'error');
+      return;
+    }
+  }
 
   const data = {
     location_id: STATE.currentLocationId,
@@ -9089,7 +9162,7 @@ async function saveStudent() {
     document_type: f('f-doc-type').value || null,
     document_number: f('f-doc-num').value.trim() || null,
     birth_date: f('f-birth-date').value || null,
-    modality: f('f-modality').value,
+    modality: modality,
     emergency_contact_name: f('f-emergency-name').value.trim() || null,
     emergency_contact_phone: f('f-emergency-phone').value.trim() || null,
     medical_notes: f('f-medical').value.trim() || null,
@@ -9115,6 +9188,54 @@ async function saveStudent() {
       if (idx >= 0) STATE.students[idx] = result.data;
     } else {
       STATE.students.push(result.data);
+
+      // Si es nuevo alumno MonkeyFit, crear el paquete automáticamente
+      if (modality === 'monkeyfit' && mfClasses > 0) {
+        try {
+          const mfPkg = (STATE.packages || []).find(p =>
+            (p.name || '').toLowerCase().includes('monkeyfit') ||
+            (p.name || '').toLowerCase().includes('monkey fit')
+          );
+          if (!mfPkg) {
+            showToast('Falta crear el paquete "Pase MonkeyFit" en el catálogo. Avisa a Rodrigo.', 'warn');
+          } else {
+            const todayIso = new Date().toISOString().split('T')[0];
+            // Vencimiento default: 30 días desde hoy (pase mensual MonkeyFit)
+            const exp = new Date();
+            exp.setDate(exp.getDate() + 30);
+            const expIso = exp.toISOString().split('T')[0];
+
+            const pkgData = {
+              student_id: result.data.id,
+              package_id: mfPkg.id,
+              classes_total: mfClasses,
+              classes_used: 0,
+              price_pen: 0,
+              purchase_date: todayIso,
+              expiry_date: expIso,
+              is_active: true,
+              is_frozen: false,
+              status: 'active',
+            };
+            const pkgResult = await sb.from('student_packages').insert(pkgData).select().single();
+            if (pkgResult.error) {
+              showToast('Alumna creada, pero falló crear el paquete MonkeyFit: ' + pkgResult.error.message, 'error');
+            } else {
+              if (STATE.studentPackages) STATE.studentPackages.push(pkgResult.data);
+              try {
+                logActivity('student_package.create', {
+                  table: 'student_packages',
+                  id: pkgResult.data.id,
+                  label: `${result.data.first_name} ${result.data.last_name || ''} · Pase MonkeyFit (${mfClasses} clases)`
+                }, { source: 'monkeyfit', classes: mfClasses });
+              } catch(e) {}
+            }
+          }
+        } catch (e) {
+          console.error('Error creando paquete MonkeyFit:', e);
+          showToast('Alumna creada, pero falló crear el paquete MonkeyFit', 'error');
+        }
+      }
     }
 
     // Log de actividad
@@ -12195,7 +12316,7 @@ function renderFlexibleSearch() {
       <div>
         <div style="font-weight: 500; font-size: 14px;">${escape(s.first_name)} ${escape(s.last_name || '')}</div>
         <div style="font-size: 11px; color: var(--ink-mute);">
-          <span class="modality-pill modality-${s.modality}" style="font-size:9px;">${s.modality === 'fixed' ? '★ Fijo' : (s.modality === 'flexible' ? '↻ Flex' : '✦ Prueba')}</span>
+          <span class="modality-pill modality-${s.modality}" style="font-size:9px;">${getModalityIcon(s.modality)} ${getModalityShortLabel(s.modality)}</span>
           ${s.document ? ' · ' + escape(s.document) : ''}
         </div>
       </div>
@@ -15668,7 +15789,7 @@ function openInstructorStudentSheet(studentId, dateIso, hour, locationId, curren
   backdrop.onclick = (e) => { if (e.target === backdrop) closeInstructorStudentSheet(); };
 
   // Construir información de paquete (mejor esfuerzo - sin query async aquí, usamos cache si existe)
-  const modalityLabel = stud.modality === 'fixed' ? 'Fijo' : (stud.modality === 'flexible' ? 'Flexible' : 'Prueba');
+  const modalityLabel = getModalityLabel(stud.modality);
 
   // Acciones disponibles según estado
   let primaryBtn = '';
@@ -21291,7 +21412,7 @@ function renderDetailData(stud) {
     ['Documento', stud.document_type ? `${stud.document_type} ${stud.document_number || ''}` : ''],
     ['Fecha de nacimiento', stud.birth_date ? formatDate(stud.birth_date) : ''],
     ['Sede', loc?.name],
-    ['Modalidad', stud.modality === 'fixed' ? 'Fijo' : (stud.modality === 'flexible' ? 'Flexible' : 'Prueba')],
+    ['Modalidad', getModalityLabel(stud.modality)],
     ['Estado de cuenta', stud.account_status || 'pendiente'],
     ['Consentimiento', stud.consent_signed ? `Firmado el ${formatDate(stud.consent_signed_at)}` : 'No firmado'],
     ['Notas', stud.notes],
