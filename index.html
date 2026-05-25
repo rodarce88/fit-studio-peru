@@ -13652,6 +13652,37 @@ async function changePkgWizardNext() {
     }
 
     const studentId = wiz.pkgUsage?.student_id;
+
+    // Log de actividad: registrar el cambio de paquete con detalle
+    try {
+      const stud = STATE.students.find(s => s.id === studentId);
+      const studName = stud ? `${stud.first_name || ''} ${stud.last_name || ''}`.trim() : 'Alumna';
+
+      // Paquete viejo: del student_packages → catálogo
+      const oldSP = (STATE.studentPackages || []).find(sp => sp.id === wiz.pkgId);
+      const oldPkgName = oldSP
+        ? ((STATE.packages || []).find(p => p.id === oldSP.package_id)?.name || 'paquete anterior')
+        : 'paquete anterior';
+
+      // Paquete nuevo: wiz.selectedNewPkgId es del catálogo packages
+      const newPkgName = (STATE.packages || []).find(p => p.id === wiz.selectedNewPkgId)?.name || 'nuevo paquete';
+
+      const label = `${studName} · ${oldPkgName} → ${newPkgName}`;
+
+      logActivity('student_package.change', {
+        table: 'student_packages',
+        id: wiz.pkgId,
+        label
+      }, {
+        from_package: oldPkgName,
+        to_package: newPkgName,
+        classes_kept: (wiz.keptRecoverableIds || []).length,
+        classes_discarded: (wiz.discardedRecoverableIds || []).length,
+        cancelled_bookings: (wiz.cancelledBookingIds || []).length,
+        refund_amount: parseFloat(wiz.refundAmount || 0)
+      });
+    } catch(e) { /* never block */ }
+
     showToast('✓ Paquete cambiado correctamente', 'success');
     closeChangePkgWizard();
 
@@ -22966,6 +22997,7 @@ function humanizeAction(action) {
     'payment.update': '✎ Editó pago',
     'payment.delete': '✗ Eliminó pago',
     'student_package.create': '📦 Creó paquete',
+    'student_package.change': '🔄 Cambió paquete',
     'session.cancel': '✗ Canceló clase',
     'session_booking.create': '📅 Agendó alumna',
     'session_booking.cancel': '✗ Canceló booking',
