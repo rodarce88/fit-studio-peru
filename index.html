@@ -18743,7 +18743,10 @@ const PDF_PKG_STATUS = {
   completed: { dot: '✓', label: 'Completado' },
   active:    { dot: '●', label: 'Activo' },
   upcoming:  { dot: '○', label: 'Próximo' },
-  frozen:    { dot: '❄', label: 'Congelado' }
+  frozen:    { dot: '❄', label: 'Congelado' },
+  changed:   { dot: '⇄', label: 'Cambiado' },
+  cancelled: { dot: '✗', label: 'Cancelado' },
+  expired:   { dot: '⌛', label: 'Vencido' }
 };
 
 async function generateStudentPDF(studentId) {
@@ -18812,6 +18815,11 @@ function _pdfFmtDateShort(iso) {
 }
 
 function _pdfPkgStatusKey(p, activePkgId) {
+  // Estados que el sistema marca explícitamente en BD tienen prioridad
+  if (p.status === 'changed') return 'changed';
+  if (p.status === 'cancelled') return 'cancelled';
+  if (p.status === 'expired') return 'expired';
+
   const used = p.classes_used || 0;
   const total = p.classes_total || 0;
   if (p.is_frozen) return 'frozen';
@@ -18986,9 +18994,12 @@ function _pdfBuildHTML(stud, data) {
     return (b.created_at || '').localeCompare(a.created_at || '');
   });
 
-  // Saldo total pendiente (suma de owed de todos los paquetes)
+  // Saldo total pendiente (suma de owed de paquetes vigentes — excluye cambiados/cancelados/expirados)
+  // Un paquete cambiado o cancelado NO genera deuda: su saldo ya quedó cerrado al hacer el cambio.
+  const INVALID_PKG_STATUSES = new Set(['changed', 'cancelled', 'expired']);
   let totalOwed = 0;
   allPkgsSorted.forEach(p => {
+    if (INVALID_PKG_STATUSES.has(p.status)) return;
     const price = parseFloat(p.price_paid || p.packages?.price_pen || 0);
     const paid = (data.payments || [])
       .filter(pm => pm.student_package_id === p.id)
@@ -19010,13 +19021,23 @@ function _pdfBuildHTML(stud, data) {
       .reduce((s, pm) => s + parseFloat(pm.amount_pen || pm.amount || 0) + parseFloat(pm.discount_amount || 0), 0);
     const owed = Math.max(0, price - paid);
     const name = escape(p.packages?.name || `Paquete ${total} clases`);
+    const isInvalid = INVALID_PKG_STATUSES.has(p.status);
 
     let statusText = meta.label;
     if (statusKey === 'active') statusText += ` · ${remaining} restantes`;
 
-    const pkgPaidCell = owed === 0
-      ? `<span class="pkg-amount">S/ ${price.toFixed(2)}</span>`
-      : `<span class="pkg-amount">S/ ${paid.toFixed(2)}</span><div style="font-size:9px;color:var(--ink-mute);margin-top:2px;">debe S/ ${owed.toFixed(2)}</div>`;
+    // Para paquetes cambiados/cancelados/expirados: NO mostrar "debe", solo el monto pagado original.
+    // El saldo pendiente real está reflejado en el paquete vigente que lo reemplaza.
+    let pkgPaidCell;
+    if (isInvalid) {
+      pkgPaidCell = paid > 0
+        ? `<span class="pkg-amount" style="text-decoration:line-through;color:var(--ink-mute);">S/ ${paid.toFixed(2)}</span><div style="font-size:9px;color:var(--ink-mute);margin-top:2px;">pago original</div>`
+        : `<span class="pkg-amount" style="color:var(--ink-mute);">—</span>`;
+    } else if (owed === 0) {
+      pkgPaidCell = `<span class="pkg-amount">S/ ${price.toFixed(2)}</span>`;
+    } else {
+      pkgPaidCell = `<span class="pkg-amount">S/ ${paid.toFixed(2)}</span><div style="font-size:9px;color:var(--ink-mute);margin-top:2px;">debe S/ ${owed.toFixed(2)}</div>`;
+    }
 
     return `
       <tr>
@@ -19419,6 +19440,17 @@ function _pdfBuildHTML(stud, data) {
         .pdf-page .pkg-status.upcoming .dot { color: var(--ink-mute); }
         .pdf-page .pkg-status.frozen,
         .pdf-page .pkg-status.frozen .dot { color: var(--info); }
+        .pdf-page .pkg-status.changed,
+        .pdf-page .pkg-status.changed .dot { color: var(--ink-mute); }
+        .pdf-page .pkg-status.cancelled,
+        .pdf-page .pkg-status.cancelled .dot { color: var(--ink-mute); }
+        .pdf-page .pkg-status.expired,
+        .pdf-page .pkg-status.expired .dot { color: var(--ink-mute); }
+        .pdf-page tr:has(.pkg-status.changed) .pkg-name,
+        .pdf-page tr:has(.pkg-status.cancelled) .pkg-name,
+        .pdf-page tr:has(.pkg-status.expired) .pkg-name {
+          color: var(--ink-mute); text-decoration: line-through;
+        }
         .pdf-page .classes-grid {
           display: grid; grid-template-columns: 1fr 1fr;
           grid-auto-flow: column; gap: 0 32px;
@@ -19450,6 +19482,12 @@ function _pdfBuildHTML(stud, data) {
         .pdf-page .pkg-classes-status.completed .dot { color: var(--ink-mute); }
         .pdf-page .pkg-classes-status.frozen,
         .pdf-page .pkg-classes-status.frozen .dot { color: var(--info); }
+        .pdf-page .pkg-classes-status.changed,
+        .pdf-page .pkg-classes-status.changed .dot,
+        .pdf-page .pkg-classes-status.cancelled,
+        .pdf-page .pkg-classes-status.cancelled .dot,
+        .pdf-page .pkg-classes-status.expired,
+        .pdf-page .pkg-classes-status.expired .dot { color: var(--ink-mute); }
         .pdf-page .class-row {
           display: grid; grid-template-columns: 64px 38px 1fr auto;
           align-items: center; gap: 10px;
