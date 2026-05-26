@@ -5180,7 +5180,11 @@ async function renderScheduleAlertsBanner() {
 
   // Si no hay cache previa, esperamos en silencio (no mostramos "cargando")
   const alerts = await detectScheduleAlerts();
-  const { critical, upcoming } = alerts;
+  // Filtrar a la sede actual (Mi día = mi sede). detectScheduleAlerts retorna cross-sede
+  // intencionalmente, para uso futuro de rol Manager con vista consolidada.
+  const currentLocId = STATE.currentLocationId;
+  const critical = (alerts.critical || []).filter(a => a.location_id === currentLocId);
+  const upcoming = (alerts.upcoming || []).filter(a => a.location_id === currentLocId);
 
   if (critical.length === 0 && upcoming.length === 0) {
     wrap.innerHTML = '';
@@ -18696,14 +18700,23 @@ async function loadAndRenderPendingRecovery() {
   if (!tbody) return;
   if (!isOnline) { tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:40px;color:var(--ink-mute);">Conexión requerida</td></tr>'; return; }
 
-  const { data: recs, error } = await sb.from('attendance')
+  const { data: recsRaw, error } = await sb.from('attendance')
     .select('*, class_sessions!attendance_session_id_fkey(session_date, hour, location_id), students(first_name, last_name, phone)')
     .eq('status', 'recuperable');
   if (error) { tbody.innerHTML = `<tr><td colspan="5">Error: ${error.message}</td></tr>`; return; }
 
+  // Filtrar a alumnos de la sede actual (Mi día = mi sede)
+  const locId = STATE.currentLocationId;
+  const studentsInLoc = new Set(
+    (STATE.students || []).filter(s => s.location_id === locId).map(s => s.id)
+  );
+  const recs = (recsRaw || []).filter(r => studentsInLoc.has(r.student_id));
+
   // Para cada uno, calcular vencimiento del paquete activo
   const studentIds = [...new Set(recs.map(r => r.student_id))];
-  const { data: pkgs } = await sb.from('student_packages').select('*').in('student_id', studentIds).eq('is_frozen', false);
+  const { data: pkgs } = studentIds.length > 0
+    ? await sb.from('student_packages').select('*').in('student_id', studentIds).eq('is_frozen', false)
+    : { data: [] };
   const pkgByStudent = {};
   (pkgs||[]).forEach(p => {
     // Más reciente por purchase_date (sin expiration ya)
@@ -18749,9 +18762,16 @@ async function loadAndRenderRenewals() {
     .eq('is_frozen', false);
   if (error) { tbody.innerHTML = `<tr><td colspan="5">Error: ${error.message}</td></tr>`; return; }
 
+  // Filtrar a alumnos de la sede actual (Mi día = mi sede)
+  const locId = STATE.currentLocationId;
+  const studentsInLoc = new Set(
+    (STATE.students || []).filter(s => s.location_id === locId).map(s => s.id)
+  );
+  const localPkgs = (pkgs || []).filter(p => studentsInLoc.has(p.student_id));
+
   // Agrupar por alumno: sumar restantes de TODOS sus paquetes vivos
   const byStudent = new Map();
-  (pkgs || []).forEach(p => {
+  localPkgs.forEach(p => {
     const remaining = Math.max(0, (p.classes_total || 0) - (p.classes_used || 0));
     if (remaining <= 0) return; // paquete completado, ignorar
     if (!byStudent.has(p.student_id)) {
