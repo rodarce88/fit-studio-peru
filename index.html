@@ -493,8 +493,8 @@
     position: sticky; 
     top: calc(var(--topbar-h) + var(--dash-search-sticky-h, 76px) + var(--mi-dia-header-h, 84px) + 12px);
     align-self: start; 
-    max-height: calc(100vh - var(--topbar-h) - var(--dash-search-sticky-h, 76px) - var(--mi-dia-header-h, 84px) - 32px); 
-    overflow-y: auto; 
+    /* Sin overflow interno: los ~14 horarios del día caben en cualquier pantalla normal.
+       Si scrollea internamente, el top deja de ser 6am y rompe el alineamiento con las cards. */
     padding-top: 4px; padding-right: 2px;
   }
   .mi-dia-sidebar-line { position: absolute; left: 10px; top: 18px; bottom: 18px; width: 1px; background: var(--line); z-index: 0; pointer-events: none; }
