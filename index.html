@@ -5745,25 +5745,51 @@ async function renderFullPaymentView() {
   }
   wrap.innerHTML = '<div class="full-empty">Cargando...</div>';
 
-  // 1. Attendance con pending_payment_at (caso invitadas/sin paquete que asistieron)
-  const { data: pending } = await sb.from('attendance')
-    .select('id, student_id, status, pending_payment_at')
-    .not('pending_payment_at', 'is', null)
-    .order('pending_payment_at', { ascending: false });
+  // Filtrar a alumnos de la sede actual ANTES de hacer queries (eficiencia)
+  const locId = STATE.currentLocationId;
+  const locStudentIds = (STATE.students || [])
+    .filter(s => s.location_id === locId)
+    .map(s => s.id);
 
-  // 2. Paquetes con saldo pendiente
-  const { data: allPkgs } = await sb.from('student_packages')
-    .select('id, student_id, price_paid, classes_total, is_frozen');
+  if (locStudentIds.length === 0) {
+    wrap.innerHTML = '<div class="full-empty">Sin pendientes de cobro 🎉</div>';
+    return;
+  }
+
+  // Lanzar las 2 queries en paralelo (pre-filtradas por sede en BD)
+  const [pendingRes, allPkgsRes] = await Promise.all([
+    sb.from('attendance')
+      .select('id, student_id, status, pending_payment_at')
+      .not('pending_payment_at', 'is', null)
+      .in('student_id', locStudentIds)
+      .order('pending_payment_at', { ascending: false }),
+    sb.from('student_packages')
+      .select('id, student_id, price_paid, classes_total, is_frozen')
+      .in('student_id', locStudentIds),
+  ]);
+  const pending = pendingRes.data || [];
+  const allPkgs = allPkgsRes.data || [];
+
+  // Filtrar candidatos (no congelados, con precio > 0)
+  const candidatePkgs = allPkgs.filter(p => !p.is_frozen && parseFloat(p.price_paid || 0) > 0);
+  const candidatePkgIds = candidatePkgs.map(p => p.id);
+
+  // Fix N+1: 1 sola query a payments (antes hacía N queries = 1 por paquete)
+  const paidByPkg = new Map();
+  if (candidatePkgIds.length > 0) {
+    const { data: allPays } = await sb.from('payments')
+      .select('amount_pen, discount_amount, student_package_id')
+      .in('student_package_id', candidatePkgIds);
+    (allPays || []).forEach(p => {
+      const amt = parseFloat(p.amount_pen || 0) + parseFloat(p.discount_amount || 0);
+      paidByPkg.set(p.student_package_id, (paidByPkg.get(p.student_package_id) || 0) + amt);
+    });
+  }
 
   const pkgsWithBalance = [];
-  for (const pkg of (allPkgs || [])) {
-    if (pkg.is_frozen === true) continue;
+  for (const pkg of candidatePkgs) {
     const price = parseFloat(pkg.price_paid || 0);
-    if (price <= 0) continue;
-    const { data: pays } = await sb.from('payments')
-      .select('amount_pen, discount_amount')
-      .eq('student_package_id', pkg.id);
-    const totalPaid = (pays || []).reduce((s, p) => s + parseFloat(p.amount_pen || 0) + parseFloat(p.discount_amount || 0), 0);
+    const totalPaid = paidByPkg.get(pkg.id) || 0;
     if (totalPaid < price) {
       pkgsWithBalance.push({
         student_id: pkg.student_id,
@@ -5774,19 +5800,13 @@ async function renderFullPaymentView() {
     }
   }
 
-  // 3. Combinar por alumno — solo de la sede actual
-  const locId = STATE.currentLocationId;
-  const studentsInLoc = new Set(
-    (STATE.students || []).filter(s => s.location_id === locId).map(s => s.id)
-  );
+  // Combinar por alumno (ya vienen pre-filtrados por sede desde BD)
   const byStudent = new Map();
-  for (const p of (pending || [])) {
-    if (!studentsInLoc.has(p.student_id)) continue;
+  for (const p of pending) {
     if (!byStudent.has(p.student_id)) byStudent.set(p.student_id, { atts: [], pkgs: [] });
     byStudent.get(p.student_id).atts.push(p);
   }
   for (const pkg of pkgsWithBalance) {
-    if (!studentsInLoc.has(pkg.student_id)) continue;
     if (!byStudent.has(pkg.student_id)) byStudent.set(pkg.student_id, { atts: [], pkgs: [] });
     byStudent.get(pkg.student_id).pkgs.push(pkg);
   }
@@ -5968,28 +5988,54 @@ async function loadToPayList() {
     return;
   }
 
-  // Cargar attendance con pending_payment_at no nulo (caso 1: invitadas/sin paquete que asistieron)
-  const { data: pending } = await sb.from('attendance')
-    .select('id, student_id, status, pending_payment_at, class_sessions!attendance_session_id_fkey(session_date, hour, location_id)')
-    .not('pending_payment_at', 'is', null)
-    .order('pending_payment_at', { ascending: false });
+  // Filtrar a alumnos de la sede actual ANTES de hacer queries (eficiencia)
+  const locId = STATE.currentLocationId;
+  const locStudentIds = (STATE.students || [])
+    .filter(s => s.location_id === locId)
+    .map(s => s.id);
 
-  // Cargar paquetes con saldo pendiente (caso 2: alumnas con paquete sin pagar completo)
-  const { data: allPkgs } = await sb.from('student_packages')
-    .select('id, student_id, price_paid, classes_total, is_frozen');
+  if (locStudentIds.length === 0) {
+    listEl.innerHTML = '<div style="padding: 12px; color: var(--ink-mute); font-size: 12px;">Sin pendientes de cobro 🎉</div>';
+    countEl.textContent = '0';
+    return;
+  }
 
-  // Para cada paquete no congelado, sumar pagos y comparar con price_paid
+  // Lanzar las 2 queries en paralelo (pre-filtradas por sede en BD)
+  const [pendingRes, allPkgsRes] = await Promise.all([
+    sb.from('attendance')
+      .select('id, student_id, status, pending_payment_at, class_sessions!attendance_session_id_fkey(session_date, hour, location_id)')
+      .not('pending_payment_at', 'is', null)
+      .in('student_id', locStudentIds)
+      .order('pending_payment_at', { ascending: false }),
+    sb.from('student_packages')
+      .select('id, student_id, price_paid, classes_total, is_frozen')
+      .in('student_id', locStudentIds),
+  ]);
+  const pending = pendingRes.data || [];
+  const allPkgs = allPkgsRes.data || [];
+
+  // Filtrar paquetes candidatos (no congelados, con precio > 0)
+  const candidatePkgs = allPkgs.filter(p => !p.is_frozen && parseFloat(p.price_paid || 0) > 0);
+  const candidatePkgIds = candidatePkgs.map(p => p.id);
+
+  // Fix N+1: 1 sola query a payments para todos los paquetes candidatos,
+  // y agrupar localmente con un Map (antes hacía N queries = 1 por paquete).
+  const paidByPkg = new Map();
+  if (candidatePkgIds.length > 0) {
+    const { data: allPays } = await sb.from('payments')
+      .select('amount_pen, discount_amount, student_package_id')
+      .in('student_package_id', candidatePkgIds);
+    (allPays || []).forEach(p => {
+      const amt = parseFloat(p.amount_pen || 0) + parseFloat(p.discount_amount || 0);
+      paidByPkg.set(p.student_package_id, (paidByPkg.get(p.student_package_id) || 0) + amt);
+    });
+  }
+
+  // Calcular paquetes con saldo pendiente
   const pkgsWithBalance = [];
-  for (const pkg of (allPkgs || [])) {
-    if (pkg.is_frozen === true) continue;
+  for (const pkg of candidatePkgs) {
     const price = parseFloat(pkg.price_paid || 0);
-    if (price <= 0) continue; // sin precio definido, asumir gratis o no aplica
-
-    const { data: pays } = await sb.from('payments')
-      .select('amount_pen, discount_amount')
-      .eq('student_package_id', pkg.id);
-    const totalPaid = (pays || []).reduce((s, p) => s + parseFloat(p.amount_pen || 0) + parseFloat(p.discount_amount || 0), 0);
-
+    const totalPaid = paidByPkg.get(pkg.id) || 0;
     if (totalPaid < price) {
       pkgsWithBalance.push({
         student_id: pkg.student_id,
@@ -6001,19 +6047,13 @@ async function loadToPayList() {
     }
   }
 
-  // Combinar ambos casos por alumno — solo de la sede actual (Mi día = mi sede)
-  const locId = STATE.currentLocationId;
-  const studentsInLoc = new Set(
-    (STATE.students || []).filter(s => s.location_id === locId).map(s => s.id)
-  );
+  // Combinar ambos casos por alumno (ya vienen pre-filtrados por sede desde la BD)
   const byStudent = new Map();
-  for (const p of (pending || [])) {
-    if (!studentsInLoc.has(p.student_id)) continue;
+  for (const p of pending) {
     if (!byStudent.has(p.student_id)) byStudent.set(p.student_id, { atts: [], pkgs: [] });
     byStudent.get(p.student_id).atts.push(p);
   }
   for (const pkg of pkgsWithBalance) {
-    if (!studentsInLoc.has(pkg.student_id)) continue;
     if (!byStudent.has(pkg.student_id)) byStudent.set(pkg.student_id, { atts: [], pkgs: [] });
     byStudent.get(pkg.student_id).pkgs.push(pkg);
   }
