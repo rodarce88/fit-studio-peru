@@ -4820,12 +4820,28 @@ async function loadFromSupabase() {
   STATE.discountReasons = discountReasons.data || [];
   STATE.users = users.data || [];
 
-  // Sede por defecto: si es coord con users.location_id, usar esa; si no, Santa Cruz; si no, la primera
+  // Sede por defecto según rol:
+  // - coord: users.location_id (o Santa Cruz si no tiene)
+  // - instructor: sede de su PRÓXIMA clase asignada en próximos 30 días (o Santa Cruz si no tiene clases)
+  // - otros: Santa Cruz por default
   let defaultLocId = null;
   if (typeof CURRENT_USER !== 'undefined' && CURRENT_USER && CURRENT_USER.role === 'coordinator') {
     const coordLocId = CURRENT_USER.record && CURRENT_USER.record.location_id;
     if (coordLocId && STATE.locations.some(l => l.id === coordLocId)) {
       defaultLocId = coordLocId;
+    }
+  }
+  if (!defaultLocId && typeof CURRENT_USER !== 'undefined' && CURRENT_USER && CURRENT_USER.role === 'instructor') {
+    const instId = CURRENT_USER.record && CURRENT_USER.record.id;
+    if (instId) {
+      try {
+        const nextLocId = await findInstructorNextSessionLocationId(instId);
+        if (nextLocId && STATE.locations.some(l => l.id === nextLocId)) {
+          defaultLocId = nextLocId;
+        }
+      } catch (e) {
+        console.warn('[loadAll] findInstructorNextSessionLocationId falló, usando fallback', e);
+      }
     }
   }
   if (!defaultLocId) {
@@ -4995,8 +5011,14 @@ function switchLocation(id) {
   STATE.currentLocationId = id;
   closeModals();
   renderTopbarUser();
-  setMiDiaLoadingState();  // Skeletons agresivos en widgets cross-sede mientras recargan
-  renderAll();
+  // Branch por rol — la vista del profesor tiene su propio renderer y skeletons
+  if (CURRENT_USER && CURRENT_USER.role === 'instructor') {
+    if (typeof showInstructorSkeletons === 'function') showInstructorSkeletons();
+    if (typeof renderInstructorDay === 'function') renderInstructorDay();
+  } else {
+    setMiDiaLoadingState();  // Skeletons agresivos en widgets cross-sede mientras recargan
+    renderAll();
+  }
 }
 
 // ============================================
@@ -14545,7 +14567,8 @@ function showInstructorSkeletons() {
 }
 
 function instNextSkeletonHTML() {
-  return `<div class="inst-next-card">
+  const gradient = getInstNextCardGradient(STATE.currentLocationId);
+  return `<div class="inst-next-card" style="background: ${gradient};">
     <div class="inst-skel-on-purple" style="width: 110px; height: 11px; margin-bottom: 14px;"></div>
     <div class="inst-skel-on-purple" style="width: 110px; height: 42px; margin-bottom: 10px;"></div>
     <div class="inst-skel-on-purple" style="width: 180px; height: 13px;"></div>
@@ -14897,12 +14920,71 @@ function instructorNavWeek(direction) {
 }
 
 // ============================================
+// Gradient del widget "Tu próxima clase" según sede.
+// Mantiene el mismo espectro visual (oscuro/saturado) que el purple original,
+// pero adaptado al color de cada sede.
+function getInstNextCardGradient(locId) {
+  if (!locId) return 'linear-gradient(135deg, #534AB7 0%, #3C3489 100%)';
+  const loc = STATE.locations?.find(l => l.id === locId);
+  if (!loc) return 'linear-gradient(135deg, #534AB7 0%, #3C3489 100%)';
+  const map = {
+    'santa-cruz':         'linear-gradient(135deg, #534AB7 0%, #3C3489 100%)',  // purple original
+    'inmaculado-corazon': 'linear-gradient(135deg, #A77F3D 0%, #6F5018 100%)',  // dorado oscuro
+    'san-antonio':        'linear-gradient(135deg, #0E9E70 0%, #086245 100%)',  // verde oscuro
+  };
+  return map[loc.slug] || 'linear-gradient(135deg, #534AB7 0%, #3C3489 100%)';
+}
+
+// Resolver la sede default para un profesor al hacer login.
+// Estrategia: la sede de la PRÓXIMA sesión asignada al profesor en los próximos 30 días.
+// Si no tiene ninguna sesión asignada → retorna null (caller usa fallback).
+// Nota: no filtra por alumnos. Solo por sesiones efectivamente asignadas al profe.
+async function findInstructorNextSessionLocationId(instructorId) {
+  if (!isOnline) return null;
+  const now = new Date();
+  const todayIso = dateToIsoLocal(now);
+  const currentHour = now.getHours();
+  const cutoff = new Date(now);
+  cutoff.setDate(cutoff.getDate() + 30);
+  const cutoffIso = dateToIsoLocal(cutoff);
+
+  const { data: sessions } = await sb.from('class_sessions')
+    .select('session_date, hour, location_id, instructor_id, actual_instructor_id, is_cancelled, class_status')
+    .or(`instructor_id.eq.${instructorId},actual_instructor_id.eq.${instructorId}`)
+    .gte('session_date', todayIso)
+    .lte('session_date', cutoffIso)
+    .eq('is_cancelled', false)
+    .order('session_date', { ascending: true })
+    .order('hour', { ascending: true })
+    .limit(100);
+
+  if (!sessions || sessions.length === 0) return null;
+
+  // Validar que el profe sea el responsable real (actual_instructor_id pisa instructor_id si está seteado)
+  for (const s of sessions) {
+    if (s.actual_instructor_id) {
+      if (s.actual_instructor_id !== instructorId) continue;
+    } else if (s.instructor_id !== instructorId) {
+      continue;
+    }
+    if (s.class_status === 'delivered') continue;
+    // Si es HOY y la hora ya pasó (más de 50 min después), saltar
+    if (s.session_date === todayIso && s.hour < currentHour - 0) {
+      // Tolerancia: consideramos "ya pasó" si la hora actual es estrictamente mayor
+      if (currentHour > s.hour) continue;
+    }
+    return s.location_id;
+  }
+  return null;
+}
+
 // Encontrar la próxima clase REAL del profesor.
 // "Real" = clase asignada al profesor, no cancelada, no terminada físicamente,
 // y con AL MENOS 1 alumno asignado (booking activo o fijo).
 // Busca primero en classesToday; si no hay, query a DB para próximos 30 días.
 // Retorna: { inProgress, target, sessionDate } o null si no hay ninguna.
-async function findInstructorNextRealClass(instructorId, classesToday) {
+// locationFilter (opcional): si se pasa, solo considera clases en esa sede.
+async function findInstructorNextRealClass(instructorId, classesToday, locationFilter) {
   const now = new Date();
   const todayIso = dateToIsoLocal(now);
   const currentHour = now.getHours();
@@ -14924,6 +15006,7 @@ async function findInstructorNextRealClass(instructorId, classesToday) {
     if (isDoneNow(c)) return false;
     if (c.isOtherInstructor) return false;
     if (c.students.length === 0) return false;
+    if (locationFilter && c.location?.id !== locationFilter && c.session?.location_id !== locationFilter) return false;
     return currentHour === c.hour || (currentHour === c.hour - 1 && currentMin >= 50);
   });
   if (inProgress) return { inProgress: true, target: inProgress, sessionDate: todayIso };
@@ -14932,6 +15015,7 @@ async function findInstructorNextRealClass(instructorId, classesToday) {
     if (isDoneNow(c)) return false;
     if (c.isOtherInstructor) return false;
     if (c.students.length === 0) return false;
+    if (locationFilter && c.location?.id !== locationFilter && c.session?.location_id !== locationFilter) return false;
     return c.hour > currentHour || (c.hour === currentHour && currentMin < 10);
   });
   if (nextToday) return { inProgress: false, target: nextToday, sessionDate: todayIso };
@@ -14946,7 +15030,7 @@ async function findInstructorNextRealClass(instructorId, classesToday) {
   cutoff.setDate(cutoff.getDate() + 30);
   const cutoffIso = dateToIsoLocal(cutoff);
 
-  const { data: sessions } = await sb.from('class_sessions')
+  let query = sb.from('class_sessions')
     .select('id, session_date, hour, location_id, class_status, is_cancelled, instructor_id, actual_instructor_id')
     .or(`instructor_id.eq.${instructorId},actual_instructor_id.eq.${instructorId}`)
     .gte('session_date', tomorrowIso)
@@ -14956,6 +15040,8 @@ async function findInstructorNextRealClass(instructorId, classesToday) {
     .order('session_date', { ascending: true })
     .order('hour', { ascending: true })
     .limit(100);
+  if (locationFilter) query = query.eq('location_id', locationFilter);
+  const { data: sessions } = await query;
 
   if (!sessions || sessions.length === 0) return null;
 
@@ -15034,7 +15120,9 @@ async function renderInstructorNextClassBlock(classes) {
 
   // Buscar la próxima clase REAL (con alumnos asignados): primero en hoy,
   // si no hay → query a próximos 30 días.
-  const result = await findInstructorNextRealClass(inst.id, todayClasses);
+  // Filtra por la SEDE ACTIVA (STATE.currentLocationId): el widget refleja
+  // la próxima clase del profe EN LA SEDE QUE ESTÁ VIENDO.
+  const result = await findInstructorNextRealClass(inst.id, todayClasses, STATE.currentLocationId);
 
   // Proyección de ganancia y paquetes por vencer: SIEMPRE sobre clases de HOY
   const tiers = inst ? getPayConfigFor(inst.id).tiers : [];
@@ -15124,7 +15212,9 @@ async function renderInstructorNextClassBlock(classes) {
   }
   const footer = footerParts.length > 0 ? `<div class="inst-next-foot">${footerParts.join('')}</div>` : '';
 
-  block.innerHTML = `<div class="inst-next-card">${mainContent}${footer}</div>`;
+  // Aplicar gradient según la sede activa (cambia el color del widget al cambiar de sede)
+  const gradient = getInstNextCardGradient(STATE.currentLocationId);
+  block.innerHTML = `<div class="inst-next-card" style="background: ${gradient};">${mainContent}${footer}</div>`;
 }
 
 function renderInstructorStatsBlock(stats) {
@@ -15181,6 +15271,13 @@ function renderInstructorClassesBlock(classes) {
   const headerBlock = document.querySelector('[data-inst-classes-header]');
   const pastToggleBlock = document.querySelector('[data-inst-past-toggle]');
   if (!block) return;
+
+  // FILTRO DE SEDE: el profe puede dar clases en múltiples sedes (Alex SC+Boutique,
+  // Angie SC+SA, etc), pero solo ve las de la sede activa. Filtramos antes de todo.
+  const sedeActiva = STATE.currentLocationId;
+  if (sedeActiva && Array.isArray(classes)) {
+    classes = classes.filter(c => c.location?.id === sedeActiva || c.slot?.location_id === sedeActiva);
+  }
 
   if (!classes || classes.length === 0) {
     if (headerBlock) headerBlock.innerHTML = '';
