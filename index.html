@@ -6688,19 +6688,27 @@ if (typeof window !== 'undefined') {
 }
 
 // Sincroniza posición, visibilidad y left del sidebar fixed de Mi día.
-// - Visible solo cuando el viewport está dentro del rango del cards-stack
-//   (oculto al hacer scroll a banners/KPIs arriba, o al scrollear más allá del bottom)
-// - Left sincronizado con la columna del grid (porque fixed se posiciona respecto al viewport)
+// - Visible cuando el header "Clases de..." está pegado (sticky activo) y el cards-stack
+//   todavía está visible en el rango
+// - Oculto cuando el header sticky aún no se activó (estás arriba viendo banners/KPIs),
+//   o cuando ya scrolleaste más allá del bottom del cards-stack
 function syncMiDiaSidebar() {
   const sb = document.querySelector('.mi-dia-sidebar');
   const layout = document.querySelector('.mi-dia-layout');
   const stack = document.querySelector('.mi-dia-cards-stack');
-  if (!sb || !layout || !stack) return;
+  const header = document.querySelector('.timeline-card .timeline-header');
+  if (!sb || !layout || !stack || !header) return;
   const stickyTop = parseFloat(getComputedStyle(sb).top) || 0;
   const stackRect = stack.getBoundingClientRect();
   const layoutRect = layout.getBoundingClientRect();
-  // Visible si el rango del cards-stack cruza el stickyTop del viewport.
-  const inRange = stackRect.top <= stickyTop && stackRect.bottom >= stickyTop;
+  const headerRect = header.getBoundingClientRect();
+  // Detecta si el .timeline-header ya está pegado en su posición sticky.
+  // El header sticky se pega cuando su top está cerca de su top configurado en CSS.
+  // Si headerRect.top es <= headerStickyTop + tolerance, está pegado.
+  const headerStickyTop = parseFloat(getComputedStyle(header).top) || 0;
+  const headerIsStuck = headerRect.top <= headerStickyTop + 2;
+  // Sidebar visible si el header sticky se activó Y el cards-stack todavía no se fue por arriba.
+  const inRange = headerIsStuck && stackRect.bottom > stickyTop;
   sb.classList.toggle('is-active', inRange);
   if (inRange) sb.style.left = `${layoutRect.left}px`;
 }
