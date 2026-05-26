@@ -11086,20 +11086,22 @@ function _renderDashStudentSearchRow(s) {
   const isOtherSede = loc && loc.id !== STATE.currentLocationId;
   const sedeColor = (loc && loc.color) || '#7C3AED';
   const sedeInitials = getLocationInitials(loc);
-  // Badge de sede: sólido si es otra sede (resalta), outline si es la actual (discreto)
+  // Badge de sede al lado del nombre: sólido si es otra sede (resalta), outline si es la actual (discreto)
   const sedeBadge = loc ? (isOtherSede
-    ? `<span title="${escape(loc.name)}" style="background: ${sedeColor}; color: white; font-size: 10px; font-weight: 600; padding: 3px 8px; border-radius: 999px; letter-spacing: 0.06em; flex-shrink: 0;">${sedeInitials}</span>`
-    : `<span title="${escape(loc.name)}" style="border: 1px solid ${sedeColor}55; color: ${sedeColor}; font-size: 10px; font-weight: 600; padding: 2px 7px; border-radius: 999px; letter-spacing: 0.06em; flex-shrink: 0;">${sedeInitials}</span>`
+    ? `<span title="${escape(loc.name)}" style="background: ${sedeColor}; color: white; font-size: 9.5px; font-weight: 600; padding: 2px 7px; border-radius: 999px; letter-spacing: 0.06em; flex-shrink: 0; line-height: 1.3;">${sedeInitials}</span>`
+    : `<span title="${escape(loc.name)}" style="border: 1px solid ${sedeColor}55; color: ${sedeColor}; font-size: 9.5px; font-weight: 600; padding: 1.5px 6px; border-radius: 999px; letter-spacing: 0.06em; flex-shrink: 0; line-height: 1.3;">${sedeInitials}</span>`
   ) : '';
   const modalityBadge = `<span class="modality-pill modality-${s.modality}" style="font-size:10px; padding:2px 7px; flex-shrink:0;">${getModalityIcon(s.modality)} ${getModalityShortLabel(s.modality)}</span>`;
   const contact = s.email || s.phone || s.document_number || '';
   return `<div onclick="addRecentStudentSearch('${s.id}'); openStudentDetail('${s.id}'); document.getElementById('dash-student-search').value=''; document.getElementById('dash-student-search-results').style.display='none';" style="display: flex; align-items: center; gap: 10px; padding: 10px 14px; cursor: pointer; border-bottom: 1px solid var(--line-soft); transition: background 0.1s;" onmouseover="this.style.background='var(--fit-cream)'" onmouseout="this.style.background='white'">
-    <div class="student-avatar" style="width: 32px; height: 32px; font-size: 11px; flex-shrink: 0;">${initials(s)}</div>
+    <div class="student-avatar" style="width: 32px; height: 32px; font-size: 11px; flex-shrink: 0; background: ${sedeColor}; color: white;">${initials(s)}</div>
     <div style="flex: 1; min-width: 0;">
-      <div style="font-size: 13px; font-weight: 500; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${escape(s.first_name)} ${escape(s.last_name || '')}</div>
-      <div style="font-size: 11px; color: var(--ink-mute); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${escape(contact || '—')}</div>
+      <div style="display: flex; align-items: center; gap: 7px; min-width: 0;">
+        <span style="font-size: 13px; font-weight: 500; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0;">${escape(s.first_name)} ${escape(s.last_name || '')}</span>
+        ${sedeBadge}
+      </div>
+      <div style="font-size: 11px; color: var(--ink-mute); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 1px;">${escape(contact || '—')}</div>
     </div>
-    ${sedeBadge}
     ${modalityBadge}
   </div>`;
 }
