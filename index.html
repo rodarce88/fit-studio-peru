@@ -5669,13 +5669,19 @@ async function renderFullPaymentView() {
     }
   }
 
-  // 3. Combinar por alumno
+  // 3. Combinar por alumno — solo de la sede actual
+  const locId = STATE.currentLocationId;
+  const studentsInLoc = new Set(
+    (STATE.students || []).filter(s => s.location_id === locId).map(s => s.id)
+  );
   const byStudent = new Map();
   for (const p of (pending || [])) {
+    if (!studentsInLoc.has(p.student_id)) continue;
     if (!byStudent.has(p.student_id)) byStudent.set(p.student_id, { atts: [], pkgs: [] });
     byStudent.get(p.student_id).atts.push(p);
   }
   for (const pkg of pkgsWithBalance) {
+    if (!studentsInLoc.has(pkg.student_id)) continue;
     if (!byStudent.has(pkg.student_id)) byStudent.set(pkg.student_id, { atts: [], pkgs: [] });
     byStudent.get(pkg.student_id).pkgs.push(pkg);
   }
@@ -5890,13 +5896,19 @@ async function loadToPayList() {
     }
   }
 
-  // Combinar ambos casos por alumno
+  // Combinar ambos casos por alumno — solo de la sede actual (Mi día = mi sede)
+  const locId = STATE.currentLocationId;
+  const studentsInLoc = new Set(
+    (STATE.students || []).filter(s => s.location_id === locId).map(s => s.id)
+  );
   const byStudent = new Map();
   for (const p of (pending || [])) {
+    if (!studentsInLoc.has(p.student_id)) continue;
     if (!byStudent.has(p.student_id)) byStudent.set(p.student_id, { atts: [], pkgs: [] });
     byStudent.get(p.student_id).atts.push(p);
   }
   for (const pkg of pkgsWithBalance) {
+    if (!studentsInLoc.has(pkg.student_id)) continue;
     if (!byStudent.has(pkg.student_id)) byStudent.set(pkg.student_id, { atts: [], pkgs: [] });
     byStudent.get(pkg.student_id).pkgs.push(pkg);
   }
