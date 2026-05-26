@@ -20715,16 +20715,16 @@ function renderStudentDetail() {
 
     <div style="background: white; border: 1px solid var(--line); border-radius: var(--radius-lg); padding: 24px; margin-bottom: 16px;">
       <div style="display: flex; gap: 18px; align-items: flex-start;">
-        <div class="student-avatar" style="width: 64px; height: 64px; font-size: 22px;">${initials(stud)}</div>
+        <div class="student-avatar" style="width: 64px; height: 64px; font-size: 22px; ${studentSedeAvatarStyle(stud)}">${initials(stud)}</div>
         <div style="flex: 1;">
-          <h1 style="font-family: var(--display); font-size: 28px; margin: 0 0 6px; font-weight: 400;">${escape(stud.first_name)} <em>${escape(stud.last_name || '')}</em></h1>
+          <h1 style="font-family: var(--display); font-size: 28px; margin: 0 0 6px; font-weight: 400;">${escape(stud.first_name)} <em>${escape(stud.last_name || '')}</em>${loc ? ` <span title="${escape(loc.name)}" style="display: inline-block; vertical-align: middle; background: ${loc.color || '#7C3AED'}; color: white; font-size: 11px; font-weight: 600; padding: 3px 10px; border-radius: 999px; letter-spacing: 0.08em; margin-left: 8px; line-height: 1.4; transform: translateY(-3px);">${getLocationInitials(loc)}</span>` : ''}</h1>
           <div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-bottom: 6px;">
             ${modPill}
             ${getConsentBadge(stud)}
             ${!stud.data_complete ? '<span style="font-size: 11px; padding: 3px 8px; background: var(--warn-soft); color: #412402; border-radius: 999px;">⚠ Datos incompletos</span>' : ''}
           </div>
           <div style="font-size: 13px; color: var(--ink-mute);">
-            ${escape(loc?.name || 'Sin sede')} · ${escape(stud.email || 'Sin email')} ${stud.phone ? '· ' + escape(stud.phone) : ''}
+            ${escape(stud.email || 'Sin email')}${stud.phone ? ' · ' + escape(stud.phone) : ''}
           </div>
         </div>
         <div style="display: flex; gap: 8px; flex-wrap: wrap;">
@@ -21556,6 +21556,14 @@ function renderDetailClasses(stud) {
     return `<span style="${base} background: #EEEDFE; color: #3C3489;">Asignada</span>`;
   };
 
+  // Helper: badge con iniciales y color de la sede DONDE OCURRIÓ la clase
+  // (no la sede home del alumno) — útil para identificar clases cross-sede de un vistazo
+  const _sedeBadgeForSession = (sess) => {
+    const lc = STATE.locations.find(l => l.id === sess.location_id);
+    if (!lc) return '';
+    return `<span title="${escape(lc.name)}" style="display: inline-flex; align-items: center; background: ${lc.color || '#7C3AED'}; color: white; font-size: 9px; font-weight: 700; padding: 2px 7px; border-radius: 999px; letter-spacing: 0.08em; line-height: 1.5; vertical-align: middle; margin-right: 6px;">${getLocationInitials(lc)}</span>`;
+  };
+
   // Filtrado correcto de clases del alumno:
   // - Excluir si la session está cancelada
   // - Incluir si el booking está activo (cancelled_at IS NULL)
@@ -21676,15 +21684,15 @@ function renderDetailClasses(stud) {
 
     const renderClassRow = ({ b, att }) => {
       const sess = b.class_sessions;
-      const lc = STATE.locations.find(l => l.id === sess.location_id);
       const inst = STATE.instructors.find(i => i.id === sess.instructor_id);
       const status = att?.status || b.status;
       const statusBadge = _renderAttBadge(status, b.status);
+      const sedeBadge = _sedeBadgeForSession(sess);
       return `
         <div style="background: white; border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 10px 14px; margin-bottom: 6px; display: flex; align-items: center; justify-content: space-between; gap: 12px;">
           <div style="min-width: 0;">
             <div style="font-weight: 500; font-size: 13px;">${formatDate(sess.session_date)} · ${formatHour(sess.hour)}</div>
-            <div style="font-size: 11px; color: var(--ink-mute); margin-top: 2px;">${escape(lc?.name || '')}${inst ? ' · Prof. ' + escape(inst.first_name) : ''}</div>
+            <div style="font-size: 11px; color: var(--ink-mute); margin-top: 2px;">${sedeBadge}${inst ? 'Prof. ' + escape(inst.first_name) : ''}</div>
           </div>
           ${statusBadge}
         </div>
@@ -21774,15 +21782,15 @@ function renderDetailClasses(stud) {
 
     const renderUpcomingRow = (b) => {
       const sess = b.class_sessions;
-      const lc = STATE.locations.find(l => l.id === sess.location_id);
       const inst = STATE.instructors.find(i => i.id === sess.instructor_id);
       const att = _attForBooking(b);
       const statusBadge = _renderAttBadge(att?.status, b.status);
+      const sedeBadge = _sedeBadgeForSession(sess);
       return `
         <div style="background: white; border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 10px 14px; margin-bottom: 6px; display: flex; align-items: center; justify-content: space-between; gap: 12px;">
           <div style="min-width: 0;">
             <div style="font-weight: 500; font-size: 13px;">${formatDate(sess.session_date)} · ${formatHour(sess.hour)}</div>
-            <div style="font-size: 11px; color: var(--ink-mute); margin-top: 2px;">${escape(lc?.name || '')}${inst ? ' · Prof. ' + escape(inst.first_name) : ''}</div>
+            <div style="font-size: 11px; color: var(--ink-mute); margin-top: 2px;">${sedeBadge}${inst ? 'Prof. ' + escape(inst.first_name) : ''}</div>
           </div>
           ${statusBadge}
         </div>
@@ -21834,22 +21842,17 @@ function renderDetailClasses(stud) {
     // Filtros 'week' y 'month': usar la attendance para el badge
     listHTML = classes.map(b => {
       const sess = b.class_sessions;
-      const lc = STATE.locations.find(l => l.id === sess.location_id);
       const inst = STATE.instructors.find(i => i.id === sess.instructor_id);
       const isPast = sess.session_date < todayIso;
       const att = _attForBooking(b);
       const statusBadge = _renderAttBadge(att?.status, b.status);
-
-      const metaParts = [
-        escape(lc?.name || ''),
-        inst ? 'Prof. ' + escape(inst.first_name) : null,
-      ].filter(Boolean);
+      const sedeBadge = _sedeBadgeForSession(sess);
 
       return `
         <div style="background: white; border: 1px solid var(--line); border-radius: var(--radius-md); padding: 14px 18px; margin-bottom: 8px; display: flex; align-items: center; justify-content: space-between; gap: 12px; ${isPast && att?.status !== 'attended' ? 'opacity: 0.85;' : ''}">
           <div style="min-width: 0;">
             <div style="font-weight: 500;">${formatDate(sess.session_date)} · ${formatHour(sess.hour)}</div>
-            <div style="font-size: 12px; color: var(--ink-mute); margin-top: 2px;">${metaParts.join(' · ')}</div>
+            <div style="font-size: 12px; color: var(--ink-mute); margin-top: 2px;">${sedeBadge}${inst ? 'Prof. ' + escape(inst.first_name) : ''}</div>
           </div>
           ${statusBadge}
         </div>
