@@ -3509,7 +3509,7 @@
           </div>
           <div class="form-row">
             <label>Modalidad <span class="req">*</span></label>
-            <select id="f-modality" required onchange="toggleMonkeyfitField()">
+            <select id="f-modality" required onchange="toggleModalityFields()">
               <option value="flexible">Flexible (avisa por WhatsApp)</option>
               <option value="fixed">Fija (siempre mismo horario)</option>
               <option value="trial">Clase de prueba</option>
@@ -3522,6 +3522,13 @@
             <input type="number" id="f-monkeyfit-classes" min="1" max="60" step="1" placeholder="Ej: 8" />
             <div style="font-size: 11.5px; color: var(--ink-mute); margin-top: 4px;">
               Se creará automáticamente un paquete MonkeyFit con estas clases disponibles.
+            </div>
+          </div>
+          <div class="form-row" id="f-trial-expiry-row" style="display:none;">
+            <label>Vencimiento del paquete de prueba</label>
+            <input type="date" id="f-trial-expiry" />
+            <div style="font-size: 11.5px; color: var(--ink-mute); margin-top: 4px;">
+              Default: 30 días desde hoy. Se creará automáticamente un paquete "Clase de prueba" con 1 clase.
             </div>
           </div>
           <div class="form-row">
@@ -9358,18 +9365,29 @@ function formatDate(isoStr) {
 // ============================================
 // Muestra/oculta el campo de "clases MonkeyFit" según la modalidad seleccionada
 // Solo se muestra al CREAR alumna nueva (en edit, el paquete ya está creado).
-function toggleMonkeyfitField() {
+function toggleModalityFields() {
   const sel = document.getElementById('f-modality');
-  const row = document.getElementById('f-monkeyfit-classes-row');
+  const mfRow = document.getElementById('f-monkeyfit-classes-row');
+  const trialRow = document.getElementById('f-trial-expiry-row');
+  const trialDate = document.getElementById('f-trial-expiry');
   const studentId = document.getElementById('f-student-id')?.value || '';
-  if (!sel || !row) return;
+  if (!sel) return;
   const isEdit = !!studentId;
-  if (sel.value === 'monkeyfit' && !isEdit) {
-    row.style.display = '';
-  } else {
-    row.style.display = 'none';
+  // MonkeyFit field
+  if (mfRow) mfRow.style.display = (sel.value === 'monkeyfit' && !isEdit) ? '' : 'none';
+  // Trial field
+  if (trialRow) {
+    trialRow.style.display = (sel.value === 'trial' && !isEdit) ? '' : 'none';
+    // Set default 30 días desde hoy si está vacío
+    if (sel.value === 'trial' && !isEdit && trialDate && !trialDate.value) {
+      const exp = new Date();
+      exp.setDate(exp.getDate() + 30);
+      trialDate.value = exp.toISOString().split('T')[0];
+    }
   }
 }
+// Backward-compat: algunos onclicks pueden seguir llamando a la función antigua
+function toggleMonkeyfitField() { toggleModalityFields(); }
 
 // Helpers centralizados de modalidad
 function getModalityLabel(modality) {
@@ -9454,6 +9472,56 @@ async function saveStudent() {
       if (idx >= 0) STATE.students[idx] = result.data;
     } else {
       STATE.students.push(result.data);
+
+      // Si es nuevo alumno trial, crear el paquete "Clase de prueba" automáticamente
+      if (modality === 'trial') {
+        try {
+          const trialPkg = (STATE.packages || []).find(p =>
+            (p.name || '').toLowerCase().includes('prueba')
+          );
+          if (!trialPkg) {
+            showToast('Falta crear el paquete "Clase de prueba" en el catálogo. Avisa a Rodrigo.', 'warn');
+          } else {
+            const todayIso = new Date().toISOString().split('T')[0];
+            // Vencimiento: el que la coord puso en el form, o 30 días default
+            let expIso = document.getElementById('f-trial-expiry')?.value || '';
+            if (!expIso) {
+              const exp = new Date();
+              exp.setDate(exp.getDate() + 30);
+              expIso = exp.toISOString().split('T')[0];
+            }
+
+            const pkgData = {
+              student_id: result.data.id,
+              package_id: trialPkg.id,
+              classes_total: 1,
+              classes_used: 0,
+              price_pen: trialPkg.price_pen || 0,
+              purchase_date: todayIso,
+              expiry_date: expIso,
+              is_active: true,
+              is_frozen: false,
+              status: 'active',
+            };
+            const pkgResult = await sb.from('student_packages').insert(pkgData).select().single();
+            if (pkgResult.error) {
+              showToast('Alumna creada, pero falló crear el paquete prueba: ' + pkgResult.error.message, 'error');
+            } else {
+              if (STATE.studentPackages) STATE.studentPackages.push(pkgResult.data);
+              try {
+                logActivity('student_package.create', {
+                  table: 'student_packages',
+                  id: pkgResult.data.id,
+                  label: `${result.data.first_name} ${result.data.last_name || ''} · Clase de prueba`
+                }, { source: 'trial-auto', classes: 1 });
+              } catch(e) {}
+            }
+          }
+        } catch (e) {
+          console.error('Error creando paquete prueba:', e);
+          showToast('Alumna creada, pero falló crear el paquete prueba', 'error');
+        }
+      }
 
       // Si es nuevo alumno MonkeyFit, crear el paquete automáticamente
       if (modality === 'monkeyfit' && mfClasses > 0) {
