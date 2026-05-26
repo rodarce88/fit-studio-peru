@@ -226,6 +226,16 @@
   }
   .location-switcher:hover .location-caret { opacity: 0.9; }
 
+  /* Dot de color de la sede activa (multi-sede, Fase 2) */
+  .location-color-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--fit-purple);
+    flex-shrink: 0;
+    transition: background 0.18s ease;
+  }
+
   /* Indicador de conexión — dot verde pulsante (en lugar de barra inferior).
      Mantenemos el ID y las clases (.conn-offline/.conn-error) para no romper el JS. */
   .location-conn-line {
@@ -2827,6 +2837,7 @@
     <button class="location-switcher" id="location-switcher-btn" onclick="openLocationModal()">
       <span class="location-label">Sede</span>
       <span class="location-row">
+        <span class="location-color-dot" id="current-location-dot"></span>
         <span class="location-name" id="current-location-name">Cargando...</span>
         <span class="location-conn-line" id="conn-status" title="Sin conexión"></span>
         <svg class="location-caret" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg>
@@ -4779,7 +4790,7 @@ async function loadFromSupabase() {
       sb.from('instructor_schedules').select('*').eq('is_active', true),
       sb.from('instructor_pay_config').select('*'),
       sb.from('discount_reasons').select('*').eq('is_active', true).order('sort_order'),
-      sb.from('users').select('id, full_name, role'),
+      sb.from('users').select('id, full_name, role, handle, location_id'),
     ]);
     // Si alguna respuesta trae error de red en sí, propagar para retry
     for (const r of all) {
@@ -4809,9 +4820,19 @@ async function loadFromSupabase() {
   STATE.discountReasons = discountReasons.data || [];
   STATE.users = users.data || [];
 
-  // Default to Santa Cruz if exists, otherwise first
-  const sc = STATE.locations.find(l => l.slug === 'santa-cruz');
-  STATE.currentLocationId = sc ? sc.id : (STATE.locations[0]?.id || null);
+  // Sede por defecto: si es coord con users.location_id, usar esa; si no, Santa Cruz; si no, la primera
+  let defaultLocId = null;
+  if (typeof CURRENT_USER !== 'undefined' && CURRENT_USER && CURRENT_USER.role === 'coordinator') {
+    const coordLocId = CURRENT_USER.record && CURRENT_USER.record.location_id;
+    if (coordLocId && STATE.locations.some(l => l.id === coordLocId)) {
+      defaultLocId = coordLocId;
+    }
+  }
+  if (!defaultLocId) {
+    const sc = STATE.locations.find(l => l.slug === 'santa-cruz');
+    defaultLocId = sc ? sc.id : (STATE.locations[0]?.id || null);
+  }
+  STATE.currentLocationId = defaultLocId;
 }
 
 function loadFromMock() {
@@ -4944,25 +4965,36 @@ function getInstructorColor(inst) {
 
 function renderLocationSwitcher() {
   const loc = getCurrentLocation();
-  if (loc) document.getElementById('current-location-name').textContent = loc.name;
+  if (loc) {
+    document.getElementById('current-location-name').textContent = loc.name;
+    const dotEl = document.getElementById('current-location-dot');
+    if (dotEl) dotEl.style.background = loc.color || 'var(--fit-purple)';
+  }
 
   const opts = document.getElementById('location-options');
-  opts.innerHTML = STATE.locations.map(l => `
-    <div onclick="switchLocation('${l.id}')" style="padding: 18px 26px; display: grid; grid-template-columns: 44px 1fr; gap: 16px; align-items: center; cursor: pointer; border-bottom: 1px solid var(--line-soft); transition: background 0.15s;" onmouseover="this.style.background='var(--fit-lavender-pale)'" onmouseout="this.style.background=''">
-      <div style="width: 44px; height: 44px; border-radius: 50%; background: ${l.id === STATE.currentLocationId ? 'var(--fit-purple)' : 'var(--fit-lavender)'}; color: ${l.id === STATE.currentLocationId ? 'white' : 'var(--fit-purple)'}; display: grid; place-items: center;">
+  if (!opts) return;
+  opts.innerHTML = STATE.locations.map(l => {
+    const isActive = l.id === STATE.currentLocationId;
+    const color = l.color || '#7C3AED';
+    const bgActive = isActive ? 'background: var(--fit-lavender-pale);' : '';
+    return `
+    <div onclick="switchLocation('${l.id}')" style="padding: 18px 26px; display: grid; grid-template-columns: 44px 1fr; gap: 16px; align-items: center; cursor: pointer; border-bottom: 1px solid var(--line-soft); transition: background 0.15s; ${bgActive}" onmouseover="this.style.background='var(--fit-lavender-pale)'" onmouseout="this.style.background='${isActive ? 'var(--fit-lavender-pale)' : ''}'">
+      <div style="width: 44px; height: 44px; border-radius: 50%; background: ${color}; color: white; display: grid; place-items: center;">
         <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
       </div>
       <div>
-        <div style="font-family: var(--display); font-size: 17px;">${l.name}</div>
-        <div style="font-size: 12px; color: var(--ink-mute); margin-top: 3px;">${l.address || ''} · ${l.capacity} cupos por clase</div>
+        <div style="font-family: var(--display); font-size: 17px;">${escape(l.name)}</div>
+        <div style="font-size: 12px; color: var(--ink-mute); margin-top: 3px;">${escape(l.address || '')} · ${l.capacity} cupos por clase</div>
       </div>
     </div>
-  `).join('');
+  `;
+  }).join('');
 }
 
 function switchLocation(id) {
   STATE.currentLocationId = id;
   closeModals();
+  renderTopbarUser();
   renderAll();
 }
 
@@ -13989,6 +14021,8 @@ const COORDINATOR_EMAILS = [
   'anahi.fitstudio@gmail.com',
   'anahi@fitstudioperu.com',
   'santacruz.reformerfitstudio@gmail.com',
+  'inmaculado.fitstudioperu@gmail.com',
+  'sanantonio.fitstudioperu@gmail.com',
   // 'andresperezzanuzzi@gmail.com' — quitado temporalmente hasta optimizar coord en mobile.
   //   Andrés tiene registro en `instructors` con auth_user_id vinculado, así que entrará
   //   directo a la vista profesor. Para revertir, descomentar esta línea.
@@ -14120,37 +14154,9 @@ async function initForRole() {
   // Loguear el login (fire and forget)
   logActivity('auth.login', null, { role });
 
-  // User pill
+  // Setup onclick del user pill (no depende de STATE.locations todavía)
   const userPill = document.querySelector('.topbar-user');
   if (userPill) {
-    if (role === 'coordinator') {
-      userPill.innerHTML = `
-        <div class="user-avatar">CO</div>
-        <div class="user-info">
-          <div class="user-name">Coordinación</div>
-          <div class="user-role" id="user-role-text">${escape(CURRENT_USER.authUser.email || '')}</div>
-        </div>
-      `;
-    } else if (role === 'instructor') {
-      const i = CURRENT_USER.record;
-      userPill.innerHTML = `
-        <div class="user-avatar">${escape(i.initials || (i.first_name || '?')[0])}</div>
-        <div class="user-info">
-          <div class="user-name">${escape(i.handle || i.first_name || '')}</div>
-          <div class="user-role" id="user-role-text">Profesor</div>
-        </div>
-      `;
-    } else if (role === 'student') {
-      const s = CURRENT_USER.record;
-      const ini = ((s.first_name||'?')[0] + ((s.last_name||'')[0] || '')).toUpperCase();
-      userPill.innerHTML = `
-        <div class="user-avatar">${escape(ini)}</div>
-        <div class="user-info">
-          <div class="user-name">${escape(s.first_name || '')}</div>
-          <div class="user-role" id="user-role-text">Alumno</div>
-        </div>
-      `;
-    }
     userPill.onclick = () => { if (confirm('¿Cerrar sesión?')) logout(); };
     userPill.style.cursor = 'pointer';
   }
@@ -14165,8 +14171,11 @@ async function initForRole() {
     }
   }
 
-  // Cargar datos comunes
+  // Cargar datos comunes (incluye locations y aplica users.location_id del coord)
   await loadAll();
+
+  // Renderizar el user pill ahora que STATE.locations + STATE.currentLocationId ya están listos
+  renderTopbarUser();
 
   // Default view per role
   if (role === 'instructor') {
@@ -14178,6 +14187,63 @@ async function initForRole() {
   } else if (role === 'coordinator') {
     showView('dashboard', null);
   }
+}
+
+// ============================================
+// TOPBAR USER PILL — render reactivo (multi-sede, Fase 2)
+// Se llama: (1) en initForRole después de loadAll
+//           (2) en switchLocation para actualizar color del avatar
+// ============================================
+function renderTopbarUser() {
+  const userPill = document.querySelector('.topbar-user');
+  if (!userPill) return;
+  if (!CURRENT_USER) return;
+
+  const role = CURRENT_USER.role;
+
+  if (role === 'coordinator') {
+    const rec = CURRENT_USER.record || {};
+    const handle = rec.handle || 'Coordinación';
+    const fullName = rec.full_name || handle;
+    const initials = deriveCoordInitials(fullName);
+    const currentLoc = (typeof getCurrentLocation === 'function') ? getCurrentLocation() : null;
+    const color = (currentLoc && currentLoc.color) || '#7C3AED';
+    const sedeName = currentLoc ? currentLoc.name : '';
+    const subText = sedeName ? `Coord · ${escape(sedeName)}` : 'Coordinación';
+    userPill.innerHTML = `
+      <div class="user-avatar" style="background: ${color};">${escape(initials)}</div>
+      <div class="user-info">
+        <div class="user-name">${escape(handle)}</div>
+        <div class="user-role" id="user-role-text">${subText}</div>
+      </div>
+    `;
+  } else if (role === 'instructor') {
+    const i = CURRENT_USER.record;
+    userPill.innerHTML = `
+      <div class="user-avatar">${escape(i.initials || (i.first_name || '?')[0])}</div>
+      <div class="user-info">
+        <div class="user-name">${escape(i.handle || i.first_name || '')}</div>
+        <div class="user-role" id="user-role-text">Profesor</div>
+      </div>
+    `;
+  } else if (role === 'student') {
+    const s = CURRENT_USER.record;
+    const ini = ((s.first_name||'?')[0] + ((s.last_name||'')[0] || '')).toUpperCase();
+    userPill.innerHTML = `
+      <div class="user-avatar">${escape(ini)}</div>
+      <div class="user-info">
+        <div class="user-name">${escape(s.first_name || '')}</div>
+        <div class="user-role" id="user-role-text">Alumno</div>
+      </div>
+    `;
+  }
+}
+
+function deriveCoordInitials(fullName) {
+  if (!fullName) return '?';
+  const parts = fullName.trim().split(/\s+/);
+  if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
+  return fullName.slice(0, 2).toUpperCase();
 }
 
 // ============================================
