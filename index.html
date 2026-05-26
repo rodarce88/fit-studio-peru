@@ -14056,12 +14056,17 @@ async function detectRole(authUser) {
   let instructorRec = null;
   let studentRec = null;
 
-  if (COORDINATOR_EMAILS.includes(email)) coordinatorMatch = { type: 'list' };
-  if (!coordinatorMatch) {
+  // Detectar coord: prioridad al record de public.users (trae handle + location_id).
+  // Si no está en public.users pero sí en la allowlist legacy (COORDINATOR_EMAILS),
+  // igual lo tratamos como coord para no romper a Rodrigo/Anahí.
+  if (sb) {
     try {
       const { data: usr } = await sb.from('users').select('*').eq('email', email).maybeSingle();
-      if (usr) coordinatorMatch = usr;
+      if (usr && usr.role === 'coordinator') coordinatorMatch = usr;
     } catch(e) { /* tabla users opcional */ }
+  }
+  if (!coordinatorMatch && COORDINATOR_EMAILS.includes(email)) {
+    coordinatorMatch = { type: 'list' };
   }
   try {
     const { data: inst } = await sb.from('instructors').select('*').eq('auth_user_id', authUser.id).eq('is_active', true).maybeSingle();
