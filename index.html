@@ -5011,13 +5011,14 @@ function switchLocation(id) {
   STATE.currentLocationId = id;
   closeModals();
   renderTopbarUser();
+  renderLocationSwitcher();  // Actualizar el dropdown del topbar para TODOS los roles
   // Branch por rol — la vista del profesor tiene su propio renderer y skeletons
   if (CURRENT_USER && CURRENT_USER.role === 'instructor') {
     if (typeof showInstructorSkeletons === 'function') showInstructorSkeletons();
     if (typeof renderInstructorDay === 'function') renderInstructorDay();
   } else {
     setMiDiaLoadingState();  // Skeletons agresivos en widgets cross-sede mientras recargan
-    renderAll();
+    renderAll();  // renderAll también llama renderLocationSwitcher, pero es idempotente
   }
 }
 
