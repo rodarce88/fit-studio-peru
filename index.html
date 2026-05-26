@@ -5042,6 +5042,16 @@ function switchLocation(id) {
     if (typeof showInstructorSkeletons === 'function') showInstructorSkeletons();
     if (typeof renderInstructorDay === 'function') renderInstructorDay();
   } else {
+    // COORDINADOR: si está en una vista distinta a Mi día, redirigir a Mi día.
+    // El cambio de sede tiene sentido principalmente en el contexto de Mi día. Otras
+    // vistas (Alumnos, Calendario, detalle de alumno, Reportes) pueden tener filtros
+    // propios o mostrar info no aplicable a la nueva sede, lo cual genera confusión
+    // y riesgo de errores (ej. ver detalle de un alumno y cambiar a la sede del de al lado).
+    const currentlyOnDashboard = document.getElementById('view-dashboard')?.classList.contains('is-active');
+    if (!currentlyOnDashboard) {
+      const dashBtn = document.querySelector('.sidebar .nav-item[data-view="dashboard"]');
+      showView('dashboard', dashBtn || null);
+    }
     setMiDiaLoadingState();  // Skeletons agresivos en widgets cross-sede mientras recargan
     renderAll();  // renderAll también llama renderLocationSwitcher, pero es idempotente
   }
