@@ -490,11 +490,9 @@
   /* MI DÍA — layout 2 columnas con sidebar de horas */
   .mi-dia-layout { display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: 14px; align-items: start; }
   .mi-dia-sidebar { 
-    position: fixed; 
+    position: sticky; 
     top: calc(var(--topbar-h) + var(--dash-search-sticky-h, 76px) + var(--mi-dia-header-h, 84px) + 12px);
-    width: 96px;
-    z-index: 5;
-    /* left se calcula con JS (syncMiDiaSidebarLeft) para matchear el grid */
+    align-self: start; 
     padding-top: 4px; padding-right: 2px;
   }
   .mi-dia-sidebar-list { overflow: visible !important; }
@@ -517,7 +515,10 @@
   .mi-dia-hour-item.is-active .mi-dia-hour-count { color: var(--fit-purple-deep, var(--fit-purple)); font-weight: 500; }
   .mi-dia-hour-item.is-past .mi-dia-hour-label { opacity: 0.5; }
   .mi-dia-hour-item.is-past .mi-dia-hour-count { opacity: 0.5; }
-  .mi-dia-cards-stack { display: flex; flex-direction: column; gap: 10px; }
+  /* min-height garantiza que el grid row tenga al menos la altura del sidebar (~500px),
+     así el sidebar sticky siempre tiene espacio para deslizarse y no se "despega" del top
+     cuando la página se scrolea a una clase tardía (5pm-8pm). */
+  .mi-dia-cards-stack { display: flex; flex-direction: column; gap: 10px; min-height: 520px; }
   .mi-dia-cards-stack .class-block { margin-bottom: 0; scroll-margin-top: calc(var(--topbar-h) + var(--dash-search-sticky-h, 76px) + var(--mi-dia-header-h, 84px) + 12px); }
   .mi-dia-cards-stack .class-block.is-open { border-color: var(--fit-purple); }
   .class-block { border: 1px solid rgba(0,0,0,0.03); border-radius: var(--radius-md); margin-bottom: 12px; transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease; background: var(--fit-cream); box-shadow: var(--shadow-sm), var(--shadow-md); }
@@ -6647,10 +6648,6 @@ function renderTimeline() {
   // sidebar sticky calcule su `top` correctamente (queda pegado justo debajo del header).
   updateMiDiaHeaderHeight();
 
-  // Sincronizar el `left` del sidebar fixed con la posición de la columna del grid.
-  // Doble rAF porque updateMiDiaHeaderHeight ya hace un rAF y queremos correr DESPUÉS.
-  requestAnimationFrame(() => requestAnimationFrame(syncMiDiaSidebarLeft));
-
   // Scroll suave a la card expandida (block:'start' respeta scroll-margin-top, que ya
   // tiene en cuenta el topbar fijo + el timeline-header sticky para no quedar tapada)
   if (expandedHour !== null) {
@@ -6677,18 +6674,6 @@ if (typeof window !== 'undefined') {
     if (typeof updateMiDiaHeaderHeight === 'function') updateMiDiaHeaderHeight();
   });
 }
-
-// Sincroniza el left del sidebar fixed con la posición de la columna izquierda del grid.
-// Necesario porque position:fixed se ubica respecto al viewport, no al parent.
-// Llamar después de renderizar Mi día y en resize del window.
-function syncMiDiaSidebarLeft() {
-  const sb = document.querySelector('.mi-dia-sidebar');
-  const layout = document.querySelector('.mi-dia-layout');
-  if (!sb || !layout) return;
-  const rect = layout.getBoundingClientRect();
-  sb.style.left = `${rect.left}px`;
-}
-window.addEventListener('resize', syncMiDiaSidebarLeft);
 
 // Click en una hora del sidebar → expandir esa card y centrar scroll.
 function onMiDiaHourClick(hour) {
