@@ -490,13 +490,14 @@
   /* MI DÍA — layout 2 columnas con sidebar de horas */
   .mi-dia-layout { display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: 14px; align-items: start; }
   .mi-dia-sidebar { 
-    position: sticky; 
+    position: fixed; 
     top: calc(var(--topbar-h) + var(--dash-search-sticky-h, 76px) + var(--mi-dia-header-h, 84px) + 12px);
-    align-self: start; 
-    /* Sin overflow interno: los ~14 horarios del día caben en cualquier pantalla normal.
-       Si scrollea internamente, el top deja de ser 6am y rompe el alineamiento con las cards. */
+    width: 96px;
+    z-index: 5;
+    /* left se calcula con JS (syncMiDiaSidebarLeft) para matchear el grid */
     padding-top: 4px; padding-right: 2px;
   }
+  .mi-dia-sidebar-list { overflow: visible !important; }
   .mi-dia-sidebar-line { position: absolute; left: 10px; top: 18px; bottom: 18px; width: 1px; background: var(--line); z-index: 0; pointer-events: none; }
   .mi-dia-sidebar-list { position: relative; z-index: 1; display: flex; flex-direction: column; gap: 2px; }
   .mi-dia-hour-item { padding: 6px 6px 8px 6px; cursor: pointer; border-radius: 6px; transition: background 0.15s; }
@@ -6646,6 +6647,10 @@ function renderTimeline() {
   // sidebar sticky calcule su `top` correctamente (queda pegado justo debajo del header).
   updateMiDiaHeaderHeight();
 
+  // Sincronizar el `left` del sidebar fixed con la posición de la columna del grid.
+  // Doble rAF porque updateMiDiaHeaderHeight ya hace un rAF y queremos correr DESPUÉS.
+  requestAnimationFrame(() => requestAnimationFrame(syncMiDiaSidebarLeft));
+
   // Scroll suave a la card expandida (block:'start' respeta scroll-margin-top, que ya
   // tiene en cuenta el topbar fijo + el timeline-header sticky para no quedar tapada)
   if (expandedHour !== null) {
@@ -6672,6 +6677,18 @@ if (typeof window !== 'undefined') {
     if (typeof updateMiDiaHeaderHeight === 'function') updateMiDiaHeaderHeight();
   });
 }
+
+// Sincroniza el left del sidebar fixed con la posición de la columna izquierda del grid.
+// Necesario porque position:fixed se ubica respecto al viewport, no al parent.
+// Llamar después de renderizar Mi día y en resize del window.
+function syncMiDiaSidebarLeft() {
+  const sb = document.querySelector('.mi-dia-sidebar');
+  const layout = document.querySelector('.mi-dia-layout');
+  if (!sb || !layout) return;
+  const rect = layout.getBoundingClientRect();
+  sb.style.left = `${rect.left}px`;
+}
+window.addEventListener('resize', syncMiDiaSidebarLeft);
 
 // Click en una hora del sidebar → expandir esa card y centrar scroll.
 function onMiDiaHourClick(hour) {
