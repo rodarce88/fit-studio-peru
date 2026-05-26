@@ -6720,7 +6720,7 @@ function renderStudents() {
       <tr onclick='openStudentModal(${JSON.stringify(s.id).replace(/'/g, "&#39;")})'>
         <td>
           <div class="student-cell">
-            <div class="student-avatar">${initials(s)}</div>
+            <div class="student-avatar" style="${studentSedeAvatarStyle(s)}">${initials(s)}</div>
             <div>
               <div style="font-weight: 500;">${escape(s.first_name)} ${escape(s.last_name || '')} <span style="margin-left: 4px; font-size: 11px;">${getConsentBadge(s)}</span></div>
               ${!s.data_complete ? '<div style="font-size: 10px; color: var(--warn); margin-top: 2px;">⚠ Datos incompletos</div>' : ''}
@@ -7343,7 +7343,7 @@ function renderScheduleCellDrawer(locationId, dateIso, hour) {
 
     body += `
       <div style="display: flex; align-items: center; gap: 12px; padding: 11px 0; border-bottom: 1px solid var(--line-soft);">
-        <div class="student-avatar" style="width: 36px; height: 36px; font-size: 12px; flex-shrink: 0;">${initialsStr}</div>
+        <div class="student-avatar" style="width: 36px; height: 36px; font-size: 12px; flex-shrink: 0; ${studentSedeAvatarStyle(student)}">${initialsStr}</div>
         <div style="flex: 1; min-width: 0;">
           <div style="font-weight: 500; font-size: 14px; display: flex; align-items: center; gap: 8px;">
             ${escape(student.first_name)} ${escape(student.last_name || '')}
@@ -7516,7 +7516,7 @@ function openScheduleCellModal(locationId, dateIso, hour) {
         : 'background: var(--line); color: var(--ink-soft);'));
       return `
         <div style="display: flex; align-items: center; gap: 12px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px;">
-          <div class="student-avatar" style="width: 32px; height: 32px; font-size: 12px;">${initials(student)}</div>
+          <div class="student-avatar" style="width: 32px; height: 32px; font-size: 12px; ${studentSedeAvatarStyle(student)}">${initials(student)}</div>
           <div style="flex: 1;">
             <div style="font-weight: 500; font-size: 14px;">${escape(student.first_name)} ${escape(student.last_name || '')}</div>
             <div style="font-size: 11px; color: var(--ink-mute); margin-top: 1px;">${escape(student.email || '—')}</div>
@@ -7651,7 +7651,7 @@ function renderAssignStudentList() {
       : '<span style="font-size: 10px; padding: 2px 8px; background: #e0e7ff; color: #3730a3; border-radius: 999px;">✦ Prueba</span>');
     return `
       <div onclick="selectStudentForAssign('${s.id}')" style="display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 8px; cursor: pointer; transition: background 0.15s;" onmouseover="this.style.background='var(--fit-cream)'" onmouseout="this.style.background=''">
-        <div class="student-avatar" style="width: 32px; height: 32px; font-size: 12px;">${initials(s)}</div>
+        <div class="student-avatar" style="width: 32px; height: 32px; font-size: 12px; ${studentSedeAvatarStyle(s)}">${initials(s)}</div>
         <div style="flex: 1;">
           <div style="font-weight: 500; font-size: 13px;">${escape(s.first_name)} ${escape(s.last_name || '')}</div>
           <div style="font-size: 11px; color: var(--ink-mute);">${escape(s.email || '—')}</div>
@@ -7712,7 +7712,7 @@ function renderAssignStep2Repeat() {
 
   document.getElementById('assign-modal-body').innerHTML = `
     <div style="background: var(--fit-cream); border-radius: 10px; padding: 12px 16px; margin-bottom: 14px; display: flex; align-items: center; gap: 12px;">
-      <div class="student-avatar" style="width: 36px; height: 36px; font-size: 13px;">${initials(stud)}</div>
+      <div class="student-avatar" style="width: 36px; height: 36px; font-size: 13px; ${studentSedeAvatarStyle(stud)}">${initials(stud)}</div>
       <div style="flex: 1;">
         <div style="font-weight: 500; font-size: 14px;">${escape(stud.first_name)} ${escape(stud.last_name || '')}</div>
         <div style="font-size: 11px; color: var(--ink-mute);">${pkg ? `Paquete: ${remaining} restantes${recoverable > 0 ? ` + ${recoverable} recuperable${recoverable === 1 ? '' : 's'}` : ''}` : 'Sin paquete activo'}</div>
@@ -8382,7 +8382,7 @@ function _renderScheduleEditorImpl() {
       <!-- Fila 1: avatar + nombre + paquete + sede + pill sin agendar + contador -->
       <div style="padding: 12px 28px; display: flex; align-items: center; gap: 18px;">
         <div style="display: flex; align-items: center; gap: 11px; min-width: 0; flex: 1;">
-          <div class="student-avatar" style="width: 40px; height: 40px; font-size: 13px; flex-shrink: 0;">${initials(stud)}</div>
+          <div class="student-avatar" style="width: 40px; height: 40px; font-size: 13px; flex-shrink: 0; ${studentSedeAvatarStyle(stud)}">${initials(stud)}</div>
           <div style="min-width: 0;">
             <div style="font-family: var(--display); font-style: italic; font-size: 19px; color: var(--ink); line-height: 1.1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${escape(stud.first_name)} ${escape(stud.last_name || '')}</div>
             <div style="font-size: 12px; color: var(--ink-mute); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${pkgInfoLine}</div>
@@ -12611,7 +12611,7 @@ function renderFlexibleSearch() {
 
   container.innerHTML = list.map(s => `
     <div onclick="addStudentToClass('${s.id}')" style="display: grid; grid-template-columns: 36px 1fr auto; gap: 12px; align-items: center; padding: 10px 12px; cursor: pointer; border-radius: 8px; transition: background 0.15s;" onmouseover="this.style.background='var(--fit-lavender-pale)'" onmouseout="this.style.background=''">
-      <div class="student-avatar">${initials(s)}</div>
+      <div class="student-avatar" style="${studentSedeAvatarStyle(s)}">${initials(s)}</div>
       <div>
         <div style="font-weight: 500; font-size: 14px;">${escape(s.first_name)} ${escape(s.last_name || '')}</div>
         <div style="font-size: 11px; color: var(--ink-mute);">
@@ -16125,7 +16125,7 @@ function renderInstructorStudentRow(item, classCtx) {
   return `
     <div class="inst-stud-row ${rowKlass}">
       <div class="inst-stud-tap" onclick="openInstructorStudentSheet('${s.id}', '${classCtx.dateIso}', ${classCtx.hour}, '${classCtx.location.id}', '${status || ''}')">
-        <div class="inst-stud-avatar">${initials(s)}</div>
+        <div class="inst-stud-avatar" style="${studentSedeAvatarStyle(s)}">${initials(s)}</div>
         <div class="inst-stud-info">
           <div class="inst-stud-name">
             ${escape(s.first_name)} ${escape(s.last_name || '')}
@@ -16184,7 +16184,7 @@ function openInstructorStudentSheet(studentId, dateIso, hour, locationId, curren
     <div class="inst-sheet">
       <div class="inst-sheet-handle"></div>
       <div class="inst-sheet-header">
-        <div class="inst-sheet-avatar">${initials(stud)}</div>
+        <div class="inst-sheet-avatar" style="${studentSedeAvatarStyle(stud)}">${initials(stud)}</div>
         <div class="inst-sheet-info">
           <div class="inst-sheet-name">${escape(stud.first_name)} <em>${escape(stud.last_name || '')}</em></div>
           <div class="inst-sheet-meta">${modalityLabel} · ${formatHour(hour)} · ${status ? STATES_LABELS[status] : 'sin marcar'}</div>
@@ -17243,7 +17243,7 @@ function instructorRenderResults(query) {
     const meta = phone || (s.email || '');
     return `
       <div onclick="instructorPickStudent('${s.id}')" style="display: flex; align-items: center; gap: 12px; padding: 12px 16px; cursor: pointer; border-top: 1px solid var(--line);">
-        <div class="student-avatar" style="width: 38px; height: 38px; font-size: 12px; background: var(--fit-lavender); color: var(--fit-purple-deep); flex-shrink: 0;">${initials(s)}</div>
+        <div class="student-avatar" style="width: 38px; height: 38px; font-size: 12px; flex-shrink: 0; ${studentSedeAvatarStyle(s)}">${initials(s)}</div>
         <div style="flex: 1; min-width: 0;">
           <div style="font-size: 14px; font-weight: 500; color: var(--ink);">${highlight(fullName)} ${isTrial ? '<span style="font-size: 9px; padding: 2px 6px; background: #EEEDFE; color: #3C3489; border-radius: 999px; margin-left: 4px; font-weight: 600;">invitada</span>' : ''}</div>
           ${meta ? `<div style="font-size: 11px; color: var(--ink-mute); margin-top: 2px;">${highlight(meta)}</div>` : ''}
@@ -17318,7 +17318,7 @@ async function instructorRenderCase(caseType, stud, pkg) {
 
   const studHeader = `
     <div style="display: flex; align-items: center; gap: 10px; padding: 10px 12px; background: var(--bg); border-radius: var(--radius-sm); margin-bottom: 14px;">
-      <div class="student-avatar" style="width: 36px; height: 36px; font-size: 12px;">${initials(stud)}</div>
+      <div class="student-avatar" style="width: 36px; height: 36px; font-size: 12px; ${studentSedeAvatarStyle(stud)}">${initials(stud)}</div>
       <div style="flex: 1;">
         <div style="font-size: 14px; font-weight: 500;">${escape(stud.first_name)} ${escape(stud.last_name || '')}</div>
         <div style="font-size: 11px; color: var(--ink-mute);">${escape(stud.phone || stud.email || '')}</div>
