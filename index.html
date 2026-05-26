@@ -4995,7 +4995,101 @@ function switchLocation(id) {
   STATE.currentLocationId = id;
   closeModals();
   renderTopbarUser();
+  setMiDiaLoadingState();  // Skeletons agresivos en widgets cross-sede mientras recargan
   renderAll();
+}
+
+// ============================================
+// SKELETONS al cambiar de sede (multi-sede, Fase 4)
+// ============================================
+// Cuando el coord cambia de sede vía dropdown, los widgets que dependen de queries
+// async a Supabase tardan ~1-3 seg en actualizarse. Sin esta función, durante ese
+// tiempo el coord ve datos viejos de la sede anterior (banner de alertas, sidebar
+// Por cobrar, etc.), lo que es confuso y riesgoso (podría hacer click en algo de
+// la sede vieja).
+//
+// PATRÓN para nuevos widgets cross-sede:
+// 1) En la función de carga del widget, filtrar por STATE.currentLocationId
+// 2) Registrar acá el "vaciado" del contenedor (reemplazar con .skel)
+// 3) Si el widget tiene contenido estructural complejo (SVG, layout), usar
+//    `opacity: 0.4` y restaurar al final del paint async.
+function setMiDiaLoadingState() {
+  if (!CURRENT_USER || CURRENT_USER.role !== 'coordinator') return;
+
+  const skelBlock = (h, mb) => `<div class="skel" style="height: ${h}px; margin-bottom: ${mb || 8}px; border-radius: 8px;"></div>`;
+  const skelRow = () => `<div style="padding: 12px 14px; display: flex; align-items: center; gap: 10px; border-bottom: 1px solid var(--line-soft);">
+    <div class="skel" style="width: 32px; height: 32px; border-radius: 50%;"></div>
+    <div style="flex: 1;">
+      <div class="skel" style="height: 11px; width: 70%; margin-bottom: 6px;"></div>
+      <div class="skel" style="height: 9px; width: 45%;"></div>
+    </div>
+  </div>`;
+
+  // 1) Banner de alertas de horarios (solo si ya estaba mostrando algo)
+  const alertsBanner = document.getElementById('schedule-alerts-banner');
+  if (alertsBanner && alertsBanner.innerHTML.trim() !== '') {
+    alertsBanner.innerHTML = `<div style="padding: 16px; background: var(--gold-soft); border-radius: 12px; margin-bottom: 18px;">${skelBlock(20, 0)}</div>`;
+  }
+
+  // 2) Banner ancho frozen reminders (limpiar si había)
+  const frozenBanner = document.getElementById('frozen-reminders-banner');
+  if (frozenBanner) frozenBanner.innerHTML = '';
+
+  // 3) Widget de cobranza: atenuar (preserva el SVG arc + layout) + reset textos
+  //    `paintCobranzaWidget` restaurará opacity y textos al terminar.
+  const cobWidget = document.getElementById('cobranza-widget');
+  if (cobWidget) {
+    cobWidget.style.opacity = '0.4';
+    cobWidget.style.pointerEvents = 'none';
+    cobWidget.style.transition = 'opacity 0.18s';
+  }
+  const resetText = (id, val) => { const e = document.getElementById(id); if (e) e.textContent = val; };
+  resetText('cob-loc-name', '—');
+  resetText('cob-amount', 'S/ —');
+  resetText('cob-meta', '—');
+  resetText('cob-paid', 'S/ —');
+  resetText('cob-paid-sub', '— alumnos');
+  resetText('cob-rate', 'S/ —/d');
+  resetText('cob-pct', '—');
+  resetText('cob-total-label', 'S/ —');
+  resetText('cob-chip', '—');
+
+  // 4) Sidebar derecho: Por re-agendar
+  const reschedList = document.getElementById('reschedule-list');
+  if (reschedList) reschedList.innerHTML = skelRow() + skelRow() + skelRow();
+  const reschedCount = document.getElementById('reschedule-count');
+  if (reschedCount) reschedCount.textContent = '—';
+
+  // 5) Sidebar derecho: Frozen reminders (limpiar — si no hay no se muestra)
+  const frozenList = document.getElementById('frozen-reminders-list');
+  if (frozenList) frozenList.innerHTML = '';
+  const frozenCount = document.getElementById('frozen-reminders-count');
+  if (frozenCount) frozenCount.textContent = '—';
+
+  // 6) Sidebar derecho: Por cobrar
+  const topayList = document.getElementById('topay-list');
+  if (topayList) topayList.innerHTML = skelRow() + skelRow() + skelRow();
+  const topayCount = document.getElementById('topay-count');
+  if (topayCount) topayCount.textContent = '—';
+
+  // 7) Sidebar derecho: Datos incompletos
+  const incompleteList = document.getElementById('incomplete-list');
+  if (incompleteList) incompleteList.innerHTML = skelRow() + skelRow();
+  const incompleteCount = document.getElementById('incomplete-count');
+  if (incompleteCount) incompleteCount.textContent = '—';
+
+  // 8) Timeline de clases del día
+  const timelineBody = document.getElementById('timeline-body');
+  if (timelineBody) {
+    timelineBody.innerHTML = `
+      <div style="padding: 20px 24px;">
+        ${skelBlock(64, 12)}
+        ${skelBlock(64, 12)}
+        ${skelBlock(64, 12)}
+        ${skelBlock(64, 12)}
+      </div>
+    `;
+  }
 }
 
 // ============================================
@@ -5492,6 +5586,13 @@ function paintCobranzaWidget(d) {
   document.getElementById('cob-pct').setAttribute('fill', color);
   document.getElementById('cob-expected-text').textContent = `hoy: ${d.pctExpected.toFixed(0)}%`;
   document.getElementById('cob-total-label').textContent = fmtTotal(d.totalMes);
+
+  // Restaurar opacidad si veníamos de un setMiDiaLoadingState (cambio de sede)
+  const widget = document.getElementById('cobranza-widget');
+  if (widget) {
+    widget.style.opacity = '';
+    widget.style.pointerEvents = '';
+  }
 }
 
 function openCobranzaPanel() {
