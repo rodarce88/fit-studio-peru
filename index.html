@@ -6367,7 +6367,7 @@ function renderTimeline() {
 
       return `
       <div class="student-row" style="${rowStyle}">
-        <div class="student-avatar">${initials(s)}</div>
+        <div class="student-avatar" style="${studentSedeAvatarStyle(s)}">${initials(s)}</div>
         <div>
           <div class="student-name">${fullName}</div>
           <div class="student-meta">
@@ -11079,6 +11079,16 @@ function getLocationInitials(loc) {
     return (parts[0][0] + parts[1][0]).toUpperCase();
   }
   return loc.name.slice(0, 2).toUpperCase();
+}
+
+// Genera el style del avatar de un alumno teñido con el color de su sede home.
+// Tinte suave: background con alpha ~13% + texto sólido. Misma estética que el
+// `--fit-lavender + --fit-purple` original de Santa Cruz, pero por sede.
+function studentSedeAvatarStyle(s) {
+  if (!s) return '';
+  const loc = STATE.locations.find(l => l.id === s.location_id);
+  const c = (loc && loc.color) || '#7C3AED';
+  return `background: ${c}22; color: ${c};`;
 }
 
 function _renderDashStudentSearchRow(s) {
