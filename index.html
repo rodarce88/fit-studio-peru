@@ -12717,8 +12717,11 @@ async function confirmMoveStudent() {
 // ADD FLEXIBLE — agregar alumno a una clase del día
 // ============================================
 let ADD_FLEX_CTX = { hour: null };
+// Caché de datos precargados al abrir el modal. Se llena via loadAddFlexData() y se usa
+// en _getPkgStateFromCache() para evaluar estado sin queries adicionales.
+let ADD_FLEX_PKG_CACHE = { pkgsByStudent: new Map(), futureBookingsByStudent: new Map(), loaded: false };
 
-function openAddFlexibleModal(hour) {
+async function openAddFlexibleModal(hour) {
   ADD_FLEX_CTX = { hour };
   const loc = getCurrentLocation();
   const dateStr = dateToIsoLocal(STATE.currentDate);
@@ -12727,37 +12730,97 @@ function openAddFlexibleModal(hour) {
     <span style="color: var(--ink-mute);">Buscá un alumno por nombre, apellido o documento.</span>
   `;
   document.getElementById('add-flex-search').value = '';
-  renderFlexibleSearch();
+  const showAllEl = document.getElementById('add-flex-show-all');
+  if (showAllEl) showAllEl.checked = false;
+  // Mostrar loading inicial
+  ADD_FLEX_PKG_CACHE = { pkgsByStudent: new Map(), futureBookingsByStudent: new Map(), loaded: false };
+  document.getElementById('add-flex-results').innerHTML = '<div style="padding: 32px; text-align: center; color: var(--ink-mute); font-size: 13px;">Cargando alumnos…</div>';
   document.getElementById('add-flexible-modal').classList.add('is-open');
-  setTimeout(() => document.getElementById('add-flex-search').focus(), 100);
+  // Pre-cargar datos de paquetes y bookings (async, no bloquea apertura del modal)
+  loadAddFlexData().then(() => {
+    renderFlexibleSearch();
+    setTimeout(() => document.getElementById('add-flex-search').focus(), 50);
+  }).catch(err => {
+    console.error('Error cargando datos del modal:', err);
+    document.getElementById('add-flex-results').innerHTML = '<div style="padding: 32px; text-align: center; color: #B45309; font-size: 13px;">Error cargando datos. Cerrá y volvé a abrir.</div>';
+  });
 }
 
-// Helper local: calcula el estado del paquete del alumno usando datos en memoria.
-// No hace queries — usa STATE.studentPackages, STATE.sessionBookings, STATE.classSessions.
+// Pre-carga paquetes y bookings de los alumnos de la sede en una sola pasada.
+// Hace 2 queries independientes del número de alumnos.
+async function loadAddFlexData() {
+  if (!isOnline) return;
+  const loc = getCurrentLocation();
+  const studentIds = STATE.students.filter(s => s.location_id === loc.id).map(s => s.id);
+  if (studentIds.length === 0) {
+    ADD_FLEX_PKG_CACHE.loaded = true;
+    return;
+  }
+  const todayIso = dateToIsoLocal(new Date());
+
+  // Query 1: paquetes no congelados de estos alumnos
+  const pkgQuery = sb.from('student_packages')
+    .select('id, student_id, classes_total, classes_used, purchase_date, status, is_frozen')
+    .in('student_id', studentIds)
+    .eq('is_frozen', false);
+
+  // Query 2: bookings activos (no cancelados) de estos alumnos
+  const bkQuery = sb.from('session_bookings')
+    .select('id, student_id, session_id, cancelled_at')
+    .in('student_id', studentIds)
+    .is('cancelled_at', null);
+
+  const [pkgsRes, bksRes] = await Promise.all([pkgQuery, bkQuery]);
+  const pkgs = pkgsRes.data || [];
+  const bookings = bksRes.data || [];
+
+  // Query 3: sessions correspondientes a los bookings (para saber fechas)
+  const sessionIds = [...new Set(bookings.map(b => b.session_id))].filter(Boolean);
+  let sessionDateMap = new Map();
+  if (sessionIds.length > 0) {
+    const { data: sessions } = await sb.from('class_sessions')
+      .select('id, session_date, is_cancelled')
+      .in('id', sessionIds);
+    (sessions || []).forEach(s => {
+      if (!s.is_cancelled) sessionDateMap.set(s.id, s.session_date);
+    });
+  }
+
+  // Para cada alumno: encontrar paquete activo (FIFO con clases libres)
+  const pkgsByStudent = new Map();
+  studentIds.forEach(id => {
+    const studPkgs = pkgs.filter(p =>
+      p.student_id === id
+      && !p.is_frozen
+      && (!p.status || p.status === 'active')
+    );
+    const sorted = studPkgs.slice().sort((a, b) => (a.purchase_date || '').localeCompare(b.purchase_date || ''));
+    const activePkg = sorted.find(p => (p.classes_used || 0) < (p.classes_total || 0));
+    if (activePkg) pkgsByStudent.set(id, activePkg);
+  });
+
+  // Para cada alumno: contar bookings futuros (sesion_date >= hoy y no cancelada)
+  const futureBookingsByStudent = new Map();
+  bookings.forEach(b => {
+    const sd = sessionDateMap.get(b.session_id);
+    if (sd && sd >= todayIso) {
+      futureBookingsByStudent.set(b.student_id, (futureBookingsByStudent.get(b.student_id) || 0) + 1);
+    }
+  });
+
+  ADD_FLEX_PKG_CACHE = { pkgsByStudent, futureBookingsByStudent, loaded: true };
+}
+
+// Helper local: calcula el estado del paquete usando el caché precargado.
+// No hace queries — usa ADD_FLEX_PKG_CACHE llenado por loadAddFlexData().
 // Retorna uno de: 'withCupos' | 'noCupos' | 'sinPaquete' | 'prospecto'
-function _getPkgStateLocal(student, sessionDateMap) {
+function _getPkgStateFromCache(student) {
   if (!student) return 'sinPaquete';
   if (student.modality === 'interested') return 'prospecto';
-
-  const pkgs = (STATE.studentPackages || []).filter(p =>
-    p.student_id === student.id
-    && !p.is_frozen
-    && (!p.status || p.status === 'active')
-  );
-  // FIFO: paquete más antiguo con clases libres
-  const sorted = pkgs.slice().sort((a, b) => (a.purchase_date || '').localeCompare(b.purchase_date || ''));
-  const activePkg = sorted.find(p => (p.classes_used || 0) < (p.classes_total || 0));
+  const activePkg = ADD_FLEX_PKG_CACHE.pkgsByStudent.get(student.id);
   if (!activePkg) return 'sinPaquete';
-
   const max = (activePkg.classes_total || 0) - (activePkg.classes_used || 0);
-  const todayIso = dateToIsoLocal(new Date());
-  const futureCount = (STATE.sessionBookings || []).filter(b => {
-    if (b.student_id !== student.id) return false;
-    if (b.cancelled_at) return false;
-    const sd = sessionDateMap.get(b.session_id);
-    return sd && sd >= todayIso;
-  }).length;
-
+  const futureCount = ADD_FLEX_PKG_CACHE.futureBookingsByStudent.get(student.id) || 0;
   return (max - futureCount > 0) ? 'withCupos' : 'noCupos';
 }
 
@@ -12768,11 +12831,12 @@ function renderFlexibleSearch() {
   const container = document.getElementById('add-flex-results');
   const countEl = document.getElementById('add-flex-count');
 
-  // Pre-calcular mapa session_id → session_date una sola vez (eficiencia)
-  const sessionDateMap = new Map();
-  (STATE.classSessions || []).forEach(s => {
-    if (!s.is_cancelled) sessionDateMap.set(s.id, s.session_date);
-  });
+  // Si el caché no está cargado todavía, mostrar loading
+  if (!ADD_FLEX_PKG_CACHE.loaded) {
+    container.innerHTML = '<div style="padding: 32px; text-align: center; color: var(--ink-mute); font-size: 13px;">Cargando alumnos…</div>';
+    if (countEl) countEl.innerHTML = '';
+    return;
+  }
 
   let list = STATE.students.filter(s => s.location_id === loc.id);
   if (q) {
@@ -12783,8 +12847,8 @@ function renderFlexibleSearch() {
     });
   }
 
-  // Calcular estado de paquete por alumno
-  list = list.map(s => ({ s, state: _getPkgStateLocal(s, sessionDateMap) }));
+  // Calcular estado de paquete por alumno (usando caché)
+  list = list.map(s => ({ s, state: _getPkgStateFromCache(s) }));
 
   // Filtro por default: solo withCupos y noCupos. "Ver todos" muestra sinPaquete y prospecto también.
   const filtered = showAll ? list : list.filter(x => x.state === 'withCupos' || x.state === 'noCupos');
