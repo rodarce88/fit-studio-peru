@@ -515,10 +515,13 @@
   .mi-dia-hour-item.is-active .mi-dia-hour-count { color: var(--fit-purple-deep, var(--fit-purple)); font-weight: 500; }
   .mi-dia-hour-item.is-past .mi-dia-hour-label { opacity: 0.5; }
   .mi-dia-hour-item.is-past .mi-dia-hour-count { opacity: 0.5; }
-  /* min-height garantiza que el grid row tenga al menos la altura del sidebar (~500px),
-     así el sidebar sticky siempre tiene espacio para deslizarse y no se "despega" del top
-     cuando la página se scrolea a una clase tardía (5pm-8pm). */
-  .mi-dia-cards-stack { display: flex; flex-direction: column; gap: 10px; min-height: 520px; }
+  /* min-height: 100vh garantiza que el grid row sea SIEMPRE más alto que el viewport.
+     Esto evita que el sticky del sidebar se "despegue" cuando el usuario scrollea al
+     final de la página (con min-height menor, al final del scroll el row se acababa
+     antes que el sidebar pudiera mantenerse sticky, y los items 6am-10am se ocultaban
+     por encima del viewport). El precio es algo de espacio en blanco abajo cuando
+     hay pocas clases — costo aceptable a cambio de sticky funcionando perfecto. */
+  .mi-dia-cards-stack { display: flex; flex-direction: column; gap: 10px; min-height: 100vh; }
   .mi-dia-cards-stack .class-block { margin-bottom: 0; scroll-margin-top: calc(var(--topbar-h) + var(--dash-search-sticky-h, 76px) + var(--mi-dia-header-h, 84px) + 12px); }
   .mi-dia-cards-stack .class-block.is-open { border-color: var(--fit-purple); }
   .class-block { border: 1px solid rgba(0,0,0,0.03); border-radius: var(--radius-md); margin-bottom: 12px; transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease; background: var(--fit-cream); box-shadow: var(--shadow-sm), var(--shadow-md); }
