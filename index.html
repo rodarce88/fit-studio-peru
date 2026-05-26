@@ -3926,6 +3926,14 @@
         <input type="text" id="add-flex-search" placeholder="Nombre, apellido o DNI..." oninput="renderFlexibleSearch()" autocomplete="off" />
       </div>
 
+      <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; padding: 0 4px;">
+        <div id="add-flex-count" style="font-size: 11.5px; color: var(--ink-mute);"></div>
+        <label style="font-size: 12px; color: var(--ink-soft); display: flex; align-items: center; gap: 6px; cursor: pointer; user-select: none;">
+          <input type="checkbox" id="add-flex-show-all" onchange="renderFlexibleSearch()" style="cursor: pointer;" />
+          Ver todos <span style="color: var(--ink-mute); font-size: 10.5px;">(incluyendo sin paquete y prospectos)</span>
+        </label>
+      </div>
+
       <div id="add-flex-results" style="max-height: 320px; overflow-y: auto; border: 1px solid var(--line-soft); border-radius: var(--radius-md); padding: 4px;"></div>
     </div>
     <div class="modal-footer">
@@ -12724,39 +12732,113 @@ function openAddFlexibleModal(hour) {
   setTimeout(() => document.getElementById('add-flex-search').focus(), 100);
 }
 
+// Helper local: calcula el estado del paquete del alumno usando datos en memoria.
+// No hace queries — usa STATE.studentPackages, STATE.sessionBookings, STATE.classSessions.
+// Retorna uno de: 'withCupos' | 'noCupos' | 'sinPaquete' | 'prospecto'
+function _getPkgStateLocal(student, sessionDateMap) {
+  if (!student) return 'sinPaquete';
+  if (student.modality === 'interested') return 'prospecto';
+
+  const pkgs = (STATE.studentPackages || []).filter(p =>
+    p.student_id === student.id
+    && !p.is_frozen
+    && (!p.status || p.status === 'active')
+  );
+  // FIFO: paquete más antiguo con clases libres
+  const sorted = pkgs.slice().sort((a, b) => (a.purchase_date || '').localeCompare(b.purchase_date || ''));
+  const activePkg = sorted.find(p => (p.classes_used || 0) < (p.classes_total || 0));
+  if (!activePkg) return 'sinPaquete';
+
+  const max = (activePkg.classes_total || 0) - (activePkg.classes_used || 0);
+  const todayIso = dateToIsoLocal(new Date());
+  const futureCount = (STATE.sessionBookings || []).filter(b => {
+    if (b.student_id !== student.id) return false;
+    if (b.cancelled_at) return false;
+    const sd = sessionDateMap.get(b.session_id);
+    return sd && sd >= todayIso;
+  }).length;
+
+  return (max - futureCount > 0) ? 'withCupos' : 'noCupos';
+}
+
 function renderFlexibleSearch() {
   const q = (document.getElementById('add-flex-search').value || '').toLowerCase().trim();
+  const showAll = document.getElementById('add-flex-show-all')?.checked || false;
   const loc = getCurrentLocation();
   const container = document.getElementById('add-flex-results');
+  const countEl = document.getElementById('add-flex-count');
+
+  // Pre-calcular mapa session_id → session_date una sola vez (eficiencia)
+  const sessionDateMap = new Map();
+  (STATE.classSessions || []).forEach(s => {
+    if (!s.is_cancelled) sessionDateMap.set(s.id, s.session_date);
+  });
 
   let list = STATE.students.filter(s => s.location_id === loc.id);
   if (q) {
     list = list.filter(s => {
       const full = (s.first_name + ' ' + (s.last_name || '')).toLowerCase();
-      const doc = (s.document || '').toLowerCase();
+      const doc = (s.document_number || s.document || '').toLowerCase();
       return full.includes(q) || doc.includes(q);
     });
   }
-  list = list.slice(0, 30);
 
-  if (list.length === 0) {
-    container.innerHTML = '<div style="padding: 32px; text-align: center; color: var(--ink-mute); font-size: 13px;">Sin resultados. Probá otro nombre.</div>';
+  // Calcular estado de paquete por alumno
+  list = list.map(s => ({ s, state: _getPkgStateLocal(s, sessionDateMap) }));
+
+  // Filtro por default: solo withCupos y noCupos. "Ver todos" muestra sinPaquete y prospecto también.
+  const filtered = showAll ? list : list.filter(x => x.state === 'withCupos' || x.state === 'noCupos');
+
+  // Ordenar: withCupos primero, después noCupos, después el resto
+  const order = { withCupos: 0, noCupos: 1, sinPaquete: 2, prospecto: 3 };
+  filtered.sort((a, b) => (order[a.state] || 9) - (order[b.state] || 9));
+
+  const shown = filtered.slice(0, 30);
+
+  // Contador resumen
+  if (countEl) {
+    const cWith = list.filter(x => x.state === 'withCupos').length;
+    const cNo = list.filter(x => x.state === 'noCupos').length;
+    const cSin = list.filter(x => x.state === 'sinPaquete').length;
+    const cPros = list.filter(x => x.state === 'prospecto').length;
+    countEl.innerHTML = `<strong>${cWith}</strong> con cupos · <strong>${cNo}</strong> sin cupos${showAll ? ` · ${cSin} sin paquete · ${cPros} prospectos` : ''}`;
+  }
+
+  if (shown.length === 0) {
+    const hint = !showAll && (list.some(x => x.state === 'sinPaquete' || x.state === 'prospecto'))
+      ? '<div style="margin-top:8px; font-size:11px;">Hay alumnos sin paquete o prospectos. Activá <strong>"Ver todos"</strong> arriba.</div>'
+      : '';
+    container.innerHTML = `<div style="padding: 32px; text-align: center; color: var(--ink-mute); font-size: 13px;">Sin resultados${q ? ' para "' + escape(q) + '"' : ''}.${hint}</div>`;
     return;
   }
 
-  container.innerHTML = list.map(s => `
-    <div onclick="addStudentToClass('${s.id}')" style="display: grid; grid-template-columns: 36px 1fr auto; gap: 12px; align-items: center; padding: 10px 12px; cursor: pointer; border-radius: 8px; transition: background 0.15s;" onmouseover="this.style.background='var(--fit-lavender-pale)'" onmouseout="this.style.background=''">
-      <div class="student-avatar" style="${studentSedeAvatarStyle(s)}">${initials(s)}</div>
-      <div>
-        <div style="font-weight: 500; font-size: 14px;">${escape(s.first_name)} ${escape(s.last_name || '')}</div>
-        <div style="font-size: 11px; color: var(--ink-mute);">
-          <span class="modality-pill modality-${s.modality}" style="font-size:9px;">${getModalityIcon(s.modality)} ${getModalityShortLabel(s.modality)}</span>
-          ${s.document ? ' · ' + escape(s.document) : ''}
+  // Estilos visuales por estado
+  const stateStyles = {
+    withCupos: { opacity: '1', borderL: 'transparent', badge: null },
+    noCupos:   { opacity: '0.85', borderL: '#F59E0B', badge: { text: 'Sin cupos', bg: '#FEF3C7', color: '#92400E' } },
+    sinPaquete:{ opacity: '0.7', borderL: '#94A3B8', badge: { text: 'Sin paquete', bg: '#F1F5F9', color: '#475569' } },
+    prospecto: { opacity: '0.7', borderL: '#A78BFA', badge: { text: 'Prospecto', bg: '#EDE9FE', color: '#6D28D9' } },
+  };
+
+  container.innerHTML = shown.map(({ s, state }) => {
+    const st = stateStyles[state] || stateStyles.withCupos;
+    const badgeHtml = st.badge
+      ? `<span style="display:inline-block; padding:2px 7px; background:${st.badge.bg}; color:${st.badge.color}; border-radius:6px; font-size:10px; font-weight:600; margin-left:4px;">${st.badge.text}</span>`
+      : '';
+    return `
+      <div onclick="addStudentToClass('${s.id}')" style="display: grid; grid-template-columns: 36px 1fr auto; gap: 12px; align-items: center; padding: 10px 12px; cursor: pointer; border-radius: 8px; border-left: 3px solid ${st.borderL}; opacity: ${st.opacity}; transition: background 0.15s;" onmouseover="this.style.background='var(--fit-lavender-pale)'" onmouseout="this.style.background=''">
+        <div class="student-avatar" style="${studentSedeAvatarStyle(s)}">${initials(s)}</div>
+        <div>
+          <div style="font-weight: 500; font-size: 14px;">${escape(s.first_name)} ${escape(s.last_name || '')}${badgeHtml}</div>
+          <div style="font-size: 11px; color: var(--ink-mute);">
+            <span class="modality-pill modality-${s.modality}" style="font-size:9px;">${getModalityIcon(s.modality)} ${getModalityShortLabel(s.modality)}</span>
+            ${(s.document_number || s.document) ? ' · ' + escape(s.document_number || s.document) : ''}
+          </div>
         </div>
+        <button class="btn btn-primary" style="padding: 4px 12px; font-size: 11px;">Agregar</button>
       </div>
-      <button class="btn btn-primary" style="padding: 4px 12px; font-size: 11px;">Agregar</button>
-    </div>
-  `).join('');
+    `;
+  }).join('');
 }
 
 // Modal de reemplazo: cuando un alumno no tiene cupos libres pero tiene clases agendadas
@@ -12902,7 +12984,9 @@ async function addStudentToClass(studentId) {
   // Validar capacidad del paquete del alumno
   const cap = await getStudentBookingCapacity(studentId);
   if (!cap.hasPackage) {
-    if (!confirm(`${student.first_name} no tiene paquete activo. ¿Asignar igual como cortesía?`)) return;
+    // Abrir mini modal de 3 opciones (paquete prueba / paquete completo / cortesía)
+    openAddOptionsModal(studentId, ADD_FLEX_CTX.hour, 'sinPaquete');
+    return;
   } else if (cap.remaining <= 0) {
     // No hay cupos libres → cargar bookings del PAQUETE ACTIVO y ofrecer reemplazo
     // (ignoramos bookings de paquetes futuros — esos se mueven desde el calendario)
@@ -12946,7 +13030,8 @@ async function addStudentToClass(studentId) {
     });
 
     if (bookingsOfActivePkg.length === 0) {
-      showToast(`${student.first_name} ya alcanzó su límite (${cap.current}/${cap.max}). Debe renovar antes.`, 'error');
+      // Sin cupos y sin clases futuras para reemplazar → abrir mini modal con opciones
+      openAddOptionsModal(studentId, ADD_FLEX_CTX.hour, 'noCupos');
       return;
     }
 
@@ -12994,6 +13079,277 @@ async function addStudentToClass(studentId) {
   showToast(`✓ ${student.first_name} agregado/a a la clase de ${formatHour(ADD_FLEX_CTX.hour)}`, 'success');
   closeModals();
   renderTimeline();
+}
+
+// ============================================
+// MINI MODAL — opciones cuando alumno no tiene paquete / sin cupos
+// 3 opciones: crear paquete prueba, asignar paquete del catálogo, o cortesía
+// ============================================
+let ADD_OPTIONS_CTX = { studentId: null, hour: null, reason: null };
+
+async function openAddOptionsModal(studentId, hour, reason) {
+  ADD_OPTIONS_CTX = { studentId, hour, reason };
+  const student = STATE.students.find(s => s.id === studentId);
+  if (!student) { showToast('Alumno no encontrado', 'error'); return; }
+
+  // Cerrar el modal de búsqueda flexible
+  document.getElementById('add-flexible-modal')?.classList.remove('is-open');
+
+  // Buscar paquete "Clase de prueba" en el catálogo (para el botón 1 y el valor de cortesía)
+  const trialPkg = (STATE.packages || []).find(p => (p.name || '').toLowerCase().includes('prueba'));
+  const trialPrice = trialPkg ? (trialPkg.price_pen || 0) : 0;
+
+  // Paquetes regulares del catálogo (no "Clase de prueba", solo los pagos)
+  const regularPkgs = (STATE.packages || []).filter(p =>
+    p.is_active !== false &&
+    !((p.name || '').toLowerCase().includes('prueba'))
+  ).sort((a, b) => (a.display_order || 0) - (b.display_order || 0));
+
+  // Modal dinámico
+  let modal = document.getElementById('add-options-modal');
+  if (modal) modal.remove();
+  modal = document.createElement('div');
+  modal.id = 'add-options-modal';
+  modal.className = 'modal-backdrop is-open';
+  modal.style.zIndex = '1100';
+  modal.onclick = (e) => { if (e.target === modal) closeAddOptionsModal(); };
+
+  const reasonText = reason === 'sinPaquete'
+    ? `<strong>${escape(student.first_name)} ${escape(student.last_name || '')}</strong> no tiene paquete activo.`
+    : `<strong>${escape(student.first_name)} ${escape(student.last_name || '')}</strong> ya usó todos los cupos de su paquete activo.`;
+
+  const pkgOptionsHtml = regularPkgs.map(p => `
+    <button onclick="actionAssignPackageAndBook('${p.id}')" style="display:flex; align-items:center; justify-content:space-between; width:100%; background:white; border:1px solid var(--line); border-radius:10px; padding:12px 14px; margin-bottom:6px; cursor:pointer; text-align:left; font-family:var(--body); transition:all 0.15s;" onmouseover="this.style.borderColor='var(--fit-purple)'; this.style.background='var(--fit-lavender-pale)';" onmouseout="this.style.borderColor='var(--line)'; this.style.background='white';">
+      <div>
+        <div style="font-weight:600; font-size:13px;">${escape(p.name)}</div>
+        <div style="font-size:11px; color:var(--ink-mute); margin-top:2px;">${p.sessions} ${p.sessions === 1 ? 'clase' : 'clases'} · 30 días vigencia</div>
+      </div>
+      <div style="font-family:var(--display); font-size:18px; color:var(--fit-purple);">S/${p.price_pen}</div>
+    </button>
+  `).join('');
+
+  modal.innerHTML = `
+    <div class="modal-card" style="width: 540px; max-width: 95vw;">
+      <div class="modal-header">
+        <div class="modal-title">Agregar a la clase</div>
+        <button class="modal-close" onclick="closeAddOptionsModal()">✕</button>
+      </div>
+      <div class="modal-body">
+        <div style="background:var(--fit-cream); border:1px solid var(--line-soft); border-radius:10px; padding:14px 16px; margin-bottom:16px; font-size:13px; color:var(--ink-soft);">
+          ${reasonText}<br>
+          <span style="color:var(--ink-mute); font-size:12px;">${formatHour(hour)} · ${dateToIsoLocal(STATE.currentDate)}</span>
+        </div>
+
+        <div style="font-size:11px; text-transform:uppercase; letter-spacing:0.08em; color:var(--ink-mute); font-weight:600; margin-bottom:10px;">Elegí una opción</div>
+
+        <!-- OPCIÓN 1: Paquete prueba -->
+        <button onclick="actionAddTrialAndBook()" ${!trialPkg ? 'disabled' : ''} style="display:flex; align-items:flex-start; gap:12px; width:100%; background:white; border:1.5px solid var(--fit-purple-soft); border-radius:12px; padding:14px 16px; margin-bottom:10px; cursor:${trialPkg ? 'pointer' : 'not-allowed'}; text-align:left; font-family:var(--body); transition:all 0.15s; opacity:${trialPkg ? 1 : 0.5};" onmouseover="if(!this.disabled){this.style.background='var(--fit-lavender-pale)'; this.style.borderColor='var(--fit-purple)';}" onmouseout="if(!this.disabled){this.style.background='white'; this.style.borderColor='var(--fit-purple-soft)';}">
+          <div style="font-size:22px;">✦</div>
+          <div style="flex:1;">
+            <div style="font-weight:600; font-size:14px; color:var(--fit-purple);">Crear paquete prueba (1 clase) y agendar</div>
+            <div style="font-size:12px; color:var(--ink-mute); margin-top:4px; line-height:1.4;">Se crea el paquete "Clase de prueba" por S/${trialPrice} (queda por cobrar) y se agenda esta clase. Vigencia 30 días.</div>
+            ${!trialPkg ? '<div style="color:#B45309; font-size:11px; margin-top:6px;">⚠ Falta crear el paquete "Clase de prueba" en catálogo</div>' : ''}
+          </div>
+        </button>
+
+        <!-- OPCIÓN 2: Paquete completo (expandible) -->
+        <button id="add-opt-pkg-toggle" onclick="document.getElementById('add-opt-pkg-list').style.display=document.getElementById('add-opt-pkg-list').style.display==='none'?'block':'none'" style="display:flex; align-items:flex-start; gap:12px; width:100%; background:white; border:1.5px solid var(--line); border-radius:12px; padding:14px 16px; margin-bottom:6px; cursor:pointer; text-align:left; font-family:var(--body); transition:all 0.15s;" onmouseover="this.style.background='var(--fit-lavender-pale)'" onmouseout="this.style.background='white'">
+          <div style="font-size:22px;">📦</div>
+          <div style="flex:1;">
+            <div style="font-weight:600; font-size:14px;">Asignar paquete y agendar</div>
+            <div style="font-size:12px; color:var(--ink-mute); margin-top:4px; line-height:1.4;">Asigna un paquete del catálogo y agenda esta clase como la primera.</div>
+          </div>
+          <div style="font-size:13px; color:var(--ink-mute);">▼</div>
+        </button>
+        <div id="add-opt-pkg-list" style="display:none; padding:8px 4px 12px;">
+          ${pkgOptionsHtml || '<div style="font-size:12px; color:var(--ink-mute); padding:8px;">No hay paquetes en el catálogo.</div>'}
+        </div>
+
+        <!-- OPCIÓN 3: Cortesía -->
+        <button onclick="actionAddCourtesyAndBook()" style="display:flex; align-items:flex-start; gap:12px; width:100%; background:white; border:1.5px solid var(--line); border-radius:12px; padding:14px 16px; margin-top:10px; cursor:pointer; text-align:left; font-family:var(--body); transition:all 0.15s;" onmouseover="this.style.background='#FEF3C7'; this.style.borderColor='#F59E0B';" onmouseout="this.style.background='white'; this.style.borderColor='var(--line)';">
+          <div style="font-size:22px;">🎁</div>
+          <div style="flex:1;">
+            <div style="font-weight:600; font-size:14px;">Solo como cortesía</div>
+            <div style="font-size:12px; color:var(--ink-mute); margin-top:4px; line-height:1.4;">Clase regalada. No aparece en "Por cobrar". Se registra con valor S/${trialPrice} para métricas de cuánto se regala.</div>
+          </div>
+        </button>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" onclick="closeAddOptionsModal()">Cancelar</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(modal);
+}
+
+function closeAddOptionsModal() {
+  const modal = document.getElementById('add-options-modal');
+  if (modal) modal.remove();
+  ADD_OPTIONS_CTX = { studentId: null, hour: null, reason: null };
+}
+
+// Acción 1: crear paquete prueba (1 clase, no cortesía) + booking
+async function actionAddTrialAndBook() {
+  if (!isOnline) { showToast('Necesita conexión', 'error'); return; }
+  const { studentId, hour } = ADD_OPTIONS_CTX;
+  if (!studentId) return;
+  const student = STATE.students.find(s => s.id === studentId);
+  const trialPkg = (STATE.packages || []).find(p => (p.name || '').toLowerCase().includes('prueba'));
+  if (!trialPkg) { showToast('Falta crear el paquete "Clase de prueba" en catálogo', 'error'); return; }
+
+  const todayIso = new Date().toISOString().split('T')[0];
+  const exp = new Date(); exp.setDate(exp.getDate() + 30);
+  const expIso = exp.toISOString().split('T')[0];
+
+  // 1. Crear student_package
+  const pkgInsert = await sb.from('student_packages').insert({
+    student_id: studentId,
+    package_id: trialPkg.id,
+    classes_total: 1,
+    classes_used: 0,
+    price_pen: trialPkg.price_pen || 0,
+    purchase_date: todayIso,
+    expiry_date: expIso,
+    is_active: true,
+    is_frozen: false,
+    is_courtesy: false,
+    status: 'active',
+  }).select().single();
+  if (pkgInsert.error) { showToast('Error creando paquete prueba: ' + pkgInsert.error.message, 'error'); return; }
+  if (STATE.studentPackages) STATE.studentPackages.push(pkgInsert.data);
+
+  // 2. Crear booking
+  await _createBookingForCurrentSlot(studentId, hour, 'flexible');
+
+  try {
+    logActivity('student_package.create', {
+      table: 'student_packages', id: pkgInsert.data.id,
+      label: `${student.first_name} ${student.last_name || ''} · Clase de prueba (desde Mi día)`
+    }, { source: 'mi-dia-add-options-trial' });
+  } catch(e) {}
+
+  showToast(`✓ ${student.first_name}: paquete prueba creado y clase agendada`, 'success');
+  closeAddOptionsModal();
+  closeModals();
+  await loadAll();
+}
+
+// Acción 2: asignar paquete del catálogo + booking
+async function actionAssignPackageAndBook(packageId) {
+  if (!isOnline) { showToast('Necesita conexión', 'error'); return; }
+  const { studentId, hour } = ADD_OPTIONS_CTX;
+  if (!studentId) return;
+  const student = STATE.students.find(s => s.id === studentId);
+  const pkg = (STATE.packages || []).find(p => p.id === packageId);
+  if (!pkg) { showToast('Paquete no encontrado', 'error'); return; }
+
+  const todayIso = new Date().toISOString().split('T')[0];
+  const exp = new Date(); exp.setDate(exp.getDate() + 30);
+  const expIso = exp.toISOString().split('T')[0];
+
+  const pkgInsert = await sb.from('student_packages').insert({
+    student_id: studentId,
+    package_id: pkg.id,
+    classes_total: pkg.sessions || 1,
+    classes_used: 0,
+    price_pen: pkg.price_pen || 0,
+    purchase_date: todayIso,
+    expiry_date: expIso,
+    is_active: true,
+    is_frozen: false,
+    is_courtesy: false,
+    status: 'active',
+  }).select().single();
+  if (pkgInsert.error) { showToast('Error: ' + pkgInsert.error.message, 'error'); return; }
+  if (STATE.studentPackages) STATE.studentPackages.push(pkgInsert.data);
+
+  await _createBookingForCurrentSlot(studentId, hour, 'flexible');
+
+  try {
+    logActivity('student_package.create', {
+      table: 'student_packages', id: pkgInsert.data.id,
+      label: `${student.first_name} ${student.last_name || ''} · ${pkg.name} (desde Mi día)`
+    }, { source: 'mi-dia-add-options-pkg' });
+  } catch(e) {}
+
+  showToast(`✓ ${student.first_name}: ${pkg.name} asignado y clase agendada`, 'success');
+  closeAddOptionsModal();
+  closeModals();
+  await loadAll();
+}
+
+// Acción 3: cortesía (paquete con is_courtesy=true, paid_amount=0) + booking
+async function actionAddCourtesyAndBook() {
+  if (!isOnline) { showToast('Necesita conexión', 'error'); return; }
+  const { studentId, hour } = ADD_OPTIONS_CTX;
+  if (!studentId) return;
+  const student = STATE.students.find(s => s.id === studentId);
+  // Buscamos el paquete prueba para usar su precio como referencia. Si no existe, usamos 0.
+  const trialPkg = (STATE.packages || []).find(p => (p.name || '').toLowerCase().includes('prueba'));
+  const refPrice = trialPkg ? (trialPkg.price_pen || 0) : 0;
+
+  const todayIso = new Date().toISOString().split('T')[0];
+  const exp = new Date(); exp.setDate(exp.getDate() + 30);
+  const expIso = exp.toISOString().split('T')[0];
+
+  const pkgInsert = await sb.from('student_packages').insert({
+    student_id: studentId,
+    package_id: trialPkg ? trialPkg.id : null,
+    classes_total: 1,
+    classes_used: 0,
+    price_pen: refPrice,
+    purchase_date: todayIso,
+    expiry_date: expIso,
+    is_active: true,
+    is_frozen: false,
+    is_courtesy: true,
+    status: 'active',
+  }).select().single();
+  if (pkgInsert.error) { showToast('Error creando cortesía: ' + pkgInsert.error.message, 'error'); return; }
+  if (STATE.studentPackages) STATE.studentPackages.push(pkgInsert.data);
+
+  await _createBookingForCurrentSlot(studentId, hour, 'flexible');
+
+  try {
+    logActivity('student_package.create', {
+      table: 'student_packages', id: pkgInsert.data.id,
+      label: `${student.first_name} ${student.last_name || ''} · Cortesía (valor ref S/${refPrice})`
+    }, { source: 'mi-dia-add-options-courtesy', is_courtesy: true });
+  } catch(e) {}
+
+  showToast(`✓ ${student.first_name}: clase de cortesía agendada`, 'success');
+  closeAddOptionsModal();
+  closeModals();
+  await loadAll();
+}
+
+// Helper interno: crea el booking en la sesión actual (sesión del slot vacío en Mi día)
+async function _createBookingForCurrentSlot(studentId, hour, source) {
+  const loc = getCurrentLocation();
+  const sessionId = await getOrCreateSession(loc.id, STATE.currentDate, hour);
+  if (!sessionId) throw new Error('Error creando la sesión');
+
+  // Re-activar booking previo cancelado, o crear nuevo
+  const { data: dbExisting } = await sb.from('session_bookings')
+    .select('id, cancelled_at')
+    .eq('session_id', sessionId)
+    .eq('student_id', studentId)
+    .maybeSingle();
+
+  if (dbExisting && dbExisting.cancelled_at) {
+    const { data } = await sb.from('session_bookings').update({
+      cancelled_at: null, cancelled_reason: null, source,
+    }).eq('id', dbExisting.id).select().single();
+    if (data) {
+      const idx = STATE.sessionBookings.findIndex(b => b.id === data.id);
+      if (idx >= 0) STATE.sessionBookings[idx] = data; else STATE.sessionBookings.push(data);
+    }
+  } else if (!dbExisting) {
+    const { data } = await sb.from('session_bookings').insert({
+      session_id: sessionId, student_id: studentId, source,
+    }).select().single();
+    if (data) STATE.sessionBookings.push(data);
+  }
 }
 
 // ============================================
