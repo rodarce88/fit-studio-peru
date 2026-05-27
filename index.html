@@ -9535,7 +9535,7 @@ async function saveStudent() {
               sessions_total: 1,
               classes_used: 0,
               classes_recoverable: 0,
-              price_paid: trialPkg.price_pen || 0,
+              price_paid: 0, // Clase de prueba siempre es gratis. El price_pen del catálogo es solo precio de referencia.
               purchase_date: todayIso,
               start_date: todayIso,
               expiration_date: expIso,
@@ -13310,7 +13310,7 @@ async function actionAddTrialAndBook() {
     sessions_total: 1,
     classes_used: 0,
     classes_recoverable: 0,
-    price_paid: trialPkg.price_pen || 0,
+    price_paid: 0, // Clase de prueba siempre es gratis
     purchase_date: todayIso,
     start_date: todayIso,
     expiration_date: expIso,
