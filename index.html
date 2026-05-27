@@ -5039,6 +5039,11 @@ function switchLocation(id) {
   renderLocationSwitcher();  // Actualizar el dropdown del topbar para TODOS los roles
   // Branch por rol — la vista del profesor tiene su propio renderer y skeletons
   if (CURRENT_USER && CURRENT_USER.role === 'instructor') {
+    // PROFESOR: al cambiar de sede, volver a "hoy". El día que estaba viendo (ej. 31 may
+    // en Santa Cruz) puede no tener sentido en la nueva sede (otras clases, otros alumnos
+    // asignados). Volver a hoy garantiza contexto claro y útil. Aplica desktop y mobile.
+    STATE.currentDate = new Date();
+    STATE.miDiaExpandedHour = null;
     if (typeof showInstructorSkeletons === 'function') showInstructorSkeletons();
     if (typeof renderInstructorDay === 'function') renderInstructorDay();
   } else {
