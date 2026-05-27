@@ -5042,7 +5042,11 @@ function switchLocation(id) {
     // PROFESOR: al cambiar de sede, volver a "hoy". El día que estaba viendo (ej. 31 may
     // en Santa Cruz) puede no tener sentido en la nueva sede (otras clases, otros alumnos
     // asignados). Volver a hoy garantiza contexto claro y útil. Aplica desktop y mobile.
+    // IMPORTANTE: la vista del profesor usa STATE.instDayDate (no STATE.currentDate),
+    // así que reseteamos ambos por las dudas.
     STATE.currentDate = new Date();
+    STATE.instDayDate = dateToIsoLocal(new Date());
+    STATE.instDayFilter = 'today';
     STATE.miDiaExpandedHour = null;
     if (typeof showInstructorSkeletons === 'function') showInstructorSkeletons();
     if (typeof renderInstructorDay === 'function') renderInstructorDay();
