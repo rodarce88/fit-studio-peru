@@ -13713,7 +13713,7 @@ function toggleUpcomingPkg(pkgId) {
   if (!pkg) return;
 
   const restantes = (pkg.classes_total || 0) - (pkg.classes_used || 0);
-  const price = parseFloat(pkg.price_paid || pkg.packages?.price_pen || 0);
+  const price = parseFloat(pkg.price_paid ?? pkg.packages?.price_pen ?? 0);
   const paid = (data.payments || []).filter(pm => pm.student_package_id === pkg.id).reduce((s, pm) => s + parseFloat(pm.amount_pen || pm.amount || 0) + parseFloat(pm.discount_amount || 0), 0);
   const owed = Math.max(0, price - paid);
 
@@ -18947,7 +18947,7 @@ async function openPaymentModal(studentId, packageId, suggestedAmount) {
   if (packageId && isOnline) {
     const { data: pkg } = await sb.from('student_packages').select('price_paid, packages(price_pen)').eq('id', packageId).maybeSingle();
     if (pkg) {
-      PAY_MODAL_CTX.packagePrice = parseFloat(pkg.price_paid || pkg.packages?.price_pen || 0);
+      PAY_MODAL_CTX.packagePrice = parseFloat(pkg.price_paid ?? pkg.packages?.price_pen ?? 0);
     }
   }
 
@@ -19114,7 +19114,7 @@ async function openEditPaymentModal(paymentId) {
   PAY_MODAL_CTX.suggestedAmount = (parseFloat(pay.amount_pen) || 0) + existingDiscountAmt;
   if (pay.student_package_id) {
     const { data: pkgPrice } = await sb.from('student_packages').select('price_paid, packages(price_pen)').eq('id', pay.student_package_id).maybeSingle();
-    if (pkgPrice) PAY_MODAL_CTX.packagePrice = parseFloat(pkgPrice.price_paid || pkgPrice.packages?.price_pen || 0);
+    if (pkgPrice) PAY_MODAL_CTX.packagePrice = parseFloat(pkgPrice.price_paid ?? pkgPrice.packages?.price_pen ?? 0);
   }
   recalcPaymentSummary();
 
@@ -20033,7 +20033,7 @@ function _pdfBuildHTML(stud, data) {
   let totalOwed = 0;
   allPkgsSorted.forEach(p => {
     if (INVALID_PKG_STATUSES.has(p.status)) return;
-    const price = parseFloat(p.price_paid || p.packages?.price_pen || 0);
+    const price = parseFloat(p.price_paid ?? p.packages?.price_pen ?? 0);
     const paid = (data.payments || [])
       .filter(pm => pm.student_package_id === p.id)
       .reduce((s, pm) => s + parseFloat(pm.amount_pen || pm.amount || 0) + parseFloat(pm.discount_amount || 0), 0);
@@ -20048,7 +20048,7 @@ function _pdfBuildHTML(stud, data) {
     const meta = PDF_PKG_STATUS[statusKey];
     const progressPct = total > 0 ? Math.min(100, (used / total) * 100) : 0;
     const fillCls = statusKey === 'completed' ? 'progress-fill done' : 'progress-fill';
-    const price = parseFloat(p.price_paid || p.packages?.price_pen || 0);
+    const price = parseFloat(p.price_paid ?? p.packages?.price_pen ?? 0);
     const paid = (data.payments || [])
       .filter(pm => pm.student_package_id === p.id)
       .reduce((s, pm) => s + parseFloat(pm.amount_pen || pm.amount || 0) + parseFloat(pm.discount_amount || 0), 0);
@@ -21633,7 +21633,7 @@ function renderDetailSummary(stud) {
   let activePkgPrice = 0;
   let activePkgOwed = 0;
   if (activePkg) {
-    activePkgPrice = parseFloat(activePkg.price_paid || activePkg.packages?.price_pen || 0);
+    activePkgPrice = parseFloat(activePkg.price_paid ?? activePkg.packages?.price_pen ?? 0);
     activePkgPaid = (data.payments || [])
       .filter(p => p.student_package_id === activePkg.id)
       .reduce((sum, p) => sum + parseFloat(p.amount_pen || p.amount || 0) + parseFloat(p.discount_amount || 0), 0);
@@ -21693,7 +21693,7 @@ function renderDetailSummary(stud) {
     const used = (activePkg && p.id === activePkg.id) ? liveUsed : (p.classes_used || 0);
     const remaining = Math.max(0, total - used);
     const recoverable = (activePkg && p.id === activePkg.id) ? liveRecoverable : (p.classes_recoverable || 0);
-    const price = parseFloat(p.price_paid || p.packages?.price_pen || 0);
+    const price = parseFloat(p.price_paid ?? p.packages?.price_pen ?? 0);
     const paid = (data.payments || [])
       .filter(pm => pm.student_package_id === p.id)
       .reduce((s, pm) => s + parseFloat(pm.amount_pen || pm.amount || 0) + parseFloat(pm.discount_amount || 0), 0);
@@ -22101,7 +22101,7 @@ function renderDetailSummary(stud) {
     const total = p.classes_total || 0;
     const used = p.classes_used || 0;
     const recoverable = p.classes_recoverable || 0;
-    const price = parseFloat(p.price_paid || p.packages?.price_pen || 0);
+    const price = parseFloat(p.price_paid ?? p.packages?.price_pen ?? 0);
     const paid = (data.payments || [])
       .filter(pm => pm.student_package_id === p.id)
       .reduce((s, pm) => s + parseFloat(pm.amount_pen || pm.amount || 0) + parseFloat(pm.discount_amount || 0), 0);
@@ -22401,7 +22401,7 @@ function renderDetailClasses(stud) {
     sortedPkgs.forEach(p => {
       const items = bookingsByPkg.get(p.id) || [];
       if (items.length === 0) return;
-      const price = parseFloat(p.price_paid || p.packages?.price_pen || 0);
+      const price = parseFloat(p.price_paid ?? p.packages?.price_pen ?? 0);
       const paid = (data.payments || []).filter(pm => pm.student_package_id === p.id).reduce((s, pm) => s + parseFloat(pm.amount_pen || pm.amount || 0) + parseFloat(pm.discount_amount || 0), 0);
       const owed = Math.max(0, price - paid);
       // Ordenar items por fecha desc dentro del paquete
@@ -22500,7 +22500,7 @@ function renderDetailClasses(stud) {
       if (items.length === 0) return;
       const isActive = p.id === activePkgId;
       const restantes = (p.classes_total || 0) - (p.classes_used || 0);
-      const price = parseFloat(p.price_paid || p.packages?.price_pen || 0);
+      const price = parseFloat(p.price_paid ?? p.packages?.price_pen ?? 0);
       const paid = (data.payments || []).filter(pm => pm.student_package_id === p.id).reduce((s, pm) => s + parseFloat(pm.amount_pen || pm.amount || 0) + parseFloat(pm.discount_amount || 0), 0);
       const owed = Math.max(0, price - paid);
       groupBlocks.push(`
