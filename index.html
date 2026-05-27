@@ -5048,6 +5048,14 @@ function switchLocation(id) {
     STATE.instDayDate = dateToIsoLocal(new Date());
     STATE.instDayFilter = 'today';
     STATE.miDiaExpandedHour = null;
+    // Si el profesor estaba en otra vista (ej. "Mis cobros"), forzar volver a la vista Hoy.
+    // Sin esto, la vista del profesor quedaría en la sección anterior mostrando datos viejos
+    // y la sincronización del bottom bar mobile quedaría desincronizada.
+    showView('instructor-day', null);
+    STATE.instTab = 'day';
+    document.querySelectorAll('.mobile-bottom-bar-prof .m-nav-item').forEach(b => b.classList.remove('is-active'));
+    const dayBtn = document.querySelector('.mobile-bottom-bar-prof [data-prof-tab="day"]');
+    if (dayBtn) dayBtn.classList.add('is-active');
     if (typeof showInstructorSkeletons === 'function') showInstructorSkeletons();
     if (typeof renderInstructorDay === 'function') renderInstructorDay();
   } else {
