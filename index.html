@@ -23976,6 +23976,18 @@ function renderReportsHubHTML() {
       </div>
     </div>
     <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; margin-top: 8px;">
+      <div onclick="REPORTS_STATE.subView='daily'; renderReportsView();"
+           style="background: white; border: 1px solid var(--line); border-radius: 14px; padding: 24px; cursor: pointer; transition: all 0.15s;"
+           onmouseover="this.style.borderColor='var(--fit-purple-soft)'; this.style.transform='translateY(-2px)';"
+           onmouseout="this.style.borderColor='var(--line)'; this.style.transform='';">
+        <div style="width: 48px; height: 48px; border-radius: 12px; background: var(--fit-lavender-pale); display: flex; align-items: center; justify-content: center; margin-bottom: 14px; font-size: 24px;">📅</div>
+        <h3 style="font-family: var(--display); font-style: italic; font-size: 22px; color: var(--fit-purple); margin: 0 0 6px; font-weight: 500;">Pagos del día</h3>
+        <div style="color: var(--ink-mute); font-size: 13px; line-height: 1.5;">
+          Vista rápida tipo Sheets: tira horizontal de días del mes, click en cualquier fecha y ves los pagos separados por método.
+        </div>
+        <div style="margin-top: 14px; color: var(--fit-purple); font-size: 12.5px; font-weight: 500;">Ver vista diaria →</div>
+      </div>
+
       <div onclick="REPORTS_STATE.subView='payments'; renderReportsView();"
            style="background: white; border: 1px solid var(--line); border-radius: 14px; padding: 24px; cursor: pointer; transition: all 0.15s;"
            onmouseover="this.style.borderColor='var(--fit-purple-soft)'; this.style.transform='translateY(-2px)';"
@@ -24443,6 +24455,315 @@ function openPaymentDetailFromReport(paymentId) {
   } else if (typeof editPayment === 'function') {
     editPayment(paymentId);
   }
+}
+
+// ============================================
+// VISTA DIARIA DE PAGOS — sub-vista "Pagos del día"
+// ============================================
+const PAYMENTS_DAILY_STATE = {
+  year: null,
+  month: null,         // 0-11
+  selectedDay: null,   // YYYY-MM-DD
+  locationId: 'all',
+  monthData: null,     // { paymentsByDay: { 'YYYY-MM-DD': [...] }, totals: { 'YYYY-MM-DD': number } }
+};
+
+function initPaymentsDailyState() {
+  if (PAYMENTS_DAILY_STATE.year === null) {
+    const now = new Date();
+    PAYMENTS_DAILY_STATE.year = now.getFullYear();
+    PAYMENTS_DAILY_STATE.month = now.getMonth();
+    PAYMENTS_DAILY_STATE.selectedDay = dateToIsoLocal(now);
+  }
+}
+
+async function loadPaymentsDailyData() {
+  const s = PAYMENTS_DAILY_STATE;
+  const y = s.year, m = s.month;
+  const startIso = `${y}-${String(m+1).padStart(2,'0')}-01`;
+  const lastDay = new Date(y, m+1, 0).getDate();
+  const endIso = `${y}-${String(m+1).padStart(2,'0')}-${String(lastDay).padStart(2,'0')}`;
+
+  let q = sb.from('payments')
+    .select('*, students(id, first_name, last_name, location_id), student_packages(id, classes_total, packages(name))')
+    .gte('payment_date', startIso)
+    .lte('payment_date', endIso);
+  if (s.locationId !== 'all') q = q.eq('location_id', s.locationId);
+
+  const { data, error } = await q.order('created_at', { ascending: true });
+  if (error) {
+    console.error('Error cargando pagos del mes:', error);
+    s.monthData = { paymentsByDay: {}, totals: {}, error: error.message };
+    return;
+  }
+
+  // Agrupar por payment_date
+  const paymentsByDay = {};
+  const totals = {};
+  (data || []).forEach(p => {
+    const day = p.payment_date;
+    if (!day) return;
+    if (!paymentsByDay[day]) { paymentsByDay[day] = []; totals[day] = 0; }
+    paymentsByDay[day].push(p);
+    totals[day] += parseFloat(p.amount_pen || 0);
+  });
+
+  s.monthData = { paymentsByDay, totals, lastDay };
+
+  // Si el día seleccionado no es del mes cargado, ajustarlo
+  if (!s.selectedDay || !s.selectedDay.startsWith(`${y}-${String(m+1).padStart(2,'0')}`)) {
+    // Default: hoy si pertenece al mes, sino el primer día con pagos, sino el día 1
+    const todayIso = dateToIsoLocal(new Date());
+    if (todayIso.startsWith(`${y}-${String(m+1).padStart(2,'0')}`)) {
+      s.selectedDay = todayIso;
+    } else {
+      const daysWithPayments = Object.keys(paymentsByDay).sort();
+      s.selectedDay = daysWithPayments[0] || startIso;
+    }
+  }
+}
+
+function paymentsDailyShiftMonth(delta) {
+  const s = PAYMENTS_DAILY_STATE;
+  let m = s.month + delta;
+  let y = s.year;
+  if (m < 0) { m = 11; y -= 1; }
+  if (m > 11) { m = 0; y += 1; }
+  s.month = m;
+  s.year = y;
+  s.selectedDay = null; // forzar default al cargar
+  renderReportsView();
+}
+
+function paymentsDailyGoToday() {
+  const today = new Date();
+  PAYMENTS_DAILY_STATE.year = today.getFullYear();
+  PAYMENTS_DAILY_STATE.month = today.getMonth();
+  PAYMENTS_DAILY_STATE.selectedDay = dateToIsoLocal(today);
+  renderReportsView();
+}
+
+function paymentsDailySelectDay(iso) {
+  PAYMENTS_DAILY_STATE.selectedDay = iso;
+  // No recargar datos, solo re-renderear (los datos del mes ya están cargados)
+  renderPaymentsDailyHTML();
+}
+
+function paymentsDailySetLocation(locId) {
+  PAYMENTS_DAILY_STATE.locationId = locId;
+  renderReportsView();
+}
+
+function paymentsDailyGoToDetailed() {
+  // Pasa la fecha seleccionada al reporte detallado y abre esa vista
+  const day = PAYMENTS_DAILY_STATE.selectedDay;
+  if (day) {
+    PAYMENTS_REPORT_STATE.dateFrom = day;
+    PAYMENTS_REPORT_STATE.dateTo = day;
+    if (PAYMENTS_DAILY_STATE.locationId !== 'all') {
+      PAYMENTS_REPORT_STATE.locationId = PAYMENTS_DAILY_STATE.locationId;
+    }
+  }
+  REPORTS_STATE.subView = 'payments';
+  renderReportsView();
+}
+
+function renderPaymentsDailyHTML() {
+  const container = document.getElementById('reports-container');
+  if (!container) return;
+  const s = PAYMENTS_DAILY_STATE;
+  const md = s.monthData || { paymentsByDay: {}, totals: {}, lastDay: 30 };
+  const lastDay = md.lastDay || new Date(s.year, s.month+1, 0).getDate();
+  const monthLabels = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+  const dayNames = ['DOM','LUN','MAR','MIÉ','JUE','VIE','SÁB'];
+  const dayNamesFull = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
+  const monthLabel = `${monthLabels[s.month]} ${s.year}`;
+  const todayIso = dateToIsoLocal(new Date());
+
+  // Generar celdas de la tira
+  const dateCells = [];
+  for (let d = 1; d <= lastDay; d++) {
+    const iso = `${s.year}-${String(s.month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const dateObj = new Date(s.year, s.month, d);
+    const dow = dateObj.getDay();
+    const total = md.totals[iso] || 0;
+    const hasPayments = total > 0;
+    const isActive = iso === s.selectedDay;
+    const isToday = iso === todayIso;
+    const isSunday = dow === 0;
+
+    const classes = ['date-cell-d'];
+    if (isActive) classes.push('is-active');
+    if (isToday) classes.push('is-today');
+    if (isSunday) classes.push('is-sunday');
+    if (hasPayments) classes.push('has-payments');
+
+    const totalLabel = hasPayments ? `S/ ${total.toLocaleString('es-PE', { maximumFractionDigits: 0 })}` : '·';
+
+    dateCells.push(`
+      <div class="${classes.join(' ')}" onclick="paymentsDailySelectDay('${iso}')">
+        <div class="dc-num">${d}</div>
+        <div class="dc-dow">${dayNames[dow].toLowerCase()}</div>
+        <div class="dc-total">${totalLabel}</div>
+      </div>
+    `);
+  }
+
+  // Procesar el día seleccionado: agrupar por método
+  const dayPayments = md.paymentsByDay[s.selectedDay] || [];
+  const dayTotal = md.totals[s.selectedDay] || 0;
+
+  // Agrupar por método y ordenar por monto total
+  const byMethod = {};
+  dayPayments.forEach(p => {
+    const m = p.method || 'other';
+    if (!byMethod[m]) byMethod[m] = { pays: [], total: 0 };
+    byMethod[m].pays.push(p);
+    byMethod[m].total += parseFloat(p.amount_pen || 0);
+  });
+  const methodOrder = Object.entries(byMethod).sort((a, b) => b[1].total - a[1].total);
+
+  // Sede options
+  const sedeOpts = ['<option value="all">Todas las sedes</option>']
+    .concat((STATE.locations || []).map(l => `<option value="${l.id}" ${s.locationId === l.id ? 'selected' : ''}>${escape(l.name)}</option>`))
+    .join('');
+
+  // Day header
+  let dayHeaderText = '—';
+  if (s.selectedDay) {
+    const dObj = new Date(s.selectedDay + 'T00:00:00');
+    dayHeaderText = `${dayNamesFull[dObj.getDay()]} ${dObj.getDate()} de <em>${monthLabels[dObj.getMonth()].toLowerCase()}</em>`;
+  }
+
+  // Method dots colors (mapeo a PAYMENT_METHOD_COLORS)
+  const methodCardsHTML = methodOrder.length === 0 ? `
+    <div style="grid-column: 1 / -1; background: white; border: 1px solid var(--line); border-radius: 14px; padding: 60px; text-align: center; color: var(--ink-mute);">
+      <div style="font-size: 38px; opacity: 0.4; margin-bottom: 8px;">📭</div>
+      <div>Sin pagos registrados este día</div>
+    </div>
+  ` : methodOrder.map(([method, info]) => {
+    const c = PAYMENT_METHOD_COLORS[method] || PAYMENT_METHOD_COLORS.other;
+    const label = PAYMENT_METHOD_LABELS[method] || method;
+    const sortedPays = [...info.pays].sort((a, b) => (a.created_at || '').localeCompare(b.created_at || ''));
+    const rows = sortedPays.map(p => {
+      const stu = p.students || {};
+      const pkg = p.student_packages || {};
+      const pkgName = pkg.packages?.name || (pkg.classes_total ? `${pkg.classes_total} clases` : '');
+      const hora = p.created_at ? new Date(p.created_at).toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit', hour12: false }) : '—';
+      const amount = parseFloat(p.amount_pen || 0);
+      const disc = parseFloat(p.discount_amount || 0);
+      const discLabel = disc > 0 ? ` · ${disc > 0 ? ((disc / (amount + disc)) * 100).toFixed(0) + '%' : ''} desc` : '';
+      const stuId = stu.id || '';
+      const stuName = `${stu.first_name || ''} ${stu.last_name || ''}`.trim() || '—';
+      return `
+        <div class="pay-row-d" onclick="event.stopPropagation(); openStudentDetail('${stuId}')" title="Ver perfil de ${escape(stuName)}">
+          <div class="pay-row-left-d">
+            <div class="pay-name-d">${escape(stuName)}</div>
+            ${pkgName || discLabel ? `<div class="pay-meta-d">${escape(pkgName)}${discLabel}</div>` : ''}
+          </div>
+          <div style="text-align: right;">
+            <div class="pay-amount-d">S/ ${amount.toLocaleString('es-PE', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</div>
+            <div class="pay-time-d">${hora}</div>
+          </div>
+        </div>
+      `;
+    }).join('');
+    return `
+      <div class="method-card-d" style="--m-dot: ${c.fg};">
+        <div class="method-head-d">
+          <div class="method-head-left-d">
+            <span class="method-dot-d"></span>
+            <span class="method-name-d">${escape(label)}</span>
+          </div>
+          <span class="method-count-d">${info.pays.length} pago${info.pays.length === 1 ? '' : 's'}</span>
+        </div>
+        <div class="method-total-d">S/ ${info.total.toLocaleString('es-PE', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</div>
+        <div class="method-list-d">${rows}</div>
+      </div>
+    `;
+  }).join('');
+
+  container.innerHTML = `
+    <style>
+      .date-strip-wrap-d { background: white; border: 1px solid var(--line); border-radius: 14px; padding: 14px 12px; margin-bottom: 22px; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+      .date-strip-d { display: flex; gap: 6px; min-width: max-content; align-items: stretch; padding-bottom: 2px; }
+      .date-cell-d { min-width: 56px; padding: 9px 6px 10px; border-radius: 10px; cursor: pointer; text-align: center; background: var(--fit-cream); border: 1px solid transparent; transition: all 0.12s; }
+      .date-cell-d:hover { background: var(--fit-lavender-pale); }
+      .date-cell-d .dc-num { font-size: 17px; font-weight: 500; color: var(--ink); line-height: 1; }
+      .date-cell-d .dc-dow { font-size: 10px; color: var(--ink-mute); text-transform: uppercase; letter-spacing: 0.06em; margin-top: 5px; font-weight: 500; }
+      .date-cell-d .dc-total { font-size: 9.5px; color: var(--ink-faint); margin-top: 4px; font-variant-numeric: tabular-nums; min-height: 11px; }
+      .date-cell-d.is-sunday .dc-dow { color: #C45959; }
+      .date-cell-d.has-payments .dc-total { color: var(--fit-purple); font-weight: 500; }
+      .date-cell-d.is-today { border-color: var(--fit-purple-soft); }
+      .date-cell-d.is-today .dc-num { color: var(--fit-purple); }
+      .date-cell-d.is-active { background: var(--fit-purple); border-color: var(--fit-purple); }
+      .date-cell-d.is-active .dc-num, .date-cell-d.is-active .dc-dow, .date-cell-d.is-active .dc-total { color: white; }
+      .methods-grid-d { display: grid; grid-template-columns: repeat(auto-fit, minmax(245px, 1fr)); gap: 14px; margin-bottom: 22px; }
+      .method-card-d { background: white; border: 1px solid var(--line); border-radius: 14px; overflow: hidden; display: flex; flex-direction: column; }
+      .method-head-d { padding: 13px 15px 11px; border-bottom: 1px solid var(--line-soft); display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+      .method-head-left-d { display: flex; align-items: center; gap: 8px; }
+      .method-dot-d { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; background: var(--m-dot, #888); }
+      .method-name-d { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--ink-soft); font-weight: 600; }
+      .method-count-d { font-size: 10.5px; color: var(--ink-mute); background: var(--fit-cream); padding: 2px 7px; border-radius: 999px; font-weight: 500; }
+      .method-total-d { padding: 11px 15px 8px; font-family: var(--display); font-size: 24px; font-style: italic; font-weight: 500; color: var(--ink); letter-spacing: -0.01em; border-bottom: 1px dashed var(--line-soft); }
+      .method-list-d { flex: 1; }
+      .pay-row-d { display: flex; align-items: center; justify-content: space-between; padding: 9px 15px; font-size: 12.5px; border-bottom: 1px solid var(--line-soft); gap: 8px; cursor: pointer; transition: background 0.12s; }
+      .pay-row-d:last-child { border-bottom: none; }
+      .pay-row-d:hover { background: var(--fit-lavender-pale); }
+      .pay-row-left-d { flex: 1; min-width: 0; }
+      .pay-name-d { font-weight: 500; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      .pay-meta-d { font-size: 10.5px; color: var(--ink-mute); margin-top: 1px; }
+      .pay-amount-d { font-variant-numeric: tabular-nums; font-weight: 500; white-space: nowrap; color: var(--ink-soft); }
+      .pay-time-d { font-size: 10.5px; color: var(--ink-faint); margin-top: 1px; text-align: right; font-variant-numeric: tabular-nums; }
+    </style>
+    <div style="margin-bottom: 16px;">
+      <button onclick="reportsBackToHub()" style="background: none; border: none; color: var(--fit-purple); font-size: 13px; cursor: pointer; padding: 4px 0; font-weight: 500;">← Volver a reportes</button>
+    </div>
+    <div class="page-header" style="margin-bottom: 22px; display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; flex-wrap: wrap;">
+      <div>
+        <h1 class="page-title" style="font-family: var(--display); font-style: italic; font-size: 38px; font-weight: 500; color: var(--ink); margin: 0 0 4px; letter-spacing: -0.01em;">Pagos del <em style="color: var(--fit-purple);">día</em></h1>
+        <div style="font-size: 13px; color: var(--ink-mute);">Vista rápida por día y método · click en una fecha</div>
+      </div>
+      <div style="display: flex; gap: 8px; align-items: center;">
+        <button class="btn" onclick="paymentsDailyGoToday()">📅 Hoy</button>
+        <button class="btn" onclick="paymentsDailyGoToDetailed()">🔍 Vista detallada</button>
+      </div>
+    </div>
+
+    <!-- NAV DE MES -->
+    <div style="display: flex; align-items: center; gap: 14px; margin-bottom: 14px; flex-wrap: wrap;">
+      <button onclick="paymentsDailyShiftMonth(-1)" style="background: none; border: 1px solid var(--line); width: 32px; height: 32px; border-radius: 999px; cursor: pointer; color: var(--ink-mute);">‹</button>
+      <div style="font-family: var(--display); font-size: 22px; font-style: italic; color: var(--fit-purple); font-weight: 500;">${monthLabel}</div>
+      <button onclick="paymentsDailyShiftMonth(1)" style="background: none; border: 1px solid var(--line); width: 32px; height: 32px; border-radius: 999px; cursor: pointer; color: var(--ink-mute);">›</button>
+      <select onchange="paymentsDailySetLocation(this.value)" style="margin-left: auto; padding: 7px 12px; font-size: 12.5px; border: 1px solid var(--line); border-radius: 999px; background: white; color: var(--ink-soft);">${sedeOpts}</select>
+    </div>
+
+    <!-- TIRA DE FECHAS -->
+    <div class="date-strip-wrap-d">
+      <div class="date-strip-d">${dateCells.join('')}</div>
+    </div>
+
+    <!-- DÍA SELECCIONADO HEADER -->
+    <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 16px; gap: 14px; flex-wrap: wrap;">
+      <h2 style="font-family: var(--display); font-style: italic; font-size: 26px; color: var(--ink); font-weight: 500; margin: 0;">${dayHeaderText}</h2>
+      <div style="font-size: 13.5px; color: var(--ink-mute);">
+        ${dayPayments.length} pago${dayPayments.length === 1 ? '' : 's'} · total <strong style="font-family: var(--display); font-style: italic; font-weight: 500; color: var(--fit-purple); font-size: 22px; margin-left: 4px;">S/ ${dayTotal.toLocaleString('es-PE', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</strong>
+      </div>
+    </div>
+
+    <!-- GRID DE MÉTODOS -->
+    <div class="methods-grid-d">${methodCardsHTML}</div>
+  `;
+
+  // Scrollear la tira para mostrar el día activo
+  setTimeout(() => {
+    const wrap = container.querySelector('.date-strip-wrap-d');
+    const active = container.querySelector('.date-cell-d.is-active');
+    if (wrap && active) {
+      const offset = active.offsetLeft - wrap.clientWidth / 2 + active.clientWidth / 2;
+      wrap.scrollLeft = Math.max(0, offset);
+    }
+  }, 50);
 }
 
 // ============================================
@@ -25284,9 +25605,20 @@ async function renderReportsView() {
   const container = document.getElementById('reports-container');
   if (!container) return;
 
-  // Routing por subView: hub (default) | monthly | payments
+  // Routing por subView: hub (default) | monthly | payments | daily
   if (REPORTS_STATE.subView === 'hub') {
     renderReportsHubHTML();
+    return;
+  }
+  if (REPORTS_STATE.subView === 'daily') {
+    initPaymentsDailyState();
+    if (!isOnline) {
+      container.innerHTML = '<div style="padding: 40px; text-align: center; color: var(--ink-mute);">Conexión requerida para ver pagos.</div>';
+      return;
+    }
+    container.innerHTML = '<div style="padding: 40px; text-align: center; color: var(--ink-mute);">Cargando pagos del mes...</div>';
+    await loadPaymentsDailyData();
+    renderPaymentsDailyHTML();
     return;
   }
   if (REPORTS_STATE.subView === 'payments') {
