@@ -23911,13 +23911,537 @@ async function saveInstructorPayConfig(instructorId) {
 // REPORTES
 // ============================================
 
-const REPORTS_STATE = { month: null, year: null, locationId: 'all', data: null };
+const REPORTS_STATE = { subView: 'hub', month: null, year: null, locationId: 'all', data: null };
 
 function initReportsState() {
   if (REPORTS_STATE.month === null) {
     const now = new Date();
     REPORTS_STATE.month = now.getMonth();
     REPORTS_STATE.year = now.getFullYear();
+  }
+}
+
+// ============================================
+// REPORTE DE PAGOS — sub-vista
+// ============================================
+const PAYMENTS_REPORT_STATE = {
+  dateFrom: null,           // YYYY-MM-DD
+  dateTo: null,
+  locationId: 'all',
+  recordedById: 'all',
+  methods: ['all'],         // ['all'] o subset de ['cash','yape','plin','transfer','pos','other']
+  hourFrom: '00:00',
+  hourTo: '23:59',
+  studentSearch: '',
+  withDiscount: 'all',      // 'all'|'yes'|'no'
+  minAmount: null,
+  data: null,
+  loading: false,
+};
+
+const PAYMENT_METHOD_LABELS = {
+  cash: 'Efectivo',
+  yape: 'Yape',
+  plin: 'Plin',
+  transfer: 'Transferencia',
+  pos: 'POS',
+  other: 'Otro',
+};
+const PAYMENT_METHOD_COLORS = {
+  cash:     { bg: '#E8F5DD', fg: '#3B6D11' },
+  yape:     { bg: '#EEEDFE', fg: '#3C3489' },
+  plin:     { bg: '#DDF0FA', fg: '#0C447C' },
+  transfer: { bg: '#FAEEDA', fg: '#854F0B' },
+  pos:      { bg: '#FBEAF0', fg: '#72243E' },
+  other:    { bg: '#EFECE6', fg: '#444441' },
+};
+
+function initPaymentsReportState() {
+  if (!PAYMENTS_REPORT_STATE.dateFrom) {
+    const today = new Date();
+    const ago30 = new Date(today); ago30.setDate(today.getDate() - 30);
+    PAYMENTS_REPORT_STATE.dateFrom = dateToIsoLocal(ago30);
+    PAYMENTS_REPORT_STATE.dateTo = dateToIsoLocal(today);
+  }
+}
+
+function renderReportsHubHTML() {
+  const container = document.getElementById('reports-container');
+  if (!container) return;
+  container.innerHTML = `
+    <div class="page-header">
+      <div>
+        <h1 class="page-title">Reportes</h1>
+        <div class="page-sub">Elige el reporte que quieres ver</div>
+      </div>
+    </div>
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; margin-top: 8px;">
+      <div onclick="REPORTS_STATE.subView='payments'; renderReportsView();"
+           style="background: white; border: 1px solid var(--line); border-radius: 14px; padding: 24px; cursor: pointer; transition: all 0.15s;"
+           onmouseover="this.style.borderColor='var(--fit-purple-soft)'; this.style.transform='translateY(-2px)';"
+           onmouseout="this.style.borderColor='var(--line)'; this.style.transform='';">
+        <div style="width: 48px; height: 48px; border-radius: 12px; background: var(--fit-lavender-pale); display: flex; align-items: center; justify-content: center; margin-bottom: 14px; font-size: 24px;">💳</div>
+        <h3 style="font-family: var(--display); font-style: italic; font-size: 22px; color: var(--fit-purple); margin: 0 0 6px; font-weight: 500;">Reporte de pagos</h3>
+        <div style="color: var(--ink-mute); font-size: 13px; line-height: 1.5;">
+          Detalle de cada pago con filtros mezclables: fechas, sede, coord, método, hora. Exportable a CSV.
+        </div>
+        <div style="margin-top: 14px; color: var(--fit-purple); font-size: 12.5px; font-weight: 500;">Ver reporte →</div>
+      </div>
+
+      <div onclick="REPORTS_STATE.subView='monthly'; renderReportsView();"
+           style="background: white; border: 1px solid var(--line); border-radius: 14px; padding: 24px; cursor: pointer; transition: all 0.15s;"
+           onmouseover="this.style.borderColor='var(--fit-purple-soft)'; this.style.transform='translateY(-2px)';"
+           onmouseout="this.style.borderColor='var(--line)'; this.style.transform='';">
+        <div style="width: 48px; height: 48px; border-radius: 12px; background: var(--fit-lavender-pale); display: flex; align-items: center; justify-content: center; margin-bottom: 14px; font-size: 24px;">📊</div>
+        <h3 style="font-family: var(--display); font-style: italic; font-size: 22px; color: var(--fit-purple); margin: 0 0 6px; font-weight: 500;">Reportes mensuales</h3>
+        <div style="color: var(--ink-mute); font-size: 13px; line-height: 1.5;">
+          Vista mensual: facturado, descuentos, paquetes vendidos por tamaño, razones de descuento. Exportable a Excel.
+        </div>
+        <div style="margin-top: 14px; color: var(--fit-purple); font-size: 12.5px; font-weight: 500;">Ver reporte →</div>
+      </div>
+    </div>
+  `;
+}
+
+function reportsBackToHub() {
+  REPORTS_STATE.subView = 'hub';
+  renderReportsView();
+}
+
+async function loadPaymentsReportData() {
+  const f = PAYMENTS_REPORT_STATE;
+  let q = sb.from('payments')
+    .select('*, students(first_name, last_name, location_id), student_packages(id, classes_total, packages(name))')
+    .gte('payment_date', f.dateFrom)
+    .lte('payment_date', f.dateTo);
+  if (f.locationId !== 'all') q = q.eq('location_id', f.locationId);
+  if (f.recordedById !== 'all') q = q.eq('recorded_by', f.recordedById);
+  if (!f.methods.includes('all') && f.methods.length > 0) q = q.in('method', f.methods);
+
+  const { data, error } = await q.order('created_at', { ascending: false });
+  if (error) {
+    console.error('Error cargando reporte de pagos:', error);
+    PAYMENTS_REPORT_STATE.data = { error: error.message, filtered: [], totalLoaded: 0 };
+    return;
+  }
+
+  let filtered = data || [];
+  const totalLoaded = filtered.length;
+
+  // Filtro de hora sobre created_at
+  const [hF_h, hF_m] = f.hourFrom.split(':').map(Number);
+  const [hT_h, hT_m] = f.hourTo.split(':').map(Number);
+  const hF = hF_h * 60 + hF_m;
+  const hT = hT_h * 60 + hT_m;
+  if (hF > 0 || hT < 1439) {
+    filtered = filtered.filter(p => {
+      if (!p.created_at) return true;
+      const d = new Date(p.created_at);
+      const mins = d.getHours() * 60 + d.getMinutes();
+      return mins >= hF && mins <= hT;
+    });
+  }
+
+  // Búsqueda por alumna (usa helper centralizado normalizeForSearch)
+  if (f.studentSearch && f.studentSearch.trim()) {
+    const norm = normalizeForSearch(f.studentSearch);
+    filtered = filtered.filter(p => {
+      const s = p.students;
+      if (!s) return false;
+      const blob = normalizeForSearch(`${s.first_name || ''} ${s.last_name || ''}`);
+      return blob.includes(norm);
+    });
+  }
+
+  // Con descuento
+  if (f.withDiscount === 'yes') {
+    filtered = filtered.filter(p => parseFloat(p.discount_amount || 0) > 0);
+  } else if (f.withDiscount === 'no') {
+    filtered = filtered.filter(p => parseFloat(p.discount_amount || 0) === 0);
+  }
+
+  // Monto mínimo
+  if (f.minAmount && !isNaN(f.minAmount)) {
+    filtered = filtered.filter(p => parseFloat(p.amount_pen || 0) >= parseFloat(f.minAmount));
+  }
+
+  PAYMENTS_REPORT_STATE.data = { filtered, totalLoaded };
+}
+
+function paymentsReportApplyFilters() {
+  // Leer valores actuales del DOM
+  const f = PAYMENTS_REPORT_STATE;
+  const get = (id) => document.getElementById(id)?.value || '';
+  f.dateFrom      = get('pr-date-from') || f.dateFrom;
+  f.dateTo        = get('pr-date-to') || f.dateTo;
+  f.locationId    = get('pr-location') || 'all';
+  f.recordedById  = get('pr-recorded-by') || 'all';
+  f.hourFrom      = get('pr-hour-from') || '00:00';
+  f.hourTo        = get('pr-hour-to') || '23:59';
+  f.studentSearch = get('pr-student-search');
+  f.withDiscount  = get('pr-with-discount') || 'all';
+  const minA = get('pr-min-amount');
+  f.minAmount = minA ? parseFloat(minA) : null;
+  renderReportsView();
+}
+
+function paymentsReportResetFilters() {
+  PAYMENTS_REPORT_STATE.dateFrom = null;
+  PAYMENTS_REPORT_STATE.dateTo = null;
+  PAYMENTS_REPORT_STATE.locationId = 'all';
+  PAYMENTS_REPORT_STATE.recordedById = 'all';
+  PAYMENTS_REPORT_STATE.methods = ['all'];
+  PAYMENTS_REPORT_STATE.hourFrom = '00:00';
+  PAYMENTS_REPORT_STATE.hourTo = '23:59';
+  PAYMENTS_REPORT_STATE.studentSearch = '';
+  PAYMENTS_REPORT_STATE.withDiscount = 'all';
+  PAYMENTS_REPORT_STATE.minAmount = null;
+  initPaymentsReportState();
+  renderReportsView();
+}
+
+function paymentsReportToggleMethod(method) {
+  const f = PAYMENTS_REPORT_STATE;
+  if (method === 'all') {
+    f.methods = ['all'];
+  } else {
+    // quitar 'all' al elegir uno específico
+    f.methods = f.methods.filter(m => m !== 'all');
+    if (f.methods.includes(method)) {
+      f.methods = f.methods.filter(m => m !== method);
+      if (f.methods.length === 0) f.methods = ['all'];
+    } else {
+      f.methods.push(method);
+    }
+  }
+  renderReportsView();
+}
+
+function exportPaymentsCSV() {
+  const data = PAYMENTS_REPORT_STATE.data;
+  if (!data || !data.filtered || data.filtered.length === 0) {
+    showToast('No hay datos para exportar', 'warn');
+    return;
+  }
+  const locById = {};
+  (STATE.locations || []).forEach(l => { locById[l.id] = l.name; });
+  const userById = {};
+  (STATE.users || []).forEach(u => { userById[u.id] = u.full_name || u.handle || u.id.slice(0,8); });
+
+  const headers = ['Fecha pago','Hora registro','Alumna','Sede','Método','Monto cobrado','Descuento','Monto nominal','Coord','Referencia','Notas','Paquete'];
+  const rows = data.filtered.map(p => {
+    const s = p.students || {};
+    const pkg = p.student_packages || {};
+    const pkgName = pkg.packages?.name || (pkg.classes_total ? `${pkg.classes_total} clases` : '');
+    const hora = p.created_at ? new Date(p.created_at).toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit', hour12: false }) : '';
+    const amount = parseFloat(p.amount_pen || 0);
+    const disc = parseFloat(p.discount_amount || 0);
+    return [
+      p.payment_date || '',
+      hora,
+      `${s.first_name || ''} ${s.last_name || ''}`.trim(),
+      locById[p.location_id] || '',
+      PAYMENT_METHOD_LABELS[p.method] || p.method || '',
+      amount.toFixed(2),
+      disc.toFixed(2),
+      (amount + disc).toFixed(2),
+      userById[p.recorded_by] || '',
+      p.reference || '',
+      (p.notes || '').replace(/[\r\n]+/g, ' '),
+      pkgName,
+    ];
+  });
+
+  // Construir CSV con separador `;` (mejor para Excel en español) y comillas escapadas
+  const escapeCSV = (val) => {
+    const s = String(val ?? '');
+    if (s.includes(';') || s.includes('"') || s.includes('\n')) {
+      return '"' + s.replace(/"/g, '""') + '"';
+    }
+    return s;
+  };
+  const csv = '\uFEFF' + [headers, ...rows].map(r => r.map(escapeCSV).join(';')).join('\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `reporte_pagos_${PAYMENTS_REPORT_STATE.dateFrom}_${PAYMENTS_REPORT_STATE.dateTo}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  showToast(`Exportado: ${data.filtered.length} pagos`, 'success');
+}
+
+function renderPaymentsReportHTML() {
+  const container = document.getElementById('reports-container');
+  if (!container) return;
+  const f = PAYMENTS_REPORT_STATE;
+  const data = f.data || { filtered: [], totalLoaded: 0 };
+  const payments = data.filtered || [];
+
+  // KPIs
+  const totalFacturado = payments.reduce((s, p) => s + parseFloat(p.amount_pen || 0), 0);
+  const totalDescuentos = payments.reduce((s, p) => s + parseFloat(p.discount_amount || 0), 0);
+  const avg = payments.length > 0 ? totalFacturado / payments.length : 0;
+  const conDescuento = payments.filter(p => parseFloat(p.discount_amount || 0) > 0).length;
+
+  // Hora pico: bucket de 2 en 2 horas
+  const hourBuckets = {};
+  payments.forEach(p => {
+    if (!p.created_at) return;
+    const h = new Date(p.created_at).getHours();
+    const bucket = Math.floor(h / 2) * 2;
+    hourBuckets[bucket] = (hourBuckets[bucket] || 0) + 1;
+  });
+  let peakBucket = null, peakCount = 0;
+  Object.entries(hourBuckets).forEach(([b, c]) => { if (c > peakCount) { peakCount = c; peakBucket = parseInt(b); } });
+  const peakLabel = peakBucket !== null
+    ? `${peakBucket}–${peakBucket + 2}h`
+    : '—';
+
+  // Breakdown por método (filtrado actual)
+  const methodTotals = {};
+  payments.forEach(p => {
+    const m = p.method || 'other';
+    if (!methodTotals[m]) methodTotals[m] = { count: 0, amount: 0 };
+    methodTotals[m].count += 1;
+    methodTotals[m].amount += parseFloat(p.amount_pen || 0);
+  });
+  const methodRows = Object.entries(methodTotals)
+    .map(([m, v]) => ({ method: m, ...v }))
+    .sort((a, b) => b.amount - a.amount);
+  const maxMethodAmount = methodRows.reduce((mx, r) => Math.max(mx, r.amount), 0) || 1;
+
+  // Coords con pagos en periodo (para el dropdown "Registrado por")
+  const coordsSet = new Set();
+  payments.forEach(p => { if (p.recorded_by) coordsSet.add(p.recorded_by); });
+  // Combinar con coords/owner/manager del state (por si filtro actual no incluye al user)
+  const allCoords = (STATE.users || []).filter(u => ['coordinator','owner','manager'].includes(u.role));
+  const coordById = {};
+  allCoords.forEach(u => { coordById[u.id] = u; });
+  // Asegurar que coords con pagos pero sin role estén
+  Array.from(coordsSet).forEach(id => { if (!coordById[id]) coordById[id] = { id, full_name: `Usuario ${id.slice(0,8)}` }; });
+  const coordsList = Object.values(coordById).sort((a, b) => (a.full_name || '').localeCompare(b.full_name || ''));
+
+  const locById = {};
+  (STATE.locations || []).forEach(l => { locById[l.id] = l.name; });
+  const userById = {};
+  Object.values(coordById).forEach(u => { userById[u.id] = u.full_name || u.handle || u.id.slice(0,8); });
+
+  const methodChips = ['all', 'cash', 'yape', 'plin', 'transfer', 'pos', 'other'].map(m => {
+    const active = f.methods.includes(m);
+    const label = m === 'all' ? 'Todos' : PAYMENT_METHOD_LABELS[m];
+    return `<button type="button" onclick="paymentsReportToggleMethod('${m}')" style="font-size: 11.5px; padding: 5px 11px; border-radius: 999px; border: 1px solid ${active ? 'var(--fit-purple)' : 'var(--line)'}; background: ${active ? 'var(--fit-purple)' : 'var(--fit-cream)'}; color: ${active ? 'white' : 'var(--ink-mute)'}; cursor: pointer; font-weight: 500;">${label}</button>`;
+  }).join('');
+
+  const sedeOpts = ['<option value="all">Todas las sedes</option>']
+    .concat((STATE.locations || []).map(l => `<option value="${l.id}" ${f.locationId === l.id ? 'selected' : ''}>${escape(l.name)}</option>`))
+    .join('');
+  const coordOpts = ['<option value="all">Todos los coords</option>']
+    .concat(coordsList.map(u => `<option value="${u.id}" ${f.recordedById === u.id ? 'selected' : ''}>${escape(u.full_name || u.id.slice(0,8))}</option>`))
+    .join('');
+
+  // Renderizado del HTML completo
+  container.innerHTML = `
+    <div style="margin-bottom: 16px;">
+      <button onclick="reportsBackToHub()" style="background: none; border: none; color: var(--fit-purple); font-size: 13px; cursor: pointer; padding: 4px 0; font-weight: 500;">← Volver a reportes</button>
+    </div>
+    <div class="page-header">
+      <div>
+        <h1 class="page-title">Reporte de <em>pagos</em></h1>
+        <div class="page-sub">Filtros mezclables · exportable a CSV</div>
+      </div>
+    </div>
+
+    <!-- FILTROS -->
+    <div style="background: white; border: 1px solid var(--line); border-radius: 14px; padding: 20px 22px; margin-bottom: 20px;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+        <h2 style="font-family: var(--display); font-style: italic; font-size: 20px; color: var(--fit-purple); margin: 0; font-weight: 500;">Filtros</h2>
+        <div style="display: flex; gap: 8px;">
+          <button class="btn btn-ghost" onclick="paymentsReportResetFilters()" style="font-size: 12.5px;">Resetear</button>
+          <button class="btn" onclick="paymentsReportApplyFilters()" style="background: var(--fit-purple); color: white; border-color: var(--fit-purple); font-size: 12.5px;">Aplicar filtros</button>
+        </div>
+      </div>
+
+      <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px 16px;">
+        <div style="display: flex; flex-direction: column; gap: 6px;">
+          <label style="font-size: 10.5px; color: var(--ink-mute); text-transform: uppercase; letter-spacing: 0.08em; font-weight: 600;">Desde</label>
+          <input type="date" id="pr-date-from" value="${f.dateFrom}" style="font-size: 13px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--fit-cream); color: var(--ink);">
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 6px;">
+          <label style="font-size: 10.5px; color: var(--ink-mute); text-transform: uppercase; letter-spacing: 0.08em; font-weight: 600;">Hasta</label>
+          <input type="date" id="pr-date-to" value="${f.dateTo}" style="font-size: 13px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--fit-cream); color: var(--ink);">
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 6px;">
+          <label style="font-size: 10.5px; color: var(--ink-mute); text-transform: uppercase; letter-spacing: 0.08em; font-weight: 600;">Sede</label>
+          <select id="pr-location" style="font-size: 13px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--fit-cream); color: var(--ink);">${sedeOpts}</select>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 6px;">
+          <label style="font-size: 10.5px; color: var(--ink-mute); text-transform: uppercase; letter-spacing: 0.08em; font-weight: 600;">Registrado por</label>
+          <select id="pr-recorded-by" style="font-size: 13px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--fit-cream); color: var(--ink);">${coordOpts}</select>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 6px; grid-column: span 2;">
+          <label style="font-size: 10.5px; color: var(--ink-mute); text-transform: uppercase; letter-spacing: 0.08em; font-weight: 600;">Método de pago (múltiple)</label>
+          <div style="display: flex; flex-wrap: wrap; gap: 6px;">${methodChips}</div>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 6px;">
+          <label style="font-size: 10.5px; color: var(--ink-mute); text-transform: uppercase; letter-spacing: 0.08em; font-weight: 600;">Hora desde</label>
+          <input type="time" id="pr-hour-from" value="${f.hourFrom}" style="font-size: 13px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--fit-cream); color: var(--ink);">
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 6px;">
+          <label style="font-size: 10.5px; color: var(--ink-mute); text-transform: uppercase; letter-spacing: 0.08em; font-weight: 600;">Hora hasta</label>
+          <input type="time" id="pr-hour-to" value="${f.hourTo}" style="font-size: 13px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--fit-cream); color: var(--ink);">
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 6px; grid-column: span 2;">
+          <label style="font-size: 10.5px; color: var(--ink-mute); text-transform: uppercase; letter-spacing: 0.08em; font-weight: 600;">Buscar alumna</label>
+          <input type="text" id="pr-student-search" value="${escape(f.studentSearch)}" placeholder="Nombre, apellido, DNI o email..." style="font-size: 13px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--fit-cream); color: var(--ink);">
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 6px;">
+          <label style="font-size: 10.5px; color: var(--ink-mute); text-transform: uppercase; letter-spacing: 0.08em; font-weight: 600;">Con descuento</label>
+          <select id="pr-with-discount" style="font-size: 13px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--fit-cream); color: var(--ink);">
+            <option value="all" ${f.withDiscount === 'all' ? 'selected' : ''}>Todos</option>
+            <option value="yes" ${f.withDiscount === 'yes' ? 'selected' : ''}>Solo con descuento</option>
+            <option value="no" ${f.withDiscount === 'no' ? 'selected' : ''}>Sin descuento</option>
+          </select>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 6px;">
+          <label style="font-size: 10.5px; color: var(--ink-mute); text-transform: uppercase; letter-spacing: 0.08em; font-weight: 600;">Monto mínimo (S/)</label>
+          <input type="number" id="pr-min-amount" value="${f.minAmount || ''}" placeholder="Cualquiera" style="font-size: 13px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--fit-cream); color: var(--ink);">
+        </div>
+      </div>
+    </div>
+
+    <!-- KPIs -->
+    <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 20px;">
+      <div style="background: linear-gradient(135deg, var(--fit-lavender-pale) 0%, white 100%); border: 1px solid var(--fit-lavender); border-radius: 14px; padding: 16px 18px;">
+        <div style="font-size: 10.5px; color: var(--ink-mute); text-transform: uppercase; letter-spacing: 0.08em; font-weight: 600; margin-bottom: 6px;">Ingreso total</div>
+        <div style="font-family: var(--display); font-size: 28px; font-weight: 500; color: var(--fit-purple); letter-spacing: -0.01em;">S/ ${totalFacturado.toLocaleString('es-PE', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}</div>
+        <div style="font-size: 11.5px; color: var(--ink-mute); margin-top: 2px;">${payments.length} pagos en el rango</div>
+      </div>
+      <div style="background: white; border: 1px solid var(--line); border-radius: 14px; padding: 16px 18px;">
+        <div style="font-size: 10.5px; color: var(--ink-mute); text-transform: uppercase; letter-spacing: 0.08em; font-weight: 600; margin-bottom: 6px;">Promedio por pago</div>
+        <div style="font-family: var(--display); font-size: 28px; font-weight: 500; color: var(--ink); letter-spacing: -0.01em;">S/ ${avg.toLocaleString('es-PE', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</div>
+        <div style="font-size: 11.5px; color: var(--ink-mute); margin-top: 2px;">${payments.length > 0 ? `min S/ ${Math.min(...payments.map(p => parseFloat(p.amount_pen || 0))).toFixed(0)} · max S/ ${Math.max(...payments.map(p => parseFloat(p.amount_pen || 0))).toFixed(0)}` : '—'}</div>
+      </div>
+      <div style="background: white; border: 1px solid var(--line); border-radius: 14px; padding: 16px 18px;">
+        <div style="font-size: 10.5px; color: var(--ink-mute); text-transform: uppercase; letter-spacing: 0.08em; font-weight: 600; margin-bottom: 6px;">Pagos con descuento</div>
+        <div style="font-family: var(--display); font-size: 28px; font-weight: 500; color: var(--ink); letter-spacing: -0.01em;">${conDescuento}</div>
+        <div style="font-size: 11.5px; color: var(--ink-mute); margin-top: 2px;">S/ ${totalDescuentos.toLocaleString('es-PE', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} descontados</div>
+      </div>
+      <div style="background: white; border: 1px solid var(--line); border-radius: 14px; padding: 16px 18px;">
+        <div style="font-size: 10.5px; color: var(--ink-mute); text-transform: uppercase; letter-spacing: 0.08em; font-weight: 600; margin-bottom: 6px;">Hora pico de registro</div>
+        <div style="font-family: var(--display); font-size: 28px; font-weight: 500; color: var(--ink); letter-spacing: -0.01em;">${peakLabel}</div>
+        <div style="font-size: 11.5px; color: var(--ink-mute); margin-top: 2px;">${peakCount > 0 ? `${peakCount} pagos en esa franja` : 'Sin datos'}</div>
+      </div>
+    </div>
+
+    <!-- Breakdown por método -->
+    ${methodRows.length > 0 ? `
+    <div style="background: white; border: 1px solid var(--line); border-radius: 14px; padding: 16px 20px; margin-bottom: 20px;">
+      <h3 style="font-family: var(--display); font-style: italic; font-size: 18px; color: var(--fit-purple); margin: 0 0 12px; font-weight: 500;">Distribución por método</h3>
+      ${methodRows.map(r => {
+        const pct = (r.amount / maxMethodAmount * 100).toFixed(0);
+        const c = PAYMENT_METHOD_COLORS[r.method] || PAYMENT_METHOD_COLORS.other;
+        return `
+          <div style="display: grid; grid-template-columns: 130px 1fr 110px 80px; align-items: center; gap: 12px; padding: 6px 0; font-size: 12.5px;">
+            <div style="color: var(--ink-soft); font-weight: 500;">${PAYMENT_METHOD_LABELS[r.method] || r.method}</div>
+            <div style="background: var(--line-soft); height: 8px; border-radius: 999px; overflow: hidden;">
+              <div style="background: ${c.fg}; height: 100%; border-radius: 999px; width: ${pct}%;"></div>
+            </div>
+            <div style="text-align: right; font-variant-numeric: tabular-nums; font-weight: 500;">S/ ${r.amount.toLocaleString('es-PE', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}</div>
+            <div style="text-align: right; color: var(--ink-mute); font-size: 11.5px;">${r.count} pago${r.count === 1 ? '' : 's'}</div>
+          </div>
+        `;
+      }).join('')}
+    </div>
+    ` : ''}
+
+    <!-- TABLA -->
+    <div style="background: white; border: 1px solid var(--line); border-radius: 14px; overflow: hidden;">
+      <div style="padding: 16px 22px; border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; align-items: center;">
+        <h2 style="font-family: var(--display); font-style: italic; font-size: 20px; color: var(--fit-purple); margin: 0; font-weight: 500;">Detalle <span style="color: var(--ink-mute); font-size: 14px;">· ${payments.length} pago${payments.length === 1 ? '' : 's'}</span></h2>
+        <div style="display: flex; gap: 8px;">
+          <button class="btn" onclick="exportPaymentsCSV()" style="font-size: 12.5px;">⬇ Exportar CSV</button>
+        </div>
+      </div>
+      ${payments.length === 0 ? `
+        <div style="padding: 60px; text-align: center; color: var(--ink-mute);">
+          ${data.totalLoaded === 0 ? 'No hay pagos en el rango y sede seleccionados.' : 'Ningún pago cumple los filtros aplicados.'}
+        </div>
+      ` : `
+      <div style="overflow-x: auto;">
+      <table style="width: 100%; border-collapse: collapse; font-size: 12.5px;">
+        <thead>
+          <tr>
+            <th style="text-align: left; padding: 12px 14px; font-size: 10.5px; color: var(--ink-mute); text-transform: uppercase; letter-spacing: 0.07em; font-weight: 600; background: var(--fit-lavender-pale); border-bottom: 1px solid var(--line);">Fecha</th>
+            <th style="text-align: left; padding: 12px 14px; font-size: 10.5px; color: var(--ink-mute); text-transform: uppercase; letter-spacing: 0.07em; font-weight: 600; background: var(--fit-lavender-pale); border-bottom: 1px solid var(--line);">Hora</th>
+            <th style="text-align: left; padding: 12px 14px; font-size: 10.5px; color: var(--ink-mute); text-transform: uppercase; letter-spacing: 0.07em; font-weight: 600; background: var(--fit-lavender-pale); border-bottom: 1px solid var(--line);">Alumna</th>
+            <th style="text-align: left; padding: 12px 14px; font-size: 10.5px; color: var(--ink-mute); text-transform: uppercase; letter-spacing: 0.07em; font-weight: 600; background: var(--fit-lavender-pale); border-bottom: 1px solid var(--line);">Sede</th>
+            <th style="text-align: left; padding: 12px 14px; font-size: 10.5px; color: var(--ink-mute); text-transform: uppercase; letter-spacing: 0.07em; font-weight: 600; background: var(--fit-lavender-pale); border-bottom: 1px solid var(--line);">Método</th>
+            <th style="text-align: left; padding: 12px 14px; font-size: 10.5px; color: var(--ink-mute); text-transform: uppercase; letter-spacing: 0.07em; font-weight: 600; background: var(--fit-lavender-pale); border-bottom: 1px solid var(--line);">Coord</th>
+            <th style="text-align: left; padding: 12px 14px; font-size: 10.5px; color: var(--ink-mute); text-transform: uppercase; letter-spacing: 0.07em; font-weight: 600; background: var(--fit-lavender-pale); border-bottom: 1px solid var(--line);">Notas</th>
+            <th style="text-align: right; padding: 12px 14px; font-size: 10.5px; color: var(--ink-mute); text-transform: uppercase; letter-spacing: 0.07em; font-weight: 600; background: var(--fit-lavender-pale); border-bottom: 1px solid var(--line);">Monto</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${payments.slice(0, 200).map(p => {
+            const s = p.students || {};
+            const pkg = p.student_packages || {};
+            const pkgName = pkg.packages?.name || (pkg.classes_total ? `${pkg.classes_total} clases` : '');
+            const hora = p.created_at ? new Date(p.created_at).toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit', hour12: false }) : '—';
+            const fechaCorta = p.payment_date ? (() => {
+              const d = new Date(p.payment_date + 'T00:00:00');
+              const meses = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+              return `${d.getDate()} ${meses[d.getMonth()]}`;
+            })() : '—';
+            const amount = parseFloat(p.amount_pen || 0);
+            const disc = parseFloat(p.discount_amount || 0);
+            const showOriginal = disc > 0;
+            const mcol = PAYMENT_METHOD_COLORS[p.method] || PAYMENT_METHOD_COLORS.other;
+            const mlabel = PAYMENT_METHOD_LABELS[p.method] || p.method || '—';
+            const coord = userById[p.recorded_by] || '—';
+            const notesPreview = (p.notes || '').slice(0, 40) + (p.notes && p.notes.length > 40 ? '…' : '') || '—';
+            return `
+              <tr style="cursor: pointer;" onclick="openPaymentDetailFromReport('${p.id}')" onmouseover="this.style.background='var(--fit-cream)'" onmouseout="this.style.background=''">
+                <td style="padding: 12px 14px; border-bottom: 1px solid var(--line-soft);">${fechaCorta}</td>
+                <td style="padding: 12px 14px; border-bottom: 1px solid var(--line-soft); font-variant-numeric: tabular-nums;">${hora}</td>
+                <td style="padding: 12px 14px; border-bottom: 1px solid var(--line-soft);">
+                  <div style="font-weight: 500; color: var(--ink);">${escape(s.first_name || '')} ${escape(s.last_name || '')}</div>
+                  ${pkgName || p.reference ? `<div style="font-size: 11px; color: var(--ink-mute); margin-top: 2px;">${escape(pkgName || '')}${p.reference ? ` · Ref: ${escape(p.reference)}` : ''}</div>` : ''}
+                </td>
+                <td style="padding: 12px 14px; border-bottom: 1px solid var(--line-soft);"><span style="display: inline-block; font-size: 10.5px; padding: 2px 8px; border-radius: 999px; background: var(--fit-cream); border: 1px solid var(--line); color: var(--ink-soft); font-weight: 500;">${escape(locById[p.location_id] || '—')}</span></td>
+                <td style="padding: 12px 14px; border-bottom: 1px solid var(--line-soft);"><span style="display: inline-block; font-size: 11px; padding: 3px 9px; border-radius: 999px; font-weight: 500; background: ${mcol.bg}; color: ${mcol.fg};">${mlabel}</span></td>
+                <td style="padding: 12px 14px; border-bottom: 1px solid var(--line-soft); color: var(--ink-soft); font-size: 12px;">${escape(coord)}</td>
+                <td style="padding: 12px 14px; border-bottom: 1px solid var(--line-soft); font-size: 11.5px; color: var(--ink-mute); font-style: italic; max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${escape(p.notes || '')}">${escape(notesPreview)}</td>
+                <td style="padding: 12px 14px; border-bottom: 1px solid var(--line-soft); font-variant-numeric: tabular-nums; font-weight: 500; text-align: right;">
+                  ${showOriginal ? `<div style="color: var(--ink-mute); font-size: 11px; text-decoration: line-through;">S/ ${(amount + disc).toFixed(0)}</div>` : ''}
+                  S/ ${amount.toLocaleString('es-PE', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
+                </td>
+              </tr>
+            `;
+          }).join('')}
+        </tbody>
+      </table>
+      </div>
+      ${payments.length > 200 ? `
+        <div style="padding: 14px 22px; border-top: 1px solid var(--line); background: var(--fit-cream); font-size: 12px; color: var(--ink-mute); text-align: center;">
+          Mostrando los primeros 200 de ${payments.length} resultados · usa exportar CSV para ver todos
+        </div>
+      ` : ''}
+      `}
+    </div>
+  `;
+}
+
+// Abrir detalle del pago desde el reporte (reutiliza el modal existente)
+function openPaymentDetailFromReport(paymentId) {
+  if (typeof openPaymentDetail === 'function') {
+    openPaymentDetail(paymentId);
+  } else if (typeof editPayment === 'function') {
+    editPayment(paymentId);
   }
 }
 
@@ -24759,6 +25283,24 @@ async function renderReportsView() {
   initReportsState();
   const container = document.getElementById('reports-container');
   if (!container) return;
+
+  // Routing por subView: hub (default) | monthly | payments
+  if (REPORTS_STATE.subView === 'hub') {
+    renderReportsHubHTML();
+    return;
+  }
+  if (REPORTS_STATE.subView === 'payments') {
+    initPaymentsReportState();
+    if (!isOnline) {
+      container.innerHTML = '<div style="padding: 40px; text-align: center; color: var(--ink-mute);">Conexión requerida para ver reportes.</div>';
+      return;
+    }
+    container.innerHTML = '<div style="padding: 40px; text-align: center; color: var(--ink-mute);">Cargando pagos...</div>';
+    await loadPaymentsReportData();
+    renderPaymentsReportHTML();
+    return;
+  }
+  // subView === 'monthly' — reporte mensual original
   if (!isOnline) {
     container.innerHTML = '<div style="padding: 40px; text-align: center; color: var(--ink-mute);">Conexión requerida para ver reportes.</div>';
     return;
@@ -24888,6 +25430,9 @@ function renderReportsHTML() {
     (STATE.locations || []).map(l => `<option value="${l.id}" ${REPORTS_STATE.locationId === l.id ? 'selected' : ''}>${escape(l.name)}</option>`).join('');
 
   container.innerHTML = `
+    <div style="margin-bottom: 16px;">
+      <button onclick="reportsBackToHub()" style="background: none; border: none; color: var(--fit-purple); font-size: 13px; cursor: pointer; padding: 4px 0; font-weight: 500;">← Volver a reportes</button>
+    </div>
     <div class="page-header" style="margin-bottom: 18px;">
       <div>
         <h1 style="font-family: var(--display); font-size: 30px; margin: 0 0 4px; font-weight: 400;">Reportes <em>mensuales</em></h1>
