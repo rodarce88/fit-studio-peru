@@ -5000,14 +5000,22 @@ function resolveInstructor(locationId, date, dow, hour) {
 
 function getInstructorColor(inst) {
   if (!inst || inst._isUnassigned) return '#9CA3AF';
-  const colors = {
-    'AL': 'var(--fit-purple)',  // Alex - morado FIT
-    'V':  '#DB2777',  // Valeria - magenta
-    'AG': '#7C3AED',  // Angie - violeta
-    'AR': '#0891B2',  // Artem - cyan
-    'AP': '#B45309',  // Andrés - ámbar
-  };
-  return colors[inst.initials] || '#7C3AED';
+  // Color personalizado del profesor si existe (preparado para futuro campo `color` editable en BD)
+  if (inst.color) return inst.color;
+  // Paleta automática: 14 colores bien diferenciados
+  const palette = ['#7C3AED','#DB2777','#0891B2','#B45309','#059669','#DC2626','#2563EB','#CA8A04','#9333EA','#0D9488','#E11D48','#EA580C','#16A34A','#7E22CE'];
+  // Asignación determinística por posición en la lista de instructores ordenada por id.
+  // Garantiza colores distintos (sin colisiones) hasta 14 profesores y es estable entre sesiones.
+  const all = (STATE.instructors || []).slice().sort((a, b) => String(a.id).localeCompare(String(b.id)));
+  let idx = all.findIndex(i => i.id === inst.id);
+  if (idx < 0) {
+    // Fallback: si el profesor no está en STATE.instructors, hash estable de su id
+    const key = String(inst.id || inst.full_name || inst.initials || '');
+    let h = 0;
+    for (let i = 0; i < key.length; i++) h = (h * 31 + key.charCodeAt(i)) >>> 0;
+    idx = h;
+  }
+  return palette[idx % palette.length];
 }
 
 function renderLocationSwitcher() {
