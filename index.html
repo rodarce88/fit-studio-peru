@@ -3516,6 +3516,12 @@
               <option value="interested">Cliente interesada</option>
               <option value="monkeyfit">MonkeyFit</option>
             </select>
+            <div id="f-modality-error" style="display:none; margin-top: 10px; padding: 14px 16px; background: #FEE2E2; border: 1px solid #F87171; border-left: 4px solid #DC2626; border-radius: 10px; color: #7F1D1D; font-size: 13px; line-height: 1.5;">
+              <div style="font-weight: 700; margin-bottom: 4px; display: flex; align-items: center; gap: 6px;">
+                <span style="font-size: 16px;">⚠️</span> <span id="f-modality-error-code">Error</span>
+              </div>
+              <div id="f-modality-error-msg">Mensaje del error.</div>
+            </div>
           </div>
           <div class="form-row" id="f-monkeyfit-classes-row" style="display:none;">
             <label>Clases adquiridas por MonkeyFit <span class="req">*</span></label>
@@ -3570,7 +3576,7 @@
     <div class="modal-footer">
       <button class="btn btn-ghost" onclick="closeModals()">Cancelar</button>
       <button class="btn btn-danger" id="student-delete-btn" style="display:none" onclick="deactivateStudent()">Desactivar</button>
-      <button class="btn btn-primary" onclick="saveStudent()">Guardar alumno</button>
+      <button class="btn btn-primary" id="f-save-student-btn" onclick="saveStudent()">Guardar alumno</button>
     </div>
   </div>
 </div>
@@ -9422,9 +9428,90 @@ function toggleModalityFields() {
       trialDate.value = exp.toISOString().split('T')[0];
     }
   }
+  // Pre-validación catálogo (solo para nuevas alumnas, no en edición)
+  if (!isEdit) {
+    validateModalityCatalog(sel.value);
+  } else {
+    // En edición, asegurar banner oculto y botón habilitado
+    hideModalityError();
+  }
 }
 // Backward-compat: algunos onclicks pueden seguir llamando a la función antigua
 function toggleMonkeyfitField() { toggleModalityFields(); }
+
+// ============================================
+// PRE-VALIDACIÓN DE CATÁLOGO DE PAQUETES
+// ============================================
+// Verifica que el catálogo necesario para una modalidad exista en BD.
+// Si no, muestra banner de error en el form y deshabilita el botón Guardar.
+// Códigos de error: E-PKG-001 (trial), E-PKG-002 (monkeyfit)
+async function validateModalityCatalog(modality) {
+  // Modalidades que requieren catálogo: trial, monkeyfit
+  const REQUIRES_CATALOG = {
+    trial:     { keyword: 'prueba',     code: 'E-PKG-001', label: 'Clase de prueba' },
+    monkeyfit: { keyword: 'monkeyfit',  code: 'E-PKG-002', label: 'Pase MonkeyFit' },
+  };
+  const cfg = REQUIRES_CATALOG[modality];
+  if (!cfg) {
+    // Modalidad sin catálogo requerido (flexible, fixed, interested) → todo OK
+    hideModalityError();
+    return true;
+  }
+  // 1. Buscar en STATE.packages (memoria local)
+  const findInState = () => (STATE.packages || []).find(p =>
+    (p.name || '').toLowerCase().includes(cfg.keyword) && p.is_active !== false
+  );
+  let pkg = findInState();
+  if (pkg) {
+    hideModalityError();
+    return true;
+  }
+  // 2. Refrescar STATE.packages desde BD por si está desincronizado
+  try {
+    const { data: fresh, error } = await sb.from('packages').select('*').eq('is_active', true);
+    if (!error && Array.isArray(fresh)) {
+      STATE.packages = fresh;
+      pkg = findInState();
+    }
+  } catch (e) {
+    console.warn('validateModalityCatalog refresh failed:', e);
+  }
+  // 3. Si después de refrescar sigue sin existir → bloquear
+  if (!pkg) {
+    showModalityError(cfg.code, `No se encontró el catálogo "${cfg.label}" en la base de datos. No se puede crear esta modalidad hasta que el administrador del sistema lo configure. Comunica el código de error para resolverlo.`);
+    return false;
+  }
+  hideModalityError();
+  return true;
+}
+
+function showModalityError(code, msg) {
+  const box = document.getElementById('f-modality-error');
+  const codeEl = document.getElementById('f-modality-error-code');
+  const msgEl = document.getElementById('f-modality-error-msg');
+  const saveBtn = document.getElementById('f-save-student-btn');
+  if (box && codeEl && msgEl) {
+    codeEl.textContent = code;
+    msgEl.textContent = msg;
+    box.style.display = '';
+  }
+  if (saveBtn) {
+    saveBtn.disabled = true;
+    saveBtn.style.opacity = '0.5';
+    saveBtn.style.cursor = 'not-allowed';
+  }
+}
+
+function hideModalityError() {
+  const box = document.getElementById('f-modality-error');
+  const saveBtn = document.getElementById('f-save-student-btn');
+  if (box) box.style.display = 'none';
+  if (saveBtn) {
+    saveBtn.disabled = false;
+    saveBtn.style.opacity = '';
+    saveBtn.style.cursor = '';
+  }
+}
 
 // Helpers centralizados de modalidad
 function getModalityLabel(modality) {
@@ -9517,7 +9604,7 @@ async function saveStudent() {
             (p.name || '').toLowerCase().includes('prueba')
           );
           if (!trialPkg) {
-            showToast('Falta crear el paquete "Clase de prueba" en el catálogo. Avisa a Rodrigo.', 'warn');
+            alert('Error E-PKG-001\n\nNo se pudo crear el paquete de prueba porque el catálogo "Clase de prueba" no se encuentra disponible en la base de datos.\n\nLa alumna fue creada SIN paquete. Asígnale uno manualmente desde su detalle, o comunica este código de error al administrador del sistema para resolverlo.');
           } else {
             const todayIso = new Date().toISOString().split('T')[0];
             // Vencimiento: el que la coord puso en el form, o 30 días default
@@ -9546,7 +9633,7 @@ async function saveStudent() {
             };
             const pkgResult = await sb.from('student_packages').insert(pkgData).select().single();
             if (pkgResult.error) {
-              showToast('Alumna creada, pero falló crear el paquete prueba: ' + pkgResult.error.message, 'error');
+              alert('Error E-PKG-101\n\nLa alumna fue creada pero ocurrió un error al crear su paquete de prueba.\n\nDetalle técnico: ' + pkgResult.error.message + '\n\nAcción requerida: asígnale un paquete manualmente desde su detalle. Si el error persiste, comunica el código E-PKG-101 al administrador del sistema.');
             } else {
               if (STATE.studentPackages) STATE.studentPackages.push(pkgResult.data);
               try {
@@ -9560,7 +9647,7 @@ async function saveStudent() {
           }
         } catch (e) {
           console.error('Error creando paquete prueba:', e);
-          showToast('Alumna creada, pero falló crear el paquete prueba', 'error');
+          alert('Error E-PKG-102\n\nLa alumna fue creada pero ocurrió un error inesperado al crear su paquete de prueba.\n\nDetalle técnico: ' + (e?.message || String(e)) + '\n\nAcción requerida: asígnale un paquete manualmente desde su detalle. Comunica el código E-PKG-102 al administrador del sistema.');
         }
       }
 
@@ -9572,7 +9659,7 @@ async function saveStudent() {
             (p.name || '').toLowerCase().includes('monkey fit')
           );
           if (!mfPkg) {
-            showToast('Falta crear el paquete "Pase MonkeyFit" en el catálogo. Avisa a Rodrigo.', 'warn');
+            alert('Error E-PKG-002\n\nNo se pudo crear el paquete MonkeyFit porque el catálogo "Pase MonkeyFit" no se encuentra disponible en la base de datos.\n\nLa alumna fue creada SIN paquete. Asígnale uno manualmente desde su detalle, o comunica este código de error al administrador del sistema para resolverlo.');
           } else {
             const todayIso = new Date().toISOString().split('T')[0];
             // Vencimiento default: 30 días desde hoy (pase mensual MonkeyFit)
@@ -9598,7 +9685,7 @@ async function saveStudent() {
             };
             const pkgResult = await sb.from('student_packages').insert(pkgData).select().single();
             if (pkgResult.error) {
-              showToast('Alumna creada, pero falló crear el paquete MonkeyFit: ' + pkgResult.error.message, 'error');
+              alert('Error E-PKG-103\n\nLa alumna fue creada pero ocurrió un error al crear su paquete MonkeyFit.\n\nDetalle técnico: ' + pkgResult.error.message + '\n\nAcción requerida: asígnale un paquete manualmente desde su detalle. Si el error persiste, comunica el código E-PKG-103 al administrador del sistema.');
             } else {
               if (STATE.studentPackages) STATE.studentPackages.push(pkgResult.data);
               try {
@@ -9612,7 +9699,7 @@ async function saveStudent() {
           }
         } catch (e) {
           console.error('Error creando paquete MonkeyFit:', e);
-          showToast('Alumna creada, pero falló crear el paquete MonkeyFit', 'error');
+          alert('Error E-PKG-104\n\nLa alumna fue creada pero ocurrió un error inesperado al crear su paquete MonkeyFit.\n\nDetalle técnico: ' + (e?.message || String(e)) + '\n\nAcción requerida: asígnale un paquete manualmente desde su detalle. Comunica el código E-PKG-104 al administrador del sistema.');
         }
       }
     }
@@ -17776,12 +17863,12 @@ async function instructorOpenAddStudent(dateIso, hour, locationId) {
   STATE.instAddCtx = { dateIso, hour, locationId, locationName: loc?.name || '', capacity: cap };
   STATE.instAddPick = null;
 
-  const dateObj = new Date(dateIso + 'T12:00:00');
-  const dayLabels = ['dom','lun','mar','mié','jue','vie','sáb'];
-  document.getElementById('inst-add-sub').textContent = `${dayLabels[dateObj.getDay()]} ${dateObj.getDate()} · ${formatHour(hour)} · ${loc?.name || ''}`;
-
   const modal = document.getElementById('instructor-add-modal');
   modal.classList.add('is-open');
+  // instructorRenderAddSearch en modo 'list' regenera el .modal-header completo
+  // (incluyendo #inst-add-sub con el subtítulo via _instAddCtxLabel). NO seteamos
+  // #inst-add-sub aquí directamente porque si el modal se cerró estando en modo
+  // 'search', ese elemento no existe y causaría un crash que impide reabrir.
   instructorRenderAddSearch('', { mode: 'list' });
 
   // Refrescar STATE.students en background — sin filtro status='active' para que
