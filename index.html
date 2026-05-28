@@ -5738,6 +5738,7 @@ async function renderFullRescheduleView() {
   wrap.innerHTML = '<div class="full-empty">Cargando...</div>';
 
   const todayIso = dateToIsoLocal(new Date());
+  const locId = STATE.currentLocationId;  // filtro automático por sede del coord
   // 1. Paquetes vivos
   const { data: pkgs } = await sb.from('student_packages')
     .select('id, student_id, classes_total, classes_used, classes_recoverable')
@@ -5747,8 +5748,19 @@ async function renderFullRescheduleView() {
     return;
   }
 
+  // Filtrar a alumnos de la sede actual (mismo patrón que loadRescheduleList del sidebar)
+  const studentsInLoc = new Set(
+    (STATE.students || []).filter(s => s.location_id === locId).map(s => s.id)
+  );
+  const localPkgs = pkgs.filter(p => studentsInLoc.has(p.student_id));
+
+  if (localPkgs.length === 0) {
+    wrap.innerHTML = '<div class="full-empty">Sin pendientes en esta sede ✓</div>';
+    return;
+  }
+
   // 2. Bookings futuros no cancelados de esos alumnos
-  const studentIds = pkgs.map(p => p.student_id);
+  const studentIds = localPkgs.map(p => p.student_id);
   const { data: bookings } = await sb.from('session_bookings')
     .select('student_id, cancelled_at, class_sessions(session_date, is_cancelled)')
     .in('student_id', studentIds);
@@ -5762,7 +5774,7 @@ async function renderFullRescheduleView() {
   });
 
   // 3. Pendientes
-  const items = pkgs.map(p => {
+  const items = localPkgs.map(p => {
     const max = Math.max(0, (p.classes_total || 0) - (p.classes_used || 0));
     const current = futureCountByStudent.get(p.student_id) || 0;
     const pending = max - current;
