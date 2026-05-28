@@ -4840,7 +4840,7 @@ async function loadFromSupabase() {
   if (locations.error) { showToast('Error cargando sedes: ' + locations.error.message, 'error'); return; }
 
   STATE.locations = locations.data || [];
-  STATE.students = students.data || [];
+  STATE.students = (students.data || []).map(s => { s._searchBlob = _buildStudentSearchBlob(s); return s; });
   STATE.instructors = instructors.data || [];
   STATE.packages = packages.data || [];
   STATE.fixedBookings = fixedBookings.data || [];
@@ -6804,13 +6804,10 @@ function renderStudents() {
   else if (STATE.currentFilter === 'incomplete') list = list.filter(s => !s.data_complete);
   else if (STATE.currentFilter === 'unsigned') list = list.filter(s => !s.consent_signed && !s.consent_signed_at);
 
-  // Search
-  const q = (document.getElementById('student-search').value || '').toLowerCase().trim();
-  if (q) {
-    list = list.filter(s => {
-      const blob = `${s.first_name} ${s.last_name || ''} ${s.email || ''} ${s.document_number || ''} ${s.phone || ''}`.toLowerCase();
-      return blob.includes(q);
-    });
+  // Search (usa helper centralizado: tildes-insensible, multi-token AND)
+  const q = document.getElementById('student-search').value || '';
+  if (q.trim()) {
+    list = list.filter(s => studentMatchesSearch(s, q));
   }
 
   document.getElementById('students-sub').textContent = `${list.length} alumnos · sede ${loc.name}`;
@@ -7749,14 +7746,12 @@ function renderAssignStep1Search() {
 function renderAssignStudentList() {
   const ctx = STATE.assignCtx;
   const loc = STATE.locations.find(l => l.id === ctx.locationId);
-  const q = (document.getElementById('assign-search')?.value || '').toLowerCase().trim();
+  const q = document.getElementById('assign-search')?.value || '';
   // Filtrar alumnos: por sede del coordinador o todos (decisión: por sede)
   let list = (STATE.students || []).filter(s => s.location_id === ctx.locationId);
-  if (q) {
-    list = list.filter(s => {
-      const fullname = `${s.first_name || ''} ${s.last_name || ''}`.toLowerCase();
-      return fullname.includes(q) || (s.email || '').toLowerCase().includes(q) || (s.document_number || '').includes(q);
-    });
+  if (q.trim()) {
+    // Usa helper centralizado: tildes-insensible, multi-token AND
+    list = list.filter(s => studentMatchesSearch(s, q));
   }
   // Ordenar: primero los que tienen modalidad flexible o trial, luego fixed
   list.sort((a, b) => {
@@ -11462,6 +11457,68 @@ async function deleteAllSchedulesForInstructor() {
 // ============================================
 // FILTERS, SEARCH, NAV
 // ============================================
+/**
+ * ============================================================
+ * BÚSQUEDA DE ALUMNOS - SPEC PARA FUTUROS CAMBIOS
+ * ============================================================
+ *
+ * REGLA: cualquier buscador NUEVO que filtre alumnos DEBE usar
+ * `studentMatchesSearch(student, query)`. No reinventes el filtrado
+ * con `.toLowerCase().includes()` porque eso rompe con tildes
+ * (en JS, "María".toLowerCase() === "maría", NO "maria").
+ *
+ * El helper:
+ *   - Ignora tildes (María = Maria, José = Jose, Ñuñez = Nunez)
+ *   - Ignora mayúsculas y espacios extras
+ *   - Soporta multi-token AND ("maria castro" matchea aunque estén
+ *     en distinto orden o en distintos campos)
+ *   - Busca en: first_name, last_name, email, document_number,
+ *     phone (normalizado sin espacios/guiones/paréntesis)
+ *
+ * Si necesitas extender qué campos se buscan, edita
+ * `_buildStudentSearchBlob()` y se aplica a todos los buscadores.
+ *
+ * BUSCADORES QUE LO USAN (mantener sincronizado al agregar uno nuevo):
+ *   - renderDashStudentSearch  (topbar Mi día coord)
+ *   - renderStudents           (sección Alumnos)
+ *   - renderAssignStudentList  (modal Asignar alumno coord)
+ *   - instructorRenderResults  (modal del profesor)
+ *
+ * Para máxima performance, el blob normalizado se pre-computa en
+ * `loadFromSupabase` (campo `student._searchBlob`). Si por alguna
+ * razón no está pre-computado, el helper lo calcula al vuelo.
+ * ============================================================
+ */
+function normalizeForSearch(str) {
+  return (str || '').toString()
+    .normalize('NFD')                  // descompone "í" en "i" + acento combinante
+    .replace(/[\u0300-\u036f]/g, '')   // elimina los signos diacríticos
+    .toLowerCase()
+    .trim();
+}
+
+function _buildStudentSearchBlob(s) {
+  if (!s) return '';
+  const parts = [
+    s.first_name || '',
+    s.last_name || '',
+    s.email || '',
+    s.document_number || '',
+    (s.phone || '').replace(/[\s\-()]/g, ''), // teléfono sin espacios/guiones/paréntesis
+  ];
+  return normalizeForSearch(parts.join(' '));
+}
+
+function studentMatchesSearch(student, query) {
+  if (!student) return false;
+  const q = normalizeForSearch(query);
+  if (!q) return true;
+  const blob = student._searchBlob || _buildStudentSearchBlob(student);
+  // Multi-token AND: todas las palabras del query deben aparecer en algún campo
+  const tokens = q.split(/\s+/).filter(Boolean);
+  return tokens.every(t => blob.includes(t));
+}
+
 function filterStudents() { renderStudents(); }
 function setFilter(btn) {
   document.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('is-active'));
@@ -11572,15 +11629,8 @@ function renderDashStudentSearch(query) {
     return;
   }
 
-  const norm = s => (s || '').toLowerCase();
-  const allMatches = (STATE.students || [])
-    .filter(s => {
-      const fullName = `${norm(s.first_name)} ${norm(s.last_name)}`;
-      return fullName.includes(q)
-        || norm(s.email).includes(q)
-        || norm(s.document_number).includes(q)
-        || norm(s.phone).includes(q);
-    });
+  // Usa helper centralizado: tildes-insensible, multi-token AND
+  const allMatches = (STATE.students || []).filter(s => studentMatchesSearch(s, query));
 
   if (allMatches.length === 0) {
     results.style.display = 'block';
@@ -17886,7 +17936,7 @@ async function instructorOpenAddStudent(dateIso, hour, locationId) {
   try {
     const { data: freshStudents } = await sb.from('students').select('*').order('first_name');
     if (freshStudents) {
-      STATE.students = freshStudents;
+      STATE.students = freshStudents.map(s => { s._searchBlob = _buildStudentSearchBlob(s); return s; });
       // Re-rendear si el modal sigue abierto y el usuario no escribió todavía
       if (modal.classList.contains('is-open') && STATE.instAddMode === 'list') {
         instructorRenderAddSearch('', { mode: 'list' });
@@ -17977,9 +18027,10 @@ function _instAddCtxLabel() {
 function instructorRenderResults(query) {
   const results = document.getElementById('inst-add-results');
   if (!results) return;
-  // Normalizar query: lowercase + sin acentos
-  const norm = (str) => (str || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-  const q = norm(query).trim();
+  // Helper de normalización local (también usado para highlight). El filtrado
+  // se centraliza en `studentMatchesSearch` (ver doc bloque al inicio de helpers).
+  const norm = normalizeForSearch;
+  const q = norm(query);
   const mode = STATE.instAddMode || 'list';
 
   // Helper para escapar y resaltar coincidencia (matching insensible a acentos)
@@ -17995,12 +18046,8 @@ function instructorRenderResults(query) {
 
   let matches = STATE.students || [];
   if (q) {
-    matches = matches.filter(s => {
-      const name = norm((s.first_name || '') + ' ' + (s.last_name || ''));
-      const phone = (s.phone || '').replace(/\s/g, '');
-      const doc = norm(s.document_number || '');
-      return name.includes(q) || phone.includes(q) || doc.includes(q);
-    });
+    // Usa helper centralizado: tildes-insensible, multi-token AND
+    matches = matches.filter(s => studentMatchesSearch(s, query));
   } else {
     // Sin query: ordenar alfabéticamente
     matches = [...matches].sort((a, b) => (a.first_name || '').localeCompare(b.first_name || ''));
