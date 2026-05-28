@@ -20787,7 +20787,7 @@ Soy {coordinadora} de FIT Studio {sede}. Te recordamos tus clases de Pilates de 
 
 ¡Te esperamos! 🤍`;
 
-const CONFIRM_DEFAULT_LINE_FORMAT = `📅 {dia} {fecha} · {hora}`;
+const CONFIRM_DEFAULT_LINE_FORMAT = `⏰ {dia} {fecha} · {hora}`;
 
 const CONFIRM_TEMPLATE_KEY = 'fit_confirm_template_v1';
 const CONFIRM_LINE_FORMAT_KEY = 'fit_confirm_line_format_v1';
@@ -21201,7 +21201,7 @@ function renderConfirmTemplateEditor() {
     <div style="font-size: 10.5px; color: var(--ink-mute); text-transform: uppercase; letter-spacing: 0.12em; font-weight: 600; margin: 4px 0 6px;">💬 Mensaje</div>
     <textarea id="confirm-template-textarea" style="width: 100%; min-height: 180px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 10px; font-family: -apple-system, BlinkMacSystemFont, sans-serif; font-size: 13px; line-height: 1.55; color: var(--ink); background: var(--fit-cream); resize: vertical;">${escape(tpl)}</textarea>
 
-    <div style="font-size: 10.5px; color: var(--ink-mute); text-transform: uppercase; letter-spacing: 0.12em; font-weight: 600; margin: 14px 0 6px;">📅 Formato de cada clase</div>
+    <div style="font-size: 10.5px; color: var(--ink-mute); text-transform: uppercase; letter-spacing: 0.12em; font-weight: 600; margin: 14px 0 6px;">⏰ Formato de cada clase</div>
     <input id="confirm-template-line" value="${escape(lf)}" style="width: 100%; padding: 9px 12px; border: 1px solid var(--line); border-radius: 8px; font-family: 'JetBrains Mono', monospace; font-size: 12px; background: var(--fit-cream);" />
     <div style="font-size: 11px; color: var(--ink-mute); margin-top: 6px;">
       Variables aquí: <code style="background: var(--fit-lavender-pale); padding: 1px 5px; border-radius: 3px; font-size: 10.5px;">{dia}</code> · <code style="background: var(--fit-lavender-pale); padding: 1px 5px; border-radius: 3px; font-size: 10.5px;">{fecha}</code> · <code style="background: var(--fit-lavender-pale); padding: 1px 5px; border-radius: 3px; font-size: 10.5px;">{hora}</code>
