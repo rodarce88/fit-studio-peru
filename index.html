@@ -7789,7 +7789,7 @@ async function selectStudentForAssign(studentId) {
       .select('id, classes_total, classes_used, classes_recoverable, purchase_date, start_date, is_frozen, status')
       .eq('student_id', studentId)
       .eq('is_frozen', false)
-      .order('purchase_date', { ascending: true });
+      .order('purchase_date', { ascending: true }).order('created_at', { ascending: true });
     const pkg = (allPkgs || []).find(p =>
       (!p.status || p.status === 'active') &&
       (p.classes_used || 0) < (p.classes_total || 0)
@@ -8100,7 +8100,7 @@ async function getStudentBookingCapacity(studentId) {
     .select('id, classes_total, classes_used, classes_recoverable, purchase_date, start_date, is_frozen')
     .eq('student_id', studentId)
     .eq('is_frozen', false)
-    .order('purchase_date', { ascending: true });
+    .order('purchase_date', { ascending: true }).order('created_at', { ascending: true });
 
   const pkg = (allPkgs || []).find(p => (p.classes_used || 0) < (p.classes_total || 0));
 
@@ -8224,7 +8224,7 @@ async function loadScheduleEditorData() {
   const pkgResp = await sb.from('student_packages')
     .select('id, classes_total, classes_used, classes_recoverable, purchase_date, start_date, is_frozen, status, packages(name, price_pen)')
     .eq('student_id', ed.studentId)
-    .order('purchase_date', { ascending: true });
+    .order('purchase_date', { ascending: true }).order('created_at', { ascending: true });
   if (pkgResp.error) throw new Error('Paquetes: ' + pkgResp.error.message);
 
   const allPackages = pkgResp.data || [];
@@ -12547,7 +12547,7 @@ async function getOrCreateActivePackageId(studentId) {
   const { data: pkgs } = await sb.from('student_packages')
     .select('id, package_id, classes_total, classes_used, purchase_date, start_date, is_frozen, price_paid, status')
     .eq('student_id', studentId)
-    .order('purchase_date', { ascending: true });
+    .order('purchase_date', { ascending: true }).order('created_at', { ascending: true });
 
   const active = (pkgs || []).find(p => {
     if (p.is_frozen) return false;
@@ -13189,7 +13189,7 @@ async function addStudentToClass(studentId) {
       .select('id, classes_total, classes_used, purchase_date, start_date, is_frozen, status')
       .eq('student_id', studentId)
       .eq('is_frozen', false)
-      .order('purchase_date', { ascending: true });
+      .order('purchase_date', { ascending: true }).order('created_at', { ascending: true });
 
     const sortedPkgs = (allPkgs || []).filter(p => !p.is_frozen && (!p.status || p.status === 'active'));
     const activePkg = sortedPkgs.find(p => (p.classes_used || 0) < (p.classes_total || 0));
@@ -15266,7 +15266,7 @@ async function loadActivePackagesForStudents(studentIds) {
     .select('id, student_id, classes_total, classes_used, status, is_active, is_frozen, purchase_date, packages(name)')
     .in('student_id', studentIds)
     .eq('is_active', true)
-    .order('purchase_date', { ascending: true }); // FIFO: el más viejo es el activo
+    .order('purchase_date', { ascending: true }).order('created_at', { ascending: true }); // FIFO: el más viejo es el activo
   if (error) { console.warn('loadActivePackagesForStudents error:', error); return new Map(); }
 
   const map = new Map();
@@ -18679,7 +18679,7 @@ async function renderStudentRecoverables(stud) {
     .select('purchase_date, start_date, classes_total, classes_used, is_frozen, status')
     .eq('student_id', stud.id)
     .eq('is_frozen', false)
-    .order('purchase_date', { ascending: true });
+    .order('purchase_date', { ascending: true }).order('created_at', { ascending: true });
   const pkg = (allPkgs || []).find(p =>
     (!p.status || p.status === 'active') &&
     (p.classes_used || 0) < (p.classes_total || 0)
