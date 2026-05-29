@@ -23703,6 +23703,58 @@ function countClassForPay(cls) {
 }
 
 // Calcula el reporte completo del profesor en un rango
+function renderPayByLocationBreakdown(report) {
+  // Solo mostrar si hay al menos 1 sede con monto > 0
+  const entries = Object.values(report.byLocation || {})
+    .filter(e => e.total > 0)
+    .sort((a, b) => b.total - a.total); // mayor a menor monto
+  if (entries.length === 0) return '';
+  // Mostrar TODAS las sedes activas (aunque tengan 0), para que el profe vea de un vistazo en qué sede no ganó nada.
+  // Pero si todas son 0, no mostrar nada. Y si solo hay 1 sede en total, tampoco tiene sentido el desglose.
+  const totalAll = entries.reduce((s, e) => s + e.total, 0);
+  const allLocs = (STATE.locations || []).filter(l => l.is_active !== false);
+  if (allLocs.length <= 1) return ''; // sistema con 1 sola sede → sin desglose
+
+  // Construir filas: una por cada sede activa, con su monto (puede ser 0)
+  const rows = allLocs.map(loc => {
+    const e = report.byLocation[loc.id] || { total: 0, classes: 0, students: 0 };
+    const pct = totalAll > 0 ? (e.total / totalAll) * 100 : 0;
+    const color = loc.color || '#7C3AED';
+    return { loc, total: e.total, classes: e.classes, students: e.students, pct, color };
+  }).sort((a, b) => b.total - a.total);
+
+  const html = `
+    <div style="background: white; border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; margin-bottom: 14px;">
+      <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 12px;">
+        <div style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.8px; color: var(--ink-mute); font-weight: 600;">Cobrable por sede</div>
+        <div style="font-size: 11px; color: var(--ink-soft); font-style: italic;">solo lo ya generado · no proyectado</div>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 10px;">
+        ${rows.map(r => `
+          <div>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; font-size: 12.5px;">
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <span style="display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: ${r.color}; flex-shrink: 0;"></span>
+                <span style="font-weight: 500; color: var(--ink);">${escape(r.loc.name)}</span>
+                ${r.classes > 0 ? `<span style="font-size: 11px; color: var(--ink-mute);">· ${r.classes} clase${r.classes === 1 ? '' : 's'}</span>` : `<span style="font-size: 11px; color: var(--ink-faint); font-style: italic;">· sin clases</span>`}
+              </div>
+              <div style="font-weight: 600; color: var(--ink); font-variant-numeric: tabular-nums;">S/ ${r.total.toFixed(2)}</div>
+            </div>
+            <div style="background: var(--line-soft); border-radius: 999px; height: 8px; overflow: hidden;">
+              <div style="background: ${r.color}; height: 100%; width: ${r.pct.toFixed(1)}%; transition: width 0.3s ease; border-radius: 999px;"></div>
+            </div>
+          </div>
+        `).join('')}
+      </div>
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 14px; padding-top: 10px; border-top: 1px solid var(--line-soft);">
+        <div style="font-size: 12px; color: var(--ink-mute); font-weight: 500;">Total cobrable</div>
+        <div style="font-family: var(--display); font-style: italic; font-size: 22px; color: var(--fit-purple-deep); font-variant-numeric: tabular-nums;">S/ ${totalAll.toFixed(2)}</div>
+      </div>
+    </div>
+  `;
+  return html;
+}
+
 async function calculateInstructorPayReport(instructorId, startIso, endIso) {
   const config = getPayConfigFor(instructorId);
   const classes = await loadInstructorClassesInRange(instructorId, startIso, endIso);
@@ -23757,13 +23809,27 @@ async function calculateInstructorPayReport(instructorId, startIso, endIso) {
   const totalStudentsCounted = days.reduce((sum, d) => sum + d.dayStudentsCounted, 0);
   const totalPending = days.reduce((sum, d) => sum + d.dayPending, 0);
 
+  // Desglose por sede: solo pago real (cls.pay), no proyectado, y solo clases no vacías.
+  // byLocation: { [location_id]: { total, classes, students } }
+  const byLocation = {};
+  days.forEach(d => {
+    d.classes.forEach(c => {
+      if (c.isEmpty) return;
+      const locId = c.location_id || 'unknown';
+      if (!byLocation[locId]) byLocation[locId] = { location_id: locId, total: 0, classes: 0, students: 0 };
+      byLocation[locId].total += c.pay;
+      byLocation[locId].classes += 1;
+      byLocation[locId].students += c.countInfo.counted;
+    });
+  });
+
   // Si el periodo ya terminó, no hay proyección
   const periodEnded = endIso < todayIso;
   const projection = periodEnded ? total : Math.round(totalProjectedPay);
 
   return {
     config, days, total, totalClassesCounted, totalStudentsCounted, totalPending,
-    projection,
+    projection, byLocation,
     periodStart: startIso, periodEnd: endIso
   };
 }
@@ -23891,6 +23957,8 @@ async function _renderPayViewFor(inst, container, isCoordinator) {
           </div>
         </div>
       ` : ''}
+
+      ${renderPayByLocationBreakdown(report)}
 
       ${report.days.length === 0 ? `
         <div style="background:white; border:1px solid var(--line); border-radius:14px; padding:32px; text-align:center; color: var(--ink-mute); font-size: 13px;">
