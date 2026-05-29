@@ -3536,6 +3536,7 @@
     <div class="modal-body">
       <form id="student-form" onsubmit="event.preventDefault(); saveStudent();">
         <input type="hidden" id="f-student-id" />
+        <input type="hidden" id="f-original-modality" />
         <div class="form-grid">
           <div class="form-row">
             <label>Nombre <span class="req">*</span></label>
@@ -9452,8 +9453,11 @@ function openStudentModal(id) {
   f('f-doc-num').value = s?.document_number || '';
   f('f-birth-date').value = s?.birth_date || '';
   f('f-modality').value = s?.modality || 'flexible';
+  // Guardamos la modalidad original para detectar cambios al editar
+  // (clave para mostrar el campo de monkeyfit-classes solo cuando hay cambio real)
+  f('f-original-modality').value = s?.modality || '';
   // Si es edit y la alumna ya tiene modalidad monkeyfit, no le pedimos clases otra vez (ya tiene paquete creado)
-  // Si es nuevo y se selecciona monkeyfit, mostramos el campo. Reset valor.
+  // Si es nuevo o cambió a monkeyfit, mostramos el campo. Reset valor.
   f('f-monkeyfit-classes').value = '';
   toggleMonkeyfitField();
   f('f-emergency-name').value = s?.emergency_contact_name || '';
@@ -9711,10 +9715,13 @@ function toggleModalityFields() {
   const trialRow = document.getElementById('f-trial-expiry-row');
   const trialDate = document.getElementById('f-trial-expiry');
   const studentId = document.getElementById('f-student-id')?.value || '';
+  const originalModality = document.getElementById('f-original-modality')?.value || '';
   if (!sel) return;
   const isEdit = !!studentId;
+  // Detectar si necesita pedir clases monkeyfit: caso nuevo, o caso edit donde cambió A monkeyfit
+  const isMonkeyfitNew = sel.value === 'monkeyfit' && (!isEdit || originalModality !== 'monkeyfit');
   // MonkeyFit field
-  if (mfRow) mfRow.style.display = (sel.value === 'monkeyfit' && !isEdit) ? '' : 'none';
+  if (mfRow) mfRow.style.display = isMonkeyfitNew ? '' : 'none';
   // Trial field
   if (trialRow) {
     trialRow.style.display = (sel.value === 'trial' && !isEdit) ? '' : 'none';
@@ -9725,11 +9732,13 @@ function toggleModalityFields() {
       trialDate.value = exp.toISOString().split('T')[0];
     }
   }
-  // Pre-validación catálogo (solo para nuevas alumnas, no en edición)
+  // Pre-validación catálogo. En edit, solo validar si cambia a monkeyfit (caso nuevo paquete)
   if (!isEdit) {
     validateModalityCatalog(sel.value);
+  } else if (isMonkeyfitNew) {
+    validateModalityCatalog(sel.value);
   } else {
-    // En edición, asegurar banner oculto y botón habilitado
+    // En edición sin cambio relevante, asegurar banner oculto y botón habilitado
     hideModalityError();
   }
 }
@@ -9847,10 +9856,13 @@ async function saveStudent() {
   const id = f('f-student-id').value;
   const isEdit = !!id;
   const modality = f('f-modality').value;
+  const originalModality = f('f-original-modality').value || '';
+  // Detectar si requiere crear paquete monkeyfit: nuevo, o edit con cambio A monkeyfit
+  const isMonkeyfitNew = modality === 'monkeyfit' && (!isEdit || originalModality !== 'monkeyfit');
 
   // Validación específica MonkeyFit: requerir clases adquiridas
   let mfClasses = 0;
-  if (modality === 'monkeyfit' && !isEdit) {
+  if (isMonkeyfitNew) {
     mfClasses = parseInt(f('f-monkeyfit-classes').value || '0', 10);
     if (!mfClasses || mfClasses < 1) {
       showToast('Indica cuántas clases adquirió por MonkeyFit', 'error');
@@ -9947,57 +9959,61 @@ async function saveStudent() {
           alert('Error E-PKG-102\n\nLa alumna fue creada pero ocurrió un error inesperado al crear su paquete de prueba.\n\nDetalle técnico: ' + (e?.message || String(e)) + '\n\nAcción requerida: asígnale un paquete manualmente desde su detalle. Comunica el código E-PKG-102 al administrador del sistema.');
         }
       }
+    }
 
-      // Si es nuevo alumno MonkeyFit, crear el paquete automáticamente
-      if (modality === 'monkeyfit' && mfClasses > 0) {
-        try {
-          const mfPkg = (STATE.packages || []).find(p =>
-            (p.name || '').toLowerCase().includes('monkeyfit') ||
-            (p.name || '').toLowerCase().includes('monkey fit')
-          );
-          if (!mfPkg) {
-            alert('Error E-PKG-002\n\nNo se pudo crear el paquete MonkeyFit porque el catálogo "Pase MonkeyFit" no se encuentra disponible en la base de datos.\n\nLa alumna fue creada SIN paquete. Asígnale uno manualmente desde su detalle, o comunica este código de error al administrador del sistema para resolverlo.');
+    // Crear paquete MonkeyFit automáticamente.
+    // Aplica en 2 casos:
+    //   1) Nuevo alumno con modalidad monkeyfit
+    //   2) Edit donde se cambió DESDE otra modalidad A monkeyfit
+    // En ambos, isMonkeyfitNew = true y mfClasses fue validado al inicio.
+    if (isMonkeyfitNew && mfClasses > 0) {
+      try {
+        const mfPkg = (STATE.packages || []).find(p =>
+          (p.name || '').toLowerCase().includes('monkeyfit') ||
+          (p.name || '').toLowerCase().includes('monkey fit')
+        );
+        if (!mfPkg) {
+          alert('Error E-PKG-002\n\nNo se pudo crear el paquete MonkeyFit porque el catálogo "Pase MonkeyFit" no se encuentra disponible en la base de datos.\n\nLa alumna fue ' + (isEdit ? 'actualizada' : 'creada') + ' SIN paquete MonkeyFit. Asígnale uno manualmente desde su detalle, o comunica este código de error al administrador del sistema para resolverlo.');
+        } else {
+          const todayIso = new Date().toISOString().split('T')[0];
+          // Vencimiento default: 30 días desde hoy (pase mensual MonkeyFit)
+          const exp = new Date();
+          exp.setDate(exp.getDate() + 30);
+          const expIso = exp.toISOString().split('T')[0];
+
+          const pkgData = {
+            student_id: result.data.id,
+            package_id: mfPkg.id,
+            classes_total: mfClasses,
+            sessions_total: mfClasses,
+            classes_used: 0,
+            classes_recoverable: 0,
+            price_paid: 0,
+            purchase_date: todayIso,
+            start_date: todayIso,
+            expiration_date: expIso,
+            is_active: true,
+            is_frozen: false,
+            status: 'active',
+            created_by_user_id: CURRENT_USER?.record?.id || null,
+          };
+          const pkgResult = await sb.from('student_packages').insert(pkgData).select().single();
+          if (pkgResult.error) {
+            alert('Error E-PKG-103\n\nLa alumna fue ' + (isEdit ? 'actualizada' : 'creada') + ' pero ocurrió un error al crear su paquete MonkeyFit.\n\nDetalle técnico: ' + pkgResult.error.message + '\n\nAcción requerida: asígnale un paquete manualmente desde su detalle. Si el error persiste, comunica el código E-PKG-103 al administrador del sistema.');
           } else {
-            const todayIso = new Date().toISOString().split('T')[0];
-            // Vencimiento default: 30 días desde hoy (pase mensual MonkeyFit)
-            const exp = new Date();
-            exp.setDate(exp.getDate() + 30);
-            const expIso = exp.toISOString().split('T')[0];
-
-            const pkgData = {
-              student_id: result.data.id,
-              package_id: mfPkg.id,
-              classes_total: mfClasses,
-              sessions_total: mfClasses,
-              classes_used: 0,
-              classes_recoverable: 0,
-              price_paid: 0,
-              purchase_date: todayIso,
-              start_date: todayIso,
-              expiration_date: expIso,
-              is_active: true,
-              is_frozen: false,
-              status: 'active',
-              created_by_user_id: CURRENT_USER?.record?.id || null,
-            };
-            const pkgResult = await sb.from('student_packages').insert(pkgData).select().single();
-            if (pkgResult.error) {
-              alert('Error E-PKG-103\n\nLa alumna fue creada pero ocurrió un error al crear su paquete MonkeyFit.\n\nDetalle técnico: ' + pkgResult.error.message + '\n\nAcción requerida: asígnale un paquete manualmente desde su detalle. Si el error persiste, comunica el código E-PKG-103 al administrador del sistema.');
-            } else {
-              if (STATE.studentPackages) STATE.studentPackages.push(pkgResult.data);
-              try {
-                logActivity('student_package.create', {
-                  table: 'student_packages',
-                  id: pkgResult.data.id,
-                  label: `${result.data.first_name} ${result.data.last_name || ''} · Pase MonkeyFit (${mfClasses} clases)`
-                }, { source: 'monkeyfit', classes: mfClasses });
-              } catch(e) {}
-            }
+            if (STATE.studentPackages) STATE.studentPackages.push(pkgResult.data);
+            try {
+              logActivity('student_package.create', {
+                table: 'student_packages',
+                id: pkgResult.data.id,
+                label: `${result.data.first_name} ${result.data.last_name || ''} · Pase MonkeyFit (${mfClasses} clases)`
+              }, { source: isEdit ? 'monkeyfit-edit-switch' : 'monkeyfit-new', classes: mfClasses, was_modality: originalModality || null });
+            } catch(e) {}
           }
-        } catch (e) {
-          console.error('Error creando paquete MonkeyFit:', e);
-          alert('Error E-PKG-104\n\nLa alumna fue creada pero ocurrió un error inesperado al crear su paquete MonkeyFit.\n\nDetalle técnico: ' + (e?.message || String(e)) + '\n\nAcción requerida: asígnale un paquete manualmente desde su detalle. Comunica el código E-PKG-104 al administrador del sistema.');
         }
+      } catch (e) {
+        console.error('Error creando paquete MonkeyFit:', e);
+        alert('Error E-PKG-104\n\nLa alumna fue ' + (isEdit ? 'actualizada' : 'creada') + ' pero ocurrió un error inesperado al crear su paquete MonkeyFit.\n\nDetalle técnico: ' + (e?.message || String(e)) + '\n\nAcción requerida: asígnale un paquete manualmente desde su detalle. Comunica el código E-PKG-104 al administrador del sistema.');
       }
     }
 
