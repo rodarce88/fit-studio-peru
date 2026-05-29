@@ -6972,8 +6972,7 @@ function renderInstructorsScheduleGrid() {
     { idx: 0, label: 'Dom' },
   ];
 
-  // Filtrar schedules vigentes EN LA SEMANA SELECCIONADA en la sede activa
-  // Una vigencia toca la semana si: effective_from <= sunday AND effective_to >= monday
+  // Schedules vigentes en la semana (solo para detectar cambios de vigencia y dar feedback)
   const activeSchedules = STATE.schedules.filter(s =>
     s.location_id === loc.id &&
     s.is_active !== false &&
@@ -6989,20 +6988,42 @@ function renderInstructorsScheduleGrid() {
   });
   const crossesVigencia = vigenciaDates.size > 0;
 
+  // === Calcular instructores REALES por celda usando resolveInstructor ===
+  // Esto respeta overrides: cambios desde Mi día (class_sessions con instructor_id)
+  // tienen prioridad sobre el schedule base.
+  // Fechas reales de cada día de la semana (lunes a domingo)
+  const monD2 = new Date(monday + 'T12:00:00');
+  const weekDates = [];
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(monD2); d.setDate(monD2.getDate() + i);
+    weekDates.push(d);
+  }
+
   const cellMap = new Map();
-  activeSchedules.forEach(s => {
-    const key = `${s.day_of_week}-${s.hour}`;
-    if (!cellMap.has(key)) cellMap.set(key, new Set());
-    cellMap.get(key).add(s.instructor_id);
+  const presentInstructorIds = new Set();
+  const hoursByInstructor = new Map();
+  // Set para registrar celdas donde hay un override (instructor distinto al schedule base)
+  const overrideCells = new Set();
+
+  DAYS.forEach((d, di) => {
+    const dateObj = weekDates[di];
+    HOURS.forEach(h => {
+      const inst = resolveInstructor(loc.id, dateObj, d.idx, h);
+      if (!inst || inst._isUnassigned || inst._isCancelled || !inst.id) return;
+      const key = `${d.idx}-${h}`;
+      if (!cellMap.has(key)) cellMap.set(key, new Set());
+      cellMap.get(key).add(inst.id);
+      presentInstructorIds.add(inst.id);
+      hoursByInstructor.set(inst.id, (hoursByInstructor.get(inst.id) || 0) + 1);
+      if (inst._isOverride) overrideCells.add(`${key}-${inst.id}`);
+    });
   });
 
-  const presentInstructorIds = new Set();
-  activeSchedules.forEach(s => presentInstructorIds.add(s.instructor_id));
   const presentInstructors = STATE.instructors
     .filter(i => presentInstructorIds.has(i.id))
     .sort((a, b) => (a.handle || a.first_name || '').localeCompare(b.handle || b.first_name || ''));
 
-  const totalSlots = activeSchedules.length;
+  const totalSlots = Array.from(hoursByInstructor.values()).reduce((s, n) => s + n, 0);
 
   // === MINI CALENDARIO ===
   const selD = new Date(selDate + 'T12:00:00');
@@ -7159,7 +7180,10 @@ function renderInstructorsScheduleGrid() {
           if (!inst) return;
           const color = getInstructorColor(inst);
           const name = inst.handle || inst.first_name || inst.full_name || '?';
-          html += `<button onclick='openInstructorScheduleModal(${JSON.stringify(instId).replace(/'/g, "&#39;")})' title="${escape(name)} · ${formatHour(h)} ${d.label}" style="background: ${color}; color: white; padding: 3px 5px; border-radius: 4px; font-size: 10px; font-weight: 500; text-align: center; border: none; cursor: pointer; line-height: 1.2; min-height: 18px;">${escape(name)}</button>`;
+          const isOverride = overrideCells.has(`${d.idx}-${h}-${instId}`);
+          const overrideMark = isOverride ? ' *' : '';
+          const overrideTitle = isOverride ? ' · Reemplazo desde Mi día' : '';
+          html += `<button onclick='openInstructorScheduleModal(${JSON.stringify(instId).replace(/'/g, "&#39;")})' title="${escape(name)} · ${formatHour(h)} ${d.label}${overrideTitle}" style="background: ${color}; color: white; padding: 3px 5px; border-radius: 4px; font-size: 10px; font-weight: 500; text-align: center; border: none; cursor: pointer; line-height: 1.2; min-height: 18px;${isOverride ? ' outline: 1.5px dashed white; outline-offset: -3px;' : ''}">${escape(name)}${overrideMark}</button>`;
         });
         html += `</div>`;
       }
@@ -7172,7 +7196,7 @@ function renderInstructorsScheduleGrid() {
   html += `<div style="display: flex; flex-wrap: wrap; gap: 14px; margin-top: 14px; font-size: 11px;">`;
   presentInstructors.forEach(i => {
     const color = getInstructorColor(i);
-    const hrs = activeSchedules.filter(s => s.instructor_id === i.id).length;
+    const hrs = hoursByInstructor.get(i.id) || 0;
     const name = i.handle || i.first_name || i.full_name || '?';
     html += `<div style="display: flex; align-items: center; gap: 6px;"><span style="width: 12px; height: 12px; background: ${color}; border-radius: 3px;"></span><span style="color: var(--ink);">${escape(name)}</span><span style="color: var(--ink-mute);">${hrs}h</span></div>`;
   });
