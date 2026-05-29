@@ -6907,12 +6907,59 @@ function renderStudents() {
 // ============================================
 // INSTRUCTORS SCHEDULE GRID — vista general semanal de todos los profes
 // ============================================
+// State de la vista Profesores: semana seleccionada (ISO YYYY-MM-DD del lunes)
+const INSTRUCTORS_VIEW_STATE = { selectedDate: null };
+
+function getWeekRange(iso) {
+  // Devuelve { monday, sunday } como ISO strings, a partir de cualquier fecha
+  const d = new Date(iso + 'T12:00:00');
+  const dow = d.getDay(); // 0=dom 1=lun...6=sab
+  const offset = (dow + 6) % 7; // días desde el lunes anterior
+  const monday = new Date(d); monday.setDate(d.getDate() - offset);
+  const sunday = new Date(monday); sunday.setDate(monday.getDate() + 6);
+  return { monday: dateToIsoLocal(monday), sunday: dateToIsoLocal(sunday) };
+}
+
+function instructorsShiftWeek(delta) {
+  const cur = INSTRUCTORS_VIEW_STATE.selectedDate || dateToIsoLocal(new Date());
+  const d = new Date(cur + 'T12:00:00');
+  d.setDate(d.getDate() + (delta * 7));
+  INSTRUCTORS_VIEW_STATE.selectedDate = dateToIsoLocal(d);
+  renderInstructorsScheduleGrid();
+}
+
+function instructorsShiftMonth(delta) {
+  const cur = INSTRUCTORS_VIEW_STATE.selectedDate || dateToIsoLocal(new Date());
+  const d = new Date(cur + 'T12:00:00');
+  d.setMonth(d.getMonth() + delta);
+  INSTRUCTORS_VIEW_STATE.selectedDate = dateToIsoLocal(d);
+  renderInstructorsScheduleGrid();
+}
+
+function instructorsGoToToday() {
+  INSTRUCTORS_VIEW_STATE.selectedDate = dateToIsoLocal(new Date());
+  renderInstructorsScheduleGrid();
+}
+
+function instructorsSelectDay(iso) {
+  INSTRUCTORS_VIEW_STATE.selectedDate = iso;
+  renderInstructorsScheduleGrid();
+}
+
 function renderInstructorsScheduleGrid() {
   const container = document.getElementById('instructors-schedule-grid');
   if (!container) return;
 
   const loc = getCurrentLocation();
   if (!loc) { container.innerHTML = ''; return; }
+
+  // Inicializar fecha seleccionada
+  if (!INSTRUCTORS_VIEW_STATE.selectedDate) {
+    INSTRUCTORS_VIEW_STATE.selectedDate = dateToIsoLocal(new Date());
+  }
+  const selDate = INSTRUCTORS_VIEW_STATE.selectedDate;
+  const { monday, sunday } = getWeekRange(selDate);
+  const todayIso = dateToIsoLocal(new Date());
 
   const HOURS = [6,7,8,9,10,11,16,17,18,19,20];
   const DAYS = [
@@ -6924,17 +6971,24 @@ function renderInstructorsScheduleGrid() {
     { idx: 6, label: 'Sáb' },
     { idx: 0, label: 'Dom' },
   ];
-  const today = dateToIsoLocal(new Date());
 
-  // Filtrar schedules vigentes hoy en la sede activa
+  // Filtrar schedules vigentes EN LA SEMANA SELECCIONADA en la sede activa
+  // Una vigencia toca la semana si: effective_from <= sunday AND effective_to >= monday
   const activeSchedules = STATE.schedules.filter(s =>
     s.location_id === loc.id &&
     s.is_active !== false &&
-    (!s.effective_from || s.effective_from <= today) &&
-    (!s.effective_to || s.effective_to >= today)
+    (!s.effective_from || s.effective_from <= sunday) &&
+    (!s.effective_to || s.effective_to >= monday)
   );
 
-  // Mapa por celda (dow, hour) → lista de instructorIds
+  // Detectar si hay cambio de vigencia dentro de la semana
+  const vigenciaDates = new Set();
+  activeSchedules.forEach(s => {
+    if (s.effective_from && s.effective_from > monday && s.effective_from <= sunday) vigenciaDates.add(s.effective_from);
+    if (s.effective_to && s.effective_to >= monday && s.effective_to < sunday) vigenciaDates.add(s.effective_to);
+  });
+  const crossesVigencia = vigenciaDates.size > 0;
+
   const cellMap = new Map();
   activeSchedules.forEach(s => {
     const key = `${s.day_of_week}-${s.hour}`;
@@ -6942,39 +6996,145 @@ function renderInstructorsScheduleGrid() {
     cellMap.get(key).add(s.instructor_id);
   });
 
-  // Profes presentes en esta sede (para leyenda + colores)
   const presentInstructorIds = new Set();
   activeSchedules.forEach(s => presentInstructorIds.add(s.instructor_id));
   const presentInstructors = STATE.instructors
     .filter(i => presentInstructorIds.has(i.id))
     .sort((a, b) => (a.handle || a.first_name || '').localeCompare(b.handle || b.first_name || ''));
 
-  // Stats
   const totalSlots = activeSchedules.length;
 
+  // === MINI CALENDARIO ===
+  const selD = new Date(selDate + 'T12:00:00');
+  const year = selD.getFullYear();
+  const month = selD.getMonth();
+  const monthLabels = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+  const monthLabel = `${monthLabels[month]} ${year}`;
+
+  // Primer día del mes y offset
+  const firstOfMonth = new Date(year, month, 1);
+  const lastOfMonth = new Date(year, month + 1, 0);
+  const firstDow = (firstOfMonth.getDay() + 6) % 7; // 0=lun
+
+  // Etiqueta de semana (e.g. "25-31 may" o "28 may - 3 jun")
+  const monD = new Date(monday + 'T12:00:00');
+  const sunD = new Date(sunday + 'T12:00:00');
+  const sMon = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+  const weekLabel = (monD.getMonth() === sunD.getMonth())
+    ? `${monD.getDate()}–${sunD.getDate()} ${sMon[monD.getMonth()]}`
+    : `${monD.getDate()} ${sMon[monD.getMonth()]} – ${sunD.getDate()} ${sMon[sunD.getMonth()]}`;
+
+  // Generar celdas del mini calendario (siempre 6 filas × 7 cols para layout estable)
+  const calCells = [];
+  // Días previos (mes anterior)
+  for (let i = 0; i < firstDow; i++) {
+    const d = new Date(year, month, -firstDow + i + 1);
+    calCells.push({ d, current: false });
+  }
+  // Días del mes actual
+  for (let i = 1; i <= lastOfMonth.getDate(); i++) {
+    calCells.push({ d: new Date(year, month, i), current: true });
+  }
+  // Rellenar hasta 42 (6 filas)
+  while (calCells.length < 42) {
+    const last = calCells[calCells.length - 1].d;
+    const next = new Date(last); next.setDate(last.getDate() + 1);
+    calCells.push({ d: next, current: false });
+  }
+
   let html = `
+    <div style="background: white; border: 1px solid var(--line); border-radius: var(--radius-lg); padding: 14px 16px; margin-bottom: 14px; max-width: 360px;">
+      <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+        <button onclick="instructorsShiftMonth(-1)" style="width: 24px; height: 24px; border-radius: 50%; border: 1px solid var(--line); background: white; cursor: pointer; color: var(--ink-mute); padding: 0; display: flex; align-items: center; justify-content: center; font-size: 13px;" title="Mes anterior">‹</button>
+        <div style="font-family: var(--display); font-size: 14px; font-style: italic; color: var(--fit-purple); font-weight: 500;">${monthLabel}</div>
+        <button onclick="instructorsShiftMonth(1)" style="width: 24px; height: 24px; border-radius: 50%; border: 1px solid var(--line); background: white; cursor: pointer; color: var(--ink-mute); padding: 0; display: flex; align-items: center; justify-content: center; font-size: 13px;" title="Mes siguiente">›</button>
+      </div>
+      <div style="display: grid; grid-template-columns: repeat(7, 1fr); gap: 1px; margin-bottom: 2px;">
+        ${['L','M','M','J','V','S','D'].map((d, i) => `<div style="font-size: 9px; text-align: center; color: ${i === 6 ? '#C45959' : 'var(--ink-mute)'}; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600; padding: 2px 0;">${d}</div>`).join('')}
+      </div>
+      <div style="display: grid; grid-template-columns: repeat(7, 1fr); gap: 1px;">
+  `;
+
+  calCells.forEach((cell, idx) => {
+    const iso = dateToIsoLocal(cell.d);
+    const inSelectedWeek = iso >= monday && iso <= sunday;
+    const isToday = iso === todayIso;
+    const isSunday = (idx % 7) === 6;
+    const colWeek = idx % 7; // 0=lun ... 6=dom
+
+    let bg = 'transparent';
+    let color = cell.current ? 'var(--ink)' : 'var(--ink-faint)';
+    let weight = '400';
+    let border = '1px solid transparent';
+    let radius = '4px';
+
+    if (inSelectedWeek) {
+      bg = 'var(--fit-lavender-pale)';
+      color = 'var(--fit-purple)';
+      weight = '600';
+      // bordes redondeados solo en las puntas (lun y dom)
+      if (colWeek === 0) radius = '6px 0 0 6px';
+      else if (colWeek === 6) radius = '0 6px 6px 0';
+      else radius = '0';
+    }
+    if (isToday) {
+      border = '1px solid var(--fit-purple)';
+    }
+    if (isSunday && !inSelectedWeek && cell.current) {
+      color = '#C45959';
+    }
+
+    html += `<button onclick="instructorsSelectDay('${iso}')" style="aspect-ratio: 1; min-height: 28px; display: flex; align-items: center; justify-content: center; font-size: 11px; color: ${color}; font-weight: ${weight}; background: ${bg}; border: ${border}; border-radius: ${radius}; cursor: pointer; padding: 0;" title="${iso}">${cell.d.getDate()}</button>`;
+  });
+
+  html += `
+      </div>
+      <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--line-soft);">
+        <button onclick="instructorsShiftWeek(-1)" style="width: 24px; height: 24px; border-radius: 50%; border: 1px solid var(--line); background: white; cursor: pointer; color: var(--ink-mute); padding: 0; font-size: 13px;" title="Semana anterior">‹</button>
+        <div style="text-align: center; font-size: 11.5px;">
+          <span style="color: var(--ink-mute);">Semana del</span>
+          <span style="color: var(--fit-purple); font-weight: 600; margin-left: 4px;">${weekLabel}</span>
+        </div>
+        <div style="display: flex; gap: 4px;">
+          <button onclick="instructorsGoToToday()" style="height: 24px; padding: 0 10px; border-radius: 999px; border: 1px solid var(--line); background: white; cursor: pointer; color: var(--ink-mute); font-size: 10.5px; font-weight: 500;">Hoy</button>
+          <button onclick="instructorsShiftWeek(1)" style="width: 24px; height: 24px; border-radius: 50%; border: 1px solid var(--line); background: white; cursor: pointer; color: var(--ink-mute); padding: 0; font-size: 13px;" title="Semana siguiente">›</button>
+        </div>
+      </div>
+    </div>
+  `;
+
+  // === GRILLA SEMANAL ===
+  html += `
     <div style="background: white; border: 1px solid var(--line); border-radius: var(--radius-lg); padding: 22px 24px;">
       <div style="display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 4px; flex-wrap: wrap; gap: 12px;">
         <div>
           <div style="font-family: var(--display); font-size: 18px; color: var(--fit-purple); font-style: italic;">Grilla semanal · ${escape(loc.name)}</div>
-          <div style="font-size: 12px; color: var(--ink-mute); margin-top: 2px;">Click en una celda para editar los horarios de ese profesor</div>
+          <div style="font-size: 12px; color: var(--ink-mute); margin-top: 2px;">${weekLabel} · click en una celda para editar los horarios de ese profesor</div>
         </div>
         <div style="font-size: 12px; color: var(--ink-mute);">${presentInstructors.length} profesor${presentInstructors.length === 1 ? '' : 'es'} · ${totalSlots} turno${totalSlots === 1 ? '' : 's'} semanales</div>
       </div>
   `;
 
+  if (crossesVigencia) {
+    const fechas = Array.from(vigenciaDates).sort();
+    const fechasStr = fechas.map(f => {
+      const d = new Date(f + 'T12:00:00');
+      return `${d.getDate()} ${sMon[d.getMonth()]}`;
+    }).join(' / ');
+    html += `<div style="margin-top: 10px; padding: 8px 12px; background: #FFF8E0; border: 1px solid #E8D870; border-radius: 6px; font-size: 11.5px; color: #6B5500;">⚠ Esta semana cruza un cambio de vigencia (${fechasStr}). La grilla puede mostrar turnos de ambos períodos superpuestos.</div>`;
+  }
+
   if (presentInstructors.length === 0) {
     html += `
       <div style="padding: 40px 20px; text-align: center; color: var(--ink-mute); background: var(--bg); border-radius: var(--radius-md); margin-top: 16px;">
-        <div style="font-family: var(--display); font-size: 16px; font-style: italic; margin-bottom: 4px;">Sin horarios asignados en ${escape(loc.name)}</div>
-        <div style="font-size: 12px;">Asigna horarios a tus profesores haciendo click en "Horarios" en cada card.</div>
+        <div style="font-family: var(--display); font-size: 16px; font-style: italic; margin-bottom: 4px;">Sin horarios vigentes en ${escape(loc.name)} esta semana</div>
+        <div style="font-size: 12px;">Navega a otra semana o asigna horarios desde el card del profesor.</div>
       </div>
     </div>`;
     container.innerHTML = html;
     return;
   }
 
-  // Grid header
   html += `
     <div style="margin-top: 16px; border: 1px solid var(--line); border-radius: var(--radius-md); overflow: hidden;">
       <div style="display: grid; grid-template-columns: 56px repeat(7, 1fr); background: var(--bg); border-bottom: 1px solid var(--line); font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--ink-mute);">
@@ -7007,9 +7167,8 @@ function renderInstructorsScheduleGrid() {
     html += `</div>`;
   });
 
-  html += `</div>`; // close grid
+  html += `</div>`;
 
-  // Leyenda con horas totales por profesor en esta sede
   html += `<div style="display: flex; flex-wrap: wrap; gap: 14px; margin-top: 14px; font-size: 11px;">`;
   presentInstructors.forEach(i => {
     const color = getInstructorColor(i);
