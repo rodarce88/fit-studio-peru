@@ -7797,6 +7797,14 @@ async function toggleConfirmedForCell(studentId, dateIso, hour, locationId) {
       STATE.scheduleWeekBookings = STATE.scheduleWeekBookings || [];
       STATE.scheduleWeekBookings.push(booking);
       showToast('✓ Confirmada', 'success');
+      try {
+        const stud = STATE.students.find(s => s.id === studentId);
+        const studName = stud ? `${stud.first_name || ''} ${stud.last_name || ''}`.trim() : 'Alumna';
+        logActivity('session_booking.create', {
+          table: 'session_bookings', id: booking.id,
+          label: `${studName} · ${session.session_date} ${formatHour(session.hour)} · confirmación fija`
+        }, { student_id: studentId, session_id: session.id, source: 'fixed', from: 'calendar_confirm' });
+      } catch(e) {}
     } else if (booking.confirmed_at) {
       // Ya está confirmada → desmarcar
       const { error } = await sb.from('session_bookings').update({ confirmed_at: null }).eq('id', booking.id);
@@ -7829,8 +7837,10 @@ async function copyConfirmMessageForCell(studentId, dateIso, hour, locationId) {
   if (!student) return;
   const loc = STATE.locations.find(l => l.id === locationId);
   const msg = _buildConfirmMessageForCell(student, dateIso, hour, loc?.name || '');
+  let ok = false;
   try {
     await navigator.clipboard.writeText(msg);
+    ok = true;
     showToast(`✓ Mensaje copiado · ${student.first_name}`, 'success');
   } catch (err) {
     // Fallback para browsers sin clipboard API
@@ -7839,9 +7849,18 @@ async function copyConfirmMessageForCell(studentId, dateIso, hour, locationId) {
     ta.style.position = 'fixed'; ta.style.opacity = '0';
     document.body.appendChild(ta);
     ta.select();
-    try { document.execCommand('copy'); showToast(`✓ Mensaje copiado · ${student.first_name}`, 'success'); }
+    try { document.execCommand('copy'); ok = true; showToast(`✓ Mensaje copiado · ${student.first_name}`, 'success'); }
     catch { showToast('No se pudo copiar', 'error'); }
     document.body.removeChild(ta);
+  }
+  if (ok) {
+    try {
+      const studName = `${student.first_name || ''} ${student.last_name || ''}`.trim();
+      logActivity('confirmation.copy', {
+        table: 'students', id: studentId,
+        label: `${studName} · ${dateIso} ${formatHour(hour)}`
+      }, { student_id: studentId, date: dateIso, hour, location_id: locationId, channel: 'clipboard' });
+    } catch(e) {}
   }
 }
 
@@ -9376,6 +9395,22 @@ async function _confirmScheduleEditorChangesImpl(toAdd, toCancel) {
     if (added > 0) parts.push(`+${added}`);
     if (cancelled > 0) parts.push(`−${cancelled}`);
     showToast(`✓ Cambios guardados (${parts.join(', ')})`, 'success');
+    try {
+      const stud = STATE.students.find(s => s.id === ed.studentId);
+      const studName = stud ? `${stud.first_name || ''} ${stud.last_name || ''}`.trim() : 'Alumna';
+      if (added > 0) {
+        logActivity('session_booking.create', {
+          table: 'session_bookings', id: null,
+          label: `${studName} · ${added} clase${added === 1 ? '' : 's'} agendada${added === 1 ? '' : 's'}`
+        }, { student_id: ed.studentId, added, cancelled, source, from: 'schedule_editor' });
+      }
+      if (cancelled > 0) {
+        logActivity('session_booking.cancel', {
+          table: 'session_bookings', id: null,
+          label: `${studName} · ${cancelled} clase${cancelled === 1 ? '' : 's'} cancelada${cancelled === 1 ? '' : 's'}`
+        }, { student_id: ed.studentId, cancelled, from: 'schedule_editor' });
+      }
+    } catch(e) {}
   }
   if (errors > 0) showToast(`${errors} error${errors === 1 ? '' : 'es'} al guardar`, 'error');
 
@@ -13149,6 +13184,18 @@ async function confirmMoveStudent() {
   }
 
   showToast('✓ Alumno movido correctamente', 'success');
+  try {
+    const stud = STATE.students.find(s => s.id === MOVE_CTX.studentId);
+    const studName = stud ? `${stud.first_name || ''} ${stud.last_name || ''}`.trim() : 'Alumna';
+    logActivity('session_booking.move', {
+      table: 'session_bookings', id: originalBooking ? originalBooking.id : null,
+      label: `${studName} · movida a ${newDateStr} ${formatHour(newHour)}`
+    }, {
+      student_id: MOVE_CTX.studentId,
+      from_session_id: fromSessionId, to_session_id: destSessionId,
+      new_date: newDateStr, new_hour: newHour, reason
+    });
+  } catch(e) {}
   closeModals();
   await loadDayData();
   renderTimeline();
@@ -13468,6 +13515,14 @@ async function executeReplacement(bookingToCancelId, studentId, hour) {
   closeReplacementModal();
   closeModals();
   showToast(`${student.first_name} agregado · clase agendada movida a hoy`, 'success');
+  try {
+    const studName = `${student.first_name || ''} ${student.last_name || ''}`.trim();
+    const todayIso = dateToIsoLocal(STATE.currentDate);
+    logActivity('session_booking.create', {
+      table: 'session_bookings', id: null,
+      label: `${studName} · ${todayIso} ${formatHour(ADD_FLEX_CTX.hour)} · reemplazo`
+    }, { student_id: studentId, session_id: sessionId, source, from: 'replacement_flow' });
+  } catch(e) {}
   await loadAll();
 }
 
@@ -13582,6 +13637,14 @@ async function addStudentToClass(studentId) {
   else STATE.sessionBookings.push(data);
 
   showToast(`✓ ${student.first_name} agregado/a a la clase de ${formatHour(ADD_FLEX_CTX.hour)}`, 'success');
+  try {
+    const studName = `${student.first_name || ''} ${student.last_name || ''}`.trim();
+    const todayIso = dateToIsoLocal(STATE.currentDate);
+    logActivity('session_booking.create', {
+      table: 'session_bookings', id: data.id,
+      label: `${studName} · ${todayIso} ${formatHour(ADD_FLEX_CTX.hour)} · agregada al día`
+    }, { student_id: studentId, session_id: sessionId, source, from: 'add_flexible' });
+  } catch(e) {}
   closeModals();
   renderTimeline();
 }
@@ -13865,7 +13928,18 @@ async function _createBookingForCurrentSlot(studentId, hour, source) {
     const { data } = await sb.from('session_bookings').insert({
       session_id: sessionId, student_id: studentId, source,
     }).select().single();
-    if (data) STATE.sessionBookings.push(data);
+    if (data) {
+      STATE.sessionBookings.push(data);
+      try {
+        const stud = STATE.students.find(s => s.id === studentId);
+        const studName = stud ? `${stud.first_name || ''} ${stud.last_name || ''}`.trim() : 'Alumna';
+        const todayIso = dateToIsoLocal(STATE.currentDate);
+        logActivity('session_booking.create', {
+          table: 'session_bookings', id: data.id,
+          label: `${studName} · ${todayIso} ${formatHour(hour)} · ${source || 'sin source'}`
+        }, { student_id: studentId, session_id: sessionId, source, from: 'mi_dia_slot' });
+      } catch(e) {}
+    }
   }
 }
 
@@ -17986,6 +18060,13 @@ async function instructorWriteAttendance(studentId, dateIso, hour, locationId, s
         }).select().single();
         if (error) throw error;
         booking = newB;
+        try {
+          const studName = stud ? `${stud.first_name || ''} ${stud.last_name || ''}`.trim() : 'Alumna';
+          logActivity('session_booking.create', {
+            table: 'session_bookings', id: booking.id,
+            label: `${studName} · ${dateIso} ${formatHour(hour)} · creado al marcar asistencia`
+          }, { student_id: studentId, session_id: session.id, source, from: 'instructor_attendance' });
+        } catch(e) {}
       }
     }
 
@@ -18584,6 +18665,14 @@ async function instructorUpsertActiveBooking(sessionId, studentId, source) {
       session_id: sessionId, student_id: studentId, source,
     }).select().single();
     if (error) throw error;
+    try {
+      const stud = STATE.students.find(s => s.id === studentId);
+      const studName = stud ? `${stud.first_name || ''} ${stud.last_name || ''}`.trim() : 'Alumna';
+      logActivity('session_booking.create', {
+        table: 'session_bookings', id: created.id,
+        label: `${studName} · asistencia directa profesor`
+      }, { student_id: studentId, session_id: sessionId, source, from: 'instructor_direct' });
+    } catch(e) {}
     return created.id;
   }
 }
@@ -20217,6 +20306,15 @@ async function generateStudentPDF(studentId) {
       pagebreak: { mode: ['css', 'legacy'] }
     }).from(container.firstElementChild).save();
     showToast('✓ PDF descargado', 'success');
+    try {
+      const studName = `${stud.first_name || ''} ${stud.last_name || ''}`.trim();
+      const pkgCount = (data.packages || []).length;
+      const payCount = (data.payments || []).length;
+      logActivity('student.export_pdf', {
+        table: 'students', id: stud.id,
+        label: `${studName} · detalle completo`
+      }, { student_id: stud.id, package_count: pkgCount, payment_count: payCount });
+    } catch(e) {}
   } catch (e) {
     console.error('[generateStudentPDF]', e);
     showToast('Error generando PDF: ' + e.message, 'error');
@@ -21410,16 +21508,30 @@ function _confirmBuildMessage() {
 async function copyConfirmMessage() {
   const msg = _confirmBuildMessage();
   if (!msg) return;
+  let ok = false;
   try {
     await navigator.clipboard.writeText(msg);
+    ok = true;
     showToast('✓ Mensaje copiado al portapapeles', 'success');
   } catch (e) {
     // Fallback para navegadores sin clipboard API
     const ta = document.createElement('textarea');
     ta.value = msg; document.body.appendChild(ta); ta.select();
-    try { document.execCommand('copy'); showToast('✓ Mensaje copiado', 'success'); }
+    try { document.execCommand('copy'); ok = true; showToast('✓ Mensaje copiado', 'success'); }
     catch (e2) { showToast('No se pudo copiar', 'error'); }
     ta.remove();
+  }
+  if (ok) {
+    try {
+      const ed = STATE.confirmModal;
+      const stud = ed?.student;
+      const studName = stud ? `${stud.first_name || ''} ${stud.last_name || ''}`.trim() : '';
+      const classCount = ed ? (ed.bookings || []).filter(b => !ed.excludedIds.has(b.id)).length : 0;
+      logActivity('confirmation.copy', {
+        table: 'students', id: stud?.id || null,
+        label: `${studName} · ${classCount} clase${classCount === 1 ? '' : 's'} semanal`
+      }, { student_id: stud?.id, class_count: classCount, channel: 'clipboard', from: 'weekly_modal' });
+    } catch(e) {}
   }
 }
 
@@ -24441,6 +24553,19 @@ function exportPaymentsCSV() {
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
   showToast(`Exportado: ${data.filtered.length} pagos`, 'success');
+  try {
+    const f = PAYMENTS_REPORT_STATE;
+    logActivity('report.export_csv', {
+      table: 'payments', id: null,
+      label: `${data.filtered.length} pagos · ${f.dateFrom} → ${f.dateTo}`
+    }, {
+      report: 'payments',
+      row_count: data.filtered.length,
+      date_from: f.dateFrom, date_to: f.dateTo,
+      location_id: f.locationId, recorded_by: f.recordedById,
+      methods: f.methods, with_discount: f.withDiscount
+    });
+  } catch(e) {}
 }
 
 function renderPaymentsReportHTML() {
@@ -25442,8 +25567,12 @@ function humanizeAction(action) {
     'session_booking.create': '📅 Agendó alumna',
     'session_booking.cancel': '✗ Canceló booking',
     'session_booking.remove': '⊘ Quitó alumna',
+    'session_booking.move': '↔ Movió clase',
     'session_note.create': '📝 Nota de sesión',
     'instructor.change': '🔄 Cambió profesor',
+    'confirmation.copy': '📋 Copió mensaje',
+    'report.export_csv': '⬇ Exportó CSV pagos',
+    'student.export_pdf': '📄 Exportó PDF alumno',
   };
   return map[action] || `<code style="font-family:monospace;font-size:11px;color:var(--ink-soft);">${escape(action || '')}</code>`;
 }
@@ -25802,6 +25931,14 @@ async function ccToggleConfirm(studentId, dateIso, hour) {
       STATE.scheduleWeekBookings = STATE.scheduleWeekBookings || [];
       STATE.scheduleWeekBookings.push(booking);
       showToast('✓ Confirmada', 'success');
+      try {
+        const stud = STATE.students.find(s => s.id === studentId);
+        const studName = stud ? `${stud.first_name || ''} ${stud.last_name || ''}`.trim() : 'Alumna';
+        logActivity('session_booking.create', {
+          table: 'session_bookings', id: booking.id,
+          label: `${studName} · ${dateIso} ${formatHour(hour)} · confirmación fija (móvil)`
+        }, { student_id: studentId, session_id: session.id, source: 'fixed', from: 'coord_confirm_mobile' });
+      } catch(e) {}
     } else if (booking.confirmed_at) {
       // Ya está confirmada → desmarcar
       const { error } = await sb.from('session_bookings').update({ confirmed_at: null }).eq('id', booking.id);
