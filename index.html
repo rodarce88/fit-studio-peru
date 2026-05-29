@@ -134,9 +134,8 @@
      ============================================ */
   .topbar {
     position: fixed; top: 0; left: 0; right: 0; height: var(--topbar-h);
-    background: rgba(255, 255, 255, 0.92);
-    backdrop-filter: saturate(180%) blur(14px);
-    -webkit-backdrop-filter: saturate(180%) blur(14px);
+    background: rgba(255, 255, 255, 0.98);
+    /* backdrop-filter removido: causaba 60fps de GPU permanente en Macs Intel */
     border-bottom: 1px solid var(--line);
     z-index: 100;
     display: flex; align-items: center; padding: 0 20px; gap: 16px;
@@ -245,6 +244,10 @@
     background: var(--good-medium);
     flex-shrink: 0;
     box-shadow: 0 0 0 2px rgba(29, 158, 117, 0.18);
+    /* animación removida en estado OK: solo pulsa en reconnecting/error
+       (antes pulsaba todo el tiempo y generaba 60fps de GPU permanente) */
+  }
+  .location-conn-line.conn-reconnecting {
     animation: conn-pulse-dot 2.4s ease-in-out infinite;
   }
   @keyframes conn-pulse-dot {
@@ -625,7 +628,7 @@
   .student-cell { display: flex; align-items: center; gap: 12px; }
 
   /* MODAL */
-  .modal-backdrop { position: fixed; inset: 0; background: rgba(26, 20, 25, 0.5); backdrop-filter: blur(6px); display: none; z-index: 200; align-items: center; justify-content: center; }
+  .modal-backdrop { position: fixed; inset: 0; background: rgba(26, 20, 25, 0.55); display: none; z-index: 200; align-items: center; justify-content: center; }
   .modal-backdrop.is-open { display: flex; }
   .modal-card { background: white; border-radius: var(--radius-lg); width: 600px; max-width: 95vw; max-height: 90vh; overflow: hidden; box-shadow: var(--shadow-lg); display: flex; flex-direction: column; }
   /* Mobile: convertir modales en bottom sheets para mejor manejo de teclado virtual */
@@ -683,8 +686,8 @@
 
   /* HUMAN ERROR OVERLAY — UX-first replacement for "Failed to fetch" etc */
   .human-error-overlay {
-    position: fixed; inset: 0; background: rgba(26, 20, 25, 0.55);
-    backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+    position: fixed; inset: 0; background: rgba(26, 20, 25, 0.65);
+    /* blur removido por performance */
     display: none; align-items: center; justify-content: center;
     z-index: 999; padding: 20px;
   }
@@ -790,9 +793,8 @@
 
   .mobile-bottom-nav {
     flex: 1;
-    background: rgba(38, 33, 92, 0.96);
-    -webkit-backdrop-filter: blur(20px);
-    backdrop-filter: blur(20px);
+    background: rgba(38, 33, 92, 0.98);
+    /* blur(20px) removido — costaba muy caro en GPU móvil */
     border-radius: 999px;
     padding: 8px 6px;
     display: flex;
@@ -1623,7 +1625,7 @@
   .inst-stat-lbl { font-size: 10px; color: var(--ink-mute); text-transform: uppercase; letter-spacing: 0.8px; margin-top: 6px; }
 
   /* Bottom sheet del alumno */
-  .inst-sheet-backdrop { position: fixed; inset: 0; background: rgba(26,20,25,0.55); backdrop-filter: blur(4px); display: none; align-items: flex-end; z-index: 200; }
+  .inst-sheet-backdrop { position: fixed; inset: 0; background: rgba(26,20,25,0.65); display: none; align-items: flex-end; z-index: 200; }
   .inst-sheet-backdrop.is-open { display: flex; }
   .inst-sheet { background: var(--fit-cream); border-radius: 24px 24px 0 0; width: 100%; max-width: 520px; margin: 0 auto; padding-top: 12px; animation: inst-slide-up 0.28s ease-out; max-height: 85vh; overflow-y: auto; }
   @keyframes inst-slide-up { from { transform: translateY(100%); } to { transform: translateY(0); } }
@@ -2725,6 +2727,34 @@
     .ise-main { grid-template-columns: 1fr; }
     .ise-side { order: 2; }
     .ise-instructors-panel { max-height: 200px; }
+  }
+
+  /* ============================================
+     PERFORMANCE OPTIMIZATIONS
+     ============================================
+     Estas reglas reducen costo de GPU/CPU especialmente en:
+     - Macs Intel sin GPU dedicada (2016-2019)
+     - Teléfonos móviles (GPU móvil débil)
+     - Modo bajo consumo de batería
+
+     Si necesitas devolver algún efecto, edita el bloque que corresponde
+     en lugar de removerlo masivamente. */
+
+  /* Respetar preferencia del usuario de "menos movimiento" */
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.001ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.001ms !important;
+    }
+  }
+
+  /* En móvil: eliminar cualquier backdrop-filter residual + reducir sombras grandes */
+  @media (max-width: 768px) {
+    *, *::before, *::after {
+      backdrop-filter: none !important;
+      -webkit-backdrop-filter: none !important;
+    }
   }
 </style>
 </head>
@@ -22857,6 +22887,17 @@ function openStudentModalWithPackages(id) {
 // ============================================
 document.addEventListener('DOMContentLoaded', () => {
   setDateDisplay();
+  // Page Visibility API: pausar animaciones CSS cuando el tab no está visible
+  // (ahorra GPU/batería cuando el usuario está en otra pestaña o app)
+  try {
+    const visStyle = document.createElement('style');
+    visStyle.id = 'visibility-perf-styles';
+    visStyle.textContent = 'body.tab-hidden *, body.tab-hidden *::before, body.tab-hidden *::after { animation-play-state: paused !important; transition: none !important; }';
+    document.head.appendChild(visStyle);
+    document.addEventListener('visibilitychange', () => {
+      document.body.classList.toggle('tab-hidden', document.hidden);
+    });
+  } catch(e) { /* silencio */ }
   // Cargar overrides puntuales de localStorage
   try {
     const saved = localStorage.getItem('classOverrides');
