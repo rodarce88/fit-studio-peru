@@ -8429,7 +8429,8 @@ async function openStudentScheduleEditor(studentId, locationId) {
   STATE.scheduleEditor = {
     studentId,
     student: stud,
-    locationId: locId,
+    homeLocationId: stud.location_id,  // sede home del alumno (no cambia)
+    locationId: locId,                  // sede activa del editor (puede cambiar)
     capacity: loc.capacity || 9,
     monthDate: new Date(today.getFullYear(), today.getMonth(), 1),
     expandedWeek: -1,
@@ -8438,6 +8439,7 @@ async function openStudentScheduleEditor(studentId, locationId) {
     consumed: new Set(),  // clases pasadas con asistencia
     missed: new Set(),    // clases pasadas sin asistencia
     occupancyByKey: new Map(), // "iso|hour" -> count
+    crossSedeConflicts: new Set(),  // keys "iso|hour" donde ya tiene clase en OTRA sede
     package: null,
     loading: true,
   };
@@ -8623,6 +8625,19 @@ async function loadScheduleEditorData() {
   await loadScheduleEditorOccupancy();
   console.log('[schedEditor] occupancy ready, slots:', ed.occupancyByKey.size);
 
+  // Cross-sede conflicts: bookings ya existentes del alumno en sedes DISTINTAS a la activa.
+  // Estos slots se bloquean en la grilla para prevenir doble-booking en otra sede.
+  // Excluimos bookings cancelados y de la sede actual.
+  ed.crossSedeConflicts = new Set();
+  bookings.forEach(b => {
+    if (b.cancelled_at) return;
+    const cs = b.class_sessions;
+    if (!cs || cs.is_cancelled) return;
+    if (cs.location_id === ed.locationId) return; // misma sede, NO es conflicto
+    ed.crossSedeConflicts.add(`${cs.session_date}|${cs.hour}`);
+  });
+  console.log('[schedEditor] cross-sede conflicts:', ed.crossSedeConflicts.size);
+
   ed.loading = false;
 }
 
@@ -8778,6 +8793,52 @@ function _renderScheduleEditorImpl() {
   document.getElementById('schedule-editor-body').innerHTML = `
     <!-- ZONA 1: STICKY TOP — 2 líneas con toda la info -->
     <div style="flex-shrink: 0; background: white; border-bottom: 1px solid var(--line);">
+      <!-- Fila 0: SELECTOR DE SEDES (chips) + banner cross-sede -->
+      ${(STATE.locations || []).length > 1 ? `
+        <div style="padding: 10px 28px 6px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+          <div style="font-size: 11px; color: var(--ink-mute); text-transform: uppercase; letter-spacing: 0.6px; font-weight: 600; flex-shrink: 0;">Agendar en:</div>
+          ${(STATE.locations || []).map(l => {
+            const isActive = l.id === ed.locationId;
+            const isHome = l.id === ed.homeLocationId;
+            const colorDot = l.color || '#534AB7';
+            return `
+              <button onclick="changeScheduleEditorLocation('${l.id}')" style="
+                padding: 6px 14px;
+                border-radius: 999px;
+                border: ${isActive ? '1.5px solid var(--fit-purple)' : '0.5px solid var(--line)'};
+                background: ${isActive ? 'var(--fit-purple)' : 'white'};
+                color: ${isActive ? 'white' : 'var(--ink)'};
+                font-size: 12.5px;
+                font-weight: ${isActive ? '500' : '400'};
+                cursor: pointer;
+                font-family: inherit;
+                display: inline-flex;
+                align-items: center;
+                gap: 6px;
+              ">
+                <span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: ${isActive ? 'white' : colorDot};"></span>
+                ${escape(l.name)}
+                ${isHome ? `<span style="font-size: 10px; opacity: 0.7; margin-left: 2px;">home</span>` : ''}
+              </button>
+            `;
+          }).join('')}
+        </div>
+      ` : ''}
+
+      ${ed.locationId !== ed.homeLocationId ? (() => {
+        const homeLoc = STATE.locations.find(l => l.id === ed.homeLocationId);
+        const activeLoc = STATE.locations.find(l => l.id === ed.locationId);
+        return `
+          <div style="margin: 0 28px 8px; padding: 10px 14px; background: #FAEEDA; border: 1px solid #EF9F27; border-left: 4px solid #BA7517; border-radius: 8px; display: flex; gap: 10px; align-items: flex-start;">
+            <span style="font-size: 16px; line-height: 1;">⚠️</span>
+            <div style="font-size: 12.5px; color: #633806; line-height: 1.5;">
+              <strong>Estás agendando en ${escape(activeLoc?.name || '')}.</strong>
+              ${escape(stud.first_name)} es de ${escape(homeLoc?.name || '')}. La clase se dictará físicamente en ${escape(activeLoc?.name || '')}, pero su paquete se descuenta igual.
+            </div>
+          </div>
+        `;
+      })() : ''}
+
       <!-- Fila 1: avatar + nombre + paquete + sede + pill sin agendar + contador -->
       <div style="padding: 12px 28px; display: flex; align-items: center; gap: 18px;">
         <div style="display: flex; align-items: center; gap: 11px; min-width: 0; flex: 1;">
@@ -8832,6 +8893,7 @@ function _renderScheduleEditorImpl() {
         <span style="display: flex; align-items: center; gap: 5px;"><span style="display: inline-block; width: 12px; height: 12px; border-radius: 3px; background: #F5E9CC;"></span>Casi lleno</span>
         <span style="display: flex; align-items: center; gap: 5px;"><span style="display: inline-block; width: 12px; height: 12px; border-radius: 3px; background: #F8D9D9;"></span>Lleno</span>
         <span style="display: flex; align-items: center; gap: 5px;"><span style="display: inline-block; width: 12px; height: 12px; border-radius: 3px; background: #F5F2EF; border: 1px solid var(--line);"></span>Sin profesor</span>
+        <span style="display: flex; align-items: center; gap: 5px;"><span style="display: inline-block; width: 12px; height: 12px; border-radius: 3px; background: #FCEBEB; border: 1px dashed #E24B4A;"></span>Ya tiene en otra sede</span>
       </div>
     </div>
 
@@ -9023,11 +9085,20 @@ function renderScheduleEditorWeekDetail(week) {
       // dejamos pasar para no romper datos existentes; pero igual mostramos un indicador.
       const noInstructor = !oob && !isConsumed && !isMissed && !hasInstructorForSlot(d.iso, hour);
       const blocked = noInstructor && !wasOriginal && occCount === 0;
+      // Conflicto cross-sede: la alumna ya tiene clase en OTRA sede a esa fecha+hora
+      // No aplica si la celda ya pertenece a esta sede (wasOriginal/isSel)
+      const isCrossSedeConflict = !oob && !isConsumed && !isMissed && !wasOriginal && !isSel && ed.crossSedeConflicts && ed.crossSedeConflicts.has(k);
 
-      let bg = '#fff', col = 'var(--ink)', txt = '', cursor = 'pointer', extra = '', mark = '';
+      let bg = '#fff', col = 'var(--ink)', txt = '', cursor = 'pointer', extra = '', mark = '', titleAttr = '';
 
       if (oob) {
         bg = '#EFEBE0'; col = 'var(--ink-faint)'; txt = '—'; cursor = 'not-allowed';
+      } else if (isCrossSedeConflict) {
+        // Slot bloqueado por conflicto con otra sede
+        bg = '#FCEBEB'; col = '#791F1F'; txt = 'otra sede'; cursor = 'not-allowed';
+        extra = 'font-size: 10px; font-style: italic; border: 1px dashed #E24B4A;';
+        mark = `<span style="position: absolute; top: 3px; right: 5px; font-size: 11px; color: #791F1F;">⚠</span>`;
+        titleAttr = ' title="Ya tiene clase en otra sede a esa hora — primero desmárcala allí"';
       } else if (blocked) {
         // Sin profesor disponible para este horario en este día
         bg = '#F5F2EF'; col = 'var(--ink-faint)'; txt = 'sin prof.'; cursor = 'not-allowed'; extra = 'font-size: 10px; font-style: italic;';
@@ -9064,8 +9135,8 @@ function renderScheduleEditorWeekDetail(week) {
       }
 
       const ownsCell = isSel || wasOriginal;
-      const onclick = (oob || blocked || isConsumed || isMissed || (isFull && !ownsCell) || cantSelect) ? '' : `toggleScheduleEditorSlot('${k}')`;
-      h += `<div onclick="${onclick}" style="position: relative; background: ${bg}; color: ${col}; padding: 10px 6px; border-radius: 7px; text-align: center; cursor: ${cursor}; min-height: 36px; display: flex; align-items: center; justify-content: center; ${extra}">${txt}${mark}</div>`;
+      const onclick = (oob || blocked || isCrossSedeConflict || isConsumed || isMissed || (isFull && !ownsCell) || cantSelect) ? '' : `toggleScheduleEditorSlot('${k}')`;
+      h += `<div onclick="${onclick}"${titleAttr} style="position: relative; background: ${bg}; color: ${col}; padding: 10px 6px; border-radius: 7px; text-align: center; cursor: ${cursor}; min-height: 36px; display: flex; align-items: center; justify-content: center; ${extra}">${txt}${mark}</div>`;
     });
     h += `</div>`;
   });
@@ -9135,6 +9206,67 @@ async function changeScheduleEditorTargetPackage(pkgId) {
     }
   }
   renderScheduleEditor();
+}
+
+// Cambiar la sede activa del editor.
+// Si hay cambios pendientes (selected != original) → pregunta antes.
+// Si no → cambia directo.
+async function changeScheduleEditorLocation(newLocId) {
+  const ed = STATE.scheduleEditor;
+  if (!ed) return;
+  if (newLocId === ed.locationId) return; // sin cambio
+  if (ed.saving) return;
+
+  const newLoc = STATE.locations.find(l => l.id === newLocId);
+  if (!newLoc) { showToast('Sede no encontrada', 'error'); return; }
+
+  // Detectar cambios pendientes
+  const toAdd = [], toCancel = [];
+  ed.selected.forEach(k => { if (!ed.original.has(k)) toAdd.push(k); });
+  ed.original.forEach(k => { if (!ed.selected.has(k)) toCancel.push(k); });
+  const hasPending = (toAdd.length + toCancel.length) > 0;
+
+  if (hasPending) {
+    const currentLoc = STATE.locations.find(l => l.id === ed.locationId);
+    const parts = [];
+    if (toAdd.length > 0) parts.push(`+${toAdd.length} nueva${toAdd.length === 1 ? '' : 's'}`);
+    if (toCancel.length > 0) parts.push(`−${toCancel.length} cancelada${toCancel.length === 1 ? '' : 's'}`);
+    const msg = `Tienes cambios sin guardar en ${currentLoc?.name || 'la sede actual'} (${parts.join(', ')}).\n\n¿Qué quieres hacer?\n\nAceptar → Guardar y cambiar a ${newLoc.name}\nCancelar → No cambiar de sede`;
+    if (!confirm(msg)) return;
+    // Intentar guardar primero. Si falla, abortar el cambio.
+    try {
+      await confirmScheduleEditorChanges();
+      // confirmScheduleEditorChanges puede haber dejado un mensaje de error abierto
+      // si el guardado falló. Verificamos releyendo el estado.
+      const stillPending = (() => {
+        const tA = [], tC = [];
+        ed.selected.forEach(k => { if (!ed.original.has(k)) tA.push(k); });
+        ed.original.forEach(k => { if (!ed.selected.has(k)) tC.push(k); });
+        return (tA.length + tC.length) > 0;
+      })();
+      if (stillPending) {
+        showToast('No se guardaron los cambios. Cambio de sede cancelado.', 'error');
+        return;
+      }
+    } catch (e) {
+      showToast('Error al guardar: ' + (e?.message || e), 'error');
+      return;
+    }
+  }
+
+  // Cambio de sede: actualizar locationId y capacity, recargar todo
+  ed.locationId = newLocId;
+  ed.capacity = newLoc.capacity || 9;
+  renderScheduleEditorLoading();
+  try {
+    await loadScheduleEditorData(); // recarga bookings, occupancy y crossSedeConflicts
+    renderScheduleEditor();
+    const isHome = newLocId === ed.homeLocationId;
+    showToast(`Mostrando ${newLoc.name}${isHome ? ' (sede home)' : ''}`, 'success');
+  } catch (e) {
+    console.error('[changeScheduleEditorLocation] error:', e);
+    showToast('Error cargando sede: ' + (e?.message || e), 'error');
+  }
 }
 
 async function navScheduleEditorMonth(delta) {
