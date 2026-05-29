@@ -5,6 +5,18 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
 <title>FIT Studio Peru — Sistema</title>
 
+<!-- Detección de iOS lo más temprano posible (antes del primer paint).
+     Apple HIG: bottom nav usa frosted glass para consistency con el OS.
+     En Android/desktop seguimos con fondo sólido (mejor performance y look nativo). -->
+<script>
+(function() {
+  var ua = navigator.userAgent;
+  var isIOS = /iPad|iPhone|iPod/.test(ua) ||
+              (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  if (isIOS) document.documentElement.classList.add('is-ios');
+})();
+</script>
+
 <!-- PWA Manifest + theme color -->
 <link rel="manifest" href="/manifest.json">
 <meta name="theme-color" content="var(--fit-purple)">
@@ -794,13 +806,21 @@
   .mobile-bottom-nav {
     flex: 1;
     background: rgba(38, 33, 92, 0.98);
-    /* blur(20px) removido — costaba muy caro en GPU móvil */
+    /* Por defecto (Android/desktop): fondo sólido, sin blur (mejor performance + look nativo Material) */
     border-radius: 999px;
     padding: 8px 6px;
     display: flex;
     align-items: center;
     justify-content: space-around;
     box-shadow: 0 6px 24px rgba(38, 33, 92, 0.28);
+  }
+  /* iOS: frosted glass per Apple HIG.
+     En iPhone moderno backdrop-filter está acelerado por hardware
+     (no afecta como en Macs Intel viejos). */
+  html.is-ios .mobile-bottom-nav {
+    background: rgba(38, 33, 92, 0.72);
+    -webkit-backdrop-filter: saturate(180%) blur(22px);
+    backdrop-filter: saturate(180%) blur(22px);
   }
   .mobile-bottom-nav .m-nav-item {
     display: flex;
@@ -2754,6 +2774,12 @@
     *, *::before, *::after {
       backdrop-filter: none !important;
       -webkit-backdrop-filter: none !important;
+    }
+    /* Excepción única: bottom nav en iOS mantiene frosted glass por consistency con HIG.
+       En iPhone backdrop-filter está acelerado por hardware. */
+    html.is-ios .mobile-bottom-nav {
+      -webkit-backdrop-filter: saturate(180%) blur(22px) !important;
+      backdrop-filter: saturate(180%) blur(22px) !important;
     }
   }
 </style>
