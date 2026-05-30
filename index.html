@@ -2830,6 +2830,16 @@
     border-radius: 50%;
     animation: splash-spin 0.85s linear infinite;
   }
+  .splash-message {
+    margin-top: 18px;
+    color: rgba(255,255,255,0.85);
+    font-size: 13px;
+    font-family: -apple-system, 'Inter', sans-serif;
+    letter-spacing: 0.3px;
+    min-height: 18px;
+    transition: opacity 0.35s ease;
+  }
+  .splash-message.fading { opacity: 0; }
   @keyframes splash-pulse {
     0%, 100% { opacity: 1; transform: scale(1); }
     50% { opacity: 0.7; transform: scale(0.97); }
@@ -2842,17 +2852,43 @@
   <div class="splash-logo">FIT</div>
   <div class="splash-sub">Studio Peru</div>
   <div class="splash-spinner"></div>
+  <div class="splash-message" id="splash-message">Cargando…</div>
 </div>
 <script>
+  // Mensaje progresivo en el splash. No menciona "primera vez" — solo da sensación
+  // de progreso a quien espera. Se limpia automáticamente cuando hideSplash() corre.
+  (function() {
+    const phases = [
+      { delay: 0,    text: 'Cargando…' },
+      { delay: 4000, text: 'Preparando tus clases…' },
+      { delay: 8000, text: 'Solo un momento más…' },
+    ];
+    const msgEl = document.getElementById('splash-message');
+    if (!msgEl) return;
+    window._splashTimers = [];
+    phases.forEach(p => {
+      if (p.delay === 0) return;
+      const t = setTimeout(() => {
+        msgEl.classList.add('fading');
+        setTimeout(() => {
+          msgEl.textContent = p.text;
+          msgEl.classList.remove('fading');
+        }, 350);
+      }, p.delay);
+      window._splashTimers.push(t);
+    });
+  })();
   // Función global para ocultar el splash. La llama el JS principal cuando la app está lista.
   window.hideSplash = function() {
     const splash = document.getElementById('app-splash');
     if (!splash) return;
+    // Limpiar timers de mensajes
+    if (window._splashTimers) { window._splashTimers.forEach(t => clearTimeout(t)); }
     splash.classList.add('is-hidden');
     setTimeout(() => splash.remove(), 400);
   };
-  // Fallback: si por alguna razón nadie llama hideSplash() en 8s, lo escondemos solos.
-  setTimeout(() => { try { window.hideSplash(); } catch(e){} }, 8000);
+  // Fallback: si por alguna razón nadie llama hideSplash() en 12s, lo escondemos solos.
+  setTimeout(() => { try { window.hideSplash(); } catch(e){} }, 12000);
 </script>
 
 <!-- LOGIN VIEW (se muestra antes de autenticar) -->
