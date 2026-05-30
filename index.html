@@ -17068,9 +17068,16 @@ async function loadInstructorClassesForDate(inst, dateIso) {
       }
     }
 
-    // También alumnos que tienen attendance pero no están en bookings (ej: invitada agregada por profesor)
+    // También alumnos que tienen attendance pero no están en bookings (ej: invitada agregada por profesor).
+    // IMPORTANTE: excluimos attendances con status que indica que el alumno NO está en esta clase:
+    //   - 'rescheduled' → fue movido a otro slot, su attendance quedó como huella histórica
+    //   - 'cancelled' → cancelación explícita
+    //   - 'lost' → cancelación tardía sin reposición
+    // Solo agregamos como walk-in los que tienen status real de asistencia (attended, no_show, recoverable, pending).
+    const NON_PRESENT_STATUS = new Set(['rescheduled', 'cancelled', 'lost']);
     for (const a of attendances) {
       if (studentsInClass.find(x => x.student.id === a.student_id)) continue;
+      if (a.status && NON_PRESENT_STATUS.has(a.status)) continue;
       const stud = STATE.students.find(s => s.id === a.student_id);
       if (stud) studentsInClass.push({ student: stud, source: 'walk_in', attendance: a, bookingId: null });
     }
