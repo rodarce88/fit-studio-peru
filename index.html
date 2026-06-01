@@ -1643,6 +1643,15 @@
   .inst-empty-day { background: white; border: 1px solid var(--line); border-radius: 16px; padding: 50px 24px; text-align: center; }
   .inst-empty-day-title { font-family: var(--display); font-style: italic; font-size: 22px; color: var(--fit-purple-deep); }
   .inst-empty-day-sub { font-size: 13px; color: var(--ink-mute); margin-top: 8px; }
+  .inst-othersede-list { display: flex; flex-direction: column; gap: 10px; margin-top: 18px; }
+  .inst-othersede-btn { display: flex; align-items: center; gap: 12px; width: 100%; padding: 14px 16px; background: var(--fit-purple-50); border: 1px solid var(--fit-purple-200); border-radius: 14px; cursor: pointer; text-align: left; transition: background 0.12s, border-color 0.12s; font-family: var(--body); }
+  .inst-othersede-btn:hover { background: var(--fit-purple-100); border-color: var(--fit-purple-300); }
+  .inst-othersede-btn:active { transform: scale(0.99); }
+  .inst-othersede-dot { width: 11px; height: 11px; border-radius: 50%; flex-shrink: 0; }
+  .inst-othersede-info { flex: 1; min-width: 0; }
+  .inst-othersede-name { display: block; font-size: 15px; font-weight: 600; color: var(--fit-purple-deep); }
+  .inst-othersede-count { display: block; font-size: 13px; color: var(--ink-soft); margin-top: 1px; }
+  .inst-othersede-cta { font-size: 14px; font-weight: 600; color: var(--fit-purple); flex-shrink: 0; }
 
   /* Stats compact (footer) */
   .inst-stats-footer { background: white; border: 1px solid var(--line); border-radius: 16px; padding: 16px 18px; margin-top: 22px; }
@@ -5196,6 +5205,20 @@ function switchLocation(id) {
     setMiDiaLoadingState();  // Skeletons agresivos en widgets cross-sede mientras recargan
     renderAll();  // renderAll también llama renderLocationSwitcher, pero es idempotente
   }
+}
+
+// Cambia de sede en la vista del PROFESOR conservando el DÍA que está mirando.
+// A diferencia de switchLocation (que resetea a "hoy"), esto se usa desde el empty-state
+// cuando el profe está parado en un día sin clases en su sede activa pero CON clases en
+// otra sede ese mismo día: lo llevamos a esa sede sin perder la fecha. Un solo toque.
+function instSwitchSedeKeepDate(id) {
+  if (!id || id === STATE.currentLocationId) return;
+  STATE.currentLocationId = id;
+  STATE.instCollapsedSet = null;  // forzar recálculo de qué hora arranca expandida en la nueva sede
+  if (typeof renderTopbarUser === 'function') renderTopbarUser();
+  if (typeof renderLocationSwitcher === 'function') renderLocationSwitcher();
+  if (typeof showInstructorSkeletons === 'function') showInstructorSkeletons();
+  if (typeof renderInstructorDay === 'function') renderInstructorDay();
 }
 
 // ============================================
@@ -16761,23 +16784,66 @@ function renderInstructorClassesBlock(classes) {
   if (!block) return;
 
   // FILTRO DE SEDE: el profe puede dar clases en múltiples sedes (Alex SC+Boutique,
-  // Angie SC+SA, etc), pero solo ve las de la sede activa. Filtramos antes de todo.
+  // Angie SC+SA, etc), pero solo ve las de la sede activa. Conservamos la lista completa
+  // (allClasses) para poder detectar clases en otras sedes en el empty-state.
   const sedeActiva = STATE.currentLocationId;
-  if (sedeActiva && Array.isArray(classes)) {
-    classes = classes.filter(c => c.location?.id === sedeActiva || c.slot?.location_id === sedeActiva);
-  }
+  const allClasses = Array.isArray(classes) ? classes : [];
+  const sedeClasses = sedeActiva
+    ? allClasses.filter(c => (c.location?.id === sedeActiva) || (c.slot?.location_id === sedeActiva))
+    : allClasses;
 
-  if (!classes || classes.length === 0) {
+  if (sedeClasses.length === 0) {
     if (headerBlock) headerBlock.innerHTML = '';
     if (pastToggleBlock) pastToggleBlock.innerHTML = '';
-    block.innerHTML = `
-      <div class="inst-empty-day">
-        <div class="inst-empty-day-title">Sin clases este día</div>
-        <div class="inst-empty-day-sub">No tienes turnos asignados.</div>
-      </div>
-    `;
+
+    // ¿Tiene clases en OTRAS sedes este mismo día? Caso típico: el sistema dejó al profe
+    // parado en la sede de su próxima clase, pero ESTE día sus clases son en otra sede.
+    // Mostramos un atajo de un toque para saltar a esa sede SIN perder el día.
+    const otrasSedes = new Map(); // locId -> { name, color, count }
+    for (const c of allClasses) {
+      const locId = (c.location && c.location.id) || (c.slot && c.slot.location_id);
+      if (!locId || locId === sedeActiva) continue;
+      const loc = c.location || STATE.locations.find(l => l.id === locId);
+      if (!loc) continue;
+      if (!otrasSedes.has(locId)) otrasSedes.set(locId, { name: loc.name, color: loc.color || '#7C3AED', count: 0 });
+      otrasSedes.get(locId).count++;
+    }
+
+    const sedeActivaName = (STATE.locations.find(l => l.id === sedeActiva) || {}).name || 'esta sede';
+
+    if (otrasSedes.size > 0) {
+      const botones = [...otrasSedes.entries()].map(([locId, info]) => {
+        const plural = info.count === 1 ? 'clase' : 'clases';
+        return `
+          <button type="button" class="inst-othersede-btn" onclick="instSwitchSedeKeepDate('${locId}')">
+            <span class="inst-othersede-dot" style="background:${info.color};"></span>
+            <span class="inst-othersede-info">
+              <span class="inst-othersede-name">${escape(info.name)}</span>
+              <span class="inst-othersede-count">${info.count} ${plural} este día</span>
+            </span>
+            <span class="inst-othersede-cta">Ver →</span>
+          </button>`;
+      }).join('');
+      block.innerHTML = `
+        <div class="inst-empty-day">
+          <div class="inst-empty-day-title">Hoy no tienes clases en ${escape(sedeActivaName)}</div>
+          <div class="inst-empty-day-sub">Pero sí en otra sede este día:</div>
+          <div class="inst-othersede-list">${botones}</div>
+        </div>
+      `;
+    } else {
+      block.innerHTML = `
+        <div class="inst-empty-day">
+          <div class="inst-empty-day-title">Sin clases este día</div>
+          <div class="inst-empty-day-sub">No tienes turnos asignados.</div>
+        </div>
+      `;
+    }
     return;
   }
+
+  // A partir de aquí trabajamos solo con las clases de la sede activa.
+  classes = sedeClasses;
 
   // Filtro temporal: solo si estamos viendo HOY
   const todayIso = dateToIsoLocal(new Date());
