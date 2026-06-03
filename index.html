@@ -6000,39 +6000,35 @@ async function renderFullPaymentView() {
       .in('student_id', locStudentIds)
       .order('pending_payment_at', { ascending: false }),
     sb.from('student_packages')
-      .select('id, student_id, price_paid, classes_total, is_frozen, is_courtesy')
+      .select('id, student_id, price_paid, classes_total, classes_used, status, is_active, is_frozen, is_courtesy, purchase_date, created_at')
       .in('student_id', locStudentIds),
   ]);
   const pending = pendingRes.data || [];
   const allPkgs = allPkgsRes.data || [];
 
-  // Filtrar candidatos (no congelados, no cortesía, con precio > 0)
-  const candidatePkgs = allPkgs.filter(p => !p.is_frozen && !p.is_courtesy && parseFloat(p.price_paid || 0) > 0);
-  const candidatePkgIds = candidatePkgs.map(p => p.id);
-
-  // Fix N+1: 1 sola query a payments (antes hacía N queries = 1 por paquete)
-  const paidByPkg = new Map();
-  if (candidatePkgIds.length > 0) {
+  // Deuda FIFO por alumno: cargar TODOS los pagos de estos alumnos y agrupar por alumno.
+  const paysByStudent = new Map();
+  {
     const { data: allPays } = await sb.from('payments')
-      .select('amount_pen, discount_amount, student_package_id')
-      .in('student_package_id', candidatePkgIds);
+      .select('amount_pen, discount_amount, student_id')
+      .in('student_id', locStudentIds);
     (allPays || []).forEach(p => {
-      const amt = parseFloat(p.amount_pen || 0) + parseFloat(p.discount_amount || 0);
-      paidByPkg.set(p.student_package_id, (paidByPkg.get(p.student_package_id) || 0) + amt);
+      if (!paysByStudent.has(p.student_id)) paysByStudent.set(p.student_id, []);
+      paysByStudent.get(p.student_id).push(p);
     });
   }
+  const pkgsByStudent = new Map();
+  allPkgs.forEach(p => {
+    if (!pkgsByStudent.has(p.student_id)) pkgsByStudent.set(p.student_id, []);
+    pkgsByStudent.get(p.student_id).push(p);
+  });
 
+  // Un alumno aparece si su deuda FIFO actual (activo + residuo de anteriores) > 0.
   const pkgsWithBalance = [];
-  for (const pkg of candidatePkgs) {
-    const price = parseFloat(pkg.price_paid || 0);
-    const totalPaid = paidByPkg.get(pkg.id) || 0;
-    if (totalPaid < price) {
-      pkgsWithBalance.push({
-        student_id: pkg.student_id,
-        package_id: pkg.id,
-        owed: price - totalPaid,
-        price, paid: totalPaid,
-      });
+  for (const [sId, sPkgs] of pkgsByStudent.entries()) {
+    const d = computeStudentDues(sPkgs, paysByStudent.get(sId) || []);
+    if (d.currentDue > 0.01 && d.targetPkgId) {
+      pkgsWithBalance.push({ student_id: sId, package_id: d.targetPkgId, owed: d.currentDue, price: d.activePrice, paid: d.activePaid });
     }
   }
 
@@ -6244,42 +6240,35 @@ async function loadToPayList() {
       .in('student_id', locStudentIds)
       .order('pending_payment_at', { ascending: false }),
     sb.from('student_packages')
-      .select('id, student_id, price_paid, classes_total, is_frozen, is_courtesy')
+      .select('id, student_id, price_paid, classes_total, classes_used, status, is_active, is_frozen, is_courtesy, purchase_date, created_at')
       .in('student_id', locStudentIds),
   ]);
   const pending = pendingRes.data || [];
   const allPkgs = allPkgsRes.data || [];
 
-  // Filtrar paquetes candidatos (no congelados, no cortesía, con precio > 0)
-  const candidatePkgs = allPkgs.filter(p => !p.is_frozen && !p.is_courtesy && parseFloat(p.price_paid || 0) > 0);
-  const candidatePkgIds = candidatePkgs.map(p => p.id);
-
-  // Fix N+1: 1 sola query a payments para todos los paquetes candidatos,
-  // y agrupar localmente con un Map (antes hacía N queries = 1 por paquete).
-  const paidByPkg = new Map();
-  if (candidatePkgIds.length > 0) {
+  // Deuda FIFO por alumno: cargar TODOS los pagos de estos alumnos y agrupar por alumno.
+  const paysByStudent = new Map();
+  {
     const { data: allPays } = await sb.from('payments')
-      .select('amount_pen, discount_amount, student_package_id')
-      .in('student_package_id', candidatePkgIds);
+      .select('amount_pen, discount_amount, student_id')
+      .in('student_id', locStudentIds);
     (allPays || []).forEach(p => {
-      const amt = parseFloat(p.amount_pen || 0) + parseFloat(p.discount_amount || 0);
-      paidByPkg.set(p.student_package_id, (paidByPkg.get(p.student_package_id) || 0) + amt);
+      if (!paysByStudent.has(p.student_id)) paysByStudent.set(p.student_id, []);
+      paysByStudent.get(p.student_id).push(p);
     });
   }
+  const pkgsByStudent = new Map();
+  allPkgs.forEach(p => {
+    if (!pkgsByStudent.has(p.student_id)) pkgsByStudent.set(p.student_id, []);
+    pkgsByStudent.get(p.student_id).push(p);
+  });
 
-  // Calcular paquetes con saldo pendiente
+  // Un alumno aparece si su deuda FIFO actual (activo + residuo de anteriores) > 0.
   const pkgsWithBalance = [];
-  for (const pkg of candidatePkgs) {
-    const price = parseFloat(pkg.price_paid || 0);
-    const totalPaid = paidByPkg.get(pkg.id) || 0;
-    if (totalPaid < price) {
-      pkgsWithBalance.push({
-        student_id: pkg.student_id,
-        package_id: pkg.id,
-        owed: price - totalPaid,
-        price,
-        paid: totalPaid,
-      });
+  for (const [sId, sPkgs] of pkgsByStudent.entries()) {
+    const d = computeStudentDues(sPkgs, paysByStudent.get(sId) || []);
+    if (d.currentDue > 0.01 && d.targetPkgId) {
+      pkgsWithBalance.push({ student_id: sId, package_id: d.targetPkgId, owed: d.currentDue, price: d.activePrice, paid: d.activePaid });
     }
   }
 
@@ -13250,6 +13239,74 @@ function totalRemainingClasses(packages) {
     const total = p.classes_total || 0;
     return sum + Math.max(0, total - used);
   }, 0);
+}
+
+// ============================================
+// DEUDA FIFO A NIVEL ALUMNO
+// El alumno solo "debe" por lo que ya está usando: paquetes consumidos (completados) +
+// el paquete ACTIVO. Todos sus pagos se aplican del más antiguo al más nuevo (FIFO),
+// sin importar a qué paquete se tagueó cada pago. Los paquetes PRÓXIMOS (aún sin
+// activar) NO generan deuda visible hasta que se vuelven activos.
+// IMPORTANTE: esto NO modifica filas de payments; solo calcula para mostrar.
+// Devuelve:
+//   activePkg, activePrice, activePaid, activeOwed  → para la tarjeta del activo
+//   olderResidual  → saldo de paquetes consumidos anteriores sin cubrir (nota chica)
+//   currentDue     → activeOwed + olderResidual (lo que el alumno debe HOY)
+//   coverageByPkgId / owedByPkgId  → cobertura/saldo FIFO por paquete (para tarjetas)
+//   targetPkgId    → paquete al que debe apuntar el botón "Cobrar"
+// ============================================
+function computeStudentDues(packages, payments) {
+  const out = {
+    activePkg: null, activePrice: 0, activePaid: 0, activeOwed: 0,
+    olderResidual: 0, currentDue: 0, targetPkgId: null,
+    coverageByPkgId: new Map(), owedByPkgId: new Map(),
+  };
+  // Paquetes "reales" que representan dinero adeudado: no cortesía, no congelados,
+  // y vigentes (status active/null — excluye changed/cancelled/expired).
+  const realPkgs = (packages || []).filter(p =>
+    p && !p.is_courtesy && !p.is_frozen && (!p.status || p.status === 'active'));
+  if (realPkgs.length === 0) return out;
+
+  const priceOf = (p) => parseFloat(p.price_paid ?? p.packages?.price_pen ?? 0) || 0;
+
+  // Cobertura total = TODO el dinero del alumno (incluye descuento como cobertura,
+  // igual que el modelo previo). No importa a qué paquete esté tagueado cada pago.
+  let coverage = (payments || []).reduce((s, p) =>
+    s + (parseFloat(p.amount_pen ?? p.amount ?? 0) || 0) + (parseFloat(p.discount_amount ?? 0) || 0), 0);
+
+  // Orden FIFO: compra (o inicio) y desempate por created_at.
+  const fifo = [...realPkgs].sort((a, b) => {
+    const da = a.purchase_date || a.start_date || '1900-01-01';
+    const db = b.purchase_date || b.start_date || '1900-01-01';
+    if (da !== db) return String(da).localeCompare(String(db));
+    return String(a.created_at || '').localeCompare(String(b.created_at || ''));
+  });
+
+  // Aplicar cobertura FIFO del más antiguo al más nuevo.
+  for (const p of fifo) {
+    const price = priceOf(p);
+    const applied = Math.min(coverage, price);
+    coverage -= applied;
+    out.coverageByPkgId.set(p.id, applied);
+    out.owedByPkgId.set(p.id, Math.max(0, price - applied));
+  }
+
+  const active = getActivePackage(realPkgs);
+  out.activePkg = active || null;
+  if (active) {
+    out.activePrice = priceOf(active);
+    out.activePaid = out.coverageByPkgId.get(active.id) || 0;
+    out.activeOwed = Math.max(0, out.activePrice - out.activePaid);
+  }
+  // Residuo de paquetes ya consumidos (completados) sin cubrir → deuda real que arrastra.
+  const completed = getCompletedPackages(realPkgs);
+  out.olderResidual = completed.reduce((s, p) => s + (out.owedByPkgId.get(p.id) || 0), 0);
+  out.currentDue = out.activeOwed + out.olderResidual;
+
+  // Botón "Cobrar": apuntar al activo; si no hay, al paquete más antiguo con saldo.
+  out.targetPkgId = active ? active.id
+    : (fifo.find(p => (out.owedByPkgId.get(p.id) || 0) > 0.01)?.id || null);
+  return out;
 }
 
 // ============================================
@@ -22665,16 +22722,13 @@ function renderDetailSummary(stud) {
   const lastPayment = (data.payments || [])[0];
 
   // Saldo pendiente del paquete activo
-  let activePkgPaid = 0;
-  let activePkgPrice = 0;
-  let activePkgOwed = 0;
-  if (activePkg) {
-    activePkgPrice = parseFloat(activePkg.price_paid ?? activePkg.packages?.price_pen ?? 0);
-    activePkgPaid = (data.payments || [])
-      .filter(p => p.student_package_id === activePkg.id)
-      .reduce((sum, p) => sum + parseFloat(p.amount_pen || p.amount || 0) + parseFloat(p.discount_amount || 0), 0);
-    activePkgOwed = Math.max(0, activePkgPrice - activePkgPaid);
-  }
+  // Deuda FIFO a nivel alumno (centralizada). Mantengo los nombres de variables que
+  // usa el resto del render más abajo para no tocar la tarjeta entera.
+  const dues = computeStudentDues(allPackages, data.payments);
+  let activePkgPaid = dues.activePaid;
+  let activePkgPrice = dues.activePrice;
+  let activePkgOwed = dues.activeOwed;
+  const olderResidual = dues.olderResidual;
 
   const cards = [
     {
@@ -22946,6 +23000,10 @@ function renderDetailSummary(stud) {
       `;
     } else if (activePkgOwed > 0) {
       const paidPct = activePkgPrice > 0 ? (activePkgPaid / activePkgPrice) * 100 : 0;
+      const residualNote = olderResidual > 0.01
+        ? `<div style="font-size: 11px; color: #9A6A12; margin-top: 5px;">+ S/ ${olderResidual.toFixed(2)} de paquetes anteriores sin cubrir</div>`
+        : '';
+      const owedTotal = activePkgOwed + (olderResidual > 0.01 ? olderResidual : 0);
       paymentBlock = `
         <div style="background: #FFF6E5; border-radius: 12px; padding: 14px 18px; display: flex; align-items: center; gap: 16px; margin-bottom: 22px;">
           <div style="font-size: 22px; line-height: 1;">⚠️</div>
@@ -22955,8 +23013,20 @@ function renderDetailSummary(stud) {
             <div style="background: #F0E5D0; height: 4px; border-radius: 2px; margin-top: 7px; overflow: hidden;">
               <div style="background: #B45309; height: 100%; width: ${paidPct.toFixed(1)}%; border-radius: 2px;"></div>
             </div>
+            ${residualNote}
           </div>
-          <button onclick='openPaymentModal(${JSON.stringify(stud.id).replace(/'/g, "&#39;")}, ${JSON.stringify(activePkg.id).replace(/'/g, "&#39;")}, ${activePkgOwed})' style="background: var(--ink); color: white; border: none; padding: 10px 16px; border-radius: 10px; font-size: 13px; font-weight: 500; cursor: pointer; font-family: inherit; white-space: nowrap;">＋ Registrar pago</button>
+          <button onclick='openPaymentModal(${JSON.stringify(stud.id).replace(/'/g, "&#39;")}, ${JSON.stringify(activePkg.id).replace(/'/g, "&#39;")}, ${owedTotal})' style="background: var(--ink); color: white; border: none; padding: 10px 16px; border-radius: 10px; font-size: 13px; font-weight: 500; cursor: pointer; font-family: inherit; white-space: nowrap;">＋ Registrar pago</button>
+        </div>
+      `;
+    } else if (olderResidual > 0.01) {
+      paymentBlock = `
+        <div style="background: #FFF6E5; border-radius: 12px; padding: 14px 18px; display: flex; align-items: center; gap: 16px; margin-bottom: 22px;">
+          <div style="font-size: 22px; line-height: 1;">⚠️</div>
+          <div style="flex: 1; min-width: 0;">
+            <div style="font-size: 13px; color: #7A4A06; font-weight: 600; margin-bottom: 2px;">Este paquete está cubierto</div>
+            <div style="font-size: 11px; color: var(--ink-mute);">Pendiente S/ ${olderResidual.toFixed(2)} de paquetes anteriores</div>
+          </div>
+          <button onclick='openPaymentModal(${JSON.stringify(stud.id).replace(/'/g, "&#39;")}, ${JSON.stringify(activePkg.id).replace(/'/g, "&#39;")}, ${olderResidual})' style="background: var(--ink); color: white; border: none; padding: 10px 16px; border-radius: 10px; font-size: 13px; font-weight: 500; cursor: pointer; font-family: inherit; white-space: nowrap;">＋ Registrar pago</button>
         </div>
       `;
     } else if (activePkgPaid > 0) {
@@ -23138,9 +23208,11 @@ function renderDetailSummary(stud) {
     const used = p.classes_used || 0;
     const recoverable = p.classes_recoverable || 0;
     const price = parseFloat(p.price_paid ?? p.packages?.price_pen ?? 0);
-    const paid = (data.payments || [])
+    const perPkgPaid = (data.payments || [])
       .filter(pm => pm.student_package_id === p.id)
       .reduce((s, pm) => s + parseFloat(pm.amount_pen || pm.amount || 0) + parseFloat(pm.discount_amount || 0), 0);
+    // Cobertura FIFO para paquetes reales; fallback al pago por-tag en cortesía/congelado/cambiado.
+    const paid = dues.coverageByPkgId.has(p.id) ? dues.coverageByPkgId.get(p.id) : perPkgPaid;
     const name = escape(p.packages?.name || `Paquete ${total} clases`);
     const transferred = p.transferred_count || 0;
     const isChanged = p.status === 'changed';
@@ -23616,6 +23688,7 @@ function renderDetailPayments(stud) {
 
   const totalPagado = payments.reduce((sum, p) => sum + parseFloat(p.amount_pen || p.amount || 0), 0);
   const methodLabels = { yape: 'Yape', plin: 'Plin', cash: 'Efectivo', card: 'Tarjeta', transfer: 'Transferencia' };
+  const pkgMap = new Map((data.packages || []).map(x => [x.id, x]));
 
   return `
     <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px;">
@@ -23634,6 +23707,10 @@ function renderDetailPayments(stud) {
         const discountPct = parseFloat(p.discount_pct || 0);
         const hasDiscount = discountAmt > 0;
         const discountBadge = hasDiscount ? `<span style="font-size:10px; padding:2px 7px; background:#FEF7E6; color:#8B6F1A; border-radius:999px; margin-left:6px; font-weight:500;">${discountPct.toFixed(1)}% desc · −S/ ${discountAmt.toFixed(2)}</span>` : '';
+        const linkedPkg = p.student_package_id ? pkgMap.get(p.student_package_id) : null;
+        const pkgChip = linkedPkg
+          ? `<span style="font-size:10px; padding:2px 8px; background:var(--fit-lavender-pale); color:var(--fit-purple-deep); border-radius:999px; white-space:nowrap;">↳ ${escape(linkedPkg.packages?.name || `Paquete ${linkedPkg.classes_total}`)} · compra ${formatDate(linkedPkg.purchase_date)}</span>`
+          : `<span style="font-size:10px; padding:2px 8px; background:var(--bg); color:var(--ink-mute); border-radius:999px; white-space:nowrap;">↳ sin paquete asociado</span>`;
         return `
         <div ${canEdit ? `onclick="openEditPaymentModal('${p.id}')" style="cursor:pointer;"` : 'style=""'} class="${canEdit ? 'pay-row-editable' : ''}" style="display: flex; align-items: center; justify-content: space-between; padding: 14px 18px; border-bottom: 1px solid var(--line); ${canEdit ? 'cursor:pointer; transition: background 0.15s;' : ''}" ${canEdit ? `onmouseover="this.style.background='var(--fit-lavender-pale)'" onmouseout="this.style.background='white'"` : ''}>
           <div style="flex: 1;">
@@ -23643,6 +23720,7 @@ function renderDetailPayments(stud) {
               ${p.reference ? ' · Ref. ' + escape(p.reference) : ''}
               ${p.notes ? ' · ' + escape(p.notes) : ''}
             </div>
+            <div style="margin-top: 6px;">${pkgChip}</div>
           </div>
           ${p.receipt_url ? `<a href="${escape(p.receipt_url)}" target="_blank" onclick="event.stopPropagation()" style="font-size: 12px; color: var(--fit-purple); text-decoration: none; padding: 6px 12px; border: 1px solid var(--line); border-radius: 999px;">Ver comprobante →</a>` : ''}
           ${canEdit ? '<span style="font-size:11px; color: var(--ink-mute); margin-left: 12px;">editar →</span>' : ''}
