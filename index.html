@@ -23000,20 +23000,25 @@ function renderDetailSummary(stud) {
       `;
     } else if (activePkgOwed > 0) {
       const paidPct = activePkgPrice > 0 ? (activePkgPaid / activePkgPrice) * 100 : 0;
-      const residualNote = olderResidual > 0.01
-        ? `<div style="font-size: 11px; color: #9A6A12; margin-top: 5px;">+ S/ ${olderResidual.toFixed(2)} de paquetes anteriores sin cubrir</div>`
+      const hasResidual = olderResidual > 0.01;
+      const owedTotal = activePkgOwed + (hasResidual ? olderResidual : 0);
+      // Con deuda arrastrada: UN número total grande + desglose. Sin arrastre: formato simple.
+      const headline = hasResidual
+        ? `Debe en total <span style="font-family: var(--display); font-style: italic; font-size: 17px; font-weight: 600;">S/ ${owedTotal.toFixed(2)}</span>`
+        : `Debe <span style="font-family: var(--display); font-style: italic; font-size: 17px; font-weight: 600;">S/ ${activePkgOwed.toFixed(2)}</span> de S/ ${activePkgPrice.toFixed(2)}`;
+      const breakdown = hasResidual
+        ? `<div style="font-size: 11.5px; color: #854F0B; margin-top: 2px;">S/ ${activePkgOwed.toFixed(2)} de este paquete + S/ ${olderResidual.toFixed(2)} de paquetes anteriores</div>`
         : '';
-      const owedTotal = activePkgOwed + (olderResidual > 0.01 ? olderResidual : 0);
       paymentBlock = `
         <div style="background: #FFF6E5; border-radius: 12px; padding: 14px 18px; display: flex; align-items: center; gap: 16px; margin-bottom: 22px;">
           <div style="font-size: 22px; line-height: 1;">⚠️</div>
           <div style="flex: 1; min-width: 0;">
-            <div style="font-size: 13px; color: #7A4A06; font-weight: 600; margin-bottom: 2px;">Debe <span style="font-family: var(--display); font-style: italic; font-size: 17px; font-weight: 600;">S/ ${activePkgOwed.toFixed(2)}</span> de S/ ${activePkgPrice.toFixed(2)}</div>
-            <div style="font-size: 11px; color: var(--ink-mute);">Pagó S/ ${activePkgPaid.toFixed(2)}</div>
+            <div style="font-size: 13px; color: #7A4A06; font-weight: 600; margin-bottom: 2px;">${headline}</div>
+            ${breakdown}
+            <div style="font-size: 11px; color: var(--ink-mute); margin-top: 2px;">Pagó S/ ${activePkgPaid.toFixed(2)}</div>
             <div style="background: #F0E5D0; height: 4px; border-radius: 2px; margin-top: 7px; overflow: hidden;">
               <div style="background: #B45309; height: 100%; width: ${paidPct.toFixed(1)}%; border-radius: 2px;"></div>
             </div>
-            ${residualNote}
           </div>
           <button onclick='openPaymentModal(${JSON.stringify(stud.id).replace(/'/g, "&#39;")}, ${JSON.stringify(activePkg.id).replace(/'/g, "&#39;")}, ${owedTotal})' style="background: var(--ink); color: white; border: none; padding: 10px 16px; border-radius: 10px; font-size: 13px; font-weight: 500; cursor: pointer; font-family: inherit; white-space: nowrap;">＋ Registrar pago</button>
         </div>
@@ -23023,8 +23028,8 @@ function renderDetailSummary(stud) {
         <div style="background: #FFF6E5; border-radius: 12px; padding: 14px 18px; display: flex; align-items: center; gap: 16px; margin-bottom: 22px;">
           <div style="font-size: 22px; line-height: 1;">⚠️</div>
           <div style="flex: 1; min-width: 0;">
-            <div style="font-size: 13px; color: #7A4A06; font-weight: 600; margin-bottom: 2px;">Este paquete está cubierto</div>
-            <div style="font-size: 11px; color: var(--ink-mute);">Pendiente S/ ${olderResidual.toFixed(2)} de paquetes anteriores</div>
+            <div style="font-size: 13px; color: #7A4A06; font-weight: 600; margin-bottom: 2px;">Debe en total <span style="font-family: var(--display); font-style: italic; font-size: 17px; font-weight: 600;">S/ ${olderResidual.toFixed(2)}</span></div>
+            <div style="font-size: 11.5px; color: #854F0B; margin-top: 2px;">Este paquete está cubierto · S/ ${olderResidual.toFixed(2)} de paquetes anteriores</div>
           </div>
           <button onclick='openPaymentModal(${JSON.stringify(stud.id).replace(/'/g, "&#39;")}, ${JSON.stringify(activePkg.id).replace(/'/g, "&#39;")}, ${olderResidual})' style="background: var(--ink); color: white; border: none; padding: 10px 16px; border-radius: 10px; font-size: 13px; font-weight: 500; cursor: pointer; font-family: inherit; white-space: nowrap;">＋ Registrar pago</button>
         </div>
@@ -23218,6 +23223,27 @@ function renderDetailSummary(stud) {
     const isChanged = p.status === 'changed';
     const isFrozen = !!p.is_frozen;
 
+    // Estado de pago bajo FIFO: un completado sin cubrir debe verse AL TOQUE (badge rojo);
+    // un próximo nunca alarma (regla de negocio: no hay deuda hasta que se activa).
+    const isRealDues = !p.is_courtesy && !isFrozen && (!p.status || p.status === 'active');
+    const shortfall = Math.max(0, price - paid);
+    const isConsumed = isRealDues && total > 0 && used >= total;
+    const isUpcomingAlive = isRealDues && used < total; // en historia, los vivos no-activos = próximos
+    let payLine;
+    if (isChanged) {
+      payLine = `<div style="font-size: 10px; color: var(--ink-mute);">pago original</div>`;
+    } else if (p.is_courtesy) {
+      payLine = `<div style="font-size: 10px; color: var(--ink-mute);">cortesía</div>`;
+    } else if (shortfall <= 0.01) {
+      payLine = `<div style="font-size: 10px; color: #3B6D11; font-weight: 600;">pagado ✓</div>`;
+    } else if (isConsumed) {
+      payLine = `<span style="display: inline-block; background: #FDE8E8; color: #9B1C1C; font-size: 10px; font-weight: 700; padding: 3px 9px; border-radius: 999px; margin-top: 3px;">⚠ ${paid > 0.01 ? `Debe S/ ${shortfall.toFixed(2)}` : `Sin pagar · debe S/ ${shortfall.toFixed(2)}`}</span>`;
+    } else if (isUpcomingAlive) {
+      payLine = `<div style="font-size: 10px; color: var(--ink-mute);">se paga al activarse</div>`;
+    } else {
+      payLine = `<div style="font-size: 10px; color: var(--ink-mute);">pagado S/ ${paid.toFixed(2)}</div>`;
+    }
+
     // Buscar paquete que lo reemplaza (si fue cambiado)
     let replacedByName = '';
     if (isChanged && p.replaced_by_id) {
@@ -23264,7 +23290,7 @@ function renderDetailSummary(stud) {
           </div>
           <div style="text-align: right;">
             <div style="font-family: var(--display); font-style: italic; font-size: 15px; color: var(--ink-soft);">S/ ${price.toFixed(2)}</div>
-            <div style="font-size: 10px; color: var(--ink-mute);">${isChanged ? 'pago original' : (paid >= price ? 'pagado' : `pagado S/ ${paid.toFixed(2)}`)}</div>
+            ${payLine}
           </div>
         </div>
         <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(80px, 1fr)); gap: 8px; padding-top: 10px; border-top: 1px solid #E0D4F0; font-size: 11px;">
