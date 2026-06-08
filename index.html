@@ -26670,9 +26670,8 @@ async function renderCoordConfirmView() {
     `;
   }
 
-  // Cargar el mes completo (sessions+bookings) — reusa STATE.scheduleWeekSessions/Bookings
-  // para mantener compatibilidad con getCellStudents (que filtra por fecha exacta).
-  await ccLoadMonthData(STATE.ccMonth.year, STATE.ccMonth.monthIndex);
+  // Cargar SOLO el día seleccionado (evita el truncado de 1000 filas del mes completo).
+  await ccLoadDayData(STATE.ccDate);
   // Recalcular weekStart para que toggleConfirmedForCell/loadScheduleWeekData no rompa si se llama luego
   STATE.scheduleWeekStart = getWeekStart(new Date(STATE.ccDate + 'T12:00:00'));
 
@@ -26858,6 +26857,35 @@ function ccRenderShell() {
 
 // Cargar sessions+bookings de un mes completo.
 // Reusa STATE.scheduleWeekSessions/Bookings para mantener compatibilidad con getCellStudents.
+// Carga SOLO el día seleccionado (sede actual) — sessions + bookings.
+// Antes se cargaba el mes entero de las 3 sedes, lo que con >1000 reservas excedía
+// el límite implícito de 1000 filas de Supabase y truncaba el resultado: algunas
+// clases salían vacías en el celular aunque sí tuvieran alumnas. La vista de confirmar
+// solo necesita el día visible (las pastillas del mes usan la plantilla de horarios,
+// no estas reservas), así que acotamos a un día por sede y nunca se trunca.
+async function ccLoadDayData(dateIso) {
+  if (!isOnline || !dateIso) {
+    STATE.scheduleWeekSessions = [];
+    STATE.scheduleWeekBookings = [];
+    return;
+  }
+  const { data: sessions } = await sb.from('class_sessions')
+    .select('id, session_date, hour, location_id, is_cancelled, instructor_id')
+    .eq('session_date', dateIso)
+    .eq('location_id', STATE.currentLocationId);
+  STATE.scheduleWeekSessions = sessions || [];
+
+  const sessionIds = (sessions || []).map(s => s.id);
+  if (sessionIds.length > 0) {
+    const { data: bookings } = await sb.from('session_bookings')
+      .select('*')
+      .in('session_id', sessionIds);
+    STATE.scheduleWeekBookings = bookings || [];
+  } else {
+    STATE.scheduleWeekBookings = [];
+  }
+}
+
 async function ccLoadMonthData(year, monthIndex) {
   if (!isOnline) {
     STATE.scheduleWeekSessions = [];
@@ -26917,7 +26945,7 @@ async function ccNavMonth(direction) {
     `;
   }
 
-  await ccLoadMonthData(year, monthIndex);
+  await ccLoadDayData(STATE.ccDate);
   STATE.scheduleWeekStart = getWeekStart(new Date(STATE.ccDate + 'T12:00:00'));
   ccRenderShell();
 }
@@ -26925,14 +26953,9 @@ async function ccNavMonth(direction) {
 async function ccSelectDay(dateIso) {
   STATE.ccDate = dateIso;
   const newDateObj = new Date(dateIso + 'T12:00:00');
-  const newYear = newDateObj.getFullYear();
-  const newMonthIdx = newDateObj.getMonth();
-  const curr = STATE.ccMonth || {};
-  // Si la fecha está en otro mes, recargar el mes
-  if (curr.year !== newYear || curr.monthIndex !== newMonthIdx) {
-    STATE.ccMonth = { year: newYear, monthIndex: newMonthIdx };
-    await ccLoadMonthData(newYear, newMonthIdx);
-  }
+  STATE.ccMonth = { year: newDateObj.getFullYear(), monthIndex: newDateObj.getMonth() };
+  // Recargar SIEMPRE el día seleccionado (ahora cargamos por día, no por mes).
+  await ccLoadDayData(dateIso);
   STATE.scheduleWeekStart = getWeekStart(newDateObj);
   ccRenderShell();
 }
