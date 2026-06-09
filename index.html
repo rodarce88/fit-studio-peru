@@ -10941,6 +10941,7 @@ async function iseConfirmReplacement() {
 
     showToast(`Reemplazo aplicado · ${CONFLICT_CTX.groupedByInst.length} ${CONFLICT_CTX.groupedByInst.length === 1 ? 'profesor recortado' : 'profesores recortados'}`, 'success');
     document.getElementById('ise-conflict-modal').classList.remove('is-open');
+    iseLoadMarksForWeek();
     iseRenderInstructorsList();
     iseRender();
   } catch (e) {
@@ -11239,12 +11240,21 @@ async function iseSaveNewBlock() {
     });
   }
 
-  // 🚨 DETECCIÓN DE CONFLICTOS Y DUPLICADOS
-  const { conflicts, sameInstructorDuplicates } = iseFindConflicts(rows, effFrom, effTo);
+  // 🚨 DETECCIÓN DE CONFLICTOS con OTROS profes (donde caen los slots marcados)
+  const { conflicts } = iseFindConflicts(rows, effFrom, effTo);
 
-  // (a) Solapamientos del MISMO profe → recortar/cerrar (NO duplicar).
-  //     Editar un rango recorta las filas previas del profe solo donde se pisan.
-  const sameTrims = iseComputeSameInstrTrims(sameInstructorDuplicates, effFrom, effTo);
+  // (a) Reemplazo del MISMO profe: recortar/cerrar TODAS sus filas en esta sede que se
+  //     solapan con el rango [desde, hasta] — sin importar si el slot sigue marcado o no.
+  //     Así, al editar un bloque, los slots que QUITASTE también se cierran (no quedan vivos).
+  const nfRange = effFrom || '0001-01-01';
+  const ntRange = effTo || '9999-12-31';
+  const sameProfeOverlap = (STATE.schedules || [])
+    .filter(s => s.instructor_id === SCHEDULE_CTX.instructorId
+      && s.location_id === locId
+      && (s.effective_from || '0001-01-01') <= ntRange
+      && (s.effective_to || '9999-12-31') >= nfRange)
+    .map(s => ({ existing: s }));
+  const sameTrims = iseComputeSameInstrTrims(sameProfeOverlap, effFrom, effTo);
 
   // (b) Si hay conflictos con OTROS profesores → modal de reemplazo.
   //     Ese flujo también aplicará los recortes del mismo profe (los dejamos en CONFLICT_CTX).
@@ -11286,6 +11296,7 @@ async function iseSaveNewBlock() {
 
     showToast(`Bloque guardado · ${rows.length} ${rows.length === 1 ? 'clase' : 'clases'}/semana`, 'success');
     if (btn) { btn.disabled = false; btn.textContent = 'Guardar bloque'; }
+    iseLoadMarksForWeek();
     iseRenderInstructorsList();
     iseRender();
   } catch (e) {
