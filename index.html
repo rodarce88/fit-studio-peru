@@ -11311,8 +11311,10 @@ async function iseSaveNewBlock() {
 // Solo limpia las sessions/overrides que tienen un instructor distinto al que se acaba de asignar.
 async function iseClearOverridesForRange(newInstId, locId, dowsSet, hoursSet, effFrom, effTo) {
   try {
-    // 1. Limpiar class_sessions.instructor_id en BD para las dow/hour del nuevo bloque,
-    //    dentro del rango del nuevo schedule, donde el instructor_id NO sea el nuevo.
+    // 1. REASIGNAR class_sessions.instructor_id al profe del nuevo bloque, para las dow/hour
+    //    del bloque dentro de su rango. El slot ahora lo dicta este profe, así que sus sesiones
+    //    deben tener su instructor_id (las dejaba en NULL antes → quedaban "huérfanas" y, por RLS,
+    //    invisibles para el profe en su propia vista/cobros). NO tocamos actual_instructor_id (suplencias).
     const dows = [...dowsSet];
     const hours = [...hoursSet];
     if (dows.length === 0 || hours.length === 0) return;
@@ -11320,29 +11322,29 @@ async function iseClearOverridesForRange(newInstId, locId, dowsSet, hoursSet, ef
     let q = sb.from('class_sessions')
       .select('id, session_date, hour, instructor_id')
       .eq('location_id', locId)
-      .in('hour', hours)
-      .not('instructor_id', 'is', null)
-      .neq('instructor_id', newInstId);
+      .in('hour', hours);
     if (effFrom) q = q.gte('session_date', effFrom);
     if (effTo) q = q.lte('session_date', effTo);
 
     const { data: sessions, error } = await q;
     if (error) { console.warn('iseClearOverridesForRange query:', error); return; }
 
-    const toClear = (sessions || []).filter(s => {
+    // Solo las del dow del bloque y que aún no apunten a este profe
+    const toReassign = (sessions || []).filter(s => {
+      if (s.instructor_id === newInstId) return false;
       const sDate = new Date(s.session_date + 'T12:00:00');
       return dows.includes(sDate.getDay());
     });
 
-    if (toClear.length > 0) {
-      const ids = toClear.map(s => s.id);
-      const { error: upErr } = await sb.from('class_sessions').update({ instructor_id: null }).in('id', ids);
+    if (toReassign.length > 0) {
+      const ids = toReassign.map(s => s.id);
+      const { error: upErr } = await sb.from('class_sessions').update({ instructor_id: newInstId }).in('id', ids);
       if (upErr) { console.warn('iseClearOverridesForRange update:', upErr); }
 
       // Refrescar STATE.classSessions del día actual si está cargado
       if (STATE.classSessions) {
         STATE.classSessions.forEach(cs => {
-          if (toClear.find(t => t.id === cs.id)) cs.instructor_id = null;
+          if (toReassign.find(t => t.id === cs.id)) cs.instructor_id = newInstId;
         });
       }
     }
