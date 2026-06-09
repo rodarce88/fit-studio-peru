@@ -3128,6 +3128,28 @@
       </div>
     </div>
 
+    <!-- Deuda acumulada — total real (todos los paquetes, no solo del mes) + tendencia 4 semanas -->
+    <div id="debt-widget" style="background:var(--surface,#fff); border:1px solid var(--line); border-radius:var(--radius-lg,18px); padding:20px 24px; margin-bottom:18px; display:flex; flex-direction:column; gap:14px;">
+      <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:16px; flex-wrap:wrap;">
+        <div>
+          <span class="kpi-label">Deuda acumulada · <span id="debt-scope-name">—</span></span>
+          <div id="debt-amount" style="font-family:var(--display); font-size:32px; font-weight:500; letter-spacing:-0.5px; color:var(--ink); line-height:1.1; margin-top:4px;">S/ —</div>
+          <div id="debt-count" style="font-size:13px; color:var(--ink-mute); margin-top:4px;">— alumnas con saldo</div>
+        </div>
+        <div style="display:inline-flex; background:var(--bg-soft,#f1eef6); border-radius:999px; padding:3px;">
+          <button type="button" id="debt-tab-sede" onclick="setDebtScope('sede')" style="border:none; background:var(--ink,#2a1a3a); color:#fff; font:inherit; font-size:12px; font-weight:600; padding:6px 14px; border-radius:999px; cursor:pointer;">Esta sede</button>
+          <button type="button" id="debt-tab-all" onclick="setDebtScope('all')" style="border:none; background:transparent; color:var(--ink-mute); font:inherit; font-size:12px; font-weight:600; padding:6px 14px; border-radius:999px; cursor:pointer;">Todas</button>
+        </div>
+      </div>
+      <div>
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+          <span class="kpi-label" style="font-size:10px;">Alumnas con deuda · últimas 4 semanas</span>
+          <span id="debt-trend-delta" style="font-size:12px; font-weight:600; color:var(--ink-mute);">—</span>
+        </div>
+        <div id="debt-chart"><div style="padding:18px 0; font-size:12px; color:var(--ink-mute);">Cargando…</div></div>
+      </div>
+    </div>
+
     <div class="layout-grid">
       <div class="timeline-card">
         <div id="frozen-reminders-banner"></div>
@@ -5553,6 +5575,8 @@ function renderDashboard() {
 
   // Widget de cobranza del mes (async, no bloquea el render)
   renderCobranzaWidget();
+  // Deuda acumulada total + tendencia 4 semanas (async, no bloquea)
+  renderDebtSummary();
 
   // Incomplete list
   const incompleteEl = document.getElementById('incomplete-list');
@@ -5594,6 +5618,153 @@ function renderDashboard() {
 // - gap: pctCobrado - pctEsperado (donde pctEsperado = dayOfMonth / daysInMonth)
 //
 // Sin buffer: la lógica de color se activa desde el día 1 del mes.
+
+// ============================================
+// DEUDA ACUMULADA — deuda total real (todos los paquetes, FIFO vía computeStudentDues)
+// + tendencia de las últimas 4 semanas. A diferencia del widget de cobranza (solo mes),
+// esto suma a TODOS los alumnos con saldo. Toggle Esta sede / Todas.
+// El punto de "hoy" usa el set completo → coincide exacto con la lista "Por cobrar".
+// Cada semana se reconstruye filtrando paquetes/pagos por fecha de corte.
+// ============================================
+let DEBT_SCOPE = 'sede'; // 'sede' | 'all'
+
+function setDebtScope(scope) {
+  DEBT_SCOPE = scope;
+  const tabS = document.getElementById('debt-tab-sede');
+  const tabA = document.getElementById('debt-tab-all');
+  if (tabS && tabA) {
+    const on  = (el) => { el.style.background = 'var(--ink,#2a1a3a)'; el.style.color = '#fff'; };
+    const off = (el) => { el.style.background = 'transparent'; el.style.color = 'var(--ink-mute)'; };
+    if (scope === 'sede') { on(tabS); off(tabA); } else { on(tabA); off(tabS); }
+  }
+  renderDebtSummary();
+}
+
+async function computeDebtSnapshot(locId) {
+  // locId null/undefined => todas las sedes
+  const studentIds = (STATE.students || [])
+    .filter(s => !locId || s.location_id === locId)
+    .map(s => s.id);
+  if (studentIds.length === 0) return { current: { total: 0, count: 0 }, trend: [] };
+
+  // Cargar paquetes + pagos en lotes (evita límites de .in())
+  const chunk = (arr, n) => { const o = []; for (let i = 0; i < arr.length; i += n) o.push(arr.slice(i, i + n)); return o; };
+  const allPkgs = [], allPays = [];
+  for (const ids of chunk(studentIds, 200)) {
+    const [pk, pa] = await Promise.all([
+      sb.from('student_packages')
+        .select('id, student_id, price_paid, classes_total, classes_used, status, is_active, is_frozen, is_courtesy, purchase_date, start_date, created_at')
+        .in('student_id', ids),
+      sb.from('payments')
+        .select('amount_pen, discount_amount, student_id, payment_date')
+        .in('student_id', ids),
+    ]);
+    if (pk.data) allPkgs.push(...pk.data);
+    if (pa.data) allPays.push(...pa.data);
+  }
+
+  const pkgsByStudent = new Map();
+  allPkgs.forEach(p => { if (!pkgsByStudent.has(p.student_id)) pkgsByStudent.set(p.student_id, []); pkgsByStudent.get(p.student_id).push(p); });
+  const paysByStudent = new Map();
+  allPays.forEach(p => { if (!paysByStudent.has(p.student_id)) paysByStudent.set(p.student_id, []); paysByStudent.get(p.student_id).push(p); });
+
+  const onOrBefore = (val, cutoffTime) => {
+    if (cutoffTime == null) return true;     // hoy: sin filtro
+    if (!val) return true;                    // sin fecha → dato antiguo, contar
+    return new Date(val).getTime() <= cutoffTime;
+  };
+
+  const snapshotAt = (cutoffTime) => {
+    let total = 0, count = 0;
+    for (const [sId, sPkgs] of pkgsByStudent.entries()) {
+      const pkgs = sPkgs.filter(p => onOrBefore(p.purchase_date || p.start_date, cutoffTime));
+      if (pkgs.length === 0) continue;
+      const pays = (paysByStudent.get(sId) || []).filter(p => onOrBefore(p.payment_date, cutoffTime));
+      const d = computeStudentDues(pkgs, pays);
+      if (d.currentDue > 0.01) { count++; total += d.currentDue; }
+    }
+    return { total: Math.round(total), count };
+  };
+
+  // 4 cortes semanales: hoy y 3 semanas atrás (fin de día).
+  const base = STATE.currentDate ? new Date(STATE.currentDate) : new Date();
+  const trend = [];
+  for (let i = 3; i >= 0; i--) {
+    const d = new Date(base); d.setDate(d.getDate() - i * 7); d.setHours(23, 59, 59, 999);
+    trend.push({ date: dateToIsoLocal(d), ...snapshotAt(d.getTime()) });
+  }
+  const current = snapshotAt(null); // exacto = lista "Por cobrar"
+  return { current, trend };
+}
+
+async function renderDebtSummary() {
+  const card = document.getElementById('debt-widget');
+  if (!card) return;
+  const loc = getCurrentLocation();
+  const scopeName = document.getElementById('debt-scope-name');
+  if (scopeName) scopeName.textContent = DEBT_SCOPE === 'all' ? 'todas las sedes' : (loc ? loc.name : '—');
+
+  const chart = document.getElementById('debt-chart');
+  if (chart) chart.innerHTML = '<div style="padding:18px 0; font-size:12px; color:var(--ink-mute);">Cargando…</div>';
+
+  const locId = DEBT_SCOPE === 'all' ? null : (loc ? loc.id : null);
+  let data;
+  try {
+    data = await computeDebtSnapshot(locId);
+  } catch (e) {
+    console.warn('computeDebtSnapshot:', e);
+    if (chart) chart.innerHTML = '<div style="padding:12px 0; font-size:12px; color:var(--danger);">No se pudo calcular la deuda.</div>';
+    return;
+  }
+  paintDebtSummary(data);
+}
+
+function paintDebtSummary(data) {
+  const amountEl = document.getElementById('debt-amount');
+  const countEl  = document.getElementById('debt-count');
+  const deltaEl  = document.getElementById('debt-trend-delta');
+  const chart    = document.getElementById('debt-chart');
+  const fmt = (n) => 'S/ ' + Math.round(n || 0).toLocaleString('es-PE');
+
+  if (amountEl) amountEl.textContent = fmt(data.current.total);
+  if (countEl)  countEl.textContent  = `${data.current.count} alumna${data.current.count === 1 ? '' : 's'} con saldo`;
+
+  const pts = data.trend || [];
+  if (deltaEl && pts.length >= 2) {
+    const diff = pts[pts.length - 1].count - pts[0].count;
+    if (diff < 0)      { deltaEl.textContent = `▼ ${Math.abs(diff)} menos que hace 3 sem`; deltaEl.style.color = 'var(--good,#1a8a4a)'; }
+    else if (diff > 0) { deltaEl.textContent = `▲ ${diff} más que hace 3 sem`;            deltaEl.style.color = 'var(--danger,#c0392b)'; }
+    else               { deltaEl.textContent = 'sin cambio';                                deltaEl.style.color = 'var(--ink-mute)'; }
+  } else if (deltaEl) { deltaEl.textContent = '—'; }
+
+  if (!chart) return;
+  if (pts.length === 0) { chart.innerHTML = '<div style="padding:12px 0; font-size:12px; color:var(--ink-mute);">Sin datos.</div>'; return; }
+
+  // Línea de cantidad de alumnos con deuda + monto por semana.
+  const W = 520, H = 132, padL = 20, padR = 20, padT = 18, padB = 36;
+  const counts = pts.map(p => p.count);
+  const maxC = Math.max(1, ...counts);
+  const x = (i) => padL + (pts.length === 1 ? (W - padL - padR) / 2 : i * (W - padL - padR) / (pts.length - 1));
+  const y = (c) => padT + (H - padT - padB) * (1 - c / maxC);
+
+  const linePath = counts.map((c, i) => `${i === 0 ? 'M' : 'L'} ${x(i).toFixed(1)} ${y(c).toFixed(1)}`).join(' ');
+  const areaPath = `${linePath} L ${x(pts.length - 1).toFixed(1)} ${(H - padB).toFixed(1)} L ${x(0).toFixed(1)} ${(H - padB).toFixed(1)} Z`;
+  const labelDate = (iso) => { const p = iso.split('-'); return `${p[2]}/${p[1]}`; };
+
+  let svg = `<svg viewBox="0 0 ${W} ${H}" width="100%" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg" style="overflow:visible;">`;
+  svg += `<path d="${areaPath}" fill="var(--accent-soft, rgba(91,42,143,0.08))" stroke="none"/>`;
+  svg += `<path d="${linePath}" fill="none" stroke="var(--accent, #5B2A8F)" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>`;
+  pts.forEach((p, i) => {
+    const cx = x(i), cy = y(p.count), isLast = i === pts.length - 1;
+    svg += `<circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="${isLast ? 5 : 3.5}" fill="${isLast ? 'var(--accent, #5B2A8F)' : '#fff'}" stroke="var(--accent, #5B2A8F)" stroke-width="2"/>`;
+    svg += `<text x="${cx.toFixed(1)}" y="${(cy - 11).toFixed(1)}" text-anchor="middle" font-size="13" font-weight="700" fill="var(--ink)">${p.count}</text>`;
+    svg += `<text x="${cx.toFixed(1)}" y="${(H - 19).toFixed(1)}" text-anchor="middle" font-size="10" fill="var(--ink-faint)">${labelDate(p.date)}</text>`;
+    svg += `<text x="${cx.toFixed(1)}" y="${(H - 6).toFixed(1)}" text-anchor="middle" font-size="9.5" fill="var(--ink-faint)">${fmt(p.total)}</text>`;
+  });
+  svg += `</svg>`;
+  chart.innerHTML = svg;
+}
+
 async function renderCobranzaWidget() {
   const loc = getCurrentLocation();
   if (!loc) return;
