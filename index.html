@@ -3893,7 +3893,7 @@
 
 <!-- NUEVO BLOQUE DE HORARIO MODAL -->
 <div class="modal-backdrop" id="ise-new-block-modal" onclick="if(event.target===this) iseCloseBlockModal()">
-  <div class="modal-card" style="width: 580px; max-width: 96vw;">
+  <div class="modal-card" style="width: 760px; max-width: 96vw;">
     <div class="modal-header">
       <div class="modal-title">Nuevo <em>bloque de horario</em></div>
       <button class="modal-close" onclick="iseCloseBlockModal()">✕</button>
@@ -3919,35 +3919,11 @@
         </div>
 
         <div class="form-row">
-          <label>Días de la semana</label>
-          <div class="ise-chip-row" id="ise-nb-dows">
-            <span class="ise-chip-toggle" data-dow="1" onclick="iseToggleDow(1)">Lun</span>
-            <span class="ise-chip-toggle" data-dow="2" onclick="iseToggleDow(2)">Mar</span>
-            <span class="ise-chip-toggle" data-dow="3" onclick="iseToggleDow(3)">Mié</span>
-            <span class="ise-chip-toggle" data-dow="4" onclick="iseToggleDow(4)">Jue</span>
-            <span class="ise-chip-toggle" data-dow="5" onclick="iseToggleDow(5)">Vie</span>
-            <span class="ise-chip-toggle" data-dow="6" onclick="iseToggleDow(6)">Sáb</span>
-            <span class="ise-chip-toggle" data-dow="0" onclick="iseToggleDow(0)">Dom</span>
-          </div>
-          <div class="ise-preset-row" style="margin-top: 8px;">
-            <button type="button" class="ise-preset-btn" onclick="iseDowPreset('weekdays')">Lun a Vie</button>
-            <button type="button" class="ise-preset-btn" onclick="iseDowPreset('weekends')">Sáb y Dom</button>
-            <button type="button" class="ise-preset-btn" onclick="iseDowPreset('all')">Todos los días</button>
-            <button type="button" class="ise-preset-btn" onclick="iseDowPreset('clear')">Limpiar</button>
-          </div>
+          <label>Slots de este profesor <span style="color: var(--ink-mute); font-size: 11px; font-weight: 400;">— toca para marcar; los puntos de color son otros profes en ese rango (para ver cruces)</span></label>
+          <div id="ise-nb-grid" style="overflow-x: auto; padding: 4px 0;"></div>
         </div>
 
-        <div class="form-row">
-          <label>Horas</label>
-          <div class="ise-chip-row" id="ise-nb-hours"></div>
-          <div class="ise-preset-row" style="margin-top: 8px;">
-            <button type="button" class="ise-preset-btn" onclick="iseHourPreset('morning')">6am – 11am</button>
-            <button type="button" class="ise-preset-btn" onclick="iseHourPreset('afternoon')">4pm – 8pm</button>
-            <button type="button" class="ise-preset-btn" onclick="iseHourPreset('clear')">Limpiar</button>
-          </div>
-        </div>
-
-        <div class="ise-summary" id="ise-nb-summary">Selecciona días y horas para ver el resumen.</div>
+        <div class="ise-summary" id="ise-nb-summary">Marca al menos un slot para ver el resumen.</div>
 
       </div>
     </div>
@@ -10838,6 +10814,56 @@ function iseDayBeforeIso(dateIso) {
   return dateToIsoLocal(d);
 }
 
+// Devuelve el día siguiente a una fecha ISO (yyyy-mm-dd)
+function iseDayAfterIso(dateIso) {
+  const d = new Date(dateIso + 'T12:00:00');
+  d.setDate(d.getDate() + 1);
+  return dateToIsoLocal(d);
+}
+
+// Calcula cómo recortar/dividir las filas del MISMO profe que se solapan con el nuevo bloque.
+// Decisión de negocio: editar un rango RECORTA las filas previas del profe solo donde se pisan,
+// nunca duplica. newFrom/newTo pueden ser null (abierto).
+//   - vieja totalmente dentro del nuevo rango → desactivar (is_active=false)
+//   - vieja empieza antes → recortar cola: effective_to = día antes de newFrom
+//   - vieja termina después → recortar cabeza: effective_from = día después de newTo
+//   - el nuevo cae dentro de la vieja → dividir: recortar cola + insertar la parte posterior
+function iseComputeSameInstrTrims(sameInstructorDuplicates, newFromIso, newToIso) {
+  const updates = [];
+  const inserts = [];
+  const seen = new Set();
+  const NF = newFromIso || '0001-01-01';
+  const NT = newToIso || '9999-12-31';
+  (sameInstructorDuplicates || []).forEach(({ existing }) => {
+    if (seen.has(existing.id)) return;
+    seen.add(existing.id);
+    const EXF = existing.effective_from || '0001-01-01';
+    const EXT = existing.effective_to || '9999-12-31';
+    const startsBefore = EXF < NF;
+    const endsAfter = EXT > NT;
+    if (startsBefore && endsAfter) {
+      // El nuevo bloque cae DENTRO de uno viejo más largo → dividir en antes + después
+      updates.push({ id: existing.id, data: { effective_to: iseDayBeforeIso(newFromIso) } });
+      inserts.push({
+        instructor_id: existing.instructor_id,
+        location_id: existing.location_id,
+        day_of_week: existing.day_of_week,
+        hour: existing.hour,
+        effective_from: iseDayAfterIso(newToIso),
+        effective_to: existing.effective_to,
+        is_active: true,
+      });
+    } else if (startsBefore) {
+      updates.push({ id: existing.id, data: { effective_to: iseDayBeforeIso(newFromIso) } });
+    } else if (endsAfter) {
+      updates.push({ id: existing.id, data: { effective_from: iseDayAfterIso(newToIso) } });
+    } else {
+      updates.push({ id: existing.id, data: { is_active: false } });
+    }
+  });
+  return { updates, inserts };
+}
+
 // Formato corto de fecha: "31 may"
 function iseFormatShortDate(dateIso) {
   const d = new Date(dateIso + 'T12:00:00');
@@ -10930,6 +10956,18 @@ async function iseConfirmReplacement() {
       if (error) throw error;
     }
 
+    // 1b. Aplicar recortes del MISMO profe (si los hubo en este guardado)
+    for (const u of (CONFLICT_CTX.sameInstrUpdates || [])) {
+      const { error } = await sb.from('instructor_schedules').update(u.data).eq('id', u.id);
+      if (error) throw error;
+    }
+    if ((CONFLICT_CTX.sameInstrInserts || []).length > 0) {
+      const { error: seErr } = await sb.from('instructor_schedules').insert(CONFLICT_CTX.sameInstrInserts);
+      if (seErr) throw seErr;
+    }
+    CONFLICT_CTX.sameInstrUpdates = [];
+    CONFLICT_CTX.sameInstrInserts = [];
+
     // 2. Insertar los nuevos rows
     const { error: insErr } = await sb.from('instructor_schedules').insert(CONFLICT_CTX.pendingRows);
     if (insErr) throw insErr;
@@ -10969,13 +11007,11 @@ async function iseConfirmReplacement() {
 // hour, effective_from, effective_to, is_active). Compatible con todos los consumers.
 
 const NB_CTX = {
-  dows: new Set(),
-  hours: new Set(),
+  cells: new Set(),   // "dow-hour" por cada slot marcado del profe seleccionado
 };
 
 function iseOpenNewBlockModal() {
-  NB_CTX.dows = new Set();
-  NB_CTX.hours = new Set();
+  NB_CTX.cells = new Set();
 
   // Llenar sede (default: la sede actual del editor)
   const sel = document.getElementById('ise-nb-location');
@@ -10986,85 +11022,114 @@ function iseOpenNewBlockModal() {
   document.getElementById('ise-nb-from').value = SCHEDULE_CTX.selectedDate || dateToIsoLocal(new Date());
   document.getElementById('ise-nb-to').value = '';
 
-  // Renderear chips de horas (dinámico desde ISE_HOURS_AVAILABLE)
-  const hoursWrap = document.getElementById('ise-nb-hours');
-  hoursWrap.innerHTML = ISE_HOURS_AVAILABLE.map(h =>
-    `<span class="ise-chip-toggle" data-hour="${h}" onclick="iseToggleHour(${h})">${formatHour(h)}</span>`
-  ).join('');
+  // Re-render de la grilla cuando cambian sede o fechas (cambia el contexto de otros profes)
+  sel.onchange = iseRenderNbGrid;
+  document.getElementById('ise-nb-from').onchange = iseRenderNbGrid;
+  document.getElementById('ise-nb-to').onchange = iseRenderNbGrid;
 
-  // Reset visual de chips de días
-  document.querySelectorAll('#ise-nb-dows .ise-chip-toggle').forEach(c => c.classList.remove('is-on'));
-
+  iseRenderNbGrid();
   iseUpdateBlockSummary();
   document.getElementById('ise-new-block-modal').classList.add('is-open');
+}
+
+// Horas reales que existen en la sede (unión de instructor_schedules) + las ya marcadas.
+function iseNbHoursForLoc(locId) {
+  const set = new Set();
+  (STATE.schedules || []).forEach(s => { if (s.location_id === locId) set.add(s.hour); });
+  [...NB_CTX.cells].forEach(c => set.add(+c.split('-')[1]));
+  let hours = [...set].sort((a, b) => a - b);
+  if (hours.length === 0) hours = [6, 7, 8, 9, 10, 11, 12, 16, 17, 18, 19, 20];
+  return hours;
+}
+
+// Grilla semanal: días (col) × horas reales (fila). Marca los slots del profe seleccionado
+// y muestra de fondo, con puntos de color, a los otros profes vigentes en el mismo rango
+// (para ver cruces antes de guardar).
+function iseRenderNbGrid() {
+  const wrap = document.getElementById('ise-nb-grid');
+  if (!wrap) return;
+  const locId = document.getElementById('ise-nb-location').value;
+  const fromIso = document.getElementById('ise-nb-from').value || null;
+  const toIso = document.getElementById('ise-nb-to').value || null;
+  const NF = fromIso || '0001-01-01';
+  const NT = toIso || '9999-12-31';
+  const days = [1, 2, 3, 4, 5, 6, 0];
+  const dayLabels = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
+  const hours = iseNbHoursForLoc(locId);
+  const myId = SCHEDULE_CTX.instructorId;
+
+  // Otros profes vigentes que se solapan con el rango nuevo, por celda
+  const othersByCell = new Map(); // "dow-hour" -> Set(instructorId)
+  (STATE.schedules || []).forEach(s => {
+    if (s.location_id !== locId) return;
+    if (s.instructor_id === myId) return;
+    const exF = s.effective_from || '0001-01-01';
+    const exT = s.effective_to || '9999-12-31';
+    if (NF <= exT && NT >= exF) {
+      const k = `${s.day_of_week}-${s.hour}`;
+      if (!othersByCell.has(k)) othersByCell.set(k, new Set());
+      othersByCell.get(k).add(s.instructor_id);
+    }
+  });
+
+  let html = `<div style="display:grid; grid-template-columns:46px repeat(7,minmax(44px,1fr)); gap:3px; min-width:500px;">`;
+  html += `<div></div>` + dayLabels.map(d => `<div style="text-align:center; font-size:11px; font-weight:600; color:var(--ink-mute);">${d}</div>`).join('');
+  hours.forEach(h => {
+    html += `<div style="font-size:11px; color:var(--ink-mute); display:flex; align-items:center; justify-content:flex-end; padding-right:4px;">${formatHour(h)}</div>`;
+    days.forEach(dow => {
+      const k = `${dow}-${h}`;
+      const mine = NB_CTX.cells.has(k);
+      const others = othersByCell.get(k);
+      let bg = 'var(--white)';
+      let content = '';
+      if (mine) {
+        bg = 'var(--fit-purple, #5B2A8F)';
+        content = `<span style="color:#fff; font-size:12px; font-weight:700;">✓</span>`;
+        if (others && others.size) {
+          // El slot del profe pisa a otros → marca de advertencia
+          content += `<span style="position:absolute; top:1px; right:2px; font-size:9px; color:#FCD34D;">●</span>`;
+        }
+      } else if (others && others.size) {
+        content = [...others].slice(0, 4).map(id => {
+          const inst = STATE.instructors.find(i => i.id === id);
+          const c = getInstructorColor(inst);
+          return `<span title="${inst ? escape(inst.full_name) : ''}" style="display:inline-block; width:7px; height:7px; border-radius:50%; background:${c};"></span>`;
+        }).join('');
+      }
+      html += `<div onclick="iseToggleNbCell(${dow}, ${h})" style="position:relative; min-height:30px; border:1px solid var(--line-soft, #E5E0EC); border-radius:6px; background:${bg}; cursor:pointer; display:flex; align-items:center; justify-content:center; flex-wrap:wrap; gap:2px;">${content}</div>`;
+    });
+  });
+  html += `</div>`;
+  wrap.innerHTML = html;
+}
+
+function iseToggleNbCell(dow, hour) {
+  const k = `${dow}-${hour}`;
+  if (NB_CTX.cells.has(k)) NB_CTX.cells.delete(k);
+  else NB_CTX.cells.add(k);
+  iseRenderNbGrid();
+  iseUpdateBlockSummary();
 }
 
 function iseCloseBlockModal() {
   document.getElementById('ise-new-block-modal').classList.remove('is-open');
 }
 
-function iseToggleDow(dow) {
-  if (NB_CTX.dows.has(dow)) NB_CTX.dows.delete(dow);
-  else NB_CTX.dows.add(dow);
-  const el = document.querySelector(`#ise-nb-dows [data-dow="${dow}"]`);
-  if (el) el.classList.toggle('is-on');
-  iseUpdateBlockSummary();
-}
-
-function iseToggleHour(hour) {
-  if (NB_CTX.hours.has(hour)) NB_CTX.hours.delete(hour);
-  else NB_CTX.hours.add(hour);
-  const el = document.querySelector(`#ise-nb-hours [data-hour="${hour}"]`);
-  if (el) el.classList.toggle('is-on');
-  iseUpdateBlockSummary();
-}
-
-function iseDowPreset(preset) {
-  const apply = (dows) => {
-    NB_CTX.dows = new Set(dows);
-    document.querySelectorAll('#ise-nb-dows .ise-chip-toggle').forEach(c => {
-      const d = parseInt(c.dataset.dow);
-      c.classList.toggle('is-on', NB_CTX.dows.has(d));
-    });
-  };
-  if (preset === 'weekdays') apply([1,2,3,4,5]);
-  else if (preset === 'weekends') apply([6,0]);
-  else if (preset === 'all') apply([1,2,3,4,5,6,0]);
-  else if (preset === 'clear') apply([]);
-  iseUpdateBlockSummary();
-}
-
-function iseHourPreset(preset) {
-  const apply = (hours) => {
-    NB_CTX.hours = new Set(hours);
-    document.querySelectorAll('#ise-nb-hours .ise-chip-toggle').forEach(c => {
-      const h = parseInt(c.dataset.hour);
-      c.classList.toggle('is-on', NB_CTX.hours.has(h));
-    });
-  };
-  if (preset === 'morning') apply([6,7,8,9,10,11]);
-  else if (preset === 'afternoon') apply([16,17,18,19,20]);
-  else if (preset === 'clear') apply([]);
-  iseUpdateBlockSummary();
-}
-
 function iseUpdateBlockSummary() {
-  const dows = [...NB_CTX.dows].sort((a,b) => (a===0?7:a) - (b===0?7:b));
-  const hours = [...NB_CTX.hours].sort((a,b) => a-b);
+  const cells = [...NB_CTX.cells];
   const summaryEl = document.getElementById('ise-nb-summary');
   const btn = document.getElementById('ise-nb-save-btn');
 
-  if (dows.length === 0 || hours.length === 0) {
-    summaryEl.innerHTML = 'Selecciona días y horas para ver el resumen.';
+  if (cells.length === 0) {
+    summaryEl.innerHTML = 'Marca al menos un slot para ver el resumen.';
     btn.disabled = true;
     return;
   }
 
-  const dowLabel = iseFormatDows(new Set(dows));
-  const hoursLabel = iseFormatHours(new Set(hours));
-  const totalSlots = dows.length * hours.length;
-  summaryEl.innerHTML = `<strong>${dowLabel}</strong> · <strong>${hoursLabel}</strong><br>
-    ${totalSlots} ${totalSlots === 1 ? 'clase' : 'clases'} por semana en esta sede.`;
+  const dows = new Set(cells.map(c => +c.split('-')[0]));
+  const hours = new Set(cells.map(c => +c.split('-')[1]));
+  summaryEl.innerHTML = `<strong>${iseFormatDows(dows)}</strong> · <strong>${iseFormatHours(hours)}</strong><br>
+    ${cells.length} ${cells.length === 1 ? 'clase' : 'clases'} por semana en esta sede.`;
   btn.disabled = false;
 }
 
@@ -11083,8 +11148,8 @@ async function iseSaveNewBlock() {
     if (btn) { btn.disabled = false; btn.textContent = 'Guardar bloque'; }
     return;
   }
-  if (NB_CTX.dows.size === 0 || NB_CTX.hours.size === 0) {
-    showToast('Selecciona al menos un día y una hora', 'error');
+  if (NB_CTX.cells.size === 0) {
+    showToast('Marca al menos un slot en la grilla', 'error');
     if (btn) { btn.disabled = false; btn.textContent = 'Guardar bloque'; }
     return;
   }
@@ -11100,53 +11165,52 @@ async function iseSaveNewBlock() {
     return;
   }
 
-  // Generar las filas (una por cada dow × hour)
+  // Generar las filas (una por cada slot marcado en la grilla)
   const rows = [];
-  for (const dow of NB_CTX.dows) {
-    for (const hour of NB_CTX.hours) {
-      rows.push({
-        instructor_id: SCHEDULE_CTX.instructorId,
-        location_id: locId,
-        day_of_week: dow,
-        hour: hour,
-        effective_from: effFrom,
-        effective_to: effTo,
-        is_active: true,
-      });
-    }
+  for (const cell of NB_CTX.cells) {
+    const [dow, hour] = cell.split('-').map(Number);
+    rows.push({
+      instructor_id: SCHEDULE_CTX.instructorId,
+      location_id: locId,
+      day_of_week: dow,
+      hour: hour,
+      effective_from: effFrom,
+      effective_to: effTo,
+      is_active: true,
+    });
   }
 
   // 🚨 DETECCIÓN DE CONFLICTOS Y DUPLICADOS
   const { conflicts, sameInstructorDuplicates } = iseFindConflicts(rows, effFrom, effTo);
 
-  // (a) Si el MISMO profesor ya tiene rows traslapados → avisar antes de duplicar
-  if (sameInstructorDuplicates.length > 0) {
-    const dupDows = new Set(sameInstructorDuplicates.map(d => d.existing.day_of_week));
-    const dupHours = new Set(sameInstructorDuplicates.map(d => d.existing.hour));
-    const inst = STATE.instructors.find(i => i.id === SCHEDULE_CTX.instructorId);
-    const instName = inst ? inst.full_name : 'Este profesor';
-    const msg = `${instName} ya tiene clases asignadas en este rango:\n\n` +
-                `${iseFormatDows(dupDows)} · ${iseFormatHours(dupHours)}\n\n` +
-                `Si continúas, se crearán filas DUPLICADAS en la base de datos. ` +
-                `¿Estás seguro? (Normalmente esto es un error.)`;
-    if (!confirm(msg)) {
-      if (btn) { btn.disabled = false; btn.textContent = 'Guardar bloque'; }
-      return;
-    }
-  }
+  // (a) Solapamientos del MISMO profe → recortar/cerrar (NO duplicar).
+  //     Editar un rango recorta las filas previas del profe solo donde se pisan.
+  const sameTrims = iseComputeSameInstrTrims(sameInstructorDuplicates, effFrom, effTo);
 
-  // (b) Si hay conflictos con OTROS profesores → modal de reemplazo
+  // (b) Si hay conflictos con OTROS profesores → modal de reemplazo.
+  //     Ese flujo también aplicará los recortes del mismo profe (los dejamos en CONFLICT_CTX).
   if (conflicts.length > 0) {
+    CONFLICT_CTX.sameInstrUpdates = sameTrims.updates;
+    CONFLICT_CTX.sameInstrInserts = sameTrims.inserts;
     // Re-habilitar el botón porque el flujo continúa en otro modal
     if (btn) { btn.disabled = false; btn.textContent = 'Guardar bloque'; }
     iseShowConflictModal(conflicts, rows, effFrom, effTo, locId);
     return;
   }
 
-  // (c) Sin conflictos → guardado directo
+  // (c) Sin conflictos de otros → aplicar recortes del mismo profe + insertar el nuevo bloque
   if (btn) btn.textContent = 'Guardando...';
 
   try {
+    for (const u of sameTrims.updates) {
+      const { error } = await sb.from('instructor_schedules').update(u.data).eq('id', u.id);
+      if (error) throw error;
+    }
+    if (sameTrims.inserts.length > 0) {
+      const { error: splitErr } = await sb.from('instructor_schedules').insert(sameTrims.inserts);
+      if (splitErr) throw splitErr;
+    }
+
     const { error: insErr } = await sb.from('instructor_schedules').insert(rows);
     if (insErr) throw insErr;
 
@@ -11157,7 +11221,9 @@ async function iseSaveNewBlock() {
     STATE.schedules = refreshed || [];
 
     // Limpiar class_sessions y classOverrides que pudieran sobreescribir el nuevo schedule
-    await iseClearOverridesForRange(SCHEDULE_CTX.instructorId, locId, NB_CTX.dows, NB_CTX.hours, effFrom, effTo);
+    const clrDows = new Set(rows.map(r => r.day_of_week));
+    const clrHours = new Set(rows.map(r => r.hour));
+    await iseClearOverridesForRange(SCHEDULE_CTX.instructorId, locId, clrDows, clrHours, effFrom, effTo);
 
     showToast(`Bloque guardado · ${rows.length} ${rows.length === 1 ? 'clase' : 'clases'}/semana`, 'success');
     iseCloseBlockModal();
