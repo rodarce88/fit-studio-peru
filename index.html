@@ -3826,59 +3826,53 @@
 
 <!-- INSTRUCTOR SCHEDULE MODAL (editar horarios fijos del profesor) -->
 <div class="modal-backdrop" id="instructor-schedule-modal" onclick="if(event.target===this) closeModals()">
-  <div class="modal-card" style="width: 1240px; max-width: 96vw;">
+  <div class="modal-card" style="width: 96vw; max-width: 1500px; height: 92vh; display: flex; flex-direction: column;">
     <div class="modal-header">
       <div class="modal-title" id="schedule-modal-title">Horarios de <em>profesor</em></div>
       <button class="modal-close" onclick="closeModals()">✕</button>
     </div>
-    <div class="modal-body ise-body" style="max-height: calc(100vh - 140px); overflow-y: auto;">
+    <div class="modal-body" style="flex: 1; overflow: hidden; display: flex; flex-direction: column; gap: 14px;">
 
-      <div class="ise-head">
-        <div class="ise-loc-pick">
-          <label for="sched-location">Sede</label>
-          <select id="sched-location" onchange="onISELocationChange()"></select>
-        </div>
-        <div class="ise-month-nav">
-          <button type="button" onclick="navigateScheduleMonth(-1)" aria-label="Mes anterior">‹</button>
-          <span class="ise-month-pill" id="ise-month-pill">—</span>
-          <button type="button" onclick="navigateScheduleMonth(1)" aria-label="Mes siguiente">›</button>
-        </div>
+      <div style="display: flex; align-items: center; gap: 10px;">
+        <label for="sched-location" style="font-size: 12px; color: var(--ink-mute, #8A8398); text-transform: uppercase; letter-spacing: .04em; font-weight: 600;">Sede</label>
+        <select id="sched-location" onchange="onISELocationChange()" style="min-width: 220px;"></select>
       </div>
 
-      <div class="ise-main">
-        <!-- LISTA DE PROFESORES -->
-        <div class="ise-instructors-panel">
+      <div style="flex: 1; display: grid; grid-template-columns: 230px 1fr 310px; gap: 18px; overflow: hidden;">
+
+        <!-- IZQUIERDA: PROFESORES -->
+        <div style="overflow-y: auto; border-right: 1px solid var(--line-soft, #E5E0EC); padding-right: 10px;">
           <div class="ise-side-h">Profesores</div>
           <div id="ise-instructors-list"></div>
         </div>
 
-        <!-- CALENDARIO -->
-        <div class="ise-cal">
-          <div class="ise-dow">
-            <span>L</span><span>M</span><span>M</span><span>J</span><span>V</span><span>S</span><span>D</span>
+        <!-- CENTRO: VIGENCIA + GRILLA + RESUMEN -->
+        <div style="overflow-y: auto; display: flex; flex-direction: column; gap: 12px; padding: 0 4px;">
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+            <div class="form-row">
+              <label>Vigente desde</label>
+              <input type="date" id="ise-main-from" onchange="iseRenderGrid(); iseUpdateBlockSummary();" />
+            </div>
+            <div class="form-row">
+              <label>Vigente hasta <span style="color: var(--ink-mute, #8A8398); font-size: 11px; font-weight: 400;">(opcional)</span></label>
+              <input type="date" id="ise-main-to" onchange="iseRenderGrid(); iseUpdateBlockSummary();" />
+            </div>
           </div>
-          <div class="ise-grid" id="ise-grid"></div>
+          <div style="font-size: 12px; color: var(--ink-mute, #8A8398);">Marca los slots de este profesor — los puntos de color son otros profes en ese rango (para ver cruces).</div>
+          <div id="ise-main-grid" style="overflow-x: auto;"></div>
+          <div class="ise-summary" id="ise-main-summary">Marca al menos un slot para ver el resumen.</div>
         </div>
 
-        <!-- SIDE: BLOQUES + DETALLE -->
-        <div class="ise-side">
+        <!-- DERECHA: BLOQUES -->
+        <div style="overflow-y: auto; border-left: 1px solid var(--line-soft, #E5E0EC); padding-left: 14px;">
           <div class="ise-side-h">Bloques de horario</div>
           <div id="ise-blocks-list"></div>
-          <button class="ise-add-block" type="button" id="ise-add-block-btn" onclick="iseOpenNewBlockModal()">+ Nuevo bloque de horario</button>
-          <div id="ise-day-detail"></div>
+          <button class="ise-add-block" type="button" id="ise-add-block-btn" onclick="iseNewBlock()">+ Nuevo bloque (limpiar grilla)</button>
         </div>
+
       </div>
 
-      <!-- TIMELINE HORIZONTAL DEL MES -->
-      <div class="ise-tl-wrap">
-        <div class="ise-tl-h">Línea del mes — transiciones</div>
-        <div class="ise-tl">
-          <div class="ise-tl-bar" id="ise-tl-bar"></div>
-          <div class="ise-tl-axis" id="ise-tl-axis"></div>
-        </div>
-      </div>
-
-      <!-- Inputs ocultos para retrocompatibilidad con saveInstructorSchedule existente -->
+      <!-- Inputs ocultos para retrocompatibilidad -->
       <input type="hidden" id="sched-from" />
       <input type="hidden" id="sched-to" />
       <div id="schedule-grid-editor" style="display: none;"></div>
@@ -3886,50 +3880,7 @@
     <div class="modal-footer">
       <button class="btn btn-ghost" onclick="closeModals()">Cerrar</button>
       <button class="btn btn-danger" id="schedule-delete-all" onclick="deleteAllSchedulesForInstructor()" style="display:none;">Eliminar todos</button>
-      <button class="btn btn-primary" id="ise-save-btn" onclick="saveInstructorSchedule()" style="display:none;">Guardar horarios</button>
-    </div>
-  </div>
-</div>
-
-<!-- NUEVO BLOQUE DE HORARIO MODAL -->
-<div class="modal-backdrop" id="ise-new-block-modal" onclick="if(event.target===this) iseCloseBlockModal()">
-  <div class="modal-card" style="width: 760px; max-width: 96vw;">
-    <div class="modal-header">
-      <div class="modal-title">Nuevo <em>bloque de horario</em></div>
-      <button class="modal-close" onclick="iseCloseBlockModal()">✕</button>
-    </div>
-    <div class="modal-body" style="max-height: calc(100vh - 200px); overflow-y: auto;">
-
-      <div style="display: grid; grid-template-columns: 1fr; gap: 16px;">
-
-        <div class="form-row">
-          <label>Sede</label>
-          <select id="ise-nb-location"></select>
-        </div>
-
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
-          <div class="form-row">
-            <label>Vigente desde</label>
-            <input type="date" id="ise-nb-from" />
-          </div>
-          <div class="form-row">
-            <label>Vigente hasta <span style="color: var(--ink-mute); font-size: 11px; font-weight: 400;">(opcional)</span></label>
-            <input type="date" id="ise-nb-to" />
-          </div>
-        </div>
-
-        <div class="form-row">
-          <label>Slots de este profesor <span style="color: var(--ink-mute); font-size: 11px; font-weight: 400;">— toca para marcar; los puntos de color son otros profes en ese rango (para ver cruces)</span></label>
-          <div id="ise-nb-grid" style="overflow-x: auto; padding: 4px 0;"></div>
-        </div>
-
-        <div class="ise-summary" id="ise-nb-summary">Marca al menos un slot para ver el resumen.</div>
-
-      </div>
-    </div>
-    <div class="modal-footer">
-      <button class="btn btn-ghost" onclick="iseCloseBlockModal()">Cancelar</button>
-      <button class="btn btn-primary" id="ise-nb-save-btn" onclick="iseSaveNewBlock()" disabled>Guardar bloque</button>
+      <button class="btn btn-primary" id="ise-main-save-btn" onclick="iseSaveNewBlock()" disabled>Guardar bloque</button>
     </div>
   </div>
 </div>
@@ -10911,14 +10862,12 @@ function iseShowConflictModal(conflicts, newRows, newFromIso, newToIso, locId) {
     </div>`;
   }).join('');
 
-  document.getElementById('ise-new-block-modal').classList.remove('is-open');
   document.getElementById('ise-conflict-modal').classList.add('is-open');
 }
 
 function iseCloseConflictModal() {
   document.getElementById('ise-conflict-modal').classList.remove('is-open');
-  // Re-abrir el modal de nuevo bloque para que pueda corregir
-  document.getElementById('ise-new-block-modal').classList.add('is-open');
+  // El editor principal sigue abierto detrás con la grilla marcada para corregir.
 }
 
 async function iseConfirmReplacement() {
@@ -11010,26 +10959,36 @@ const NB_CTX = {
   cells: new Set(),   // "dow-hour" por cada slot marcado del profe seleccionado
 };
 
-function iseOpenNewBlockModal() {
+// Carga en la grilla los slots del profe actual vigentes en la fecha "desde" (default hoy).
+function iseLoadMarksForCurrent() {
+  const locId = SCHEDULE_CTX.locationId;
+  const ref = (document.getElementById('ise-main-from') || {}).value || dateToIsoLocal(new Date());
   NB_CTX.cells = new Set();
+  (STATE.schedules || [])
+    .filter(s => s.instructor_id === SCHEDULE_CTX.instructorId && s.location_id === locId)
+    .filter(s => !s.effective_from || s.effective_from <= ref)
+    .filter(s => !s.effective_to || s.effective_to >= ref)
+    .forEach(s => NB_CTX.cells.add(`${s.day_of_week}-${s.hour}`));
+}
 
-  // Llenar sede (default: la sede actual del editor)
-  const sel = document.getElementById('ise-nb-location');
-  sel.innerHTML = STATE.locations.map(l => `<option value="${l.id}">${escape(l.name)}</option>`).join('');
-  sel.value = SCHEDULE_CTX.locationId;
-
-  // Default dates: si hay día seleccionado, ese es el desde
-  document.getElementById('ise-nb-from').value = SCHEDULE_CTX.selectedDate || dateToIsoLocal(new Date());
-  document.getElementById('ise-nb-to').value = '';
-
-  // Re-render de la grilla cuando cambian sede o fechas (cambia el contexto de otros profes)
-  sel.onchange = iseRenderNbGrid;
-  document.getElementById('ise-nb-from').onchange = iseRenderNbGrid;
-  document.getElementById('ise-nb-to').onchange = iseRenderNbGrid;
-
-  iseRenderNbGrid();
+// "+ Nuevo bloque": limpia la grilla y resetea la vigencia a hoy.
+function iseNewBlock() {
+  document.getElementById('ise-main-from').value = dateToIsoLocal(new Date());
+  document.getElementById('ise-main-to').value = '';
+  NB_CTX.cells = new Set();
+  iseRenderGrid();
   iseUpdateBlockSummary();
-  document.getElementById('ise-new-block-modal').classList.add('is-open');
+}
+
+// Carga un bloque existente (de la lista de la derecha) en la grilla para editarlo.
+function iseLoadBlock(idx) {
+  const b = (ISE_CURRENT_BLOCKS || [])[idx];
+  if (!b) return;
+  document.getElementById('ise-main-from').value = b.from || '';
+  document.getElementById('ise-main-to').value = b.to || '';
+  NB_CTX.cells = new Set((b.schedules || []).map(s => `${s.day_of_week}-${s.hour}`));
+  iseRenderGrid();
+  iseUpdateBlockSummary();
 }
 
 // Horas reales que existen en la sede (unión de instructor_schedules) + las ya marcadas.
@@ -11042,15 +11001,15 @@ function iseNbHoursForLoc(locId) {
   return hours;
 }
 
-// Grilla semanal: días (col) × horas reales (fila). Marca los slots del profe seleccionado
-// y muestra de fondo, con puntos de color, a los otros profes vigentes en el mismo rango
-// (para ver cruces antes de guardar).
-function iseRenderNbGrid() {
-  const wrap = document.getElementById('ise-nb-grid');
+// Grilla semanal central: días (col) × horas reales (fila). Marca los slots del profe
+// seleccionado y muestra de fondo, con puntos de color, a los otros profes vigentes en el
+// mismo rango (para ver cruces antes de guardar).
+function iseRenderGrid() {
+  const wrap = document.getElementById('ise-main-grid');
   if (!wrap) return;
-  const locId = document.getElementById('ise-nb-location').value;
-  const fromIso = document.getElementById('ise-nb-from').value || null;
-  const toIso = document.getElementById('ise-nb-to').value || null;
+  const locId = document.getElementById('sched-location').value;
+  const fromIso = document.getElementById('ise-main-from').value || null;
+  const toIso = document.getElementById('ise-main-to').value || null;
   const NF = fromIso || '0001-01-01';
   const NT = toIso || '9999-12-31';
   const days = [1, 2, 3, 4, 5, 6, 0];
@@ -11072,31 +11031,30 @@ function iseRenderNbGrid() {
     }
   });
 
-  let html = `<div style="display:grid; grid-template-columns:46px repeat(7,minmax(44px,1fr)); gap:3px; min-width:500px;">`;
-  html += `<div></div>` + dayLabels.map(d => `<div style="text-align:center; font-size:11px; font-weight:600; color:var(--ink-mute);">${d}</div>`).join('');
+  let html = `<div style="display:grid; grid-template-columns:48px repeat(7,minmax(50px,1fr)); gap:4px; min-width:520px;">`;
+  html += `<div></div>` + dayLabels.map(d => `<div style="text-align:center; font-size:11.5px; font-weight:600; color:var(--ink-mute, #8A8398);">${d}</div>`).join('');
   hours.forEach(h => {
-    html += `<div style="font-size:11px; color:var(--ink-mute); display:flex; align-items:center; justify-content:flex-end; padding-right:4px;">${formatHour(h)}</div>`;
+    html += `<div style="font-size:11.5px; color:var(--ink-mute, #8A8398); display:flex; align-items:center; justify-content:flex-end; padding-right:6px;">${formatHour(h)}</div>`;
     days.forEach(dow => {
       const k = `${dow}-${h}`;
       const mine = NB_CTX.cells.has(k);
       const others = othersByCell.get(k);
-      let bg = 'var(--white)';
+      let bg = 'var(--white, #fff)';
       let content = '';
       if (mine) {
         bg = 'var(--fit-purple, #5B2A8F)';
-        content = `<span style="color:#fff; font-size:12px; font-weight:700;">✓</span>`;
+        content = `<span style="color:#fff; font-size:13px; font-weight:700;">✓</span>`;
         if (others && others.size) {
-          // El slot del profe pisa a otros → marca de advertencia
-          content += `<span style="position:absolute; top:1px; right:2px; font-size:9px; color:#FCD34D;">●</span>`;
+          content += `<span style="position:absolute; top:2px; right:3px; font-size:9px; color:#FCD34D;">●</span>`;
         }
       } else if (others && others.size) {
         content = [...others].slice(0, 4).map(id => {
           const inst = STATE.instructors.find(i => i.id === id);
           const c = getInstructorColor(inst);
-          return `<span title="${inst ? escape(inst.full_name) : ''}" style="display:inline-block; width:7px; height:7px; border-radius:50%; background:${c};"></span>`;
+          return `<span title="${inst ? escape(inst.full_name) : ''}" style="display:inline-block; width:8px; height:8px; border-radius:50%; background:${c};"></span>`;
         }).join('');
       }
-      html += `<div onclick="iseToggleNbCell(${dow}, ${h})" style="position:relative; min-height:30px; border:1px solid var(--line-soft, #E5E0EC); border-radius:6px; background:${bg}; cursor:pointer; display:flex; align-items:center; justify-content:center; flex-wrap:wrap; gap:2px;">${content}</div>`;
+      html += `<div onclick="iseToggleNbCell(${dow}, ${h})" style="position:relative; min-height:34px; border:1px solid var(--line-soft, #E5E0EC); border-radius:7px; background:${bg}; cursor:pointer; display:flex; align-items:center; justify-content:center; flex-wrap:wrap; gap:2px;">${content}</div>`;
     });
   });
   html += `</div>`;
@@ -11107,18 +11065,15 @@ function iseToggleNbCell(dow, hour) {
   const k = `${dow}-${hour}`;
   if (NB_CTX.cells.has(k)) NB_CTX.cells.delete(k);
   else NB_CTX.cells.add(k);
-  iseRenderNbGrid();
+  iseRenderGrid();
   iseUpdateBlockSummary();
-}
-
-function iseCloseBlockModal() {
-  document.getElementById('ise-new-block-modal').classList.remove('is-open');
 }
 
 function iseUpdateBlockSummary() {
   const cells = [...NB_CTX.cells];
-  const summaryEl = document.getElementById('ise-nb-summary');
-  const btn = document.getElementById('ise-nb-save-btn');
+  const summaryEl = document.getElementById('ise-main-summary');
+  const btn = document.getElementById('ise-main-save-btn');
+  if (!summaryEl || !btn) return;
 
   if (cells.length === 0) {
     summaryEl.innerHTML = 'Marca al menos un slot para ver el resumen.';
@@ -11134,7 +11089,7 @@ function iseUpdateBlockSummary() {
 }
 
 async function iseSaveNewBlock() {
-  const btn = document.getElementById('ise-nb-save-btn');
+  const btn = document.getElementById('ise-main-save-btn');
 
   // Protección anti-double-click: si ya estaba deshabilitado, no procesar
   if (btn && btn.disabled) return;
@@ -11154,9 +11109,9 @@ async function iseSaveNewBlock() {
     return;
   }
 
-  const locId = document.getElementById('ise-nb-location').value;
-  const effFrom = document.getElementById('ise-nb-from').value || null;
-  const effTo = document.getElementById('ise-nb-to').value || null;
+  const locId = document.getElementById('sched-location').value;
+  const effFrom = document.getElementById('ise-main-from').value || null;
+  const effTo = document.getElementById('ise-main-to').value || null;
 
   // Validación: si hay ambas fechas, desde debe ser <= hasta
   if (effFrom && effTo && effFrom > effTo) {
@@ -11226,7 +11181,7 @@ async function iseSaveNewBlock() {
     await iseClearOverridesForRange(SCHEDULE_CTX.instructorId, locId, clrDows, clrHours, effFrom, effTo);
 
     showToast(`Bloque guardado · ${rows.length} ${rows.length === 1 ? 'clase' : 'clases'}/semana`, 'success');
-    iseCloseBlockModal();
+    if (btn) { btn.disabled = false; btn.textContent = 'Guardar bloque'; }
     iseRenderInstructorsList();
     iseRender();
   } catch (e) {
@@ -11493,128 +11448,47 @@ function iseBlockStats(block) {
 }
 
 // Render principal de la vista mensual
+let ISE_CURRENT_BLOCKS = [];
+
 async function iseRender() {
   const inst = STATE.instructors.find(i => i.id === SCHEDULE_CTX.instructorId);
   if (!inst) return;
   const locId = SCHEDULE_CTX.locationId;
   if (!locId) return;
 
-  // Header del mes
-  const monthName = ISE_MONTHS[SCHEDULE_CTX.viewMonth];
-  document.getElementById('ise-month-pill').innerHTML = `<em>${monthName}</em> ${SCHEDULE_CTX.viewYear}`;
+  // Centro: grilla semanal editable (slots del profe + cruces de otros)
+  iseRenderGrid();
+  iseUpdateBlockSummary();
 
-  // Cargar overrides del mes desde BD (suplencias y cambios puntuales)
-  await iseLoadMonthSessions();
-
-  // Calendar grid
-  const grid = document.getElementById('ise-grid');
-  if (!grid) return;
-  const firstDay = new Date(SCHEDULE_CTX.viewYear, SCHEDULE_CTX.viewMonth, 1);
-  const lastDay = new Date(SCHEDULE_CTX.viewYear, SCHEDULE_CTX.viewMonth + 1, 0);
-  // Lunes como primer día: getDay() devuelve 0=Dom, 1=Lun... convertimos a 0=Lun, 6=Dom
-  const startDow = (firstDay.getDay() + 6) % 7;
-  const todayIso = dateToIsoLocal(new Date());
-
-  let html = '';
-  // Días del mes anterior (placeholders gris)
-  for (let i = 0; i < startDow; i++) {
-    const d = new Date(firstDay);
-    d.setDate(d.getDate() - (startDow - i));
-    html += `<div class="ise-day is-other"><span class="ise-num">${d.getDate()}</span></div>`;
-  }
-  // Días del mes actual
-  for (let day = 1; day <= lastDay.getDate(); day++) {
-    const dateIso = `${SCHEDULE_CTX.viewYear}-${String(SCHEDULE_CTX.viewMonth+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
-    const resolvedHours = iseResolvedHoursForDay(SCHEDULE_CTX.instructorId, locId, dateIso);
-    const hourCount = resolvedHours.length;
-    let intensityClass = '';
-    if (hourCount >= 5) intensityClass = 'has-heavy';
-    else if (hourCount >= 3) intensityClass = 'has-medium';
-    else if (hourCount >= 1) intensityClass = 'has-light';
-    const isToday = dateIso === todayIso;
-    const isSelected = dateIso === SCHEDULE_CTX.selectedDate;
-    const cls = ['ise-day', intensityClass, isToday ? 'is-today' : '', isSelected ? 'is-selected' : ''].filter(Boolean).join(' ');
-    // Chips de horas (máx 4 visibles + "+N")
-    const visibleHours = resolvedHours.slice(0, 4);
-    const extraCount = resolvedHours.length - visibleHours.length;
-    const chipsHtml = visibleHours.map(h => `<span class="ise-chip">${formatHour(h)}</span>`).join('') +
-                      (extraCount > 0 ? `<span class="ise-chip" style="background: var(--ink-faint); color: var(--white);">+${extraCount}</span>` : '');
-    html += `<div class="${cls}" onclick="iseSelectDay('${dateIso}')">
-      <span class="ise-num">${day}</span>
-      ${chipsHtml ? `<div class="ise-chips">${chipsHtml}</div>` : ''}
-    </div>`;
-  }
-  // Rellenar resto de la última semana
-  const totalCells = startDow + lastDay.getDate();
-  const remaining = (7 - (totalCells % 7)) % 7;
-  for (let i = 1; i <= remaining; i++) {
-    html += `<div class="ise-day is-other"><span class="ise-num">${i}</span></div>`;
-  }
-  grid.innerHTML = html;
-
-  // Bloques laterales (filtrados por sede actual)
+  // Derecha: bloques de horario del profe en esta sede
   const allSchedules = (STATE.schedules || []).filter(s =>
     s.instructor_id === SCHEDULE_CTX.instructorId && s.location_id === locId
   );
-  const blocks = iseGroupBlocks(allSchedules);
+  ISE_CURRENT_BLOCKS = iseGroupBlocks(allSchedules);
+  iseRenderBlocksList(ISE_CURRENT_BLOCKS);
+}
 
-  // Detectar si tiene suplencias en el mes (sin tener bloque base)
-  const monthSuplencias = (SCHEDULE_CTX.monthSessions || []).filter(sess =>
-    !sess.is_cancelled && (sess.actual_instructor_id === SCHEDULE_CTX.instructorId ||
-    (sess.actual_instructor_id == null && sess.instructor_id === SCHEDULE_CTX.instructorId))
-  );
-  // Contar suplencias que NO están en bloques base
-  const suplenciasOutsideBlocks = monthSuplencias.filter(sess => {
-    const dow = new Date(sess.session_date + 'T12:00:00').getDay();
-    return !allSchedules.some(s =>
-      s.day_of_week === dow && s.hour === sess.hour &&
-      (!s.effective_from || sess.session_date >= s.effective_from) &&
-      (!s.effective_to || sess.session_date <= s.effective_to)
-    );
-  });
-
+// Lista de bloques (columna derecha). Cada bloque es tocable para cargarlo en la grilla.
+function iseRenderBlocksList(blocks) {
   const blocksEl = document.getElementById('ise-blocks-list');
-  if (blocks.length === 0 && suplenciasOutsideBlocks.length === 0) {
-    blocksEl.innerHTML = `<div style="padding: 16px; text-align: center; color: var(--ink-mute); font-size: 12.5px; background: var(--fit-cream); border-radius: 12px; font-style: italic;">Este profesor no tiene horarios asignados en esta sede todavía.</div>`;
-  } else {
-    let listHtml = blocks.map(b => {
-      const stats = iseBlockStats(b);
-      const isActive = SCHEDULE_CTX.selectedDate && (
-        (!b.from || SCHEDULE_CTX.selectedDate >= b.from) &&
-        (!b.to || SCHEDULE_CTX.selectedDate <= b.to)
-      );
-      return `<div class="ise-block ${isActive ? 'is-active' : ''}">
+  if (!blocksEl) return;
+  if (!blocks || blocks.length === 0) {
+    blocksEl.innerHTML = `<div style="padding: 16px; text-align: center; color: var(--ink-mute, #8A8398); font-size: 12.5px; background: var(--fit-cream, #F5F0F7); border-radius: 12px; font-style: italic;">Este profesor no tiene horarios en esta sede todavia.</div>`;
+    return;
+  }
+  const todayIso = dateToIsoLocal(new Date());
+  blocksEl.innerHTML = blocks.map((b, idx) => {
+    const stats = iseBlockStats(b);
+    const isActive = (!b.from || todayIso >= b.from) && (!b.to || todayIso <= b.to);
+    return `<div class="ise-block ${isActive ? 'is-active' : ''}" style="cursor: pointer;" onclick="iseLoadBlock(${idx})" title="Tocar para editar este bloque en la grilla">
         <div class="ise-block-range"><em>${iseFormatRange(b.from, b.to)}</em></div>
         <div class="ise-block-meta">${iseFormatDows(b.dows)} · ${iseFormatHours(b.hours)}</div>
         <div class="ise-block-stats">
-          <span>📅 ${stats.days} ${typeof stats.days === 'number' ? 'días' : ''}</span>
+          <span>📅 ${stats.days} ${typeof stats.days === 'number' ? 'dias' : ''}</span>
           <span>🕐 ${stats.classes} ${typeof stats.classes === 'number' ? 'clases' : ''}</span>
         </div>
       </div>`;
-    }).join('');
-
-    // Si hay suplencias fuera de bloques, mostrar una card adicional
-    if (suplenciasOutsideBlocks.length > 0) {
-      const uniqueDates = [...new Set(suplenciasOutsideBlocks.map(s => s.session_date))];
-      const datesLabel = uniqueDates.map(d => {
-        const dt = new Date(d + 'T12:00:00');
-        return `${dt.getDate()} ${ISE_MONTHS[dt.getMonth()].slice(0,3)}`;
-      }).join(' · ');
-      listHtml += `<div class="ise-block" style="border-style: dashed; background: var(--gold-soft); border-color: var(--gold-light);">
-        <div class="ise-block-range" style="color: var(--gold-deep, #6B4A0A);"><em>Suplencias del mes</em></div>
-        <div class="ise-block-meta">${suplenciasOutsideBlocks.length} ${suplenciasOutsideBlocks.length === 1 ? 'clase cubierta' : 'clases cubiertas'} fuera de su horario base</div>
-        <div class="ise-block-stats"><span>📅 ${datesLabel}</span></div>
-      </div>`;
-    }
-
-    blocksEl.innerHTML = listHtml;
-  }
-
-  // Detalle del día seleccionado
-  iseRenderDayDetail();
-
-  // Timeline horizontal
-  iseRenderTimeline(blocks);
+  }).join('');
 }
 
 function iseRenderDayDetail() {
@@ -11779,10 +11653,15 @@ function iseRenderInstructorsList() {
 function iseSelectInstructor(instructorId) {
   if (SCHEDULE_CTX.instructorId === instructorId) return;
   SCHEDULE_CTX.instructorId = instructorId;
-  SCHEDULE_CTX.selectedDate = dateToIsoLocal(new Date()); // reset al hoy
+  SCHEDULE_CTX.selectedDate = dateToIsoLocal(new Date());
 
   const inst = STATE.instructors.find(i => i.id === instructorId);
   document.getElementById('schedule-modal-title').innerHTML = `Horarios de <em>${escape(inst ? inst.full_name : 'profesor')}</em>`;
+
+  // Resetear vigencia a hoy y cargar los slots vigentes del profe en la grilla
+  document.getElementById('ise-main-from').value = dateToIsoLocal(new Date());
+  document.getElementById('ise-main-to').value = '';
+  iseLoadMarksForCurrent();
 
   iseRenderInstructorsList(); // actualizar highlight de "activo"
   iseRender();
@@ -11809,8 +11688,8 @@ function navigateScheduleMonth(delta) {
 
 function onISELocationChange() {
   SCHEDULE_CTX.locationId = document.getElementById('sched-location').value;
-  // Limpiar selección — la sede cambió
   SCHEDULE_CTX.selectedDate = null;
+  iseLoadMarksForCurrent(); // recargar los slots del profe en la sede nueva
   iseRenderInstructorsList(); // el conteo de slots por profesor depende de la sede
   iseRender();
 }
@@ -11820,8 +11699,6 @@ function openInstructorScheduleModal(instructorId) {
   SCHEDULE_CTX = {
     instructorId,
     locationId: STATE.currentLocationId,
-    viewMonth: today.getMonth(),
-    viewYear: today.getFullYear(),
     selectedDate: dateToIsoLocal(today),
     marks: new Set() // retrocompatibilidad
   };
@@ -11834,10 +11711,12 @@ function openInstructorScheduleModal(instructorId) {
   sedeSel.value = STATE.currentLocationId;
   SCHEDULE_CTX.locationId = sedeSel.value;
 
-  // Render lista de profesores (columna izquierda)
-  iseRenderInstructorsList();
+  // Vigencia por defecto: hoy / sin fin, y cargar slots vigentes del profe
+  document.getElementById('ise-main-from').value = dateToIsoLocal(today);
+  document.getElementById('ise-main-to').value = '';
+  iseLoadMarksForCurrent();
 
-  // Render principal de la vista mensual
+  iseRenderInstructorsList();
   iseRender();
 
   document.getElementById('instructor-schedule-modal').classList.add('is-open');
