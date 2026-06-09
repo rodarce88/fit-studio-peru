@@ -24015,13 +24015,42 @@ const PAY_DEFAULT_CONFIG = {
   tiers: PAY_DEFAULT_TIERS
 };
 
+// Normaliza las versiones del tarifario de un profe. Cada versión: { from: 'YYYY-MM-DD'|null, tiers:[...] }.
+// from:null = "desde siempre" (histórico). Si no hay tier_versions, se sintetiza desde el tiers legacy.
+function normalizeTierVersions(c) {
+  let versions = (c && Array.isArray(c.tier_versions) && c.tier_versions.length) ? c.tier_versions.slice() : null;
+  if (!versions) {
+    const base = (c && c.tiers && c.tiers.length) ? c.tiers : PAY_DEFAULT_TIERS;
+    versions = [{ from: null, tiers: base }];
+  }
+  versions.sort((a, b) => {
+    const af = a.from || '0000-00-00', bf = b.from || '0000-00-00';
+    return af < bf ? -1 : (af > bf ? 1 : 0);
+  });
+  return versions;
+}
+
+// Dada una fecha, retorna los tiers vigentes ese día (la versión con 'from' más reciente <= fecha).
+function getTiersForDate(config, dateIso) {
+  const vers = (config && config.tier_versions) ? config.tier_versions : [{ from: null, tiers: (config && config.tiers) || PAY_DEFAULT_TIERS }];
+  const d = dateIso || '9999-12-31';
+  let chosen = vers[0];
+  for (const v of vers) {
+    if ((v.from || '0000-00-00') <= d) chosen = v;
+  }
+  return (chosen && chosen.tiers && chosen.tiers.length) ? chosen.tiers : PAY_DEFAULT_TIERS;
+}
+
 function getPayConfigFor(instructorId) {
   const c = STATE.payConfigs && STATE.payConfigs[instructorId];
-  if (!c) return { ...PAY_DEFAULT_CONFIG };
+  const versions = normalizeTierVersions(c);
+  const todayIso = dateToIsoLocal(new Date());
+  const effectiveToday = getTiersForDate({ tier_versions: versions }, todayIso);
   return {
-    period_frequency: c.period_frequency || 'biweekly',
-    period_close_mode: c.period_close_mode || 'manual',
-    tiers: (c.tiers && c.tiers.length) ? c.tiers : PAY_DEFAULT_TIERS
+    period_frequency: (c && c.period_frequency) || 'biweekly',
+    period_close_mode: (c && c.period_close_mode) || 'manual',
+    tiers: effectiveToday,        // tiers vigentes HOY (para vistas que no pasan fecha)
+    tier_versions: versions
   };
 }
 
@@ -24313,7 +24342,8 @@ async function calculateInstructorPayReport(instructorId, startIso, endIso) {
     if (!byDay[dateIso]) byDay[dateIso] = { date: dateIso, classes: [], dayTotal: 0, dayPending: 0, dayStudentsCounted: 0 };
 
     const cnt = countClassForPay(cls);
-    const realPay = (cnt.totalRegistered === 0) ? 0 : getPayForCount(cnt.counted, config.tiers);
+    const tiers = getTiersForDate(config, dateIso);
+    const realPay = (cnt.totalRegistered === 0) ? 0 : getPayForCount(cnt.counted, tiers);
 
     // PROYECCIÓN: para clases futuras o de hoy con pendientes,
     // asumir que los pendientes van a contar (escenario optimista realista).
@@ -24322,14 +24352,14 @@ async function calculateInstructorPayReport(instructorId, startIso, endIso) {
       const isFuture = cls.session_date > todayIso;
       if (isFuture) {
         // Clase futura: todos los registrados (fijos + bookings activos) suman al tier
-        projectedPay = getPayForCount(cnt.totalRegistered, config.tiers);
+        projectedPay = getPayForCount(cnt.totalRegistered, tiers);
       } else if (cnt.pending > 0) {
         // Hoy o pasado con pendientes: asumir optimistamente que los pendientes contarán
-        projectedPay = getPayForCount(cnt.counted + cnt.pending, config.tiers);
+        projectedPay = getPayForCount(cnt.counted + cnt.pending, tiers);
       }
     }
 
-    const tierLabel = getTierLabelForCount(cnt.counted, config.tiers);
+    const tierLabel = getTierLabelForCount(cnt.counted, tiers);
     const isEmpty = cnt.totalRegistered === 0;
 
     byDay[dateIso].classes.push({
@@ -25076,8 +25106,9 @@ async function openPayClassDetail(dateIso, hour, instructorId, locationId) {
   };
   const counted = cnt.attended + cnt.lost + cnt.no_show;
   const config = getPayConfigFor(instructorId);
-  const pay = getPayForCount(counted, config.tiers);
-  const tierLabel = getTierLabelForCount(counted, config.tiers);
+  const tiers = getTiersForDate(config, dateIso);
+  const pay = getPayForCount(counted, tiers);
+  const tierLabel = getTierLabelForCount(counted, tiers);
   const loc = STATE.locations.find(l => l.id === locationId);
 
   const statusLabel = {
@@ -25239,7 +25270,115 @@ async function renderCoordPayList() {
 }
 
 // ============ VISTA COORDINADOR: CONFIGURACIÓN ============
-function renderCoordPayConfig(instructorId) {
+let PAY_CFG_STATE = { instructorId: null, versions: [], editingIdx: 0, activeIdx: 0 };
+
+function payFmtDate(iso) {
+  if (!iso) return '';
+  const d = new Date(iso + 'T12:00:00');
+  return `${d.getDate()} ${ISE_MONTHS[d.getMonth()].slice(0, 3)} ${d.getFullYear()}`;
+}
+
+// Lee el formulario de la página (frecuencia, cierre, vigencia y tiers de la versión editada)
+function payReadForm() {
+  const freq = document.getElementById('pay-cfg-freq').value;
+  const closeMode = document.getElementById('pay-cfg-close').value;
+  const fromEl = document.getElementById('pay-version-from');
+  const from = fromEl ? (fromEl.value || null) : null; // la versión histórica no tiene input → null
+  const tiers = [];
+  document.querySelectorAll('#pay-tier-table tbody tr').forEach(tr => {
+    const min = tr.querySelector('[data-field=min]').value.trim();
+    const maxRaw = tr.querySelector('[data-field=max]').value.trim();
+    const amt = tr.querySelector('[data-field=amount]').value.trim();
+    if (!min || !amt) return;
+    const max = (maxRaw === '' || maxRaw === '∞') ? null : Number(maxRaw);
+    tiers.push({ min: Number(min), max: max, amount: Number(amt) });
+  });
+  return { freq, closeMode, from, tiers };
+}
+
+function paySortVersions(versions) {
+  versions.sort((a, b) => { const af = a.from || '0000-00-00', bf = b.from || '0000-00-00'; return af < bf ? -1 : (af > bf ? 1 : 0); });
+  return versions;
+}
+
+// Guarda en BD el config con sus versiones; mantiene `tiers` legacy = tiers vigentes hoy (compat).
+async function payPersistConfig(instructorId, freq, closeMode, versions) {
+  const todayIso = dateToIsoLocal(new Date());
+  const effectiveToday = getTiersForDate({ tier_versions: versions }, todayIso);
+  const { error } = await sb.from('instructor_pay_config').upsert({
+    instructor_id: instructorId,
+    period_frequency: freq,
+    period_close_mode: closeMode,
+    tiers: effectiveToday,
+    tier_versions: versions,
+    updated_at: new Date().toISOString(),
+    updated_by: CURRENT_USER?.authUser?.id || null,
+  }, { onConflict: 'instructor_id' });
+  if (error) { showToast('Error guardando: ' + error.message, 'error'); throw error; }
+  STATE.payConfigs[instructorId] = {
+    instructor_id: instructorId, period_frequency: freq, period_close_mode: closeMode,
+    tiers: effectiveToday, tier_versions: versions
+  };
+}
+
+// Programa un cambio de tarifa para ESTE profe desde una fecha (copia la tarifa vigente como base).
+async function payAddVersion(instructorId) {
+  if (!isOnline) { showToast('Conexión requerida', 'error'); return; }
+  const cfg = getPayConfigFor(instructorId);
+  const today = new Date();
+  const defFrom = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-01`;
+  const date = prompt('¿Desde qué fecha aplica la nueva tarifa? (AAAA-MM-DD)', defFrom);
+  if (!date) return;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) { showToast('Fecha inválida (usa AAAA-MM-DD)', 'error'); return; }
+  let versions = cfg.tier_versions.map(v => ({ from: v.from, tiers: v.tiers.map(t => ({ ...t })) }));
+  if (versions.some(v => v.from === date)) { showToast('Ya existe una tarifa con esa fecha', 'error'); return; }
+  const baseTiers = getTiersForDate({ tier_versions: versions }, date).map(t => ({ ...t }));
+  versions.push({ from: date, tiers: baseTiers });
+  paySortVersions(versions);
+  try { await payPersistConfig(instructorId, cfg.period_frequency, cfg.period_close_mode, versions); } catch (e) { return; }
+  const newIdx = versions.findIndex(v => v.from === date);
+  showToast('Versión creada — edítala y guarda', 'success');
+  renderCoordPayConfig(instructorId, newIdx);
+}
+
+async function payRemoveVersion(instructorId, idx) {
+  if (!isOnline) { showToast('Conexión requerida', 'error'); return; }
+  const cfg = getPayConfigFor(instructorId);
+  let versions = cfg.tier_versions.map(v => ({ from: v.from, tiers: v.tiers.map(t => ({ ...t })) }));
+  if (!versions[idx]) return;
+  if (versions.length <= 1) { showToast('Debe quedar al menos una tarifa', 'error'); return; }
+  const label = versions[idx].from ? 'Desde ' + payFmtDate(versions[idx].from) : 'Histórico';
+  if (!confirm(`¿Eliminar la tarifa "${label}"? Las clases de ese rango volverán a usar la tarifa anterior.`)) return;
+  versions.splice(idx, 1);
+  try { await payPersistConfig(instructorId, cfg.period_frequency, cfg.period_close_mode, versions); } catch (e) { return; }
+  showToast('Versión eliminada', 'success');
+  renderCoordPayConfig(instructorId);
+}
+
+// Aplica la tarifa actualmente en pantalla (vigencia + tiers) a TODOS los profes activos.
+async function payApplyToAll(instructorId) {
+  if (!isOnline) { showToast('Conexión requerida', 'error'); return; }
+  const form = payReadForm();
+  if (form.tiers.length === 0) { showToast('Define al menos un tier', 'error'); return; }
+  const actives = (STATE.instructors || []).filter(i => i.is_active !== false);
+  const label = form.from ? `desde ${payFmtDate(form.from)}` : 'como tarifa histórica (sin fecha)';
+  const tiersTxt = form.tiers.map(t => `${t.min}${t.max ? ('–' + t.max) : '+'}: S/${t.amount}`).join('  ·  ');
+  if (!confirm(`Aplicar esta tarifa a TODOS los profes activos (${actives.length}):\n\n${tiersTxt}\n${label}\n\nLa tarifa anterior de cada profe se conserva intacta; esta se agrega/actualiza solo para esa vigencia.`)) return;
+  let ok = 0;
+  for (const i of actives) {
+    const cfg = getPayConfigFor(i.id);
+    let versions = cfg.tier_versions.map(v => ({ from: v.from, tiers: v.tiers.map(t => ({ ...t })) }));
+    const existingIdx = versions.findIndex(v => (v.from || null) === (form.from || null));
+    const entry = { from: form.from, tiers: form.tiers.map(t => ({ ...t })) };
+    if (existingIdx >= 0) versions[existingIdx] = entry; else versions.push(entry);
+    paySortVersions(versions);
+    try { await payPersistConfig(i.id, cfg.period_frequency, cfg.period_close_mode, versions); ok++; } catch (e) { /* sigue con los demás */ }
+  }
+  showToast(`Tarifa aplicada a ${ok} de ${actives.length} profes`, 'success');
+  renderCoordPayConfig(instructorId);
+}
+
+function renderCoordPayConfig(instructorId, editingIdx) {
   const container = document.getElementById('coord-pay-config-container');
   if (!CURRENT_USER || CURRENT_USER.role !== 'coordinator') return;
   const instructors = STATE.instructors || [];
@@ -25252,6 +25391,25 @@ function renderCoordPayConfig(instructorId) {
   }
 
   const config = getPayConfigFor(inst.id);
+  const versions = config.tier_versions;
+  const todayIso = dateToIsoLocal(new Date());
+  // Índice de la versión vigente hoy
+  let activeIdx = 0;
+  versions.forEach((v, i) => { if ((v.from || '0000-00-00') <= todayIso) activeIdx = i; });
+  // Versión que se está editando (default: la vigente hoy)
+  if (editingIdx === undefined || editingIdx === null || !versions[editingIdx]) editingIdx = activeIdx;
+  PAY_CFG_STATE = { instructorId: inst.id, versions, editingIdx, activeIdx };
+  const editTiers = versions[editingIdx].tiers || [];
+
+  const versionChips = versions.map((v, i) => {
+    const label = v.from ? `Desde ${payFmtDate(v.from)}` : 'Histórico';
+    const isEditing = i === editingIdx;
+    const isActive = i === activeIdx;
+    return `<button type="button" onclick="renderCoordPayConfig('${inst.id}', ${i})"
+      style="border:1px solid ${isEditing ? 'var(--fit-purple,#5B2A8F)' : 'var(--line,#E5E0EC)'}; background:${isEditing ? 'var(--fit-purple,#5B2A8F)' : '#fff'}; color:${isEditing ? '#fff' : 'var(--ink,#2A2440)'}; border-radius:999px; padding:5px 12px; font-size:12px; cursor:pointer; display:inline-flex; align-items:center; gap:6px;">
+      ${escape(label)}${isActive ? `<span style="font-size:9px; opacity:.8;">● vigente hoy</span>` : ''}
+    </button>`;
+  }).join('');
 
   container.innerHTML = `
     <div class="page-header">
@@ -25295,14 +25453,27 @@ function renderCoordPayConfig(instructorId) {
 
         <div class="pay-config-section">
           <h3 class="pay-config-section-title">Tiers de pago por clase</h3>
-          <p class="pay-config-section-desc">Cuánto cobra por clase según los alumnos que cuentan (asistidos + clases perdidas).</p>
+          <p class="pay-config-section-desc">Cuánto cobra por clase según los alumnos que cuentan (asistidos + clases perdidas). Cada tarifa tiene una vigencia: la anterior queda intacta y la nueva aplica desde su fecha.</p>
+
+          <div style="display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-bottom:14px;">
+            ${versionChips}
+            <button type="button" onclick="payAddVersion('${inst.id}')" style="border:1px dashed var(--fit-purple,#5B2A8F); background:transparent; color:var(--fit-purple,#5B2A8F); border-radius:999px; padding:5px 12px; font-size:12px; cursor:pointer;">+ Programar cambio de tarifa</button>
+          </div>
+
+          ${versions[editingIdx].from
+            ? `<div style="display:flex; align-items:center; gap:10px; margin-bottom:12px; font-size:13px;">
+                 <label style="color:var(--ink-mute,#8A8398);">Vigente desde</label>
+                 <input type="date" id="pay-version-from" value="${versions[editingIdx].from}" />
+                 <button class="pay-x-btn" title="Eliminar esta versión" onclick="payRemoveVersion('${inst.id}', ${editingIdx})">✕ eliminar versión</button>
+               </div>`
+            : `<div style="margin-bottom:12px; font-size:12px; color:var(--ink-mute,#8A8398); font-style:italic;">Tarifa histórica (aplica a todo lo anterior al primer cambio). No tiene fecha de inicio.</div>`}
 
           <table class="pay-tier-table" id="pay-tier-table">
             <thead>
               <tr><th>Desde</th><th>Hasta</th><th class="num">Pago por clase (S/)</th><th></th></tr>
             </thead>
             <tbody>
-              ${config.tiers.map((t, idx) => `
+              ${editTiers.map((t, idx) => `
                 <tr data-tier-row="${idx}">
                   <td><input class="pay-tier-input" data-field="min" value="${t.min}"/></td>
                   <td><input class="pay-tier-input" data-field="max" value="${t.max === null || t.max === undefined ? '∞' : t.max}"/></td>
@@ -25326,9 +25497,12 @@ function renderCoordPayConfig(instructorId) {
           </div>
         </div>
 
-        <div style="margin-top: 24px; padding-top: 18px; border-top: 1px solid var(--line); display: flex; justify-content: flex-end; gap: 10px;">
-          <button class="btn btn-ghost" onclick="renderCoordPayConfig('${inst.id}')">Restablecer</button>
-          <button class="btn btn-primary" onclick="saveInstructorPayConfig('${inst.id}')">Guardar configuración</button>
+        <div style="margin-top: 24px; padding-top: 18px; border-top: 1px solid var(--line); display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap;">
+          <button class="btn btn-ghost" onclick="payApplyToAll('${inst.id}')" title="Copia esta tarifa y su vigencia a todos los profesores activos">Aplicar esta tarifa a todos los profes</button>
+          <div style="display: flex; gap: 10px;">
+            <button class="btn btn-ghost" onclick="renderCoordPayConfig('${inst.id}', ${editingIdx})">Restablecer</button>
+            <button class="btn btn-primary" onclick="saveInstructorPayConfig('${inst.id}')">Guardar configuración</button>
+          </div>
         </div>
 
       </div>
@@ -25359,36 +25533,29 @@ async function saveInstructorPayConfig(instructorId) {
   if (!CURRENT_USER || CURRENT_USER.role !== 'coordinator') { showToast('Solo coordinador', 'error'); return; }
   if (!isOnline) { showToast('Conexión requerida', 'error'); return; }
 
-  const freq = document.getElementById('pay-cfg-freq').value;
-  const closeMode = document.getElementById('pay-cfg-close').value;
-  const tierRows = document.querySelectorAll('#pay-tier-table tbody tr');
-  const tiers = [];
-  tierRows.forEach(tr => {
-    const min = tr.querySelector('[data-field=min]').value.trim();
-    const maxRaw = tr.querySelector('[data-field=max]').value.trim();
-    const amt = tr.querySelector('[data-field=amount]').value.trim();
-    if (!min || !amt) return;
-    const max = (maxRaw === '' || maxRaw === '∞') ? null : Number(maxRaw);
-    tiers.push({ min: Number(min), max: max, amount: Number(amt) });
-  });
-  if (tiers.length === 0) { showToast('Define al menos un tier', 'error'); return; }
+  const form = payReadForm();
+  if (form.tiers.length === 0) { showToast('Define al menos un tier', 'error'); return; }
 
-  const { error } = await sb.from('instructor_pay_config').upsert({
-    instructor_id: instructorId,
-    period_frequency: freq,
-    period_close_mode: closeMode,
-    tiers: tiers,
-    updated_at: new Date().toISOString(),
-    updated_by: CURRENT_USER?.authUser?.id || null,
-  }, { onConflict: 'instructor_id' });
+  // Tomar las versiones actuales y reemplazar la que se está editando
+  const st = PAY_CFG_STATE;
+  const usingState = st && st.instructorId === instructorId && Array.isArray(st.versions);
+  let versions = (usingState ? st.versions : getPayConfigFor(instructorId).tier_versions)
+    .map(v => ({ from: v.from, tiers: v.tiers.map(t => ({ ...t })) }));
+  const idx = usingState ? st.editingIdx : versions.length - 1;
+  versions[idx] = { from: form.from, tiers: form.tiers };
+  paySortVersions(versions);
 
-  if (error) { showToast('Error guardando: ' + error.message, 'error'); return; }
+  // Evitar dos versiones con la misma fecha
+  const seen = new Set();
+  for (const v of versions) {
+    const key = v.from || 'NULL';
+    if (seen.has(key)) { showToast('Hay dos tarifas con la misma fecha de inicio', 'error'); return; }
+    seen.add(key);
+  }
 
-  // Actualizar STATE
-  STATE.payConfigs[instructorId] = {
-    instructor_id: instructorId, period_frequency: freq, period_close_mode: closeMode, tiers
-  };
-  showToast('✓ Configuración guardada', 'success');
+  try { await payPersistConfig(instructorId, form.freq, form.closeMode, versions); } catch (e) { return; }
+  showToast('✓ Tarifa guardada', 'success');
+  renderCoordPayConfig(instructorId);
 }
 
 // ============================================
