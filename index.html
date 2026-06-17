@@ -16521,6 +16521,9 @@ async function renderInstructorDay() {
   }
 
   // Lanzar las 4 queries independientes en paralelo (eran secuenciales antes)
+  // Token de petición: si entra otra carga/fecha mientras esta espera, se descarta al volver.
+  const reqSeq = (STATE.instReqSeq = (STATE.instReqSeq || 0) + 1);
+  const reqDate = STATE.instDayDate;
   const monthKey = new Date().toISOString().slice(0,7);
   const needStats = !STATE.instMonthStats || STATE.instMonthStatsKey !== monthKey;
   const [, monthStats, pending, classes] = await Promise.all([
@@ -16535,9 +16538,12 @@ async function renderInstructorDay() {
     STATE.instMonthStatsKey = monthKey;
   }
 
-  // Cachear las clases recién cargadas (para navegación entre días)
+  // Si llegó otra petición más nueva mientras esperábamos, descartar esta.
+  if (reqSeq !== STATE.instReqSeq) return;
+
+  // Cachear las clases recién cargadas (bajo la fecha que se pidió, no la actual)
   STATE.instClassesCache = STATE.instClassesCache || {};
-  STATE.instClassesCache[STATE.instDayDate] = classes;
+  STATE.instClassesCache[reqDate] = classes;
 
   renderInstructorGreetBlock();
   renderInstructorDayStrip();
@@ -16555,6 +16561,9 @@ async function renderInstructorDay() {
       }
     }
   }
+
+  // Tras el await de paquetes, revalidar que sigamos siendo la petición vigente.
+  if (reqSeq !== STATE.instReqSeq) return;
 
   renderInstructorNextClassBlock(classes);
   renderInstructorClassesBlock(classes);
@@ -16704,9 +16713,11 @@ function renderInstructorPendingBanner(pending) {
 async function instructorGoToPending(dateIso, locationId) {
   STATE.instDayFilter = 'other';
   STATE.instDayDate = dateIso;
+  const reqSeq = (STATE.instReqSeq = (STATE.instReqSeq || 0) + 1);
   renderInstructorFiltersBlock();
   const inst = CURRENT_USER.record;
   const classes = await loadInstructorClassesForDate(inst, dateIso);
+  if (reqSeq !== STATE.instReqSeq) return;
   renderInstructorClassesBlock(classes);
 }
 
@@ -17536,8 +17547,15 @@ async function loadInstructorClassesForDate(inst, dateIso) {
   const dateObj = new Date(dateIso + 'T12:00:00');
   const dow = dateObj.getDay();
 
-  // Turnos del profesor por dow (si tienes tabla schedules) — uso fallback al horario fijo
-  const schedules = (STATE.schedules || []).filter(s => s.instructor_id === inst.id && s.day_of_week === dow);
+  // Turnos del profesor por dow, SOLO los vigentes para esta fecha.
+  // (Antes ignoraba effective_from/effective_to → mostraba turnos ya vencidos,
+  //  p.ej. el viernes 7am/8am de Ethan que pasó a Andrés desde el 08-jun.)
+  const schedules = (STATE.schedules || []).filter(s =>
+    s.instructor_id === inst.id &&
+    s.day_of_week === dow &&
+    (!s.effective_from || dateIso >= s.effective_from) &&
+    (!s.effective_to || dateIso <= s.effective_to)
+  );
 
   // Sesiones reales asignadas al profesor en esa fecha (overrides puntuales)
   const { data: sessionsAssigned } = await sb.from('class_sessions')
@@ -17571,6 +17589,14 @@ async function loadInstructorClassesForDate(inst, dateIso) {
         .eq('hour', slot.hour)
         .maybeSingle();
       session = sess;
+    }
+
+    // Malla de seguridad: si la sesión real de este slot está asignada a OTRO
+    // profesor (y este profe no es su suplente), no es su clase → omitir.
+    // Evita fugas aunque quede algún horario viejo traslapado.
+    if (session && session.instructor_id && session.instructor_id !== inst.id
+        && session.actual_instructor_id !== inst.id) {
+      continue;
     }
 
     let bookings = [];
@@ -18731,6 +18757,7 @@ function instructorConfirmUndoAttendance(studentId, dateIso, hour, locationId) {
 // Cambio de fecha desde el day-strip
 async function instructorSetDateIso(iso) {
   STATE.instDayDate = iso;
+  const reqSeq = (STATE.instReqSeq = (STATE.instReqSeq || 0) + 1);
   const todayIso = dateToIsoLocal(new Date());
   const tomorrowIso = new Date(Date.now() + 86400000).toISOString().slice(0,10);
   STATE.instDayFilter = (iso === todayIso) ? 'today' : (iso === tomorrowIso ? 'tomorrow' : 'other');
@@ -18769,6 +18796,7 @@ async function instructorSetDateIso(iso) {
   }
   const inst = CURRENT_USER.record;
   const classes = await loadInstructorClassesForDate(inst, STATE.instDayDate);
+  if (reqSeq !== STATE.instReqSeq) return;
   // Guardar en cache
   STATE.instClassesCache = STATE.instClassesCache || {};
   STATE.instClassesCache[iso] = classes;
@@ -18823,10 +18851,12 @@ async function instructorSetDate(filter) {
   if (filter === 'today') STATE.instDayDate = today;
   else if (filter === 'tomorrow') STATE.instDayDate = new Date(Date.now() + 86400000).toISOString().slice(0,10);
   STATE.instAbsenceMenuOpen = null;
+  const reqSeq = (STATE.instReqSeq = (STATE.instReqSeq || 0) + 1);
   // Solo re-render filtros + clases, no stats (no cambian con la fecha)
   renderInstructorFiltersBlock();
   const inst = CURRENT_USER.record;
   const classes = await loadInstructorClassesForDate(inst, STATE.instDayDate);
+  if (reqSeq !== STATE.instReqSeq) return;
   renderInstructorClassesBlock(classes);
 }
 
@@ -18861,9 +18891,11 @@ async function instructorSetCustomDate(dateIso) {
   STATE.instDayFilter = 'other';
   STATE.instDayDate = dateIso;
   STATE.instAbsenceMenuOpen = null;
+  const reqSeq = (STATE.instReqSeq = (STATE.instReqSeq || 0) + 1);
   renderInstructorFiltersBlock();
   const inst = CURRENT_USER.record;
   const classes = await loadInstructorClassesForDate(inst, STATE.instDayDate);
+  if (reqSeq !== STATE.instReqSeq) return;
   renderInstructorClassesBlock(classes);
 }
 
