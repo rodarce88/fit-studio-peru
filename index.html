@@ -4081,7 +4081,7 @@
     </div>
     <div class="modal-footer">
       <button class="btn btn-ghost" onclick="closeModals()">Cancelar</button>
-      <button class="btn btn-primary" onclick="saveAssignPackage()">Asignar paquete</button>
+      <button id="assign-pkg-save-btn" class="btn btn-primary" onclick="saveAssignPackage()">Asignar paquete</button>
     </div>
   </div>
 </div>
@@ -20281,6 +20281,11 @@ async function openAssignPackageModal(studentId) {
   const student = STATE.students.find(s => s.id === studentId);
   if (!student) return;
 
+  // Reset defensivo del lock anti doble-creación (por si quedó trabado en un intento previo)
+  STATE.assignPkgSaving = false;
+  const _b0 = document.getElementById('assign-pkg-save-btn');
+  if (_b0) { _b0.disabled = false; _b0.style.opacity = ''; _b0.style.cursor = ''; _b0.textContent = 'Asignar paquete'; }
+
   // Si ya tiene un paquete con clases libres, confirmar antes de asignar otro.
   // Usar la MISMA lógica que el resto del sistema (isPkgAlive) para evitar inconsistencias
   // entre "no hay paquete activo" en el perfil y "ya tiene paquete" aquí.
@@ -20361,6 +20366,7 @@ function updateAssignPkgPreview() {
 
 async function saveAssignPackage() {
   if (!isOnline) { showToast('Conexión requerida', 'error'); return; }
+  if (STATE.assignPkgSaving) return; // anti doble-creación: ya hay un guardado en curso
   const studentId = document.getElementById('assign-pkg-student-id').value;
   const packageId = document.getElementById('assign-pkg-id').value;
   const purchaseDate = document.getElementById('assign-pkg-purchase').value;
@@ -20371,6 +20377,16 @@ async function saveAssignPackage() {
     showToast('Completa paquete, fecha y clases', 'error');
     return;
   }
+
+  // Anti doble-creación: bloquear lock + botón mientras se guarda
+  STATE.assignPkgSaving = true;
+  const _releaseSaveLock = () => {
+    STATE.assignPkgSaving = false;
+    const b = document.getElementById('assign-pkg-save-btn');
+    if (b) { b.disabled = false; b.style.opacity = ''; b.style.cursor = ''; b.textContent = 'Asignar paquete'; }
+  };
+  const _saveBtn = document.getElementById('assign-pkg-save-btn');
+  if (_saveBtn) { _saveBtn.disabled = true; _saveBtn.style.opacity = '0.6'; _saveBtn.style.cursor = 'wait'; _saveBtn.textContent = 'Asignando…'; }
 
   // Detectar si hay imputación de pendientes
   const imputeCheckbox = document.getElementById('assign-pkg-impute');
@@ -20394,7 +20410,7 @@ async function saveAssignPackage() {
     price_paid: price,
   }).select().single();
 
-  if (error) { showToast('Error: '+error.message, 'error'); return; }
+  if (error) { _releaseSaveLock(); showToast('Error: '+error.message, 'error'); return; }
 
   // ============ IMPUTAR PENDIENTES — RUTEO FIFO POR FECHA (con tope de cupo) ============
   // Cada clase pendiente va al paquete VIVO más antiguo que (a) ya exista para esa fecha
@@ -20491,6 +20507,7 @@ async function saveAssignPackage() {
     await openStudentDetail(studentId);
   }
 
+  _releaseSaveLock();
   closeModals();
   setTimeout(() => openPaymentModal(studentId, data.id, price), 200);
 }
