@@ -20376,9 +20376,9 @@ async function saveAssignPackage() {
   const imputeCheckbox = document.getElementById('assign-pkg-impute');
   const pendingAtts = STATE.assignPkgPendingAtts || [];
   const shouldImpute = imputeCheckbox && imputeCheckbox.checked && pendingAtts.length > 0;
-  const initialUsed = shouldImpute ? Math.min(pendingAtts.length, classes) : 0;
 
   // Lógica nueva: paquetes no vencen → expiration_date y end_date quedan NULL
+  // El paquete arranca en 0; los contadores se recalculan al final desde la verdad.
   const { data, error } = await sb.from('student_packages').insert({
     student_id: studentId,
     package_id: packageId,
@@ -20388,7 +20388,7 @@ async function saveAssignPackage() {
     end_date: null,
     classes_total: classes,
     sessions_total: classes,
-    classes_used: initialUsed,
+    classes_used: 0,
     classes_recoverable: 0,
     is_frozen: false,
     price_paid: price,
@@ -20396,14 +20396,58 @@ async function saveAssignPackage() {
 
   if (error) { showToast('Error: '+error.message, 'error'); return; }
 
-  // Imputar attendance pendientes: limpiar pending_payment_at + asignar el nuevo student_package_id
+  // ============ IMPUTAR PENDIENTES — RUTEO FIFO POR FECHA (con tope de cupo) ============
+  // Cada clase pendiente va al paquete VIVO más antiguo que (a) ya exista para esa fecha
+  // (compra <= fecha de la clase) y (b) tenga cupo libre. Así se LLENA primero el paquete
+  // viejo y nunca se rebalsa (jamás 9 clases en un paquete de 8). Si ninguno cubre por
+  // fecha, cae al paquete vivo más antiguo con cupo (típicamente el recién creado). Si no
+  // hay cupo en ningún lado, la clase se queda pendiente (no se fuerza el rebalse).
+  let imputedCount = 0;
   if (shouldImpute) {
-    const idsToImpute = pendingAtts.slice(0, initialUsed).map(a => a.id);
-    await sb.from('attendance').update({
-      pending_payment_at: null,
-      counts_against_package: true,
-      student_package_id: data.id,
-    }).in('id', idsToImpute);
+    const { data: pkgsNow } = await sb.from('student_packages')
+      .select('id, purchase_date, start_date, classes_total, classes_used, is_frozen, status, created_at')
+      .eq('student_id', studentId);
+
+    const alivePkgs = (pkgsNow || [])
+      .filter(p => !p.is_frozen && (!p.status || p.status === 'active'))
+      .sort((a, b) => {
+        const da = a.purchase_date || a.start_date || '1900-01-01';
+        const db = b.purchase_date || b.start_date || '1900-01-01';
+        if (da !== db) return da.localeCompare(db);
+        return (a.created_at || '').localeCompare(b.created_at || '');
+      });
+
+    // Cupo libre por paquete (en memoria, para este pase)
+    const freeCap = {};
+    alivePkgs.forEach(p => { freeCap[p.id] = Math.max(0, (p.classes_total || 0) - (p.classes_used || 0)); });
+
+    // Procesar pendientes de la sesión MÁS ANTIGUA a la más nueva (FIFO real)
+    const toImpute = [...pendingAtts].sort((a, b) =>
+      (a.class_sessions?.session_date || '').localeCompare(b.class_sessions?.session_date || ''));
+
+    for (const att of toImpute) {
+      const sd = att.class_sessions?.session_date || null;
+      // 1) paquete vivo más antiguo que cubre la fecha y tiene cupo
+      let target = alivePkgs.find(p => {
+        const start = p.purchase_date || p.start_date || '1900-01-01';
+        return (sd ? sd >= start : true) && freeCap[p.id] > 0;
+      });
+      // 2) fallback: paquete vivo más antiguo con cupo (sin importar fecha)
+      if (!target) target = alivePkgs.find(p => freeCap[p.id] > 0);
+      // 3) sin cupo en ningún lado → no imputar (se queda pendiente, sin rebalse)
+      if (!target) break;
+
+      freeCap[target.id] -= 1;
+      const { error: impErr } = await sb.from('attendance').update({
+        pending_payment_at: null,
+        counts_against_package: true,
+        student_package_id: target.id,
+      }).eq('id', att.id);
+      if (!impErr) imputedCount++;
+    }
+
+    // Recalcular contadores de TODOS los paquetes del alumno desde la verdad
+    await recalcPackageCounters(studentId);
   }
 
   // Si la alumna era trial, promoverla a active (ahora tiene paquete)
@@ -20425,7 +20469,7 @@ async function saveAssignPackage() {
   const msg = wasConverted
     ? '✓ Paquete asignado · Convertida de Prueba a alumna activa'
     : (shouldImpute
-        ? `✓ Paquete asignado · ${initialUsed} clase${initialUsed === 1 ? '' : 's'} imputada${initialUsed === 1 ? '' : 's'}`
+        ? `✓ Paquete asignado · ${imputedCount} clase${imputedCount === 1 ? '' : 's'} imputada${imputedCount === 1 ? '' : 's'}`
         : '✓ Paquete asignado');
   showToast(msg, 'success');
 
@@ -20436,7 +20480,7 @@ async function saveAssignPackage() {
     logActivity('student_package.create', {
       table: 'student_packages', id: data.id,
       label: `${studName} · ${pkg?.name || 'paquete'}`
-    }, { price, imputed: initialUsed });
+    }, { price, imputed: imputedCount });
   } catch(e) {}
 
   // Refrescar widget Por cobrar
