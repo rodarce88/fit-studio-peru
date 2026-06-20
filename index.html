@@ -23971,7 +23971,7 @@ function renderDetailClasses(stud) {
   const order = [];
   if (activePkgId) order.push(activePkgId);
   sortedAsc.filter(p => p.id !== activePkgId && !isChangedPkg(p) && !p.is_frozen && (p.classes_used || 0) < (p.classes_total || 0)).forEach(p => order.push(p.id));
-  [...packages].filter(p => !order.includes(p.id)).sort((a, b) => (b.purchase_date || b.start_date || '1900-01-01').localeCompare(a.purchase_date || a.start_date || '1900-01-01')).forEach(p => order.push(p.id));
+  [...packages].filter(p => !order.includes(p.id) && !isChangedPkg(p)).sort((a, b) => (b.purchase_date || b.start_date || '1900-01-01').localeCompare(a.purchase_date || a.start_date || '1900-01-01')).forEach(p => order.push(p.id));
 
   const GRID = 'grid-template-columns: 104px 92px 58px 1fr 132px 116px; gap:10px;';
   const headerRow = `<div style="display:grid; ${GRID} padding:7px 14px; font-size:10px; letter-spacing:0.04em; text-transform:uppercase; color:var(--ink-mute); border-bottom:1px solid var(--line); background:var(--fit-cream);">
@@ -24051,7 +24051,7 @@ function renderDetailClasses(stud) {
 
   const header = `<div style="display:flex; align-items:baseline; justify-content:space-between; margin-bottom:14px;">
       <h3 style="font-family:var(--display); font-style:italic; font-weight:500; font-size:20px; margin:0; color:var(--ink);">Historial de clases</h3>
-      <span style="font-size:11px; color:var(--ink-mute);">${packages.length} paquete${packages.length === 1 ? '' : 's'}</span>
+      <span style="font-size:11px; color:var(--ink-mute);">${order.length} paquete${order.length === 1 ? '' : 's'}</span>
     </div>`;
 
   const legend = `<div style="display:flex; flex-wrap:wrap; gap:14px; margin-top:14px; padding-top:12px; border-top:1px solid var(--line); font-size:11px; color:var(--ink-soft);">
