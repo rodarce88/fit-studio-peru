@@ -1533,6 +1533,13 @@
   .inst-stud-pkg-seg.warn { background: #E24B4A; }
   .inst-stud-pkg-label { font-size: 10.5px; color: #A32D2D; font-weight: 500; white-space: nowrap; }
 
+  /* Chip de estado en la línea 1 (Asistió / Confirmada / etc.) */
+  .inst-stud-statchip { font-size: 9.5px; font-weight: 500; padding: 2px 7px; border-radius: 999px; white-space: nowrap; display: inline-flex; align-items: center; gap: 3px; }
+  /* Línea de molestias del alumno (resumen rápido, se corta con …) */
+  .inst-stud-molestias { display: flex; align-items: center; gap: 4px; margin-top: 4px; font-size: 11px; color: #6B4F0A; min-width: 0; }
+  .inst-stud-molestias .inst-stud-mol-ico { flex-shrink: 0; font-size: 11px; line-height: 1; }
+  .inst-stud-molestias .inst-stud-mol-txt { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+
   /* Tag visible "Prueba" para alumnas trial — más prominente que un alert icon */
   .inst-stud-trial-tag {
     display: inline-block;
@@ -18241,16 +18248,16 @@ function renderInstructorStudentRow(item, classCtx) {
   // Tag de modalidad/estado — visible junto al nombre
   const trialTag = isTrial ? '<span class="inst-stud-trial-tag">Prueba</span>' : '';
 
-  // Status / meta (solo se muestra si tiene marca; si "sin marcar" no se muestra texto repetitivo)
-  let statusLine = '';
+  // Estado como chip en la línea 1 (junto al nombre)
+  let statusChip = '';
   if (st) {
-    let statusClass = '';
-    if (status === 'attended') statusClass = '';
-    else if (status === 'recoverable') statusClass = 'is-warn';
-    else if (status === 'lost' || status === 'no_show') statusClass = 'is-danger';
-    statusLine = `<div class="inst-stud-status ${statusClass}">● ${st.label}</div>`;
+    let bg = '#EAF3DE', fg = '#27500A', pre = '';
+    if (status === 'attended') { pre = '✓ '; }
+    else if (status === 'recoverable') { bg = '#FAEEDA'; fg = '#633806'; }
+    else if (status === 'lost' || status === 'no_show') { bg = '#FCEBEB'; fg = '#791F1F'; }
+    statusChip = `<span class="inst-stud-statchip" style="background:${bg}; color:${fg};">${pre}${escape(st.label)}</span>`;
   } else if (isConfirmedByCoord) {
-    statusLine = `<div class="inst-stud-status is-confirmed">✓ Confirmada</div>`;
+    statusChip = `<span class="inst-stud-statchip" style="background:#EAF3DE; color:#27500A;">✓ Confirmada</span>`;
   }
 
   // ¿Tiene notas de salud guardadas? (health_tags con al menos 1 tag, o medical_notes con texto)
@@ -18261,7 +18268,6 @@ function renderInstructorStudentRow(item, classCtx) {
   const hasCoordNote = !!(s.coord_note && s.coord_note.trim());
 
   const alertIcons = [
-    hasHealthAlert ? '<span class="inst-stud-alert is-health" title="Tiene notas de salud">⚠</span>' : '',
     hasCoordNote ? '<span class="inst-stud-alert is-note" title="Tiene nota del coordinador">📝</span>' : '',
     isPending ? '<span class="inst-stud-alert is-note" title="Pago pendiente" style="background:var(--warn-soft); color:#633806;">$</span>' : '',
   ].filter(Boolean).join('');
@@ -18294,6 +18300,20 @@ function renderInstructorStudentRow(item, classCtx) {
     `;
   }
 
+  // Línea de molestias: tags marcados (Lumbalgia, Embarazo…) + notas libres. Se corta con … si es larga.
+  let molestiaHtml = '';
+  if (hasHealthAlert) {
+    const tagLabels = hasHealthTags
+      ? s.health_tags.tags.map(tid => (HEALTH_TAG_MAP[tid] && HEALTH_TAG_MAP[tid].label)).filter(Boolean)
+      : [];
+    const parts = tagLabels.slice();
+    if (hasMedicalNotes) parts.push(s.medical_notes.trim());
+    const molTxt = parts.join(' · ');
+    if (molTxt) {
+      molestiaHtml = `<div class="inst-stud-molestias" title="${escape(molTxt)}"><span class="inst-stud-mol-ico">⚠</span><span class="inst-stud-mol-txt">${escape(molTxt)}</span></div>`;
+    }
+  }
+
   // El check inline solo se muestra si NO está ya marcada como attended
   const isAttended = status === 'attended';
   const checkBtnHtml = isAttended
@@ -18308,10 +18328,11 @@ function renderInstructorStudentRow(item, classCtx) {
           <div class="inst-stud-name">
             ${escape(s.first_name)} ${escape(s.last_name || '')}
             ${trialTag}
+            ${statusChip}
             ${alertIcons}
           </div>
-          ${statusLine}
           ${pkgBarHtml}
+          ${molestiaHtml}
         </div>
       </div>
       ${checkBtnHtml}
