@@ -7891,7 +7891,7 @@ function renderSchedule() {
     dates.push(d);
   }
   const dayLabels = ['LUN', 'MAR', 'MIÉ', 'JUE', 'VIE', 'SÁB', 'DOM'];
-  const hours = [6, 7, 8, 9, 10, 11, 16, 17, 18, 19, 20];
+  const hours = [6, 7, 8, 9, 10, 11, 12, 16, 17, 18, 19, 20];
   const todayIso = dateToIsoLocal(new Date());
 
   // Estado del drawer expandido (celda actualmente abierta inline, si la hay)
@@ -11007,7 +11007,7 @@ async function applyInstructorChange() {
   if (scope === 'single') hours = [CHANGE_CTX.hour];
   else if (scope === 'morning') hours = [6,7,8,9,10,11,12];
   else if (scope === 'afternoon') hours = [16,17,18,19,20];
-  else if (scope === 'all-day') hours = [6,7,8,9,10,11,16,17,18,19,20];
+  else if (scope === 'all-day') hours = [6,7,8,9,10,11,12,16,17,18,19,20];
 
   // Persistir en BD (class_sessions.instructor_id) Y en memoria/localStorage para retro-compat
   for (const h of hours) {
@@ -12238,7 +12238,7 @@ function renderInstructorScheduleEditor() {
   const grid = document.getElementById('schedule-grid-editor');
   const days = [1,2,3,4,5,6,0];
   const dayLabels = ['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'];
-  const hours = [6,7,8,9,10,11,16,17,18,19,20];
+  const hours = [6,7,8,9,10,11,12,16,17,18,19,20];
 
   let html = `<div style="display: grid; grid-template-columns: 60px repeat(7, 1fr); background: var(--fit-cream); border-bottom: 1px solid var(--line);">
     <div style="padding: 10px; font-size: 11px; color: var(--ink-mute);"></div>`;
