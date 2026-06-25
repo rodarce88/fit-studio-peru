@@ -3613,6 +3613,26 @@ body:not(.doctor-mode) .doc-bottomnav{ display:none; }
 #doc-role-sheet .drs-item:last-child{ border-bottom:none; }
 #doc-role-sheet .drs-item i{ font-size:20px; color:#6A4E9C; }
 #doc-role-sheet .drs-danger, #doc-role-sheet .drs-danger i{ color:#A32D2D; }
+/* Chunk 2: perfil / formularios */
+#view-doctor-home .doc-iconbtn{ width:34px;height:34px;border-radius:10px;border:1px solid var(--doc-line);background:#fff;display:flex;align-items:center;justify-content:center;color:#8C857A;cursor:pointer; }
+#view-doctor-home .doc-iconbtn i{ font-size:18px; }
+#view-doctor-home .doc-sec{ font-size:10px;color:#A39B8C;text-transform:uppercase;letter-spacing:0.06em;margin:16px 0 8px; }
+#view-doctor-home .doc-info{ background:#fff;border:1px solid #ECE6DA;border-radius:13px;padding:2px 13px; }
+#view-doctor-home .doc-inforow{ display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid #F2EEE5;font-size:12.5px; }
+#view-doctor-home .doc-inforow:last-child{ border-bottom:none; }
+#view-doctor-home .doc-inforow span{ color:#9A9183; } #view-doctor-home .doc-inforow b{ font-weight:500; }
+#view-doctor-home .doc-fitcard{ display:flex;align-items:center;justify-content:space-between;background:#fff;border:1px solid #ECE6DA;border-radius:13px;padding:12px 13px; }
+#view-doctor-home .doc-fittag{ font-size:8.5px;color:#3E7A52;background:#E9F1E7;padding:3px 8px;border-radius:999px;display:inline-flex;align-items:center;gap:3px; }
+#view-doctor-home .doc-linkbtn{ width:100%;background:#fff;border:1px dashed #C8C0B0;border-radius:13px;padding:13px;font-size:12.5px;color:#6A4E9C;display:flex;align-items:center;justify-content:center;gap:8px;cursor:pointer; }
+#view-doctor-home .doc-linkbtn i{ font-size:16px; }
+#view-doctor-home .doc-primary{ width:100%;background:var(--doc-ink);color:#fff;border:none;border-radius:12px;padding:14px;font-size:13.5px;font-weight:600;display:flex;align-items:center;justify-content:center;gap:8px;cursor:pointer;margin-top:18px; }
+#view-doctor-home .doc-primary i{ font-size:16px; }
+#view-doctor-home .doc-seg{ display:flex;gap:4px;background:#EEE9DE;border-radius:11px;padding:3px;margin-bottom:14px; }
+#view-doctor-home .doc-seg button{ flex:1;padding:9px 0;font-size:11.5px;color:#8C857A;border:none;background:none;border-radius:9px;cursor:pointer;font-family:inherit; }
+#view-doctor-home .doc-seg button.on{ background:#1C1922;color:#fff;font-weight:600; }
+#view-doctor-home .doc-form{ display:flex;flex-direction:column;gap:9px; }
+#view-doctor-home .doc-form input,#view-doctor-home .doc-form select{ width:100%;background:#FBFAF6;border:1px solid var(--doc-line);border-radius:10px;padding:11px 12px;font-size:12.5px;color:#1C1922;outline:none;font-family:inherit; }
+#view-doctor-home .doc-frow{ display:flex;gap:9px; } #view-doctor-home .doc-frow input{ flex:1;min-width:0; }
 </style>
 
 <div id="doc-role-chooser"><div class="doc-rc-wrap" id="doc-rc-wrap"></div></div>
@@ -28352,6 +28372,8 @@ function docRenderBottomNav(active){
 }
 function docGoTab(t){
   if (t==='hoy'){ docState.date=docYMD(new Date()); docRenderHoy(); return; }
+  if (t==='pacientes'){ docRenderPacientes(); return; }
+  if (t==='nuevo'){ docRenderNuevo(); return; }
   if (t==='mas'){ docRoleMenu(); return; }
   showToast('Esa sección llega en el siguiente paso 🙌','info');
 }
@@ -28430,7 +28452,7 @@ async function docRenderHoy(){
         const freq=p.freq_per_week?`${p.freq_per_week}×/sem`:'';
         const fitTag=p.student_id?'<span style="color:#3E7A52;">alumna FIT</span>':'';
         const meta=[freq,fitTag].filter(Boolean).join(' · ');
-        html+=`<div class="doc-card" onclick="showToast('Perfil del paciente — siguiente paso','info')">
+        html+=`<div class="doc-card" onclick="docRenderPatient('${(p.id||'')}')">
           <div class="c-time"><div class="c-h">${docHourH(it.hour)}</div><div class="c-ap">${docHourAp(it.hour)}</div>
             <div class="c-sede"><span class="c-dot" style="background:${sede.color};"></span>${docEsc(sede.name)}</div></div>
           <div class="c-div"></div>
@@ -28442,6 +28464,207 @@ async function docRenderHoy(){
   }
   html+='</div>';
   cont.innerHTML=html;
+}
+
+// ============================================
+// MÓDULO DOCTOR — Chunk 2: Pacientes / perfil / registrar
+// ============================================
+const docCache = { patients: null };
+let docNuevoState = { mode:'cero', student:null };
+let docFitResults = [];
+
+function docInitials(p){
+  const a=(p.first_name||'').trim()[0]||''; const b=(p.last_name||'').trim()[0]||'';
+  return (a+b).toUpperCase()||'·';
+}
+function docWa(phone){ return (phone||'').replace(/[^0-9]/g,''); }
+function docSanit(q){ return (q||'').replace(/[,()%]/g,' ').trim(); }
+
+async function docLoadPatients(force){
+  if (docCache.patients && !force) return docCache.patients;
+  try{
+    const { data } = await sb.from('therapy_patients')
+      .select('id, first_name, last_name, phone, email, location_id, freq_per_week, status, student_id, notes')
+      .eq('doctor_id', docState.doctorId).order('first_name');
+    docCache.patients = data || [];
+  }catch(e){ docCache.patients = []; }
+  return docCache.patients;
+}
+
+// ---- Lista de pacientes ----
+async function docRenderPacientes(){
+  const cont=document.getElementById('doc-home-content'); if(!cont) return;
+  docRenderBottomNav('pacientes');
+  cont.innerHTML='<div class="doc-wrap"><div class="doc-loading">Cargando pacientes…</div></div>';
+  const pts=await docLoadPatients();
+  cont.innerHTML=`<div class="doc-wrap">
+    <div class="doc-top"><div style="font-size:18px;font-weight:600;">Pacientes</div><div style="font-size:11px;color:#8C857A;">${pts.length}</div></div>
+    <div class="doc-search" style="cursor:text;"><i class="ti ti-search" style="font-size:15px;"></i><input id="doc-pt-search" placeholder="Buscar paciente…" style="border:none;background:none;outline:none;flex:1;font-size:12.5px;color:#1C1922;font-family:inherit;" oninput="docFilterPacientes(this.value)"></div>
+    <div id="doc-pt-list"></div></div>`;
+  docRenderPatientList(pts);
+}
+function docRenderPatientList(list){
+  const box=document.getElementById('doc-pt-list'); if(!box) return;
+  if(!list.length){ box.innerHTML='<div class="doc-empty">Sin pacientes.</div>'; return; }
+  box.innerHTML=list.map(p=>{
+    const sede=docSede(p.location_id);
+    const name=docEsc(((p.first_name||'')+' '+(p.last_name||'')).trim());
+    const freq=p.freq_per_week?`${p.freq_per_week}×/sem`:'sin horario';
+    const fit=p.student_id?' · <span style="color:#3E7A52;">FIT</span>':'';
+    return `<div class="doc-card" onclick="docRenderPatient('${p.id}')">
+      <div style="width:36px;height:36px;border-radius:50%;background:#F0ECE2;color:#1C1922;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;flex-shrink:0;">${docEsc(docInitials(p))}</div>
+      <div class="c-body"><div class="c-name">${name}</div><div class="c-meta"><span class="c-dot" style="background:${sede.color};display:inline-block;width:7px;height:7px;border-radius:50%;"></span> ${docEsc(sede.name)} · ${freq}${fit}</div></div>
+      <i class="ti ti-chevron-right c-chev"></i></div>`;
+  }).join('');
+}
+function docFilterPacientes(q){
+  q=(q||'').toLowerCase().trim();
+  const list=(docCache.patients||[]).filter(p=> (((p.first_name||'')+' '+(p.last_name||'')).toLowerCase().includes(q)));
+  docRenderPatientList(list);
+}
+
+// ---- Perfil de paciente ----
+async function docRenderPatient(id){
+  const cont=document.getElementById('doc-home-content'); if(!cont) return;
+  docRenderBottomNav('pacientes');
+  cont.innerHTML='<div class="doc-wrap"><div class="doc-loading">Cargando…</div></div>';
+  const pts=await docLoadPatients();
+  const p=pts.find(x=>x.id===id);
+  if(!p){ cont.innerHTML='<div class="doc-wrap"><div class="doc-empty">No encontrado.</div></div>'; return; }
+  let sess=[];
+  try{
+    const today=docYMD(new Date());
+    const { data }=await sb.from('therapy_sessions').select('id, session_date, hour, location_id, status').eq('patient_id', id).gte('session_date', today).neq('status','cancelled').order('session_date').order('hour').limit(8);
+    sess=data||[];
+  }catch(e){}
+  let fit=null;
+  if(p.student_id){ try{ const { data }=await sb.from('students').select('first_name,last_name,location_id,phone').eq('id',p.student_id).maybeSingle(); fit=data; }catch(e){} }
+  const sede=docSede(p.location_id);
+  const name=docEsc(((p.first_name||'')+' '+(p.last_name||'')).trim());
+  const freq=p.freq_per_week?`${p.freq_per_week}× por semana`:'Sin horario fijo';
+  let html=`<div class="doc-wrap">
+    <div class="doc-top"><button class="doc-iconbtn" onclick="docRenderPacientes()"><i class="ti ti-arrow-left"></i></button><div style="flex:1;"></div></div>
+    <div style="display:flex;align-items:center;gap:13px;margin-bottom:6px;">
+      <div style="width:54px;height:54px;border-radius:50%;background:#F0ECE2;color:#1C1922;display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:600;">${docEsc(docInitials(p))}</div>
+      <div><div style="font-size:18px;font-weight:600;">${name}</div>
+      <div style="font-size:11px;color:#9A9183;display:flex;align-items:center;gap:5px;margin-top:2px;"><span class="c-dot" style="background:${sede.color};width:8px;height:8px;border-radius:50%;display:inline-block;"></span>${docEsc(sede.name)} · ${freq}</div></div>
+    </div>
+    <div class="doc-sec">Contacto</div>
+    <div class="doc-info">
+      <div class="doc-inforow"><span>Teléfono</span><b>${p.phone?`<a href="https://wa.me/${docWa(p.phone)}" target="_blank" style="color:#3E7A52;">${docEsc(p.phone)}</a>`:'—'}</b></div>
+      <div class="doc-inforow"><span>Correo</span><b>${p.email?docEsc(p.email):'—'}</b></div>
+    </div>
+    <div class="doc-sec">Alumno de FIT</div>`;
+  if(fit){
+    const fs=docSede(fit.location_id);
+    html+=`<div class="doc-fitcard"><div><div style="font-size:13px;font-weight:600;">${docEsc(((fit.first_name||'')+' '+(fit.last_name||'')).trim())}</div><div style="font-size:10.5px;color:#9A9183;margin-top:2px;"><span class="c-dot" style="background:${fs.color};width:7px;height:7px;border-radius:50%;display:inline-block;"></span> ${docEsc(fs.name)}</div></div><span class="doc-fittag"><i class="ti ti-link" style="font-size:12px;"></i> enlazada</span></div>`;
+  } else {
+    html+=`<button class="doc-linkbtn" onclick="docLinkFit('${p.id}')"><i class="ti ti-link"></i> Enlazar con un alumno de FIT</button>`;
+  }
+  if(p.notes){ html+=`<div class="doc-sec">Notas</div><div class="doc-info"><div style="font-size:12.5px;color:#5A5248;line-height:1.5;padding:9px 0;">${docEsc(p.notes)}</div></div>`; }
+  html+=`<div class="doc-sec">Próximas terapias</div>`;
+  if(!sess.length){ html+=`<div class="doc-info"><div style="font-size:12px;color:#9A9183;padding:9px 0;">Sin terapias próximas.</div></div>`; }
+  else {
+    html+=sess.map(s=>{
+      const ss=docSede(s.location_id); const d=new Date(s.session_date+'T12:00:00');
+      const dl=docCap(d.toLocaleDateString('es-PE',{weekday:'short',day:'numeric',month:'short'}));
+      return `<div class="doc-card" style="cursor:default;"><div class="c-time"><div class="c-h" style="font-size:13px;">${docHourH(s.hour)}</div><div class="c-ap">${docHourAp(s.hour)}</div></div><div class="c-div"></div><div class="c-body"><div class="c-name" style="font-size:12.5px;">${dl}</div><div class="c-meta"><span class="c-dot" style="background:${ss.color};width:7px;height:7px;border-radius:50%;display:inline-block;"></span> ${docEsc(ss.name)}</div></div></div>`;
+    }).join('');
+  }
+  html+=`<button class="doc-primary" onclick="showToast('Agendar llega en el Chunk 3','info')"><i class="ti ti-calendar-plus"></i> Agendar terapia</button></div>`;
+  cont.innerHTML=html;
+}
+
+// ---- Enlazar a FIT desde el perfil ----
+function docLinkFit(pid){
+  const cont=document.getElementById('doc-home-content'); if(!cont) return;
+  cont.innerHTML=`<div class="doc-wrap">
+    <div class="doc-top"><button class="doc-iconbtn" onclick="docRenderPatient('${pid}')"><i class="ti ti-arrow-left"></i></button><div style="font-size:16px;font-weight:600;flex:1;">Enlazar con FIT</div></div>
+    <div class="doc-search" style="cursor:text;"><i class="ti ti-search" style="font-size:15px;"></i><input placeholder="Buscar alumno…" style="border:none;background:none;outline:none;flex:1;font-size:12.5px;font-family:inherit;" oninput="docLinkSearch('${pid}', this.value)"></div>
+    <div id="doc-link-results"></div></div>`;
+}
+async function docLinkSearch(pid,q){
+  const box=document.getElementById('doc-link-results'); if(!box) return;
+  const qq=docSanit(q); if(qq.length<2){ box.innerHTML=''; return; }
+  let res=[];
+  try{ const { data }=await sb.from('students').select('id,first_name,last_name,location_id').or(`first_name.ilike.%${qq}%,last_name.ilike.%${qq}%`).eq('status','active').limit(8); res=data||[]; }catch(e){}
+  box.innerHTML=res.map(s=>`<div class="doc-card" onclick="docDoLink('${pid}','${s.id}')"><div class="c-body"><div class="c-name" style="font-size:12.5px;">${docEsc(((s.first_name||'')+' '+(s.last_name||'')).trim())}</div><div class="c-meta">${docEsc(docSede(s.location_id).name)}</div></div><i class="ti ti-link c-chev"></i></div>`).join('') || '<div class="doc-empty">Sin resultados.</div>';
+}
+async function docDoLink(pid,sid){
+  try{ const { error }=await sb.from('therapy_patients').update({student_id:sid}).eq('id',pid); if(error) throw error; docCache.patients=null; showToast('✓ Enlazado','success'); docRenderPatient(pid); }
+  catch(e){ showToast('Error: '+(e.message||''),'error'); }
+}
+
+// ---- Registrar paciente ----
+function docRenderNuevo(){
+  const cont=document.getElementById('doc-home-content'); if(!cont) return;
+  docRenderBottomNav('nuevo');
+  docNuevoState={ mode:'cero', student:null };
+  cont.innerHTML=docNuevoHtml();
+}
+function docNuevoHtml(){
+  const st=docNuevoState, s=st.student;
+  const sedeOpts=`<option value="">Sede…</option>
+    <option value="11111111-1111-1111-1111-111111111111">Santa Cruz</option>
+    <option value="22222222-2222-2222-2222-222222222222">Boutique</option>
+    <option value="33333333-3333-3333-3333-333333333333">San Antonio</option>`;
+  const freqOpts=`<option value="">Frecuencia…</option><option value="1">1×/sem</option><option value="2">2×/sem</option><option value="3">3×/sem</option>`;
+  return `<div class="doc-wrap">
+    <div class="doc-top"><button class="doc-iconbtn" onclick="docRenderPacientes()"><i class="ti ti-arrow-left"></i></button><div style="font-size:16px;font-weight:600;flex:1;">Nuevo paciente</div></div>
+    <div class="doc-seg">
+      <button class="${st.mode==='cero'?'on':''}" onclick="docNuevoMode('cero')">Desde cero</button>
+      <button class="${st.mode==='fit'?'on':''}" onclick="docNuevoMode('fit')">Desde alumno FIT</button>
+    </div>
+    ${st.mode==='fit'?`<div class="doc-search" style="cursor:text;"><i class="ti ti-search" style="font-size:15px;"></i><input placeholder="Buscar alumno de FIT…" style="border:none;background:none;outline:none;flex:1;font-size:12.5px;font-family:inherit;" oninput="docFitSearch(this.value)"></div><div id="doc-fit-results"></div>${s?`<div class="doc-fitcard" style="margin-bottom:14px;"><div><div style="font-size:13px;font-weight:600;">${docEsc(((s.first_name||'')+' '+(s.last_name||'')).trim())}</div><div style="font-size:10.5px;color:#9A9183;">${docEsc(docSede(s.location_id).name)}</div></div><span class="doc-fittag"><i class="ti ti-link" style="font-size:12px;"></i> datos jalados</span></div>`:''}`:''}
+    <div class="doc-form">
+      <div class="doc-frow"><input id="np-first" placeholder="Nombre" value="${s?docEsc(s.first_name||''):''}"><input id="np-last" placeholder="Apellido" value="${s?docEsc(s.last_name||''):''}"></div>
+      <input id="np-phone" placeholder="Teléfono / WhatsApp" value="${s?docEsc(s.phone||''):''}">
+      <input id="np-email" placeholder="Correo (opcional)" value="${s&&s.email?docEsc(s.email):''}">
+      <select id="np-sede">${sedeOpts}</select>
+      <select id="np-freq">${freqOpts}</select>
+    </div>
+    <button class="doc-primary" onclick="docCreatePatient()"><i class="ti ti-check"></i> Crear paciente</button></div>`;
+}
+function docNuevoMode(m){
+  docNuevoState.mode=m; if(m==='cero') docNuevoState.student=null;
+  document.getElementById('doc-home-content').innerHTML=docNuevoHtml();
+  docSetSedeSelect();
+}
+async function docFitSearch(q){
+  const box=document.getElementById('doc-fit-results'); if(!box) return;
+  const qq=docSanit(q); if(qq.length<2){ box.innerHTML=''; return; }
+  try{ const { data }=await sb.from('students').select('id,first_name,last_name,phone,email,location_id').or(`first_name.ilike.%${qq}%,last_name.ilike.%${qq}%`).eq('status','active').limit(8); docFitResults=data||[]; }catch(e){ docFitResults=[]; }
+  box.innerHTML=docFitResults.map(s=>`<div class="doc-card" onclick="docPickFitById('${s.id}')"><div class="c-body"><div class="c-name" style="font-size:12.5px;">${docEsc(((s.first_name||'')+' '+(s.last_name||'')).trim())}</div><div class="c-meta">${docEsc(docSede(s.location_id).name)}</div></div><i class="ti ti-plus c-chev"></i></div>`).join('') || '<div class="doc-empty">Sin resultados.</div>';
+}
+function docPickFitById(id){
+  const s=docFitResults.find(x=>x.id===id); if(!s) return;
+  docNuevoState.student=s; docNuevoState.mode='fit';
+  document.getElementById('doc-home-content').innerHTML=docNuevoHtml();
+  docSetSedeSelect();
+}
+function docSetSedeSelect(){ const s=docNuevoState.student; if(s&&s.location_id){ const sel=document.getElementById('np-sede'); if(sel) sel.value=s.location_id; } }
+async function docCreatePatient(){
+  const first=(document.getElementById('np-first').value||'').trim();
+  if(!first){ showToast('Falta el nombre','error'); return; }
+  const fv=document.getElementById('np-freq').value;
+  const payload={
+    doctor_id: docState.doctorId,
+    first_name: first,
+    last_name: (document.getElementById('np-last').value||'').trim()||null,
+    phone: (document.getElementById('np-phone').value||'').trim()||null,
+    email: (document.getElementById('np-email').value||'').trim()||null,
+    location_id: document.getElementById('np-sede').value||null,
+    freq_per_week: fv?parseInt(fv):null,
+    student_id: (docNuevoState.student&&docNuevoState.student.id)||null,
+    status:'active'
+  };
+  try{
+    const { data, error }=await sb.from('therapy_patients').insert(payload).select().single();
+    if(error) throw error;
+    docCache.patients=null;
+    showToast('✓ Paciente creado','success');
+    docRenderPatient(data.id);
+  }catch(e){ showToast('Error: '+(e.message||''),'error'); }
 }
 
 </script>
