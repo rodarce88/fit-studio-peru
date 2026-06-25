@@ -3582,7 +3582,13 @@ body:not(.doctor-mode) .doc-bottomnav{ display:none; }
 .doc-nav{ display:flex; flex-direction:column; align-items:center; gap:2px; color:#A39B8C; font-size:9.5px; background:none; border:none; cursor:pointer; }
 .doc-nav i{ font-size:19px; } .doc-nav.is-active{ color:var(--doc-ink); }
 .doc-fab{ width:46px; height:46px; border-radius:50%; background:var(--doc-ink); display:flex; align-items:center; justify-content:center; color:#fff; margin-top:-24px; border:4px solid #F7F5F0; cursor:pointer; }
-.doc-fab i{ font-size:22px; }
+.doc-fab i{ font-size:26px; color:#fff; -webkit-text-stroke:1px #fff; font-weight:700; }
+.doc-chips{ display:flex; gap:7px; flex-wrap:wrap; }
+.doc-chip{ padding:8px 14px; border:1px solid var(--doc-line); background:#fff; border-radius:999px; font-size:12px; color:#8C857A; cursor:pointer; font-family:inherit; }
+.doc-chip.on{ border:1.5px solid #1C1922; background:#1C1922; color:#fff; font-weight:600; }
+.doc-segsm{ display:flex; gap:4px; background:#EEE9DE; border-radius:11px; padding:3px; margin-bottom:10px; }
+.doc-segsm button{ flex:1; padding:8px 0; font-size:11.5px; color:#8C857A; border:none; background:none; border-radius:9px; cursor:pointer; font-family:inherit; }
+.doc-segsm button.on{ background:#1C1922; color:#fff; font-weight:600; }
 /* selector de rol */
 #doc-role-chooser{ display:none; position:fixed; inset:0; z-index:9999; background:
   radial-gradient(120% 70% at 12% 0%, #FFFFFF 0%, rgba(255,255,255,0) 50%),
@@ -28373,7 +28379,7 @@ function docRenderBottomNav(active){
 function docGoTab(t){
   if (t==='hoy'){ docState.date=docYMD(new Date()); docRenderHoy(); return; }
   if (t==='pacientes'){ docRenderPacientes(); return; }
-  if (t==='nuevo'){ docRenderNuevo(); return; }
+  if (t==='nuevo'){ docRenderNuevo(docState.lastMain); return; }
   if (t==='mas'){ docRoleMenu(); return; }
   showToast('Esa sección llega en el siguiente paso 🙌','info');
 }
@@ -28400,6 +28406,7 @@ async function docRenderHoy(){
   const cont=document.getElementById('doc-home-content'); if(!cont) return;
   cont.innerHTML='<div class="doc-wrap"><div class="doc-loading">Cargando tu día…</div></div>';
   docRenderBottomNav('hoy');
+  docState.lastMain='hoy';
   const date=docState.date;
   let sessions=[];
   try{
@@ -28452,7 +28459,7 @@ async function docRenderHoy(){
         const freq=p.freq_per_week?`${p.freq_per_week}×/sem`:'';
         const fitTag=p.student_id?'<span style="color:#3E7A52;">alumna FIT</span>':'';
         const meta=[freq,fitTag].filter(Boolean).join(' · ');
-        html+=`<div class="doc-card" onclick="docRenderPatient('${(p.id||'')}')">
+        html+=`<div class="doc-card" onclick="docRenderPatient('${(p.id||'')}','hoy')">
           <div class="c-time"><div class="c-h">${docHourH(it.hour)}</div><div class="c-ap">${docHourAp(it.hour)}</div>
             <div class="c-sede"><span class="c-dot" style="background:${sede.color};"></span>${docEsc(sede.name)}</div></div>
           <div class="c-div"></div>
@@ -28495,6 +28502,7 @@ async function docLoadPatients(force){
 async function docRenderPacientes(){
   const cont=document.getElementById('doc-home-content'); if(!cont) return;
   docRenderBottomNav('pacientes');
+  docState.lastMain='pacientes';
   cont.innerHTML='<div class="doc-wrap"><div class="doc-loading">Cargando pacientes…</div></div>';
   const pts=await docLoadPatients();
   cont.innerHTML=`<div class="doc-wrap">
@@ -28511,7 +28519,7 @@ function docRenderPatientList(list){
     const name=docEsc(((p.first_name||'')+' '+(p.last_name||'')).trim());
     const freq=p.freq_per_week?`${p.freq_per_week}×/sem`:'sin horario';
     const fit=p.student_id?' · <span style="color:#3E7A52;">FIT</span>':'';
-    return `<div class="doc-card" onclick="docRenderPatient('${p.id}')">
+    return `<div class="doc-card" onclick="docRenderPatient('${p.id}','pacientes')">
       <div style="width:36px;height:36px;border-radius:50%;background:#F0ECE2;color:#1C1922;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;flex-shrink:0;">${docEsc(docInitials(p))}</div>
       <div class="c-body"><div class="c-name">${name}</div><div class="c-meta"><span class="c-dot" style="background:${sede.color};display:inline-block;width:7px;height:7px;border-radius:50%;"></span> ${docEsc(sede.name)} · ${freq}${fit}</div></div>
       <i class="ti ti-chevron-right c-chev"></i></div>`;
@@ -28524,9 +28532,9 @@ function docFilterPacientes(q){
 }
 
 // ---- Perfil de paciente ----
-async function docRenderPatient(id){
+async function docRenderPatient(id, origin){
   const cont=document.getElementById('doc-home-content'); if(!cont) return;
-  docRenderBottomNav('pacientes');
+  docRenderBottomNav((origin==='hoy')?'hoy':'pacientes');
   cont.innerHTML='<div class="doc-wrap"><div class="doc-loading">Cargando…</div></div>';
   const pts=await docLoadPatients();
   const p=pts.find(x=>x.id===id);
@@ -28543,7 +28551,7 @@ async function docRenderPatient(id){
   const name=docEsc(((p.first_name||'')+' '+(p.last_name||'')).trim());
   const freq=p.freq_per_week?`${p.freq_per_week}× por semana`:'Sin horario fijo';
   let html=`<div class="doc-wrap">
-    <div class="doc-top"><button class="doc-iconbtn" onclick="docRenderPacientes()"><i class="ti ti-arrow-left"></i></button><div style="flex:1;"></div></div>
+    <div class="doc-top"><button class="doc-iconbtn" onclick="docBackTo('${(origin==='hoy'?'hoy':'pacientes')}')"><i class="ti ti-arrow-left"></i></button><div style="flex:1;"></div></div>
     <div style="display:flex;align-items:center;gap:13px;margin-bottom:6px;">
       <div style="width:54px;height:54px;border-radius:50%;background:#F0ECE2;color:#1C1922;display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:600;">${docEsc(docInitials(p))}</div>
       <div><div style="font-size:18px;font-weight:600;">${name}</div>
@@ -28571,7 +28579,7 @@ async function docRenderPatient(id){
       return `<div class="doc-card" style="cursor:default;"><div class="c-time"><div class="c-h" style="font-size:13px;">${docHourH(s.hour)}</div><div class="c-ap">${docHourAp(s.hour)}</div></div><div class="c-div"></div><div class="c-body"><div class="c-name" style="font-size:12.5px;">${dl}</div><div class="c-meta"><span class="c-dot" style="background:${ss.color};width:7px;height:7px;border-radius:50%;display:inline-block;"></span> ${docEsc(ss.name)}</div></div></div>`;
     }).join('');
   }
-  html+=`<button class="doc-primary" onclick="showToast('Agendar llega en el Chunk 3','info')"><i class="ti ti-calendar-plus"></i> Agendar terapia</button></div>`;
+  html+=`<button class="doc-primary" onclick="docRenderAgendar('${id}')"><i class="ti ti-calendar-plus"></i> Agendar terapia</button></div>`;
   cont.innerHTML=html;
 }
 
@@ -28596,10 +28604,11 @@ async function docDoLink(pid,sid){
 }
 
 // ---- Registrar paciente ----
-function docRenderNuevo(){
+function docRenderNuevo(origin){
   const cont=document.getElementById('doc-home-content'); if(!cont) return;
   docRenderBottomNav('nuevo');
   docNuevoState={ mode:'cero', student:null };
+  docState.nuevoOrigin = origin || docState.lastMain || 'hoy';
   cont.innerHTML=docNuevoHtml();
 }
 function docNuevoHtml(){
@@ -28608,9 +28617,8 @@ function docNuevoHtml(){
     <option value="11111111-1111-1111-1111-111111111111">Santa Cruz</option>
     <option value="22222222-2222-2222-2222-222222222222">Boutique</option>
     <option value="33333333-3333-3333-3333-333333333333">San Antonio</option>`;
-  const freqOpts=`<option value="">Frecuencia…</option><option value="1">1×/sem</option><option value="2">2×/sem</option><option value="3">3×/sem</option>`;
   return `<div class="doc-wrap">
-    <div class="doc-top"><button class="doc-iconbtn" onclick="docRenderPacientes()"><i class="ti ti-arrow-left"></i></button><div style="font-size:16px;font-weight:600;flex:1;">Nuevo paciente</div></div>
+    <div class="doc-top"><button class="doc-iconbtn" onclick="docBackTo(docState.nuevoOrigin)"><i class="ti ti-arrow-left"></i></button><div style="font-size:16px;font-weight:600;flex:1;">Nuevo paciente</div></div>
     <div class="doc-seg">
       <button class="${st.mode==='cero'?'on':''}" onclick="docNuevoMode('cero')">Desde cero</button>
       <button class="${st.mode==='fit'?'on':''}" onclick="docNuevoMode('fit')">Desde alumno FIT</button>
@@ -28621,9 +28629,8 @@ function docNuevoHtml(){
       <input id="np-phone" placeholder="Teléfono / WhatsApp" value="${s?docEsc(s.phone||''):''}">
       <input id="np-email" placeholder="Correo (opcional)" value="${s&&s.email?docEsc(s.email):''}">
       <select id="np-sede">${sedeOpts}</select>
-      <select id="np-freq">${freqOpts}</select>
     </div>
-    <button class="doc-primary" onclick="docCreatePatient()"><i class="ti ti-check"></i> Crear paciente</button></div>`;
+    <button class="doc-primary" onclick="docCreatePatient()"><i class="ti ti-arrow-right"></i> Crear y continuar</button></div>`;
 }
 function docNuevoMode(m){
   docNuevoState.mode=m; if(m==='cero') docNuevoState.student=null;
@@ -28646,7 +28653,6 @@ function docSetSedeSelect(){ const s=docNuevoState.student; if(s&&s.location_id)
 async function docCreatePatient(){
   const first=(document.getElementById('np-first').value||'').trim();
   if(!first){ showToast('Falta el nombre','error'); return; }
-  const fv=document.getElementById('np-freq').value;
   const payload={
     doctor_id: docState.doctorId,
     first_name: first,
@@ -28654,7 +28660,6 @@ async function docCreatePatient(){
     phone: (document.getElementById('np-phone').value||'').trim()||null,
     email: (document.getElementById('np-email').value||'').trim()||null,
     location_id: document.getElementById('np-sede').value||null,
-    freq_per_week: fv?parseInt(fv):null,
     student_id: (docNuevoState.student&&docNuevoState.student.id)||null,
     status:'active'
   };
@@ -28663,9 +28668,55 @@ async function docCreatePatient(){
     if(error) throw error;
     docCache.patients=null;
     showToast('✓ Paciente creado','success');
-    docRenderPatient(data.id);
+    docRenderAgendar(data.id);
   }catch(e){ showToast('Error: '+(e.message||''),'error'); }
 }
+
+// ---- Navegación atrás ----
+function docBackTo(o){ if(o==='hoy') docRenderHoy(); else docRenderPacientes(); }
+
+// ============================================
+// MÓDULO DOCTOR — Chunk 3 (inicio): Agendar — frecuencia y duración
+// ============================================
+let docAgState={};
+async function docRenderAgendar(pid){
+  const cont=document.getElementById('doc-home-content'); if(!cont) return;
+  cont.innerHTML='<div class="doc-wrap"><div class="doc-loading">…</div></div>';
+  const pts=await docLoadPatients(true);
+  const p=pts.find(x=>x.id===pid); if(!p){ docRenderPacientes(); return; }
+  docAgState={ pid, freq:p.freq_per_week||2, mode:'sessions', weeks:6, sessions:12 };
+  cont.innerHTML=docAgendaHtml(p);
+}
+function docAgendaHtml(p){
+  const st=docAgState, sede=docSede(p.location_id);
+  const name=docEsc(((p.first_name||'')+' '+(p.last_name||'')).trim());
+  const chip=(v,cur,onc,label)=>`<button class="doc-chip ${v===cur?'on':''}" onclick="${onc}">${label}</button>`;
+  return `<div class="doc-wrap">
+    <div class="doc-top"><button class="doc-iconbtn" onclick="docRenderPatient('${st.pid}','pacientes')"><i class="ti ti-arrow-left"></i></button>
+      <div><div style="font-size:16px;font-weight:600;line-height:1.1;">Agendar</div><div style="font-size:10.5px;color:#9A9183;">${name} · <span style="color:${sede.color};">●</span> ${docEsc(sede.name)}</div></div></div>
+    <div class="doc-sec">¿Cada cuánto?</div>
+    <div class="doc-chips">
+      ${chip(1,st.freq,"docAgSet('freq',1)","1×/sem")}${chip(2,st.freq,"docAgSet('freq',2)","2×/sem")}${chip(3,st.freq,"docAgSet('freq',3)","3×/sem")}
+    </div>
+    <div class="doc-sec">¿Hasta cuándo?</div>
+    <div class="doc-segsm">
+      <button class="${st.mode==='weeks'?'on':''}" onclick="docAgSet('mode','weeks')">Por semanas</button>
+      <button class="${st.mode==='sessions'?'on':''}" onclick="docAgSet('mode','sessions')">Por terapias</button>
+    </div>
+    ${st.mode==='weeks'
+      ? `<div class="doc-chips">${chip(2,st.weeks,"docAgSet('weeks',2)","2")}${chip(3,st.weeks,"docAgSet('weeks',3)","3")}${chip(5,st.weeks,"docAgSet('weeks',5)","5")}<button class="doc-chip" onclick="docAgEdit('weeks')"><i class="ti ti-pencil" style="font-size:12px;"></i> otro</button></div>`
+      : `<div class="doc-chips">${chip(10,st.sessions,"docAgSet('sessions',10)","10")}${chip(12,st.sessions,"docAgSet('sessions',12)","12")}<button class="doc-chip" onclick="docAgEdit('sessions')"><i class="ti ti-pencil" style="font-size:12px;"></i> otro</button></div>`}
+    <div class="doc-info" style="margin-top:14px;"><div style="padding:11px 0;"><div style="font-size:12.5px;font-weight:600;">${docAgSummary()}</div><div style="font-size:10.5px;color:#9A9183;margin-top:2px;">Te avisaré en la penúltima sesión para renovar a tiempo.</div></div></div>
+    <button class="doc-primary" onclick="docAgGenerate()"><i class="ti ti-calendar-search"></i> Generar horarios</button></div>`;
+}
+function docAgSet(k,v){ docAgState[k]=v; const p=(docCache.patients||[]).find(x=>x.id===docAgState.pid); if(p) document.getElementById('doc-home-content').innerHTML=docAgendaHtml(p); }
+function docAgEdit(k){ const v=prompt(k==='weeks'?'¿Cuántas semanas?':'¿Cuántas terapias?'); const n=parseInt(v); if(n>0) docAgSet(k,n); }
+function docAgSummary(){
+  const st=docAgState;
+  if(st.mode==='weeks'){ const tot=st.weeks*st.freq; return `${tot} terapia${tot===1?'':'s'} · ${st.weeks} semana${st.weeks===1?'':'s'}`; }
+  const wk=Math.max(1,Math.ceil(st.sessions/st.freq)); return `${st.sessions} terapias · ~${wk} semana${wk===1?'':'s'}`;
+}
+function docAgGenerate(){ showToast('Generación de opciones de horario — siguiente paso 🙌','info'); }
 
 </script>
 
