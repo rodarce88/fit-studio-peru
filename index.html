@@ -28953,7 +28953,7 @@ function docOpcionesHtml(p){
     <div class="doc-sec">${st.opts.length} horarios libres · ${docFreqWord(st.freq)}</div>
     ${cards}
     <div style="display:flex;align-items:center;justify-content:center;gap:7px;background:#fff;border:1px solid #E6E0D4;border-radius:12px;padding:11px;font-size:12.5px;color:#5A5248;margin:12px 0;cursor:pointer;" onclick="docCopyOpciones()"><i class="ti ti-copy" style="font-size:15px;"></i> Copiar mensaje para la paciente</div>
-    <div style="display:flex;align-items:center;justify-content:center;gap:7px;background:#fff;border:1px solid #E6E0D4;border-radius:12px;padding:11px;font-size:12.5px;color:#5A5248;margin-bottom:14px;cursor:pointer;" onclick="docManualPlaceholder()"><i class="ti ti-layout-grid" style="font-size:15px;"></i> Elegir manualmente</div>
+    <div style="display:flex;align-items:center;justify-content:center;gap:7px;background:#fff;border:1.5px solid #1C1922;border-radius:12px;padding:11px;font-size:12.5px;color:#1C1922;font-weight:600;margin-bottom:14px;cursor:pointer;" onclick="docManualPlaceholder()"><i class="ti ti-layout-grid" style="font-size:15px;"></i> Elegir manualmente</div>
     <button class="doc-primary" ${st.sel==null?'disabled style="opacity:.4;pointer-events:none;"':''} onclick="docOptContinue()"><i class="ti ti-arrow-right"></i> Continuar</button></div>`;
 }
 function docOptSel(i){ docOptState.sel=i; const p=(docCache.patients||[]).find(x=>x.id===docOptState.pid); if(p) document.getElementById('doc-home-content').innerHTML=docOpcionesHtml(p); }
@@ -28963,7 +28963,7 @@ function docMsgOpciones(p){
   const st=docOptState, sede=docSede(p.location_id).name;
   const name=(p.first_name||'').trim()||'';
   const nums=['1️⃣','2️⃣','3️⃣','4️⃣','5️⃣'];
-  const lines=st.opts.slice(0,3).map((o,i)=>`${nums[i]} ${docDowsFull(o.dows)} · ${docHourLbl(o.hour)} (desde ${docDateShort(o.dates[0])})`);
+  const lines=st.opts.slice(0,5).map((o,i)=>`${nums[i]} ${docDowsFull(o.dows)} · ${docHourLbl(o.hour)} (desde ${docDateShort(o.dates[0])})`);
   return `Hola ${name} 👋 Soy Andrés. Para tus terapias (${docFreqWord(st.freq)}) tengo estos horarios libres:\n\n${lines.join('\n')}\n\nTodas en la sede ${sede}. ¿Cuál te acomoda mejor?`;
 }
 async function docCopyOpciones(){
