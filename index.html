@@ -3646,6 +3646,9 @@ body:not(.doctor-mode) .doc-bottomnav{ display:none; }
 #view-doctor-home .doc-form{ display:flex;flex-direction:column;gap:9px; }
 #view-doctor-home .doc-form input,#view-doctor-home .doc-form select{ width:100%;background:#FBFAF6;border:1px solid var(--doc-line);border-radius:10px;padding:11px 12px;font-size:12.5px;color:#1C1922;outline:none;font-family:inherit; }
 #view-doctor-home .doc-frow{ display:flex;gap:9px; } #view-doctor-home .doc-frow input{ flex:1;min-width:0; }
+#view-doctor-home .doc-form .phone-field{ display:flex;gap:8px;align-items:stretch;width:100%; }
+#view-doctor-home .doc-form .phone-field .phone-code{ width:104px;flex:0 0 104px;background:#FBFAF6;cursor:pointer; }
+#view-doctor-home .doc-form .phone-field .phone-num{ flex:1;width:auto;min-width:0;background:#FBFAF6; }
 </style>
 
 <div id="doc-role-chooser"><div class="doc-rc-wrap" id="doc-rc-wrap"></div></div>
@@ -28446,7 +28449,7 @@ async function docRenderHoy(){
       <button class="doc-rolepill" onclick="docOpenRoleSwitch()"><i class="ti ti-stethoscope" style="font-size:15px;"></i> Doctor <i class="ti ti-chevron-down" style="font-size:13px;opacity:0.7;"></i></button>
       <div class="doc-date">${wd}<br><b>${dm}</b></div>
     </div>
-    <div class="doc-search" onclick="showToast('Buscador en el siguiente paso','info')"><i class="ti ti-search" style="font-size:15px;"></i> Buscar paciente…</div>
+    <div class="doc-search" onclick="docRenderPacientes()"><i class="ti ti-search" style="font-size:15px;"></i> Buscar paciente…</div>
     ${docDayStrip()}
     <div class="doc-hhead"><h2>${docIsToday(date)?'Hoy':wd}</h2><span>${sessions.length} paciente${sessions.length===1?'':'s'}</span></div>`;
   if(!items.length){
@@ -28631,8 +28634,9 @@ function docNuevoHtml(){
     ${st.mode==='fit'?`<div class="doc-search" style="cursor:text;"><i class="ti ti-search" style="font-size:15px;"></i><input placeholder="Buscar alumno de FIT…" style="border:none;background:none;outline:none;flex:1;font-size:12.5px;font-family:inherit;" oninput="docFitSearch(this.value)"></div><div id="doc-fit-results"></div>${s?`<div class="doc-fitcard" style="margin-bottom:14px;"><div><div style="font-size:13px;font-weight:600;">${docEsc(((s.first_name||'')+' '+(s.last_name||'')).trim())}</div><div style="font-size:10.5px;color:#9A9183;">${docEsc(docSede(s.location_id).name)}</div></div><span class="doc-fittag"><i class="ti ti-link" style="font-size:12px;"></i> datos jalados</span></div>`:''}`:''}
     <div class="doc-form">
       <div class="doc-frow"><input id="np-first" placeholder="Nombre" value="${s?docEsc(s.first_name||''):''}"><input id="np-last" placeholder="Apellido" value="${s?docEsc(s.last_name||''):''}"></div>
-      <input id="np-phone" placeholder="Teléfono / WhatsApp" value="${s?docEsc(s.phone||''):''}">
-      <input id="np-email" placeholder="Correo (opcional)" value="${s&&s.email?docEsc(s.email):''}">
+      <div style="font-size:11px;color:#9A9183;margin:4px 2px -2px;">Celular</div>
+      ${renderPhoneFieldHtml('np', s?(s.phone||''):'', {placeholder:'999 999 999'})}
+      <input id="np-email" type="email" placeholder="Correo (opcional)" value="${s&&s.email?docEsc(s.email):''}">
       <div style="font-size:11px;color:#9A9183;margin:4px 2px -2px;">Sede</div>
       <div class="doc-sedes" id="np-sedes">${sedeBtns}</div>
     </div>
@@ -28660,13 +28664,19 @@ function docNuevoSetSede(id){
 async function docCreatePatient(){
   const first=(document.getElementById('np-first').value||'').trim();
   if(!first){ showToast('Falta el nombre','error'); return; }
+  const email=(document.getElementById('np-email').value||'').trim();
+  if(email && !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)){ showToast('El correo no es válido','error'); return; }
+  const numDigits=(document.getElementById('np-phone-num')?.value||'').replace(/\D/g,'');
+  if(numDigits && (numDigits.length<6 || numDigits.length>15)){ showToast('El número de celular no es válido','error'); return; }
+  if(!numDigits){ showToast('Falta el celular','error'); return; }
+  if(!docNuevoState.sede){ showToast('Elige una sede','error'); return; }
   const payload={
     doctor_id: docState.doctorId,
     first_name: first,
     last_name: (document.getElementById('np-last').value||'').trim()||null,
-    phone: (document.getElementById('np-phone').value||'').trim()||null,
-    email: (document.getElementById('np-email').value||'').trim()||null,
-    location_id: docNuevoState.sede||null,
+    phone: readPhoneFieldValue('np'),
+    email: email||null,
+    location_id: docNuevoState.sede,
     student_id: (docNuevoState.student&&docNuevoState.student.id)||null,
     status:'active'
   };
