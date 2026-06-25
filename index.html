@@ -28428,7 +28428,7 @@ async function docRenderHoy(){
   try{
     const { data, error } = await sb.from('therapy_sessions')
       .select('id, hour, status, location_id, therapy_patients(id, first_name, last_name, location_id, freq_per_week, student_id)')
-      .eq('doctor_id', docState.doctorId).eq('session_date', date).neq('status','cancelled').order('hour');
+      .eq('doctor_id', docState.doctorId).eq('session_date', date).not('status','in','(cancelled,deleted)').order('hour');
     if (error) throw error;
     sessions=data||[];
   }catch(e){
@@ -28479,8 +28479,8 @@ async function docRenderHoy(){
           <div class="c-time"><div class="c-h">${docHourH(it.hour)}</div><div class="c-ap">${docHourAp(it.hour)}</div>
             <div class="c-sede"><span class="c-dot" style="background:${sede.color};"></span>${docEsc(sede.name)}</div></div>
           <div class="c-div"></div>
-          <div class="c-body"><div class="c-name">${name}</div>${meta?`<div class="c-meta">${meta}</div>`:''}</div>
-          <i class="ti ti-chevron-right c-chev"></i>
+          <div class="c-body"><div class="c-name">${name}${docStatusBadge(s.status)}</div>${meta?`<div class="c-meta">${meta}</div>`:''}</div>
+          <i class="ti ti-dots-vertical c-chev" style="cursor:pointer;" onclick="event.stopPropagation(); docSessionSheet('${s.id}','hoy')"></i>
         </div>`;
       }
     });
@@ -28556,11 +28556,15 @@ async function docRenderPatient(id, origin){
   const pts=await docLoadPatients();
   const p=pts.find(x=>x.id===id);
   if(!p){ cont.innerHTML='<div class="doc-wrap"><div class="doc-empty">No encontrado.</div></div>'; return; }
-  let sess=[];
+  let sess=[], marked=[], deleted=[];
   try{
     const today=docYMD(new Date());
-    const { data }=await sb.from('therapy_sessions').select('id, session_date, hour, location_id, status').eq('patient_id', id).gte('session_date', today).neq('status','cancelled').order('session_date').order('hour').limit(8);
-    sess=data||[];
+    const r1=await sb.from('therapy_sessions').select('id, session_date, hour, location_id, status').eq('patient_id', id).gte('session_date', today).eq('status','scheduled').order('session_date').order('hour').limit(8);
+    sess=r1.data||[];
+    const r2=await sb.from('therapy_sessions').select('id, session_date, hour, location_id, status').eq('patient_id', id).in('status',['done','no_show','to_reschedule']).order('session_date',{ascending:false}).limit(12);
+    marked=r2.data||[];
+    const r3=await sb.from('therapy_sessions').select('id, session_date, hour, deleted_at, deleted_by_name, delete_reason').eq('patient_id', id).eq('status','deleted').order('deleted_at',{ascending:false}).limit(12);
+    deleted=r3.data||[];
   }catch(e){}
   let fit=null;
   if(p.student_id){ try{ const { data }=await sb.from('students').select('first_name,last_name,location_id,phone').eq('id',p.student_id).maybeSingle(); fit=data; }catch(e){} }
@@ -28602,13 +28606,25 @@ async function docRenderPatient(id, origin){
         <div style="font-size:10.5px;color:#9A9183;margin-top:3px;">Creado ${created} · ${stTag}</div></div></div>`;
     }).join('');
   }
+  const _ctx=`pat:${id}:${(origin==='hoy'?'hoy':'pacientes')}`;
   html+=`<div class="doc-sec">Próximas terapias</div>`;
   if(!sess.length){ html+=`<div class="doc-info"><div style="font-size:12px;color:#9A9183;padding:9px 0;">Sin terapias próximas.</div></div>`; }
-  else {
-    html+=sess.map(s=>{
-      const ss=docSede(s.location_id); const d=new Date(s.session_date+'T12:00:00');
+  else { html+=sess.map(s=>docSessRow(s,_ctx)).join(''); }
+  if(marked.length){
+    html+=`<div class="doc-sec">Historial de terapias</div>`;
+    html+=marked.map(s=>docSessRow(s,_ctx)).join('');
+  }
+  if(deleted.length){
+    html+=`<div class="doc-sec">Eliminadas · interno</div>`;
+    html+=`<div style="font-size:10px;color:#A8A092;margin:-4px 2px 8px;">Solo visible para el equipo. No aparece en el PDF del alumno.</div>`;
+    html+=deleted.map(s=>{
+      const d=new Date(s.session_date+'T12:00:00');
       const dl=docCap(d.toLocaleDateString('es-PE',{weekday:'short',day:'numeric',month:'short'}));
-      return `<div class="doc-card" style="cursor:default;"><div class="c-time"><div class="c-h" style="font-size:13px;">${docHourH(s.hour)}</div><div class="c-ap">${docHourAp(s.hour)}</div></div><div class="c-div"></div><div class="c-body"><div class="c-name" style="font-size:12.5px;">${dl}</div><div class="c-meta"><span class="c-dot" style="background:${ss.color};width:7px;height:7px;border-radius:50%;display:inline-block;"></span> ${docEsc(ss.name)}</div></div></div>`;
+      const who=s.deleted_by_name?docEsc(s.deleted_by_name):'—';
+      const when=s.deleted_at?docDateShort(s.deleted_at.slice(0,10)):'';
+      return `<div class="doc-info" style="margin-bottom:7px;"><div style="padding:9px 2px;">
+        <div style="font-size:12px;color:#7A736A;text-decoration:line-through;">${dl} · ${docHourLbl(s.hour)}</div>
+        <div style="font-size:10px;color:#A8A092;margin-top:3px;">Eliminada por ${who}${when?' · '+when:''}${s.delete_reason?' · '+docEsc(s.delete_reason):''}</div></div></div>`;
     }).join('');
   }
   html+=`<button class="doc-linkbtn" onclick="docRenderRecordatorio('${id}','${(origin==='hoy'?'hoy':'pacientes')}')"><i class="ti ti-bell"></i> Copiar recordatorio</button>`;
@@ -28650,6 +28666,68 @@ function docMsgRecordatorio(p, sess){
   const freqLine=p.freq_per_week?`Tu terapia es de ${docFreqWord(p.freq_per_week)}. `:'';
   const n=sess.length;
   return `Hola ${name} 👋 Te recuerdo tus terapias con Andrés.\n\n${freqLine}Te quedan ${n} terapia${n===1?'':'s'} pendiente${n===1?'':'s'}.\n\nTus próximas:\n${next.join('\n')}\n\n📍 Sede ${sede}. ¡Te espero!`;
+}
+
+// ---- Asistencia / acciones sobre una sesión ----
+function docStatusBadge(status){
+  const m={ done:['#0F6E56','#E1F5EE','asistió'], no_show:['#A32D2D','#FCEBEB','perdida'], to_reschedule:['#854F0B','#FAEEDA','por reagendar'] };
+  const x=m[status]; if(!x) return '';
+  return ` <span style="display:inline-block;background:${x[1]};color:${x[0]};font-size:9.5px;font-weight:600;padding:2px 7px;border-radius:999px;vertical-align:middle;">${x[2]}</span>`;
+}
+function docSessRow(s, ctx){
+  const ss=docSede(s.location_id); const d=new Date(s.session_date+'T12:00:00');
+  const dl=docCap(d.toLocaleDateString('es-PE',{weekday:'short',day:'numeric',month:'short'}));
+  return `<div class="doc-card" style="cursor:pointer;" onclick="docSessionSheet('${s.id}','${ctx}')">
+    <div class="c-time"><div class="c-h" style="font-size:13px;">${docHourH(s.hour)}</div><div class="c-ap">${docHourAp(s.hour)}</div></div>
+    <div class="c-div"></div>
+    <div class="c-body"><div class="c-name" style="font-size:12.5px;">${dl}${docStatusBadge(s.status)}</div><div class="c-meta"><span class="c-dot" style="background:${ss.color};width:7px;height:7px;border-radius:50%;display:inline-block;"></span> ${docEsc(ss.name)}</div></div>
+    <i class="ti ti-dots-vertical c-chev"></i></div>`;
+}
+let docSessCtx=null;
+async function docSessionSheet(id, ctx){
+  docSessCtx=ctx;
+  let s=null;
+  try{ const { data }=await sb.from('therapy_sessions').select('id,session_date,hour,status,therapy_patients(first_name,last_name)').eq('id',id).maybeSingle(); s=data; }catch(e){}
+  if(!s){ showToast('No se pudo abrir la sesión','error'); return; }
+  const nm=s.therapy_patients?(((s.therapy_patients.first_name||'')+' '+(s.therapy_patients.last_name||'')).trim()):'';
+  const when=docCap(docDateShort(s.session_date))+' · '+docHourLbl(s.hour);
+  const opt=(icon,color,label,onclick,active)=>`<div onclick="${onclick}" style="display:flex;align-items:center;gap:11px;padding:13px 14px;border-radius:12px;background:${active?'#F0ECE2':'#fff'};border:1px solid #ECE6DA;margin-bottom:8px;cursor:pointer;"><i class="ti ${icon}" style="font-size:19px;color:${color};"></i><div style="flex:1;font-size:13.5px;color:#1C1922;">${label}</div>${active?'<i class="ti ti-check" style="font-size:16px;color:#1C1922;"></i>':''}</div>`;
+  const sheet=document.createElement('div');
+  sheet.id='doc-sess-ov';
+  sheet.setAttribute('onclick','if(event.target===this)docSessClose()');
+  sheet.style.cssText='position:fixed;inset:0;z-index:10000;background:rgba(28,25,34,.42);display:flex;align-items:flex-end;justify-content:center;';
+  sheet.innerHTML=`<div style="width:100%;max-width:440px;background:#F7F5F0;border-radius:20px 20px 0 0;padding:16px 16px 22px;font-family:'Inter',system-ui,sans-serif;">
+    <div style="width:38px;height:4px;border-radius:2px;background:#D8D2C6;margin:0 auto 14px;"></div>
+    <div style="font-size:14px;font-weight:600;color:#1C1922;">${docEsc(nm)}</div>
+    <div style="font-size:11px;color:#9A9183;margin-bottom:14px;">${when}</div>
+    ${opt('ti-circle-check','#0F6E56','Asistió',`docSetSessionStatus('${id}','done')`, s.status==='done')}
+    ${opt('ti-calendar-up','#854F0B','No vino · reagendar',`docSetSessionStatus('${id}','to_reschedule')`, s.status==='to_reschedule')}
+    ${opt('ti-circle-x','#A32D2D','No vino · perdida',`docSetSessionStatus('${id}','no_show')`, s.status==='no_show')}
+    ${s.status!=='scheduled'?opt('ti-arrow-back-up','#5F5E5A','Volver a programada',`docSetSessionStatus('${id}','scheduled')`, false):''}
+    <div style="height:4px;border-top:1px solid #ECE6DA;margin:6px 0 10px;"></div>
+    ${opt('ti-trash','#A32D2D','Eliminar (interno)',`docDeleteSession('${id}')`, false)}
+    <div onclick="docSessClose()" style="text-align:center;padding:11px;font-size:13px;color:#9A9183;cursor:pointer;">Cerrar</div>
+  </div>`;
+  document.body.appendChild(sheet);
+}
+function docSessClose(){ const ov=document.getElementById('doc-sess-ov'); if(ov) ov.remove(); }
+async function docSetSessionStatus(id, status){
+  try{ const { error }=await sb.from('therapy_sessions').update({ status }).eq('id',id); if(error) throw error; docSessClose(); showToast('✓ Actualizada','success'); docSessReturn(); }
+  catch(e){ showToast('Error: '+(e.message||''),'error'); }
+}
+async function docDeleteSession(id){
+  const reason=(prompt('Motivo de eliminación (opcional):')||'').trim()||null;
+  try{
+    const payload={ status:'deleted', deleted_at:new Date().toISOString(), deleted_by:(CURRENT_USER&&CURRENT_USER.authUser&&CURRENT_USER.authUser.id)||null, deleted_by_name:(typeof getCurrentActorLabel==='function'?getCurrentActorLabel():null), delete_reason:reason };
+    const { error }=await sb.from('therapy_sessions').update(payload).eq('id',id); if(error) throw error;
+    docSessClose(); showToast('Eliminada (interno)','success'); docSessReturn();
+  }catch(e){ showToast('Error: '+(e.message||''),'error'); }
+}
+function docSessReturn(){
+  const ctx=docSessCtx;
+  if(ctx==='hoy'){ docRenderHoy(); return; }
+  if(ctx && ctx.indexOf('pat:')===0){ const parts=ctx.split(':'); docRenderPatient(parts[1], parts[2]||'pacientes'); return; }
+  docRenderHoy();
 }
 let docEditState={};
 async function docRenderEditar(pid, origin){
@@ -28926,7 +29004,7 @@ async function docLoadOccupied(startYMD, endYMD){
   const set=new Set(), labels={};
   try{
     const { data:sess }=await sb.from('therapy_sessions').select('session_date,hour,therapy_patients(first_name)')
-      .eq('doctor_id',docState.doctorId).gte('session_date',startYMD).lte('session_date',endYMD).neq('status','cancelled');
+      .eq('doctor_id',docState.doctorId).gte('session_date',startYMD).lte('session_date',endYMD).not('status','in','(cancelled,deleted,to_reschedule)');
     (sess||[]).forEach(s=>{ const k=s.session_date+'|'+s.hour; set.add(k); const nm=s.therapy_patients&&s.therapy_patients.first_name; labels[k]='Terapia'+(nm?' · '+nm:''); });
   }catch(e){}
   try{
