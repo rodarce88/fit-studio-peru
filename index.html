@@ -3596,6 +3596,11 @@ body:not(.doctor-mode) .doc-bottomnav{ display:none; }
 .doc-sedebtn.on{ border:1.5px solid #1C1922; background:#FBF9F4; font-weight:600; }
 .doc-sedebtn .chk{ margin-left:auto; opacity:0; font-size:16px; }
 .doc-sedebtn.on .chk{ opacity:1; }
+#view-doctor-home .doc-paths{ display:flex;flex-direction:column;gap:8px; }
+#view-doctor-home .doc-pathrow{ display:flex;align-items:center;gap:11px;padding:12px 13px;border:1px solid var(--doc-line);background:#fff;border-radius:12px;cursor:pointer; }
+#view-doctor-home .doc-pathrow .chk{ opacity:0;color:#1C1922;margin-left:auto; }
+#view-doctor-home .doc-pathrow.on{ border:1.5px solid #1C1922;background:#FBF9F4; }
+#view-doctor-home .doc-pathrow.on .chk{ opacity:1; }
 /* selector de rol */
 #doc-role-chooser{ display:none; position:fixed; inset:0; z-index:9999; background:
   radial-gradient(120% 70% at 12% 0%, #FFFFFF 0%, rgba(255,255,255,0) 50%),
@@ -28559,6 +28564,8 @@ async function docRenderPatient(id, origin){
   }catch(e){}
   let fit=null;
   if(p.student_id){ try{ const { data }=await sb.from('students').select('first_name,last_name,location_id,phone').eq('id',p.student_id).maybeSingle(); fit=data; }catch(e){} }
+  let plans=[];
+  try{ const { data }=await sb.from('therapy_plans').select('id, created_at, mode, freq_per_week, weeks, total_sessions, start_date, end_date, reminder_type, reminder_value, status').eq('patient_id', id).order('created_at',{ascending:false}); plans=data||[]; }catch(e){}
   const sede=docSede(p.location_id);
   const name=docEsc(((p.first_name||'')+' '+(p.last_name||'')).trim());
   const freq=p.freq_per_week?`${p.freq_per_week}× por semana`:'Sin horario fijo';
@@ -28582,6 +28589,19 @@ async function docRenderPatient(id, origin){
     html+=`<button class="doc-linkbtn" onclick="docLinkFit('${p.id}')"><i class="ti ti-link"></i> Enlazar con un alumno de FIT</button>`;
   }
   if(p.notes){ html+=`<div class="doc-sec">Notas</div><div class="doc-info"><div style="font-size:12.5px;color:#5A5248;line-height:1.5;padding:9px 0;">${docEsc(p.notes)}</div></div>`; }
+  if(plans.length){
+    html+=`<div class="doc-sec">Historial de planes</div>`;
+    html+=plans.map(pl=>{
+      const created=docDateShort(pl.created_at.slice(0,10));
+      const detail = pl.mode==='indefinite'
+        ? `Indefinido · ${pl.freq_per_week}×/sem · reevaluar a las ${pl.reminder_value} ${pl.reminder_type==='weeks'?'sem':'terapias'}`
+        : `${pl.total_sessions} terapias · ${pl.freq_per_week}×/sem · ${pl.weeks} sem`;
+      const stTag = pl.status==='cancelled' ? '<span style="color:#A32D2D;">cancelado</span>' : (pl.status==='completed'?'<span style="color:#9A9183;">completado</span>':'<span style="color:#3B6D11;">activo</span>');
+      return `<div class="doc-info" style="margin-bottom:7px;"><div style="padding:10px 2px;">
+        <div style="font-size:12.5px;font-weight:600;">${detail}</div>
+        <div style="font-size:10.5px;color:#9A9183;margin-top:3px;">Creado ${created} · ${stTag}</div></div></div>`;
+    }).join('');
+  }
   html+=`<div class="doc-sec">Próximas terapias</div>`;
   if(!sess.length){ html+=`<div class="doc-info"><div style="font-size:12px;color:#9A9183;padding:9px 0;">Sin terapias próximas.</div></div>`; }
   else {
@@ -28760,7 +28780,7 @@ async function docRenderAgendar(pid){
   cont.innerHTML='<div class="doc-wrap"><div class="doc-loading">…</div></div>';
   const pts=await docLoadPatients(true);
   const p=pts.find(x=>x.id===pid); if(!p){ docRenderPacientes(); return; }
-  docAgState={ pid, path:null, freq:null, weeks:null, sessions:null };
+  docAgState={ pid, path:null, freq:null, weeks:null, sessions:null, remType:null, remVal:null };
   cont.innerHTML=docAgendaHtml(p);
 }
 function docAgendaHtml(p){
@@ -28768,11 +28788,13 @@ function docAgendaHtml(p){
   const name=docEsc(((p.first_name||'')+' '+(p.last_name||'')).trim());
   const chip=(v,cur,onc,label)=>`<button class="doc-chip ${v===cur?'on':''}" onclick="${onc}">${label}</button>`;
   const freqChips=`<div class="doc-chips">${chip(1,st.freq,"docAgSet('freq',1)","1× / sem")}${chip(2,st.freq,"docAgSet('freq',2)","2× / sem")}${chip(3,st.freq,"docAgSet('freq',3)","3× / sem")}</div>`;
+  const pathRow=(id,title,sub,icon)=>`<div class="doc-pathrow ${st.path===id?'on':''}" onclick="docAgPath('${id}')"><i class="ti ${icon}" style="font-size:18px;"></i><div style="flex:1;"><div style="font-size:13px;font-weight:600;">${title}</div><div style="font-size:10.5px;color:#9A9183;margin-top:1px;">${sub}</div></div><i class="ti ti-check chk" style="font-size:16px;"></i></div>`;
 
   let steps=`<div class="doc-sec">¿Cómo quieres armar el plan?</div>
-    <div class="doc-segsm">
-      <button class="${st.path==='weeks'?'on':''}" onclick="docAgPath('weeks')">Por semana</button>
-      <button class="${st.path==='sessions'?'on':''}" onclick="docAgPath('sessions')">Por cantidad</button>
+    <div class="doc-paths">
+      ${pathRow('weeks','Por semanas','Eliges cuántas semanas','ti-calendar-week')}
+      ${pathRow('sessions','Por cantidad','Eliges el total de terapias','ti-list-numbers')}
+      ${pathRow('indef','Indefinido','Continuo, con recordatorio','ti-infinity')}
     </div>`;
 
   if(st.path==='weeks'){
@@ -28787,12 +28809,26 @@ function docAgendaHtml(p){
     if(st.sessions){
       steps+=`<div class="doc-sec">¿Cuántas veces por semana?</div>${freqChips}`;
     }
+  } else if(st.path==='indef'){
+    steps+=`<div class="doc-sec">¿Cuántas veces por semana?</div>${freqChips}`;
+    if(st.freq){
+      steps+=`<div class="doc-sec">¿Cuándo te recuerdo reevaluar?</div>
+        <div class="doc-segsm">
+          <button class="${st.remType==='sessions'?'on':''}" onclick="docAgRem('sessions')">Por terapias</button>
+          <button class="${st.remType==='weeks'?'on':''}" onclick="docAgRem('weeks')">Por semanas</button>
+        </div>`;
+      if(st.remType==='sessions'){
+        steps+=`<div class="doc-chips">${chip(8,st.remVal,"docAgSet('remVal',8)","8")}${chip(10,st.remVal,"docAgSet('remVal',10)","10")}${chip(12,st.remVal,"docAgSet('remVal',12)","12")}<button class="doc-chip" onclick="docAgEdit('remVal')"><i class="ti ti-pencil" style="font-size:12px;"></i> otro</button></div>`;
+      } else if(st.remType==='weeks'){
+        steps+=`<div class="doc-chips">${chip(4,st.remVal,"docAgSet('remVal',4)","4")}${chip(6,st.remVal,"docAgSet('remVal',6)","6")}${chip(8,st.remVal,"docAgSet('remVal',8)","8")}<button class="doc-chip" onclick="docAgEdit('remVal')"><i class="ti ti-pencil" style="font-size:12px;"></i> otro</button></div>`;
+      }
+    }
   }
 
   const ready=docAgReady();
   steps+=`<div class="doc-info" style="margin-top:16px;"><div style="padding:11px 0;">
       <div style="font-size:12.5px;font-weight:600;${ready?'':'color:#9A9183;'}">${docAgSummary()}</div>
-      ${ready?'<div style="font-size:10.5px;color:#9A9183;margin-top:2px;">Te avisaré en la penúltima sesión para renovar a tiempo.</div>':''}
+      ${ready?`<div style="font-size:10.5px;color:#9A9183;margin-top:2px;">${st.path==='indef'?'Agendo un primer bloque y te aviso para renovar.':'Te avisaré en la penúltima sesión para renovar a tiempo.'}</div>`:''}
     </div></div>`;
   steps+=`<button class="doc-primary" ${ready?'':'disabled style="opacity:.4;pointer-events:none;"'} onclick="docAgGenerate()"><i class="ti ti-calendar-search"></i> Generar horarios</button>`;
 
@@ -28801,26 +28837,39 @@ function docAgendaHtml(p){
       <div><div style="font-size:16px;font-weight:600;line-height:1.1;">Agendar</div><div style="font-size:10.5px;color:#9A9183;">${name} · <span style="color:${sede.color};">●</span> ${docEsc(sede.name)}</div></div></div>
     ${steps}</div>`;
 }
-function docAgReady(){ const st=docAgState; if(st.path==='weeks') return !!(st.freq&&st.weeks); if(st.path==='sessions') return !!(st.freq&&st.sessions); return false; }
+function docAgReady(){ const st=docAgState;
+  if(st.path==='weeks') return !!(st.freq&&st.weeks);
+  if(st.path==='sessions') return !!(st.freq&&st.sessions);
+  if(st.path==='indef') return !!(st.freq&&st.remType&&st.remVal);
+  return false; }
 function docAgCalc(){
-  const st=docAgState; let freq=st.freq, weeks, total;
+  const st=docAgState; let freq=st.freq, weeks, total, mode='fixed';
   if(st.path==='weeks'){ weeks=st.weeks; total=freq*weeks; }
-  else { total=st.sessions; weeks=Math.max(1,Math.ceil(total/freq)); }
-  return { freq, weeks, total };
+  else if(st.path==='sessions'){ total=st.sessions; weeks=Math.max(1,Math.ceil(total/freq)); }
+  else { // indef: el primer bloque = el horizonte del recordatorio
+    mode='indefinite';
+    total=(st.remType==='sessions')? st.remVal : st.remVal*freq;
+    weeks=Math.max(1,Math.ceil(total/freq));
+  }
+  return { freq, weeks, total, mode, remType:st.remType, remVal:st.remVal };
 }
 function docAgSummary(){
   if(!docAgReady()) return 'Elige las opciones para ver el detalle…';
   const c=docAgCalc();
+  if(c.mode==='indefinite'){
+    const r=c.remType==='sessions'?`${c.remVal} terapia${c.remVal===1?'':'s'}`:`${c.remVal} semana${c.remVal===1?'':'s'}`;
+    return `Indefinido · ${c.freq}× por semana · reevalúo a las ${r}`;
+  }
   return `${c.total} terapia${c.total===1?'':'s'} · ${c.freq}× por semana · ${c.weeks} semana${c.weeks===1?'':'s'}`;
 }
-function docAgPath(p){ docAgState.path=p; docAgState.freq=null; docAgState.weeks=null; docAgState.sessions=null; docAgRerender(); }
+function docAgPath(p){ docAgState.path=p; docAgState.freq=null; docAgState.weeks=null; docAgState.sessions=null; docAgState.remType=null; docAgState.remVal=null; docAgRerender(); }
+function docAgRem(t){ docAgState.remType=t; docAgState.remVal=null; docAgRerender(); }
 function docAgSet(k,v){ docAgState[k]=v; docAgRerender(); }
-function docAgEdit(k){ const v=prompt(k==='weeks'?'¿Cuántas semanas?':'¿Cuántas terapias?'); const n=parseInt(v); if(n>0&&n<=200) docAgSet(k,n); }
+function docAgEdit(k){ const lbl=(k==='weeks')?'¿Cuántas semanas?':(k==='remVal'?(docAgState.remType==='weeks'?'¿Cada cuántas semanas?':'¿Cada cuántas terapias?'):'¿Cuántas terapias?'); const v=prompt(lbl); const n=parseInt(v); if(n>0&&n<=200) docAgSet(k,n); }
 function docAgRerender(){ const p=(docCache.patients||[]).find(x=>x.id===docAgState.pid); if(p) document.getElementById('doc-home-content').innerHTML=docAgendaHtml(p); }
 function docAgGenerate(){
   if(!docAgReady()){ showToast('Elige las opciones','info'); return; }
-  const c=docAgCalc();
-  docRenderOpciones(docAgState.pid, c.freq, c.total, c.weeks);
+  docRenderOpciones(docAgState.pid, docAgCalc());
 }
 
 // ============================================
@@ -28915,16 +28964,16 @@ function docBuildOptions(freq, total, anchorYMD, occ){
 }
 
 let docOptState={};
-async function docRenderOpciones(pid, freq, total, weeks){
+async function docRenderOpciones(pid, plan){
   const cont=document.getElementById('doc-home-content'); if(!cont) return;
   cont.innerHTML='<div class="doc-wrap"><div class="doc-loading">Buscando horarios libres…</div></div>';
   const pts=await docLoadPatients();
   const p=pts.find(x=>x.id===pid); if(!p){ docRenderPacientes(); return; }
   const anchor=docYMD(new Date());
-  const horizon=docAddDaysYMD(anchor, (weeks+3)*7);
+  const horizon=docAddDaysYMD(anchor, (plan.weeks+3)*7);
   const occ=await docLoadOccupied(anchor, horizon);
-  const opts=docBuildOptions(freq, total, anchor, occ);
-  docOptState={ pid, freq, total, weeks, anchor, opts, sel:null };
+  const opts=docBuildOptions(plan.freq, plan.total, anchor, occ);
+  docOptState={ pid, plan, freq:plan.freq, total:plan.total, weeks:plan.weeks, mode:plan.mode, remType:plan.remType, remVal:plan.remVal, anchor, opts, sel:null };
   cont.innerHTML=docOpcionesHtml(p);
 }
 function docOpcionesHtml(p){
@@ -28949,7 +28998,7 @@ function docOpcionesHtml(p){
   }
   return `<div class="doc-wrap">
     <div class="doc-top"><button class="doc-iconbtn" onclick="docRenderAgendar('${st.pid}')"><i class="ti ti-arrow-left"></i></button>
-      <div><div style="font-size:16px;font-weight:600;line-height:1.1;">Elegir horario</div><div style="font-size:10.5px;color:#9A9183;">${name} · <span style="color:${sede.color};">●</span> ${docEsc(sede.name)} · ${st.total} terapias</div></div></div>
+      <div><div style="font-size:16px;font-weight:600;line-height:1.1;">Elegir horario</div><div style="font-size:10.5px;color:#9A9183;">${name} · <span style="color:${sede.color};">●</span> ${docEsc(sede.name)} · ${st.mode==='indefinite'?'indefinido':st.total+' terapias'}</div></div></div>
     <div class="doc-sec">${st.opts.length} horarios libres · ${docFreqWord(st.freq)}</div>
     ${cards}
     <div style="display:flex;align-items:center;justify-content:center;gap:7px;background:#fff;border:1px solid #E6E0D4;border-radius:12px;padding:11px;font-size:12.5px;color:#5A5248;margin:12px 0;cursor:pointer;" onclick="docCopyOpciones()"><i class="ti ti-copy" style="font-size:15px;"></i> Copiar mensaje para la paciente</div>
@@ -28964,7 +29013,10 @@ function docMsgOpciones(p){
   const name=(p.first_name||'').trim()||'';
   const nums=['1️⃣','2️⃣','3️⃣','4️⃣','5️⃣'];
   const lines=st.opts.slice(0,5).map((o,i)=>`${nums[i]} ${docDowsFull(o.dows)} · ${docHourLbl(o.hour)} (desde ${docDateShort(o.dates[0])})`);
-  return `Hola ${name} 👋 Soy Andrés. Para tus terapias (${docFreqWord(st.freq)}) tengo estos horarios libres:\n\n${lines.join('\n')}\n\nTodas en la sede ${sede}. ¿Cuál te acomoda mejor?`;
+  const totalLine = st.mode==='indefinite'
+    ? `Las haríamos de forma continua (${docFreqWord(st.freq)}).`
+    : `En total serían ${st.total} terapias (${st.freq} por semana · ${st.weeks} semana${st.weeks===1?'':'s'}).`;
+  return `Hola ${name} 👋 Soy Andrés. Para tus terapias (${docFreqWord(st.freq)}) tengo estos horarios libres:\n\n${lines.join('\n')}\n\nTodas en la sede ${sede}. ${totalLine}\n¿Cuál te acomoda mejor?`;
 }
 async function docCopyOpciones(){
   const p=(docCache.patients||[]).find(x=>x.id===docOptState.pid); if(!p) return;
@@ -28976,46 +29028,63 @@ let docConfState={};
 function docOptContinue(){
   const st=docOptState; if(st.sel==null) return;
   const o=st.opts[st.sel]; const p=(docCache.patients||[]).find(x=>x.id===st.pid);
-  docConfState={ pid:st.pid, freq:st.freq, total:st.total, weeks:st.weeks, dows:o.dows, hour:o.hour, dates:o.dates, locationId:p?p.location_id:null };
+  docConfState={ pid:st.pid, plan:st.plan, freq:st.freq, total:st.total, weeks:st.weeks, mode:st.mode, remType:st.remType, remVal:st.remVal, dows:o.dows, hour:o.hour, dates:o.dates, locationId:p?p.location_id:null };
   docRenderConfirmar();
 }
 function docRenderConfirmar(){
   const cont=document.getElementById('doc-home-content'); if(!cont) return;
   const st=docConfState, p=(docCache.patients||[]).find(x=>x.id===st.pid);
   const sede=docSede(st.locationId), name=docEsc(((p.first_name||'')+' '+(p.last_name||'')).trim());
+  const isIndef=st.mode==='indefinite';
+  const planRows = isIndef
+    ? `<div class="doc-inforow"><span>Plan</span><b>Indefinido · ${st.freq}×/sem</b></div>
+       <div class="doc-inforow"><span>Reevaluar</span><b>a las ${st.remVal} ${st.remType==='weeks'?'sem':'terapias'}</b></div>`
+    : `<div class="doc-inforow"><span>Total</span><b>${st.total} terapias · ${st.weeks} sem</b></div>`;
+  const note = isIndef
+    ? `Se crea el primer bloque de ${st.total} citas.<br>Te avisaré para renovar a tiempo.`
+    : `Se crearán las ${st.total} citas en la agenda de Andrés.<br>Podrás mover o cancelar cualquiera después.`;
   cont.innerHTML=`<div class="doc-wrap">
-    <div class="doc-top"><button class="doc-iconbtn" onclick="docRenderOpciones('${st.pid}',${st.freq},${st.total},${st.weeks})"><i class="ti ti-arrow-left"></i></button><div style="font-size:16px;font-weight:600;">Confirmar plan</div></div>
+    <div class="doc-top"><button class="doc-iconbtn" onclick="docRenderOpciones(docConfState.pid, docConfState.plan)"><i class="ti ti-arrow-left"></i></button><div style="font-size:16px;font-weight:600;">Confirmar plan</div></div>
     <div class="doc-info" style="padding:4px 14px 6px;">
       <div style="display:flex;align-items:center;gap:11px;padding:11px 0;">
         <div style="width:42px;height:42px;border-radius:50%;background:#F0ECE2;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:600;">${docEsc(docInitials(p))}</div>
         <div><div style="font-size:15px;font-weight:600;">${name}</div><div style="font-size:10.5px;color:#9A9183;margin-top:2px;"><span style="color:${sede.color};">●</span> ${docEsc(sede.name)}</div></div>
       </div>
       <div class="doc-inforow"><span>Días y hora</span><b>${docDowsShort(st.dows)} · ${docHourLbl(st.hour)}</b></div>
-      <div class="doc-inforow"><span>Total</span><b>${st.total} terapias · ${st.weeks} sem</b></div>
+      ${planRows}
       <div class="doc-inforow"><span>1ª terapia</span><b>${docCap(docDateShort(st.dates[0]))}</b></div>
-      <div class="doc-inforow"><span>Última</span><b>${docCap(docDateShort(st.dates[st.dates.length-1]))}</b></div>
+      <div class="doc-inforow"><span>${isIndef?'Fin 1er bloque':'Última'}</span><b>${docCap(docDateShort(st.dates[st.dates.length-1]))}</b></div>
       <div class="doc-inforow"><span>Duración c/u</span><b>60 min</b></div>
     </div>
-    <div style="font-size:10.5px;color:#9A9183;text-align:center;margin:12px 0;line-height:1.5;">Se crearán las ${st.total} citas en la agenda de Andrés.<br>Podrás mover o cancelar cualquiera después.</div>
+    <div style="font-size:10.5px;color:#9A9183;text-align:center;margin:12px 0;line-height:1.5;">${note}</div>
     <button class="doc-primary" id="doc-conf-btn" onclick="docDoConfirm()"><i class="ti ti-calendar-check"></i> Confirmar y agendar</button></div>`;
 }
 async function docDoConfirm(){
   const st=docConfState; const btn=document.getElementById('doc-conf-btn');
   if(btn){ btn.style.opacity='.5'; btn.style.pointerEvents='none'; btn.innerHTML='Agendando…'; }
   try{
+    const isIndef=st.mode==='indefinite';
+    const { data:plan, error:pe }=await sb.from('therapy_plans').insert({
+      patient_id:st.pid, doctor_id:docState.doctorId, mode:st.mode||'fixed',
+      freq_per_week:st.freq, weeks:isIndef?null:st.weeks, total_sessions:st.total,
+      start_date:st.dates[0], end_date:st.dates[st.dates.length-1],
+      reminder_type:isIndef?st.remType:null, reminder_value:isIndef?st.remVal:null, status:'active'
+    }).select().single();
+    if(pe) throw pe;
+    const planId=plan.id;
     const recById={};
     for(const dw of st.dows){
       const dwDates=st.dates.filter(ds=>new Date(ds+'T12:00:00').getDay()===dw);
       if(!dwDates.length) continue;
       const { data, error }=await sb.from('therapy_recurrences').insert({
-        patient_id:st.pid, doctor_id:docState.doctorId, location_id:st.locationId,
+        patient_id:st.pid, doctor_id:docState.doctorId, location_id:st.locationId, plan_id:planId,
         dow:dw, hour:st.hour, start_date:dwDates[0], end_date:dwDates[dwDates.length-1],
         total_sessions:dwDates.length, is_active:true
       }).select().single();
       if(error) throw error; recById[dw]=data.id;
     }
     const rows=st.dates.map(ds=>({
-      patient_id:st.pid, doctor_id:docState.doctorId, recurrence_id:recById[new Date(ds+'T12:00:00').getDay()]||null,
+      patient_id:st.pid, doctor_id:docState.doctorId, recurrence_id:recById[new Date(ds+'T12:00:00').getDay()]||null, plan_id:planId,
       location_id:st.locationId, session_date:ds, hour:st.hour, duration_min:60, status:'scheduled'
     }));
     const { error:se }=await sb.from('therapy_sessions').insert(rows);
@@ -29032,6 +29101,10 @@ async function docDoConfirm(){
 function docMsgConfirm(p){
   const st=docConfState, sede=docSede(st.locationId).name;
   const name=(p.first_name||'').trim()||'';
+  if(st.mode==='indefinite'){
+    const r=st.remType==='weeks'?`${st.remVal} semanas`:`${st.remVal} terapias`;
+    return `¡Listo, ${name}! Quedaron reservadas tus terapias 🙌\n\n📅 ${docDowsFull(st.dows)} · ${docHourLbl(st.hour)}\n📍 Sede ${sede}\n🗓 Empezamos el ${docDateFull(st.dates[0])} y seguimos de forma continua (60 min c/u). Reviso tus avances a las ${r}.\n\nSi necesitas mover alguna, me avisas con tiempo. ¡Nos vemos!`;
+  }
   return `¡Listo, ${name}! Quedaron reservadas tus terapias 🙌\n\n📅 ${docDowsFull(st.dows)} · ${docHourLbl(st.hour)}\n📍 Sede ${sede}\n🗓 Tu primera terapia es el ${docDateFull(st.dates[0])}. En total ${st.total} sesiones (60 min c/u), hasta el ${docDateFull(st.dates[st.dates.length-1])}.\n\nSi necesitas mover alguna, me avisas con tiempo. ¡Nos vemos!`;
 }
 async function docRenderAgendado(){
