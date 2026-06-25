@@ -3601,6 +3601,13 @@ body:not(.doctor-mode) .doc-bottomnav{ display:none; }
 #view-doctor-home .doc-pathrow .chk{ opacity:0;color:#1C1922;margin-left:auto; }
 #view-doctor-home .doc-pathrow.on{ border:1.5px solid #1C1922;background:#FBF9F4; }
 #view-doctor-home .doc-pathrow.on .chk{ opacity:1; }
+#view-doctor-home .doc-fold{ border:1px solid var(--doc-line); border-radius:12px; background:#fff; margin:8px 0 4px; overflow:hidden; }
+#view-doctor-home .doc-fold>summary{ list-style:none; cursor:pointer; padding:12px 13px; font-size:12px; font-weight:600; color:#6E665A; display:flex; align-items:center; justify-content:space-between; }
+#view-doctor-home .doc-fold>summary::-webkit-details-marker{ display:none; }
+#view-doctor-home .doc-fold>summary i{ transition:transform .15s; color:#9A9183; }
+#view-doctor-home .doc-fold[open]>summary{ border-bottom:1px solid var(--doc-line); }
+#view-doctor-home .doc-fold[open]>summary i{ transform:rotate(180deg); }
+#view-doctor-home .doc-fold .fold-body{ padding:6px 13px 12px; }
 /* selector de rol */
 #doc-role-chooser{ display:none; position:fixed; inset:0; z-index:9999; background:
   radial-gradient(120% 70% at 12% 0%, #FFFFFF 0%, rgba(255,255,255,0) 50%),
@@ -28556,7 +28563,7 @@ async function docRenderPatient(id, origin){
   const pts=await docLoadPatients();
   const p=pts.find(x=>x.id===id);
   if(!p){ cont.innerHTML='<div class="doc-wrap"><div class="doc-empty">No encontrado.</div></div>'; return; }
-  let sess=[], marked=[], deleted=[];
+  let sess=[], marked=[], deleted=[], effDone=0, effSched=0;
   try{
     const today=docYMD(new Date());
     const r1=await sb.from('therapy_sessions').select('id, session_date, hour, location_id, status').eq('patient_id', id).gte('session_date', today).eq('status','scheduled').order('session_date').order('hour').limit(8);
@@ -28565,6 +28572,8 @@ async function docRenderPatient(id, origin){
     marked=r2.data||[];
     const r3=await sb.from('therapy_sessions').select('id, session_date, hour, deleted_at, deleted_by_name, delete_reason').eq('patient_id', id).eq('status','deleted').order('deleted_at',{ascending:false}).limit(12);
     deleted=r3.data||[];
+    const c1=await sb.from('therapy_sessions').select('id',{count:'exact',head:true}).eq('patient_id', id).eq('status','done'); effDone=c1.count||0;
+    const c2=await sb.from('therapy_sessions').select('id',{count:'exact',head:true}).eq('patient_id', id).eq('status','scheduled'); effSched=c2.count||0;
   }catch(e){}
   let fit=null;
   if(p.student_id){ try{ const { data }=await sb.from('students').select('first_name,last_name,location_id,phone').eq('id',p.student_id).maybeSingle(); fit=data; }catch(e){} }
@@ -28573,25 +28582,38 @@ async function docRenderPatient(id, origin){
   const sede=docSede(p.location_id);
   const name=docEsc(((p.first_name||'')+' '+(p.last_name||'')).trim());
   const freq=p.freq_per_week?`${p.freq_per_week}× por semana`:'Sin horario fijo';
+  const effTotal=effDone+effSched;
+  const _ctx=`pat:${id}:${(origin==='hoy'?'hoy':'pacientes')}`;
+  let fitInner;
+  if(fit){
+    const fs=docSede(fit.location_id);
+    fitInner=`<div class="doc-fitcard"><div><div style="font-size:13px;font-weight:600;">${docEsc(((fit.first_name||'')+' '+(fit.last_name||'')).trim())}</div><div style="font-size:10.5px;color:#9A9183;margin-top:2px;"><span class="c-dot" style="background:${fs.color};width:7px;height:7px;border-radius:50%;display:inline-block;"></span> ${docEsc(fs.name)}</div></div><span class="doc-fittag"><i class="ti ti-link" style="font-size:12px;"></i> enlazada</span></div>`;
+  } else {
+    fitInner=`<button class="doc-linkbtn" style="margin-top:8px;" onclick="docLinkFit('${p.id}')"><i class="ti ti-link"></i> Enlazar con un alumno de FIT</button>`;
+  }
   let html=`<div class="doc-wrap">
     <div class="doc-top"><button class="doc-iconbtn" onclick="docBackTo('${(origin==='hoy'?'hoy':'pacientes')}')"><i class="ti ti-arrow-left"></i></button><div style="flex:1;"></div><button class="doc-iconbtn" onclick="docRenderEditar('${id}','${(origin==='hoy'?'hoy':'pacientes')}')"><i class="ti ti-pencil"></i></button></div>
-    <div style="display:flex;align-items:center;gap:13px;margin-bottom:6px;">
+    <div style="display:flex;align-items:center;gap:13px;margin-bottom:10px;">
       <div style="width:54px;height:54px;border-radius:50%;background:#F0ECE2;color:#1C1922;display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:600;">${docEsc(docInitials(p))}</div>
       <div><div style="font-size:18px;font-weight:600;">${name}</div>
       <div style="font-size:11px;color:#9A9183;display:flex;align-items:center;gap:5px;margin-top:2px;"><span class="c-dot" style="background:${sede.color};width:8px;height:8px;border-radius:50%;display:inline-block;"></span>${docEsc(sede.name)} · ${freq}</div></div>
     </div>
-    <div class="doc-sec">Contacto</div>
-    <div class="doc-info">
+    <div class="doc-info" style="margin-bottom:6px;"><div style="display:flex;align-items:center;justify-content:space-between;padding:10px 2px;">
+      <div><div style="font-size:11px;color:#9A9183;">Terapias efectivas</div><div style="font-size:22px;font-weight:600;line-height:1.1;">${effTotal}</div></div>
+      <div style="font-size:10.5px;color:#9A9183;text-align:right;line-height:1.6;">${effSched} programada${effSched===1?'':'s'}<br>${effDone} asistida${effDone===1?'':'s'}</div>
+    </div></div>
+    <div class="doc-sec">Próximas terapias</div>`;
+  if(!sess.length){ html+=`<div class="doc-info"><div style="font-size:12px;color:#9A9183;padding:9px 0;">Sin terapias próximas.</div></div>`; }
+  else { html+=sess.map(s=>docSessRow(s,_ctx)).join(''); }
+  if(marked.length){
+    html+=`<div class="doc-sec">Historial de terapias</div>`;
+    html+=marked.map(s=>docSessRow(s,_ctx)).join('');
+  }
+  html+=`<details class="doc-fold"><summary>Datos de contacto y FIT <i class="ti ti-chevron-down"></i></summary><div class="fold-body">
       <div class="doc-inforow"><span>Teléfono</span><b>${p.phone?`<a href="https://wa.me/${docWa(p.phone)}" target="_blank" style="color:#3E7A52;">${docEsc(p.phone)}</a>`:'—'}</b></div>
       <div class="doc-inforow"><span>Correo</span><b>${p.email?docEsc(p.email):'—'}</b></div>
-    </div>
-    <div class="doc-sec">Alumno de FIT</div>`;
-  if(fit){
-    const fs=docSede(fit.location_id);
-    html+=`<div class="doc-fitcard"><div><div style="font-size:13px;font-weight:600;">${docEsc(((fit.first_name||'')+' '+(fit.last_name||'')).trim())}</div><div style="font-size:10.5px;color:#9A9183;margin-top:2px;"><span class="c-dot" style="background:${fs.color};width:7px;height:7px;border-radius:50%;display:inline-block;"></span> ${docEsc(fs.name)}</div></div><span class="doc-fittag"><i class="ti ti-link" style="font-size:12px;"></i> enlazada</span></div>`;
-  } else {
-    html+=`<button class="doc-linkbtn" onclick="docLinkFit('${p.id}')"><i class="ti ti-link"></i> Enlazar con un alumno de FIT</button>`;
-  }
+      ${fitInner}
+    </div></details>`;
   if(p.notes){ html+=`<div class="doc-sec">Notas</div><div class="doc-info"><div style="font-size:12.5px;color:#5A5248;line-height:1.5;padding:9px 0;">${docEsc(p.notes)}</div></div>`; }
   if(plans.length){
     html+=`<div class="doc-sec">Historial de planes</div>`;
@@ -28605,14 +28627,6 @@ async function docRenderPatient(id, origin){
         <div style="font-size:12.5px;font-weight:600;">${detail}</div>
         <div style="font-size:10.5px;color:#9A9183;margin-top:3px;">Creado ${created} · ${stTag}</div></div></div>`;
     }).join('');
-  }
-  const _ctx=`pat:${id}:${(origin==='hoy'?'hoy':'pacientes')}`;
-  html+=`<div class="doc-sec">Próximas terapias</div>`;
-  if(!sess.length){ html+=`<div class="doc-info"><div style="font-size:12px;color:#9A9183;padding:9px 0;">Sin terapias próximas.</div></div>`; }
-  else { html+=sess.map(s=>docSessRow(s,_ctx)).join(''); }
-  if(marked.length){
-    html+=`<div class="doc-sec">Historial de terapias</div>`;
-    html+=marked.map(s=>docSessRow(s,_ctx)).join('');
   }
   if(deleted.length){
     html+=`<div class="doc-sec">Eliminadas · interno</div>`;
