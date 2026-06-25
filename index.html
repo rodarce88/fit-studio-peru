@@ -3526,7 +3526,87 @@
     <div id="student-detail-content"></div>
   </section>
 
+  <!-- ===== MÓDULO DOCTOR (Terapias) ===== -->
+  <section class="view" id="view-doctor-home">
+    <div id="doc-home-content"></div>
+    <nav class="doc-bottomnav" id="doc-bottomnav"></nav>
+  </section>
+
 </main>
+
+<style id="doctor-module-css">
+/* ===== MÓDULO DOCTOR — tema blanco marmolado ===== */
+body.doctor-mode .topbar, body.doctor-mode .sidebar, body.doctor-mode .mobile-bottom-nav { display:none !important; }
+body.doctor-mode .main { margin:0 !important; padding:0 !important; max-width:none !important; }
+body.doctor-mode { background:#F7F5F0; }
+#view-doctor-home { display:none; }
+#view-doctor-home.is-active { display:block; }
+#view-doctor-home{
+  --doc-bg:#F7F5F0; --doc-ink:#1C1922; --doc-mut:#8C857A; --doc-mut2:#9A9183;
+  --doc-line:#E6E0D4; --doc-card:#FFFFFF; --doc-soft:#FBFAF6; --doc-purple:#6A4E9C;
+  background:radial-gradient(120% 70% at 12% 0%, #FFFFFF 0%, rgba(255,255,255,0) 50%),
+             radial-gradient(100% 60% at 100% 100%, #EFEBE3 0%, rgba(239,235,227,0) 60%), #F7F5F0;
+  min-height:100vh; color:var(--doc-ink);
+  font-family:'Inter',-apple-system,BlinkMacSystemFont,sans-serif;
+  padding-bottom:78px; box-sizing:border-box;
+}
+#view-doctor-home *{ box-sizing:border-box; }
+.doc-wrap{ max-width:480px; margin:0 auto; padding:0 16px; }
+.doc-top{ display:flex; align-items:center; justify-content:space-between; padding:16px 0 10px; }
+.doc-rolepill{ display:flex; align-items:center; gap:8px; background:var(--doc-ink); color:#F7F5F0; padding:6px 12px; border-radius:999px; font-size:12px; font-weight:500; cursor:pointer; border:none; }
+.doc-date{ font-size:10.5px; color:var(--doc-mut2); text-align:right; line-height:1.3; }
+.doc-date b{ color:var(--doc-ink); font-weight:600; }
+.doc-search{ display:flex; align-items:center; gap:8px; background:var(--doc-card); border:1px solid var(--doc-line); border-radius:11px; padding:10px 12px; color:#A39B8C; font-size:12.5px; margin-bottom:10px; cursor:pointer; }
+.doc-daystrip{ display:flex; gap:6px; margin-bottom:12px; }
+.doc-day{ flex:1; text-align:center; padding:7px 0; border-radius:10px; color:#A39B8C; cursor:pointer; border:none; background:transparent; }
+.doc-day .d-dow{ font-size:9px; text-transform:uppercase; } .doc-day .d-num{ font-size:14px; font-weight:500; }
+.doc-day.is-today{ background:var(--doc-ink); color:#fff; } .doc-day.is-today .d-num{ font-weight:600; }
+.doc-hhead{ display:flex; align-items:baseline; justify-content:space-between; padding:4px 0 10px; }
+.doc-hhead h2{ font-size:18px; font-weight:600; margin:0; color:var(--doc-ink); }
+.doc-hhead span{ font-size:10.5px; color:var(--doc-mut); }
+.doc-card{ background:var(--doc-card); border:1px solid #ECE6DA; border-radius:14px; padding:11px 12px; margin-bottom:9px; display:flex; align-items:center; gap:11px; cursor:pointer; }
+.doc-card .c-time{ text-align:center; min-width:50px; }
+.doc-card .c-h{ font-size:14px; font-weight:600; } .doc-card .c-ap{ font-size:8.5px; color:#A39B8C; }
+.doc-card .c-sede{ font-size:8.5px; color:var(--doc-mut2); display:inline-flex; align-items:center; gap:3px; margin-top:3px; }
+.doc-card .c-dot{ width:7px; height:7px; border-radius:50%; display:inline-block; }
+.doc-card .c-div{ width:1px; height:42px; background:#ECE6DA; }
+.doc-card .c-body{ flex:1; min-width:0; }
+.doc-card .c-name{ font-size:13px; font-weight:600; }
+.doc-card .c-meta{ font-size:9.5px; color:var(--doc-mut2); margin-top:3px; }
+.doc-card .c-chev{ font-size:16px; color:#C8C0B0; }
+.doc-block{ display:flex; align-items:center; gap:11px; padding:10px 12px; background:#F1EDE4; border:1px solid var(--doc-line); border-radius:14px; margin-bottom:9px; color:#6E665A; }
+.doc-empty{ text-align:center; color:var(--doc-mut); font-size:13px; padding:40px 0; }
+.doc-loading{ text-align:center; color:var(--doc-mut); font-size:13px; padding:40px 0; }
+.doc-bottomnav{ position:fixed; bottom:0; left:0; right:0; max-width:480px; margin:0 auto; display:flex; align-items:center; justify-content:space-around; padding:8px 8px 12px; background:#F7F5F0; border-top:1px solid #EAE4D8; z-index:50; }
+body:not(.doctor-mode) .doc-bottomnav{ display:none; }
+.doc-nav{ display:flex; flex-direction:column; align-items:center; gap:2px; color:#A39B8C; font-size:9.5px; background:none; border:none; cursor:pointer; }
+.doc-nav i{ font-size:19px; } .doc-nav.is-active{ color:var(--doc-ink); }
+.doc-fab{ width:46px; height:46px; border-radius:50%; background:var(--doc-ink); display:flex; align-items:center; justify-content:center; color:#fff; margin-top:-24px; border:4px solid #F7F5F0; cursor:pointer; }
+.doc-fab i{ font-size:22px; }
+/* selector de rol */
+#doc-role-chooser{ display:none; position:fixed; inset:0; z-index:9999; background:
+  radial-gradient(120% 70% at 12% 0%, #FFFFFF 0%, rgba(255,255,255,0) 50%),
+  radial-gradient(100% 60% at 100% 100%, #EFEBE3 0%, rgba(239,235,227,0) 60%), #F7F5F0;
+  font-family:'Inter',-apple-system,sans-serif; color:#1C1922; padding:26px 20px; overflow:auto; }
+#doc-role-chooser.is-open{ display:block; }
+.doc-rc-wrap{ max-width:340px; margin:0 auto; }
+.doc-rc-top{ display:flex; align-items:center; justify-content:space-between; margin-bottom:22px; }
+.doc-rc-brand{ display:flex; align-items:center; gap:9px; }
+.doc-rc-logo{ width:30px; height:30px; border-radius:8px; background:#1C1922; color:#F7F5F0; display:flex; align-items:center; justify-content:center; font-weight:600; font-size:13px; font-family:Georgia,serif; }
+.doc-rc-date{ font-size:10.5px; color:#9A9183; text-align:right; line-height:1.3; }
+.doc-rc-hi{ font-size:21px; font-weight:500; margin-bottom:3px; }
+.doc-rc-sub{ font-size:12.5px; color:#8C857A; margin-bottom:20px; }
+.doc-rc-card{ background:#fff; border:1px solid #E6E0D4; border-radius:15px; padding:14px; margin-bottom:11px; display:flex; align-items:center; gap:12px; cursor:pointer; position:relative; }
+.doc-rc-card.rec{ border:1.5px solid #1C1922; box-shadow:0 3px 12px rgba(28,25,34,0.08); }
+.doc-rc-ic{ width:42px; height:42px; border-radius:12px; background:#F1EDE4; color:#1C1922; display:flex; align-items:center; justify-content:center; }
+.doc-rc-card.rec .doc-rc-ic{ background:#1C1922; color:#fff; }
+.doc-rc-ic i{ font-size:22px; }
+.doc-rc-t{ font-size:15px; font-weight:600; } .doc-rc-d{ font-size:11px; color:#8C857A; margin-top:1px; }
+.doc-rc-tag{ position:absolute; top:13px; right:13px; font-size:8.5px; font-weight:600; letter-spacing:0.05em; text-transform:uppercase; background:#6A4E9C; color:#fff; padding:3px 8px; border-radius:999px; }
+.doc-rc-note{ display:flex; align-items:flex-start; gap:7px; font-size:10.5px; color:#9A9183; line-height:1.5; border-top:1px solid #EAE4D8; padding-top:14px; margin-top:9px; }
+</style>
+
+<div id="doc-role-chooser"><div class="doc-rc-wrap" id="doc-rc-wrap"></div></div>
 
 <!-- LOCATION MODAL -->
 <div class="modal-backdrop" id="location-modal" onclick="if(event.target===this) closeModals()">
@@ -16263,9 +16343,7 @@ const COORDINATOR_EMAILS = [
   'santacruz.reformerfitstudio@gmail.com',
   'inmaculado.fitstudioperu@gmail.com',
   'sanantonio.fitstudioperu@gmail.com',
-  // 'andresperezzanuzzi@gmail.com' — quitado temporalmente hasta optimizar coord en mobile.
-  //   Andrés tiene registro en `instructors` con auth_user_id vinculado, así que entrará
-  //   directo a la vista profesor. Para revertir, descomentar esta línea.
+  'andresperezzanuzzi@gmail.com', // Andrés: Admin + Doctor + Profesor (elige rol en móvil)
 ];
 
 async function checkAuthAndRoute() {
@@ -16279,8 +16357,20 @@ async function checkAuthAndRoute() {
     return;
   }
   CURRENT_USER = role;
-  showAppLayout();
-  await initForRole();
+  const _forced = new URLSearchParams(window.location.search).get('role');
+  if (_forced && (role.availableRoles || []).includes(_forced)) { docActivateRole(_forced); return; }
+  const _isMobile = window.matchMedia('(max-width: 820px)').matches;
+  // Multi-rol en móvil → mostrar selector. PC o rol único → entrar directo.
+  if ((role.availableRoles || []).length > 1 && _isMobile) {
+    docShowRoleChooser();
+    return;
+  }
+  // En PC, si tiene rol de coordinador, entra como Admin por defecto.
+  if (!_isMobile && (role.availableRoles || []).includes('coordinator')) {
+    docActivateRole('coordinator');
+  } else {
+    docActivateRole(role.role);
+  }
 }
 
 async function detectRole(authUser) {
@@ -16317,16 +16407,30 @@ async function detectRole(authUser) {
     if (stud) studentRec = stud;
   } catch(e) { console.error('detectRole student', e); }
 
-  // Si hay override en URL, respetarlo (si el rol existe para esta cuenta)
-  if (forced === 'instructor' && instructorRec) return { authUser, role: 'instructor', record: instructorRec };
-  if (forced === 'student' && studentRec) return { authUser, role: 'student', record: studentRec };
-  if (forced === 'coordinator' && coordinatorMatch) return { authUser, role: 'coordinator', record: coordinatorMatch.type === 'list' ? null : coordinatorMatch };
+  // Detectar rol doctor (módulo de terapias)
+  let doctorRec = null;
+  try {
+    const { data: doc } = await sb.from('doctors').select('*').eq('user_id', authUser.id).eq('is_active', true).maybeSingle();
+    if (doc) doctorRec = doc;
+  } catch(e) { /* tabla doctors opcional */ }
 
-  // Sin override: prioridad coordinador > instructor > alumno
-  if (coordinatorMatch) return { authUser, role: 'coordinator', record: coordinatorMatch.type === 'list' ? null : coordinatorMatch };
-  if (instructorRec) return { authUser, role: 'instructor', record: instructorRec };
-  if (studentRec) return { authUser, role: 'student', record: studentRec };
-  return { authUser, role: null, record: null };
+  const coordRecord = coordinatorMatch ? (coordinatorMatch.type === 'list' ? null : coordinatorMatch) : null;
+  const records = { coordinator: coordRecord, doctor: doctorRec, instructor: instructorRec, student: studentRec };
+
+  // Roles disponibles, en orden de prioridad: coordinador > doctor > instructor > alumno
+  const availableRoles = [];
+  if (coordinatorMatch) availableRoles.push('coordinator');
+  if (doctorRec)        availableRoles.push('doctor');
+  if (instructorRec)    availableRoles.push('instructor');
+  if (studentRec)       availableRoles.push('student');
+
+  // Override por URL (si el rol existe para esta cuenta)
+  if (forced && availableRoles.includes(forced)) {
+    return { authUser, role: forced, record: records[forced], availableRoles, records };
+  }
+
+  const primary = availableRoles[0] || null;
+  return { authUser, role: primary, record: primary ? records[primary] : null, availableRoles, records };
 }
 
 function showLoginScreen(errMsg) {
@@ -16414,6 +16518,15 @@ async function initForRole() {
       const sw = document.querySelector('.location-switcher');
       if (sw) sw.style.display = 'none';
     }
+  }
+
+  // Rol doctor (módulo de terapias): flujo propio, no usa loadAll de coordinación
+  if (role === 'doctor') {
+    document.body.classList.add('no-sidebar', 'doctor-mode');
+    await docInit();
+    showView('doctor-home', null);
+    docRenderHoy();
+    return;
   }
 
   // Cargar datos comunes (incluye locations y aplica users.location_id del coord)
@@ -28116,6 +28229,189 @@ async function addDiscountReason() {
   document.getElementById('new-reason-label').value = '';
   renderDiscountReasonsModal();
   showToast('✓ Razón agregada', 'success');
+}
+
+// ============================================
+// MÓDULO DOCTOR (Terapias) — Chunk 1: entrada + Hoy
+// ============================================
+const docState = { date: null, doctorId: null };
+
+function docYMD(d){ d=d||new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
+function docIsToday(ymd){ return ymd === docYMD(new Date()); }
+function docCap(s){ s=s||''; return s.charAt(0).toUpperCase()+s.slice(1); }
+function docEsc(s){ return (s==null?'':String(s)).replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
+function docHourH(h){ return (h<=12? h : h-12)+':00'; }
+function docHourAp(h){ return h<12?'am':(h===12?'m':'pm'); }
+function docFirstName(){
+  const r = CURRENT_USER && CURRENT_USER.records;
+  const n = (r && ((r.doctor&&r.doctor.full_name) || (r.instructor&&r.instructor.first_name) || (r.coordinator&&r.coordinator.full_name))) || 'Andrés';
+  return (n||'').split(' ')[0];
+}
+function docSede(locId){
+  const map = {
+    '11111111-1111-1111-1111-111111111111': {name:'Santa Cruz', color:'#534AB7'},
+    '22222222-2222-2222-2222-222222222222': {name:'Boutique',   color:'#A77F3D'},
+    '33333333-3333-3333-3333-333333333333': {name:'San Antonio',color:'#0E9E70'},
+  };
+  if (map[locId]) return map[locId];
+  const loc = (STATE.locations||[]).find(l=>l.id===locId);
+  if (loc) return { name: loc.name||'—', color: loc.color||'#6A4E9C' };
+  return { name:'—', color:'#C8C0B0' };
+}
+
+async function docInit(){
+  docState.doctorId = (CURRENT_USER.records && CURRENT_USER.records.doctor && CURRENT_USER.records.doctor.id)
+                   || (CURRENT_USER.record && CURRENT_USER.record.id) || null;
+  if (!docState.date) docState.date = docYMD(new Date());
+  if (!STATE.locations || !STATE.locations.length){
+    try { const { data } = await sb.from('locations').select('*'); STATE.locations = data || []; } catch(e){}
+  }
+}
+
+// ---- Selector de rol ----
+function docShowRoleChooser(){
+  const lv=document.getElementById('login-view'); if(lv) lv.style.display='none';
+  const al=document.getElementById('app-layout'); if(al) al.style.display='none';
+  if (typeof hideSplash==='function') hideSplash();
+  const roles = (CURRENT_USER && CURRENT_USER.availableRoles) || [];
+  const meta = {
+    doctor:      { ic:'ti-stethoscope',      t:'Doctor · Terapias',  d:'Tus pacientes, agenda y fichas' },
+    coordinator: { ic:'ti-layout-dashboard', t:'Admin',              d:'Estudio, alumnos, pagos y horarios' },
+    instructor:  { ic:'ti-yoga',             t:'Profesor de Pilates', d:'Tus clases y asistencia del día' },
+    student:     { ic:'ti-user',             t:'Alumno',             d:'Tus clases' },
+  };
+  const order = ['doctor','coordinator','instructor','student'].filter(r=>roles.includes(r));
+  const dstr = new Date().toLocaleDateString('es-PE', { weekday:'long', day:'numeric', month:'long' });
+  let html = `
+    <div class="doc-rc-top">
+      <div class="doc-rc-brand"><div class="doc-rc-logo">F</div><div style="font-size:10.5px;letter-spacing:0.14em;text-transform:uppercase;color:#9A9183;">FIT Studio</div></div>
+      <div class="doc-rc-date">${docCap(dstr)}</div>
+    </div>
+    <div class="doc-rc-hi">Hola, <span style="font-style:italic;font-family:Georgia,serif;">${docEsc(docFirstName())}</span><span style="color:#6A4E9C;">.</span></div>
+    <div class="doc-rc-sub">¿Cómo quieres entrar?</div>`;
+  order.forEach((r,i)=>{
+    const m=meta[r]; const rec=(i===0);
+    html += `<div class="doc-rc-card ${rec?'rec':''}" onclick="docPickRole('${r}')">
+      ${rec?'<div class="doc-rc-tag">Recomendado</div>':''}
+      <div class="doc-rc-ic"><i class="ti ${m.ic}"></i></div>
+      <div style="flex:1;"><div class="doc-rc-t">${m.t}</div><div class="doc-rc-d">${m.d}</div></div>
+      <i class="ti ti-chevron-right" style="font-size:18px;color:#C8C0B0;"></i>
+    </div>`;
+  });
+  html += `<div class="doc-rc-note"><i class="ti ti-device-desktop" style="font-size:14px;margin-top:1px;"></i><span>En la computadora entras directo como Admin. Puedes cambiar de rol desde el menú.</span></div>`;
+  document.getElementById('doc-rc-wrap').innerHTML = html;
+  document.getElementById('doc-role-chooser').classList.add('is-open');
+}
+function docPickRole(r){
+  document.getElementById('doc-role-chooser').classList.remove('is-open');
+  docActivateRole(r);
+}
+function docActivateRole(r){
+  CURRENT_USER.role = r;
+  CURRENT_USER.record = (CURRENT_USER.records && CURRENT_USER.records[r]) || CURRENT_USER.record;
+  document.body.classList.remove('doctor-mode','no-sidebar','role-doctor');
+  showAppLayout();
+  initForRole();
+}
+function docOpenRoleSwitch(){
+  if ((CURRENT_USER.availableRoles||[]).length>1) docShowRoleChooser();
+  else showToast('Solo tienes el rol Doctor','info');
+}
+
+// ---- Vista Hoy ----
+function docDayStrip(){
+  const base = new Date(docState.date+'T12:00:00');
+  let h='<div class="doc-daystrip">';
+  for(let off=-2; off<=2; off++){
+    const d=new Date(base); d.setDate(base.getDate()+off);
+    const ymd=docYMD(d);
+    const dow=d.toLocaleDateString('es-PE',{weekday:'short'}).replace('.','');
+    h+=`<button class="doc-day ${ymd===docState.date?'is-today':''}" onclick="docGoDate('${ymd}')"><div class="d-dow">${dow}</div><div class="d-num">${d.getDate()}</div></button>`;
+  }
+  return h+'</div>';
+}
+function docGoDate(ymd){ docState.date=ymd; docRenderHoy(); }
+
+function docRenderBottomNav(active){
+  const nav=document.getElementById('doc-bottomnav'); if(!nav) return;
+  const it=(id,ic,lbl)=>`<button class="doc-nav ${active===id?'is-active':''}" onclick="docGoTab('${id}')"><i class="ti ${ic}"></i> ${lbl}</button>`;
+  nav.innerHTML = it('hoy','ti-sun','Hoy')+it('agenda','ti-calendar-month','Agenda')
+    +`<button class="doc-fab" onclick="docGoTab('nuevo')"><i class="ti ti-plus"></i></button>`
+    +it('pacientes','ti-users','Pacientes')+it('mas','ti-dots','Más');
+}
+function docGoTab(t){
+  if (t==='hoy'){ docState.date=docYMD(new Date()); docRenderHoy(); return; }
+  showToast('Esa sección llega en el siguiente paso 🙌','info');
+}
+
+async function docRenderHoy(){
+  const cont=document.getElementById('doc-home-content'); if(!cont) return;
+  cont.innerHTML='<div class="doc-wrap"><div class="doc-loading">Cargando tu día…</div></div>';
+  docRenderBottomNav('hoy');
+  const date=docState.date;
+  let sessions=[];
+  try{
+    const { data, error } = await sb.from('therapy_sessions')
+      .select('id, hour, status, location_id, therapy_patients(id, first_name, last_name, location_id, freq_per_week, student_id)')
+      .eq('doctor_id', docState.doctorId).eq('session_date', date).neq('status','cancelled').order('hour');
+    if (error) throw error;
+    sessions=data||[];
+  }catch(e){
+    cont.innerHTML='<div class="doc-wrap"><div class="doc-empty">No se pudo cargar.<br><span style="font-size:11px;">'+docEsc(e.message||'')+'</span></div></div>';
+    return;
+  }
+  let blocks=[];
+  try{
+    const dow=new Date(date+'T12:00:00').getDay();
+    const { data: bl } = await sb.from('doctor_blocks').select('*').eq('doctor_id', docState.doctorId).eq('is_active', true);
+    blocks=(bl||[]).filter(b=> b.recurrence==='once' ? b.block_date===date
+      : (b.dow===dow && (!b.start_date||b.start_date<=date) && (!b.end_date||b.end_date>=date)));
+  }catch(e){}
+  const items=[];
+  sessions.forEach(s=> items.push({kind:'session', hour:s.hour, data:s}));
+  blocks.forEach(b=> items.push({kind:'block', hour:b.hour, data:b}));
+  items.sort((a,b)=> a.hour-b.hour);
+
+  const dObj=new Date(date+'T12:00:00');
+  const wd=docCap(dObj.toLocaleDateString('es-PE',{weekday:'long'}));
+  const dm=dObj.toLocaleDateString('es-PE',{day:'numeric',month:'long'});
+  let html=`<div class="doc-wrap">
+    <div class="doc-top">
+      <button class="doc-rolepill" onclick="docOpenRoleSwitch()"><i class="ti ti-stethoscope" style="font-size:15px;"></i> Doctor <i class="ti ti-chevron-down" style="font-size:13px;opacity:0.7;"></i></button>
+      <div class="doc-date">${wd}<br><b>${dm}</b></div>
+    </div>
+    <div class="doc-search" onclick="showToast('Buscador en el siguiente paso','info')"><i class="ti ti-search" style="font-size:15px;"></i> Buscar paciente…</div>
+    ${docDayStrip()}
+    <div class="doc-hhead"><h2>${docIsToday(date)?'Hoy':wd}</h2><span>${sessions.length} paciente${sessions.length===1?'':'s'}</span></div>`;
+  if(!items.length){
+    html+='<div class="doc-empty">Sin terapias este día.</div>';
+  } else {
+    items.forEach(it=>{
+      if(it.kind==='block'){
+        html+=`<div class="doc-block">
+          <div style="text-align:center;min-width:50px;"><div style="font-size:13px;font-weight:600;color:#6E665A;">${docHourH(it.hour)}</div><div style="font-size:8.5px;color:#A39B8C;">${docHourAp(it.hour)}</div></div>
+          <div class="c-div" style="height:26px;"></div>
+          <div style="flex:1;display:flex;align-items:center;gap:7px;"><i class="ti ${it.data.block_type==='pilates'?'ti-yoga':'ti-lock'}" style="font-size:16px;"></i><div style="font-size:11.5px;font-weight:500;">${docEsc(it.data.reason||(it.data.block_type==='pilates'?'Clase de Pilates':'Bloqueado'))}</div></div>
+        </div>`;
+      } else {
+        const s=it.data, p=s.therapy_patients||{};
+        const sede=docSede(s.location_id||p.location_id);
+        const name=docEsc(((p.first_name||'')+' '+(p.last_name||'')).trim()||'Paciente');
+        const freq=p.freq_per_week?`${p.freq_per_week}×/sem`:'';
+        const fitTag=p.student_id?'<span style="color:#3E7A52;">alumna FIT</span>':'';
+        const meta=[freq,fitTag].filter(Boolean).join(' · ');
+        html+=`<div class="doc-card" onclick="showToast('Perfil del paciente — siguiente paso','info')">
+          <div class="c-time"><div class="c-h">${docHourH(it.hour)}</div><div class="c-ap">${docHourAp(it.hour)}</div>
+            <div class="c-sede"><span class="c-dot" style="background:${sede.color};"></span>${docEsc(sede.name)}</div></div>
+          <div class="c-div"></div>
+          <div class="c-body"><div class="c-name">${name}</div>${meta?`<div class="c-meta">${meta}</div>`:''}</div>
+          <i class="ti ti-chevron-right c-chev"></i>
+        </div>`;
+      }
+    });
+  }
+  html+='</div>';
+  cont.innerHTML=html;
 }
 
 </script>
