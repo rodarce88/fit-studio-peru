@@ -28502,7 +28502,7 @@ async function docLoadPatients(force){
   if (docCache.patients && !force) return docCache.patients;
   try{
     const { data } = await sb.from('therapy_patients')
-      .select('id, first_name, last_name, phone, email, location_id, freq_per_week, status, student_id, notes')
+      .select('id, first_name, last_name, phone, email, location_id, freq_per_week, status, student_id, notes, pending_since')
       .eq('doctor_id', docState.doctorId).order('first_name');
     docCache.patients = data || [];
   }catch(e){ docCache.patients = []; }
@@ -28530,9 +28530,10 @@ function docRenderPatientList(list){
     const name=docEsc(((p.first_name||'')+' '+(p.last_name||'')).trim());
     const freq=p.freq_per_week?`${p.freq_per_week}×/sem`:'sin horario';
     const fit=p.student_id?' · <span style="color:#3E7A52;">FIT</span>':'';
+    const pend=docIsPending(p)?'<span style="display:inline-block;background:#FAEEDA;color:#854F0B;font-size:9.5px;font-weight:600;padding:2px 7px;border-radius:999px;margin-left:6px;vertical-align:middle;">pendiente</span>':'';
     return `<div class="doc-card" onclick="docRenderPatient('${p.id}','pacientes')">
       <div style="width:36px;height:36px;border-radius:50%;background:#F0ECE2;color:#1C1922;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;flex-shrink:0;">${docEsc(docInitials(p))}</div>
-      <div class="c-body"><div class="c-name">${name}</div><div class="c-meta"><span class="c-dot" style="background:${sede.color};display:inline-block;width:7px;height:7px;border-radius:50%;"></span> ${docEsc(sede.name)} · ${freq}${fit}</div></div>
+      <div class="c-body"><div class="c-name">${name}${pend}</div><div class="c-meta"><span class="c-dot" style="background:${sede.color};display:inline-block;width:7px;height:7px;border-radius:50%;"></span> ${docEsc(sede.name)} · ${freq}${fit}</div></div>
       <i class="ti ti-chevron-right c-chev"></i></div>`;
   }).join('');
 }
@@ -28816,7 +28817,246 @@ function docAgPath(p){ docAgState.path=p; docAgState.freq=null; docAgState.weeks
 function docAgSet(k,v){ docAgState[k]=v; docAgRerender(); }
 function docAgEdit(k){ const v=prompt(k==='weeks'?'¿Cuántas semanas?':'¿Cuántas terapias?'); const n=parseInt(v); if(n>0&&n<=200) docAgSet(k,n); }
 function docAgRerender(){ const p=(docCache.patients||[]).find(x=>x.id===docAgState.pid); if(p) document.getElementById('doc-home-content').innerHTML=docAgendaHtml(p); }
-function docAgGenerate(){ if(!docAgReady()){ showToast('Elige las opciones','info'); return; } const c=docAgCalc(); showToast(`Generaré horarios para ${c.total} terapias — siguiente paso 🙌`,'info'); }
+function docAgGenerate(){
+  if(!docAgReady()){ showToast('Elige las opciones','info'); return; }
+  const c=docAgCalc();
+  docRenderOpciones(docAgState.pid, c.freq, c.total, c.weeks);
+}
+
+// ============================================
+// MÓDULO DOCTOR — Generación de horarios
+// ============================================
+const DOC_DOW_SHORT=['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
+const DOC_DOW_FULL=['domingo','lunes','martes','miércoles','jueves','viernes','sábado'];
+function docDowsShort(dows){ const a=dows.map(d=>DOC_DOW_SHORT[d]); return a.length===1?a[0]:a.slice(0,-1).join(', ')+' y '+a[a.length-1]; }
+function docDowsFull(dows){ const a=dows.map(d=>DOC_DOW_FULL[d]); let s=a.length===1?a[0]:a.slice(0,-1).join(', ')+' y '+a[a.length-1]; return docCap(s); }
+function docHourLbl(h){ return docHourH(h)+' '+docHourAp(h); }
+function docDateShort(ds){ const d=new Date(ds+'T12:00:00'); return docCap(d.toLocaleDateString('es-PE',{weekday:'short',day:'numeric',month:'short'})); }
+function docDateFull(ds){ const d=new Date(ds+'T12:00:00'); return d.toLocaleDateString('es-PE',{weekday:'long',day:'numeric',month:'long'}); }
+function docFreqWord(f){ return f===1?'1 vez por semana':`${f} veces por semana`; }
+function docIsPending(p){ if(!p||!p.pending_since) return false; const t=new Date(p.pending_since).getTime(); return (Date.now()-t)>=40*60*1000; }
+function docAddDaysYMD(ds, n){ const d=new Date(ds+'T12:00:00'); d.setDate(d.getDate()+n); return docYMD(d); }
+
+// Carga los slots ocupados de Andrés (sesiones + bloqueos) entre dos fechas
+async function docLoadOccupied(startYMD, endYMD){
+  const occ=new Set();
+  try{
+    const { data:sess }=await sb.from('therapy_sessions').select('session_date,hour')
+      .eq('doctor_id',docState.doctorId).gte('session_date',startYMD).lte('session_date',endYMD).neq('status','cancelled');
+    (sess||[]).forEach(s=>occ.add(s.session_date+'|'+s.hour));
+  }catch(e){}
+  try{
+    const { data:bl }=await sb.from('doctor_blocks').select('*').eq('doctor_id',docState.doctorId).eq('is_active',true);
+    const blks=bl||[];
+    let d=new Date(startYMD+'T12:00:00'); const end=endYMD;
+    let guard=0;
+    while(docYMD(d)<=end && guard<500){
+      const ds=docYMD(d), dow=d.getDay();
+      blks.forEach(b=>{
+        if(b.recurrence==='once'){ if(b.block_date===ds) occ.add(ds+'|'+b.hour); }
+        else { if(b.dow===dow && (!b.start_date||b.start_date<=ds) && (!b.end_date||b.end_date>=ds)) occ.add(ds+'|'+b.hour); }
+      });
+      d.setDate(d.getDate()+1); guard++;
+    }
+  }catch(e){}
+  return occ;
+}
+// Fechas concretas de un patrón (dows + total sesiones) desde un ancla
+function docPlanDates(dows, total, anchorYMD){
+  const dates=[]; let d=new Date(anchorYMD+'T12:00:00'); let guard=0;
+  const set=new Set(dows);
+  while(dates.length<total && guard<500){ if(set.has(d.getDay())) dates.push(docYMD(d)); d.setDate(d.getDate()+1); guard++; }
+  return dates;
+}
+// Combinaciones de días según frecuencia
+function docDowCombos(freq){
+  const days=[1,2,3,4,5,6,0]; // lun..sáb, dom al final
+  if(freq===1) return days.map(d=>[d]);
+  const res=[];
+  for(let i=0;i<7;i++) for(let j=i+1;j<7;j++){
+    if(freq===2){ res.push([days[i],days[j]]); }
+    else { for(let k=j+1;k<7;k++) res.push([days[i],days[j],days[k]]); }
+  }
+  return res;
+}
+function docComboSpacingPenalty(dows){
+  if(dows.length<2) return 0;
+  const xs=dows.map(d=>d===0?7:d).sort((a,b)=>a-b);
+  let pen=0;
+  for(let i=1;i<xs.length;i++){ const gap=xs[i]-xs[i-1]; pen+=Math.abs(gap-3)*6; }
+  return pen;
+}
+// Construye hasta 5 opciones ordenadas
+function docBuildOptions(freq, total, anchorYMD, occ){
+  const combos=docDowCombos(freq);
+  const cands=[];
+  for(let h=6;h<=22;h++){
+    for(const combo of combos){
+      const dates=docPlanDates(combo, total, anchorYMD);
+      if(!dates.length) continue;
+      let conflicts=0;
+      for(const ds of dates){ if(occ.has(ds+'|'+h)) conflicts++; }
+      const weekendCount=combo.filter(d=>d===0||d===6).length;
+      const hourPen=(h<8?(8-h)*4:0)+(h>20?(h-20)*4:0);
+      const score=conflicts*1000 + weekendCount*45 + docComboSpacingPenalty(combo) + hourPen + h*0.2;
+      cands.push({dows:combo, hour:h, dates, conflicts, score, key:combo.slice().sort((a,b)=>a-b).join('-')+'@'+h});
+    }
+  }
+  cands.sort((a,b)=>a.score-b.score);
+  const out=[], perCombo={};
+  for(const c of cands){
+    const ck=c.dows.slice().sort((a,b)=>a-b).join('-');
+    perCombo[ck]=(perCombo[ck]||0);
+    if(perCombo[ck]>=2) continue; // máx 2 horarios por mismo par de días (variedad)
+    perCombo[ck]++; out.push(c);
+    if(out.length>=5) break;
+  }
+  return out;
+}
+
+let docOptState={};
+async function docRenderOpciones(pid, freq, total, weeks){
+  const cont=document.getElementById('doc-home-content'); if(!cont) return;
+  cont.innerHTML='<div class="doc-wrap"><div class="doc-loading">Buscando horarios libres…</div></div>';
+  const pts=await docLoadPatients();
+  const p=pts.find(x=>x.id===pid); if(!p){ docRenderPacientes(); return; }
+  const anchor=docYMD(new Date());
+  const horizon=docAddDaysYMD(anchor, (weeks+3)*7);
+  const occ=await docLoadOccupied(anchor, horizon);
+  const opts=docBuildOptions(freq, total, anchor, occ);
+  docOptState={ pid, freq, total, weeks, anchor, opts, sel:null };
+  cont.innerHTML=docOpcionesHtml(p);
+}
+function docOpcionesHtml(p){
+  const st=docOptState, sede=docSede(p.location_id);
+  const name=docEsc(((p.first_name||'')+' '+(p.last_name||'')).trim());
+  let cards='';
+  if(!st.opts.length){
+    cards=`<div class="doc-info"><div style="padding:14px 0;font-size:12.5px;color:#9A9183;">No encontré horarios libres con esa frecuencia. Prueba con otra frecuencia o usa "Elegir manualmente".</div></div>`;
+  } else {
+    cards=st.opts.map((o,i)=>{
+      const free=o.conflicts===0, on=st.sel===i;
+      const status = free
+        ? `<div style="font-size:11px;color:#3B6D11;margin-top:4px;display:flex;align-items:center;gap:5px;"><i class="ti ti-circle-check" style="font-size:13px;"></i> Libre las ${st.weeks} semanas · 1ª terapia ${docDateShort(o.dates[0])}</div>`
+        : `<div style="font-size:11px;color:#854F0B;margin-top:4px;display:flex;align-items:center;gap:5px;"><i class="ti ti-alert-triangle" style="font-size:13px;"></i> ${o.conflicts} semana${o.conflicts===1?'':'s'} con choque · se ajusta a mano</div>`;
+      const radio = on
+        ? `<div style="width:22px;height:22px;border-radius:50%;background:#1C1922;color:#fff;display:flex;align-items:center;justify-content:center;flex:none;"><i class="ti ti-check" style="font-size:13px;"></i></div>`
+        : `<div style="width:22px;height:22px;border-radius:50%;border:1.5px solid #D3CFC4;flex:none;"></div>`;
+      const click = free ? `docOptSel(${i})` : `docOptConflict()`;
+      return `<div class="doc-card" style="cursor:pointer;${on?'border:1.5px solid #1C1922;':''}${free?'':'opacity:.85;'}" onclick="${click}">
+        <div class="c-body"><div class="c-name" style="font-size:14.5px;">${docDowsShort(o.dows)} · ${docHourLbl(o.hour)}</div>${status}</div>${radio}</div>`;
+    }).join('');
+  }
+  return `<div class="doc-wrap">
+    <div class="doc-top"><button class="doc-iconbtn" onclick="docRenderAgendar('${st.pid}')"><i class="ti ti-arrow-left"></i></button>
+      <div><div style="font-size:16px;font-weight:600;line-height:1.1;">Elegir horario</div><div style="font-size:10.5px;color:#9A9183;">${name} · <span style="color:${sede.color};">●</span> ${docEsc(sede.name)} · ${st.total} terapias</div></div></div>
+    <div class="doc-sec">${st.opts.length} horarios libres · ${docFreqWord(st.freq)}</div>
+    ${cards}
+    <div style="display:flex;align-items:center;justify-content:center;gap:7px;background:#fff;border:1px solid #E6E0D4;border-radius:12px;padding:11px;font-size:12.5px;color:#5A5248;margin:12px 0;cursor:pointer;" onclick="docCopyOpciones()"><i class="ti ti-copy" style="font-size:15px;"></i> Copiar mensaje para la paciente</div>
+    <div style="display:flex;align-items:center;justify-content:center;gap:7px;background:#fff;border:1px solid #E6E0D4;border-radius:12px;padding:11px;font-size:12.5px;color:#5A5248;margin-bottom:14px;cursor:pointer;" onclick="docManualPlaceholder()"><i class="ti ti-layout-grid" style="font-size:15px;"></i> Elegir manualmente</div>
+    <button class="doc-primary" ${st.sel==null?'disabled style="opacity:.4;pointer-events:none;"':''} onclick="docOptContinue()"><i class="ti ti-arrow-right"></i> Continuar</button></div>`;
+}
+function docOptSel(i){ docOptState.sel=i; const p=(docCache.patients||[]).find(x=>x.id===docOptState.pid); if(p) document.getElementById('doc-home-content').innerHTML=docOpcionesHtml(p); }
+function docOptConflict(){ showToast('Esta opción tiene choques. El ajuste semana a semana llega en el siguiente paso 🙌','info'); }
+function docManualPlaceholder(){ showToast('"Elegir manualmente" llega en el siguiente push 🙌','info'); }
+function docMsgOpciones(p){
+  const st=docOptState, sede=docSede(p.location_id).name;
+  const name=(p.first_name||'').trim()||'';
+  const nums=['1️⃣','2️⃣','3️⃣','4️⃣','5️⃣'];
+  const lines=st.opts.slice(0,3).map((o,i)=>`${nums[i]} ${docDowsFull(o.dows)} · ${docHourLbl(o.hour)} (desde ${docDateShort(o.dates[0])})`);
+  return `Hola ${name} 👋 Soy Andrés. Para tus terapias (${docFreqWord(st.freq)}) tengo estos horarios libres:\n\n${lines.join('\n')}\n\nTodas en la sede ${sede}. ¿Cuál te acomoda mejor?`;
+}
+async function docCopyOpciones(){
+  const p=(docCache.patients||[]).find(x=>x.id===docOptState.pid); if(!p) return;
+  if(!docOptState.opts.length){ showToast('No hay opciones para copiar','info'); return; }
+  docCopy(docMsgOpciones(p), 'Mensaje copiado ✓');
+  try{ await sb.from('therapy_patients').update({ pending_since:new Date().toISOString() }).eq('id',p.id); p.pending_since=new Date().toISOString(); }catch(e){}
+}
+let docConfState={};
+function docOptContinue(){
+  const st=docOptState; if(st.sel==null) return;
+  const o=st.opts[st.sel]; const p=(docCache.patients||[]).find(x=>x.id===st.pid);
+  docConfState={ pid:st.pid, freq:st.freq, total:st.total, weeks:st.weeks, dows:o.dows, hour:o.hour, dates:o.dates, locationId:p?p.location_id:null };
+  docRenderConfirmar();
+}
+function docRenderConfirmar(){
+  const cont=document.getElementById('doc-home-content'); if(!cont) return;
+  const st=docConfState, p=(docCache.patients||[]).find(x=>x.id===st.pid);
+  const sede=docSede(st.locationId), name=docEsc(((p.first_name||'')+' '+(p.last_name||'')).trim());
+  cont.innerHTML=`<div class="doc-wrap">
+    <div class="doc-top"><button class="doc-iconbtn" onclick="docRenderOpciones('${st.pid}',${st.freq},${st.total},${st.weeks})"><i class="ti ti-arrow-left"></i></button><div style="font-size:16px;font-weight:600;">Confirmar plan</div></div>
+    <div class="doc-info" style="padding:4px 14px 6px;">
+      <div style="display:flex;align-items:center;gap:11px;padding:11px 0;">
+        <div style="width:42px;height:42px;border-radius:50%;background:#F0ECE2;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:600;">${docEsc(docInitials(p))}</div>
+        <div><div style="font-size:15px;font-weight:600;">${name}</div><div style="font-size:10.5px;color:#9A9183;margin-top:2px;"><span style="color:${sede.color};">●</span> ${docEsc(sede.name)}</div></div>
+      </div>
+      <div class="doc-inforow"><span>Días y hora</span><b>${docDowsShort(st.dows)} · ${docHourLbl(st.hour)}</b></div>
+      <div class="doc-inforow"><span>Total</span><b>${st.total} terapias · ${st.weeks} sem</b></div>
+      <div class="doc-inforow"><span>1ª terapia</span><b>${docCap(docDateShort(st.dates[0]))}</b></div>
+      <div class="doc-inforow"><span>Última</span><b>${docCap(docDateShort(st.dates[st.dates.length-1]))}</b></div>
+      <div class="doc-inforow"><span>Duración c/u</span><b>60 min</b></div>
+    </div>
+    <div style="font-size:10.5px;color:#9A9183;text-align:center;margin:12px 0;line-height:1.5;">Se crearán las ${st.total} citas en la agenda de Andrés.<br>Podrás mover o cancelar cualquiera después.</div>
+    <button class="doc-primary" id="doc-conf-btn" onclick="docDoConfirm()"><i class="ti ti-calendar-check"></i> Confirmar y agendar</button></div>`;
+}
+async function docDoConfirm(){
+  const st=docConfState; const btn=document.getElementById('doc-conf-btn');
+  if(btn){ btn.style.opacity='.5'; btn.style.pointerEvents='none'; btn.innerHTML='Agendando…'; }
+  try{
+    const recById={};
+    for(const dw of st.dows){
+      const dwDates=st.dates.filter(ds=>new Date(ds+'T12:00:00').getDay()===dw);
+      if(!dwDates.length) continue;
+      const { data, error }=await sb.from('therapy_recurrences').insert({
+        patient_id:st.pid, doctor_id:docState.doctorId, location_id:st.locationId,
+        dow:dw, hour:st.hour, start_date:dwDates[0], end_date:dwDates[dwDates.length-1],
+        total_sessions:dwDates.length, is_active:true
+      }).select().single();
+      if(error) throw error; recById[dw]=data.id;
+    }
+    const rows=st.dates.map(ds=>({
+      patient_id:st.pid, doctor_id:docState.doctorId, recurrence_id:recById[new Date(ds+'T12:00:00').getDay()]||null,
+      location_id:st.locationId, session_date:ds, hour:st.hour, duration_min:60, status:'scheduled'
+    }));
+    const { error:se }=await sb.from('therapy_sessions').insert(rows);
+    if(se) throw se;
+    await sb.from('therapy_patients').update({ freq_per_week:st.freq, pending_since:null }).eq('id',st.pid);
+    docCache.patients=null;
+    showToast('✓ Terapias agendadas','success');
+    docRenderAgendado();
+  }catch(e){
+    showToast('Error: '+(e.message||''),'error');
+    if(btn){ btn.style.opacity='1'; btn.style.pointerEvents='auto'; btn.innerHTML='<i class="ti ti-calendar-check"></i> Confirmar y agendar'; }
+  }
+}
+function docMsgConfirm(p){
+  const st=docConfState, sede=docSede(st.locationId).name;
+  const name=(p.first_name||'').trim()||'';
+  return `¡Listo, ${name}! Quedaron reservadas tus terapias 🙌\n\n📅 ${docDowsFull(st.dows)} · ${docHourLbl(st.hour)}\n📍 Sede ${sede}\n🗓 Tu primera terapia es el ${docDateFull(st.dates[0])}. En total ${st.total} sesiones (60 min c/u), hasta el ${docDateFull(st.dates[st.dates.length-1])}.\n\nSi necesitas mover alguna, me avisas con tiempo. ¡Nos vemos!`;
+}
+async function docRenderAgendado(){
+  const cont=document.getElementById('doc-home-content'); if(!cont) return;
+  const st=docConfState;
+  const pts=await docLoadPatients(); const p=pts.find(x=>x.id===st.pid)||{};
+  const msg=docMsgConfirm(p);
+  cont.innerHTML=`<div class="doc-wrap" style="text-align:center;">
+    <div style="width:64px;height:64px;border-radius:50%;background:#E1F3E9;color:#0B7A3E;display:flex;align-items:center;justify-content:center;margin:24px auto 14px;"><i class="ti ti-calendar-check" style="font-size:30px;"></i></div>
+    <div style="font-size:18px;font-weight:600;">¡Agendado!</div>
+    <div style="font-size:12.5px;color:#9A9183;margin-top:4px;">${st.total} terapias · ${docDowsShort(st.dows)} · ${docHourLbl(st.hour)}</div>
+    <div style="text-align:left;background:#fff;border:1px solid #E6E0D4;border-radius:14px;padding:13px 14px;margin:18px 0;font-size:12.5px;color:#3A352E;line-height:1.6;white-space:pre-wrap;">${docEsc(msg)}</div>
+    <div style="display:flex;align-items:center;justify-content:center;gap:8px;background:#E1F3E9;border:1px solid #B5E0C8;border-radius:12px;padding:13px;font-size:13px;color:#0B5C2E;font-weight:500;cursor:pointer;margin-bottom:10px;" onclick="docCopy(docMsgConfirm((docCache.patients||[]).find(x=>x.id==='${st.pid}')||{}),'Mensaje copiado ✓')"><i class="ti ti-brand-whatsapp" style="font-size:19px;color:#0B7A3E;"></i> Copiar mensaje para WhatsApp</div>
+    <button class="doc-primary" onclick="docRenderPatient('${st.pid}','pacientes')"><i class="ti ti-user"></i> Ir al perfil</button></div>`;
+}
+// Copiar al portapapeles con alerta
+function docCopy(text, okMsg){
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(text).then(()=>showToast(okMsg||'Copiado ✓','success'), ()=>docCopyFallback(text,okMsg));
+  } else { docCopyFallback(text,okMsg); }
+}
+function docCopyFallback(text, okMsg){
+  try{ const ta=document.createElement('textarea'); ta.value=text; ta.style.position='fixed'; ta.style.opacity='0'; document.body.appendChild(ta); ta.focus(); ta.select(); document.execCommand('copy'); document.body.removeChild(ta); showToast(okMsg||'Copiado ✓','success'); }
+  catch(e){ showToast('No se pudo copiar','error'); }
+}
 
 </script>
 
