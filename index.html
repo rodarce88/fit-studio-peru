@@ -28923,11 +28923,11 @@ function docAddDaysYMD(ds, n){ const d=new Date(ds+'T12:00:00'); d.setDate(d.get
 
 // Carga los slots ocupados de Andrés (sesiones + bloqueos) entre dos fechas
 async function docLoadOccupied(startYMD, endYMD){
-  const occ=new Set();
+  const set=new Set(), labels={};
   try{
-    const { data:sess }=await sb.from('therapy_sessions').select('session_date,hour')
+    const { data:sess }=await sb.from('therapy_sessions').select('session_date,hour,therapy_patients(first_name)')
       .eq('doctor_id',docState.doctorId).gte('session_date',startYMD).lte('session_date',endYMD).neq('status','cancelled');
-    (sess||[]).forEach(s=>occ.add(s.session_date+'|'+s.hour));
+    (sess||[]).forEach(s=>{ const k=s.session_date+'|'+s.hour; set.add(k); const nm=s.therapy_patients&&s.therapy_patients.first_name; labels[k]='Terapia'+(nm?' · '+nm:''); });
   }catch(e){}
   try{
     const { data:bl }=await sb.from('doctor_blocks').select('*').eq('doctor_id',docState.doctorId).eq('is_active',true);
@@ -28937,13 +28937,13 @@ async function docLoadOccupied(startYMD, endYMD){
     while(docYMD(d)<=end && guard<500){
       const ds=docYMD(d), dow=d.getDay();
       blks.forEach(b=>{
-        if(b.recurrence==='once'){ if(b.block_date===ds) occ.add(ds+'|'+b.hour); }
-        else { if(b.dow===dow && (!b.start_date||b.start_date<=ds) && (!b.end_date||b.end_date>=ds)) occ.add(ds+'|'+b.hour); }
+        const hit = b.recurrence==='once' ? (b.block_date===ds) : (b.dow===dow && (!b.start_date||b.start_date<=ds) && (!b.end_date||b.end_date>=ds));
+        if(hit){ const k=ds+'|'+b.hour; set.add(k); labels[k]=(b.block_type==='pilates'?'Pilates':(b.reason||'Bloqueado')); }
       });
       d.setDate(d.getDate()+1); guard++;
     }
   }catch(e){}
-  return occ;
+  return { set, labels };
 }
 // Fechas concretas de un patrón (dows + total sesiones) desde un ancla
 function docPlanDates(dows, total, anchorYMD){
@@ -29007,7 +29007,7 @@ async function docRenderOpciones(pid, plan){
   const anchor=docYMD(new Date());
   const horizon=docAddDaysYMD(anchor, (plan.weeks+3)*7);
   const occ=await docLoadOccupied(anchor, horizon);
-  const opts=docBuildOptions(plan.freq, plan.total, anchor, occ);
+  const opts=docBuildOptions(plan.freq, plan.total, anchor, occ.set);
   docOptState={ pid, plan, freq:plan.freq, total:plan.total, weeks:plan.weeks, mode:plan.mode, remType:plan.remType, remVal:plan.remVal, anchor, opts, sel:null };
   cont.innerHTML=docOpcionesHtml(p);
 }
@@ -29022,12 +29022,11 @@ function docOpcionesHtml(p){
       const free=o.conflicts===0, on=st.sel===i;
       const status = free
         ? `<div style="font-size:11px;color:#3B6D11;margin-top:4px;display:flex;align-items:center;gap:5px;"><i class="ti ti-circle-check" style="font-size:13px;"></i> Libre las ${st.weeks} semanas · 1ª terapia ${docDateShort(o.dates[0])}</div>`
-        : `<div style="font-size:11px;color:#854F0B;margin-top:4px;display:flex;align-items:center;gap:5px;"><i class="ti ti-alert-triangle" style="font-size:13px;"></i> ${o.conflicts} semana${o.conflicts===1?'':'s'} con choque · se ajusta a mano</div>`;
+        : `<div style="font-size:11px;color:#854F0B;margin-top:4px;display:flex;align-items:center;gap:5px;"><i class="ti ti-alert-triangle" style="font-size:13px;"></i> ${o.conflicts} con choque · ajustas esas a mano</div>`;
       const radio = on
         ? `<div style="width:22px;height:22px;border-radius:50%;background:#1C1922;color:#fff;display:flex;align-items:center;justify-content:center;flex:none;"><i class="ti ti-check" style="font-size:13px;"></i></div>`
         : `<div style="width:22px;height:22px;border-radius:50%;border:1.5px solid #D3CFC4;flex:none;"></div>`;
-      const click = free ? `docOptSel(${i})` : `docOptConflict()`;
-      return `<div class="doc-card" style="cursor:pointer;${on?'border:1.5px solid #1C1922;':''}${free?'':'opacity:.85;'}" onclick="${click}">
+      return `<div class="doc-card" style="cursor:pointer;${on?'border:1.5px solid #1C1922;':''}" onclick="docOptSel(${i})">
         <div class="c-body"><div class="c-name" style="font-size:14.5px;">${docDowsShort(o.dows)} · ${docHourLbl(o.hour)}</div>${status}</div>${radio}</div>`;
     }).join('');
   }
@@ -29037,12 +29036,10 @@ function docOpcionesHtml(p){
     <div class="doc-sec">${st.opts.length} horarios libres · ${docFreqWord(st.freq)}</div>
     ${cards}
     <div style="display:flex;align-items:center;justify-content:center;gap:7px;background:#fff;border:1px solid #E6E0D4;border-radius:12px;padding:11px;font-size:12.5px;color:#5A5248;margin:12px 0;cursor:pointer;" onclick="docCopyOpciones()"><i class="ti ti-copy" style="font-size:15px;"></i> Copiar mensaje para la paciente</div>
-    <div style="display:flex;align-items:center;justify-content:center;gap:7px;background:#fff;border:1.5px solid #1C1922;border-radius:12px;padding:11px;font-size:12.5px;color:#1C1922;font-weight:600;margin-bottom:14px;cursor:pointer;" onclick="docManualPlaceholder()"><i class="ti ti-layout-grid" style="font-size:15px;"></i> Elegir manualmente</div>
+    <div style="display:flex;align-items:center;justify-content:center;gap:7px;background:#fff;border:1.5px solid #1C1922;border-radius:12px;padding:11px;font-size:12.5px;color:#1C1922;font-weight:600;margin-bottom:14px;cursor:pointer;" onclick="docRenderManual(docOptState.pid, docOptState.plan, null)"><i class="ti ti-layout-grid" style="font-size:15px;"></i> Elegir manualmente</div>
     <button class="doc-primary" ${st.sel==null?'disabled style="opacity:.4;pointer-events:none;"':''} onclick="docOptContinue()"><i class="ti ti-arrow-right"></i> Continuar</button></div>`;
 }
 function docOptSel(i){ docOptState.sel=i; const p=(docCache.patients||[]).find(x=>x.id===docOptState.pid); if(p) document.getElementById('doc-home-content').innerHTML=docOpcionesHtml(p); }
-function docOptConflict(){ showToast('Esta opción tiene choques. El ajuste semana a semana llega en el siguiente paso 🙌','info'); }
-function docManualPlaceholder(){ showToast('"Elegir manualmente" llega en el siguiente push 🙌','info'); }
 function docMsgOpciones(p){
   const st=docOptState, sede=docSede(p.location_id).name;
   const name=(p.first_name||'').trim()||'';
@@ -29063,6 +29060,7 @@ let docConfState={};
 function docOptContinue(){
   const st=docOptState; if(st.sel==null) return;
   const o=st.opts[st.sel]; const p=(docCache.patients||[]).find(x=>x.id===st.pid);
+  if(o.conflicts>0){ docRenderManual(st.pid, st.plan, o); return; }
   docConfState={ pid:st.pid, plan:st.plan, freq:st.freq, total:st.total, weeks:st.weeks, mode:st.mode, remType:st.remType, remVal:st.remVal, dows:o.dows, hour:o.hour, dates:o.dates, locationId:p?p.location_id:null };
   docRenderConfirmar();
 }
@@ -29164,6 +29162,143 @@ function docCopy(text, okMsg){
 function docCopyFallback(text, okMsg){
   try{ const ta=document.createElement('textarea'); ta.value=text; ta.style.position='fixed'; ta.style.opacity='0'; document.body.appendChild(ta); ta.focus(); ta.select(); document.execCommand('copy'); document.body.removeChild(ta); showToast(okMsg||'Copiado ✓','success'); }
   catch(e){ showToast('No se pudo copiar','error'); }
+}
+
+// ============================================
+// MÓDULO DOCTOR — Elegir manualmente (semana por semana)
+// ============================================
+let docManState={};
+async function docRenderManual(pid, plan, preset){
+  const cont=document.getElementById('doc-home-content'); if(!cont) return;
+  cont.innerHTML='<div class="doc-wrap"><div class="doc-loading">Preparando calendario…</div></div>';
+  const pts=await docLoadPatients();
+  const p=pts.find(x=>x.id===pid); if(!p){ docRenderPacientes(); return; }
+  const anchor=docYMD(new Date());
+  const numWeeks=Math.max(1, plan.weeks||Math.ceil((plan.total||1)/(plan.freq||1)));
+  const horizon=docAddDaysYMD(anchor, (numWeeks+1)*7);
+  const occ=await docLoadOccupied(anchor, horizon);
+  const weeks=[];
+  for(let i=0;i<numWeeks;i++){ weeks.push({ startYMD:docAddDaysYMD(anchor, i*7), slots:[] }); }
+  if(preset && preset.dates){
+    preset.dates.forEach(ds=>{
+      const wi=Math.min(numWeeks-1, Math.floor((new Date(ds+'T12:00:00')-new Date(anchor+'T12:00:00'))/(7*86400000)));
+      weeks[wi].slots.push({ date:ds, hour:preset.hour });
+    });
+  }
+  docManState={ pid, plan, locationId:p.location_id, anchor, horizon, numWeeks, occ, weeks, target:(plan.total||0) };
+  cont.innerHTML=docManHtml(p);
+}
+function docManTaken(){ const t=new Set(); docManState.weeks.forEach(w=>w.slots.forEach(s=>t.add(s.date+'|'+s.hour))); return t; }
+function docManCount(){ let n=0; docManState.weeks.forEach(w=>n+=w.slots.length); return n; }
+function docManSlotState(s){ // 'ok' | 'conflict'
+  return docManState.occ.set.has(s.date+'|'+s.hour) ? 'conflict' : 'ok';
+}
+function docManHtml(p){
+  const st=docManState, sede=docSede(st.locationId);
+  const name=docEsc(((p.first_name||'')+' '+(p.last_name||'')).trim());
+  const count=docManCount();
+  let confl=0; st.weeks.forEach(w=>w.slots.forEach(s=>{ if(docManSlotState(s)==='conflict') confl++; }));
+  let weeksHtml=st.weeks.map((w,wi)=>{
+    const end=docAddDaysYMD(w.startYMD,6);
+    const rng=docCap(new Date(w.startYMD+'T12:00:00').toLocaleDateString('es-PE',{day:'numeric',month:'short'}))+' – '+docCap(new Date(end+'T12:00:00').toLocaleDateString('es-PE',{day:'numeric',month:'short'}));
+    const slots=w.slots.slice().sort((a,b)=> a.date<b.date?-1:a.date>b.date?1:a.hour-b.hour);
+    let slotsHtml = slots.length ? slots.map(s=>{
+      const idx=w.slots.indexOf(s); const conf=docManSlotState(s)==='conflict';
+      return `<div style="display:flex;align-items:center;gap:8px;background:${conf?'#FCEBE7':'#F4F8F1'};border:1px solid ${conf?'#F0C4B3':'#CFE4C2'};border-radius:10px;padding:9px 11px;margin-bottom:6px;">
+        <i class="ti ${conf?'ti-alert-triangle':'ti-circle-check'}" style="font-size:15px;color:${conf?'#A33B1D':'#3B6D11'};"></i>
+        <div style="flex:1;font-size:12.5px;color:#2A2620;">${docCap(docDateShort(s.date))} · ${docHourLbl(s.hour)}${conf?' <span style="color:#A33B1D;font-size:10.5px;">(choca, cámbiala)</span>':''}</div>
+        <i class="ti ti-x" style="font-size:15px;color:#9A9183;cursor:pointer;" onclick="docManRemove(${wi},${idx})"></i></div>`;
+    }).join('') : `<div style="font-size:11px;color:#A8A092;padding:2px 2px 8px;">Sin terapias esta semana.</div>`;
+    return `<div class="doc-info" style="margin-bottom:9px;padding:11px 13px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;"><div style="font-size:12.5px;font-weight:600;">Semana ${wi+1}</div><div style="font-size:10.5px;color:#9A9183;">${rng}</div></div>
+      ${slotsHtml}
+      <div onclick="docManAddStart(${wi})" style="display:flex;align-items:center;justify-content:center;gap:6px;border:1px dashed #C9C2B4;border-radius:10px;padding:9px;font-size:12px;color:#5A5248;cursor:pointer;margin-top:2px;"><i class="ti ti-plus" style="font-size:14px;"></i> Agregar terapia</div>
+    </div>`;
+  }).join('');
+  const conflLine = confl?`<div style="font-size:10.5px;color:#A33B1D;margin-top:3px;">${confl} con choque — cámbialas antes de agendar.</div>`:'';
+  return `<div class="doc-wrap">
+    <div class="doc-top"><button class="doc-iconbtn" onclick="docRenderOpciones(docManState.pid, docManState.plan)"><i class="ti ti-arrow-left"></i></button>
+      <div><div style="font-size:16px;font-weight:600;line-height:1.1;">Elegir manualmente</div><div style="font-size:10.5px;color:#9A9183;">${name} · <span style="color:${sede.color};">●</span> ${docEsc(sede.name)}</div></div></div>
+    <div class="doc-info" style="margin-bottom:12px;"><div style="padding:10px 2px;"><div style="font-size:12.5px;font-weight:600;">${count} terapia${count===1?'':'s'} elegida${count===1?'':'s'}${st.target?` · objetivo ${st.target}`:''}</div><div style="font-size:10.5px;color:#9A9183;margin-top:2px;">Puedes poner más o menos, como veas conveniente.</div>${conflLine}</div></div>
+    ${weeksHtml}
+    <button class="doc-primary" ${(count===0||confl>0)?'disabled style="opacity:.4;pointer-events:none;"':''} onclick="docManConfirm()"><i class="ti ti-calendar-check"></i> Confirmar y agendar${count?` (${count})`:''}</button>
+    <div style="height:8px;"></div></div>`;
+}
+function docManRemove(wi,idx){ docManState.weeks[wi].slots.splice(idx,1); docManRerender(); }
+function docManRerender(){ const p=(docCache.patients||[]).find(x=>x.id===docManState.pid); if(p) document.getElementById('doc-home-content').innerHTML=docManHtml(p); }
+// Selector de día dentro de una semana
+function docManAddStart(wi){
+  const st=docManState, p=(docCache.patients||[]).find(x=>x.id===st.pid);
+  const sede=docSede(st.locationId), today=docYMD(new Date());
+  let days='';
+  for(let i=0;i<7;i++){
+    const ds=docAddDaysYMD(st.weeks[wi].startYMD, i);
+    if(ds<today) continue;
+    let freeN=0; const taken=docManTaken();
+    for(let h=6;h<=22;h++){ const k=ds+'|'+h; if(!st.occ.set.has(k)&&!taken.has(k)) freeN++; }
+    const d=new Date(ds+'T12:00:00');
+    days+=`<div class="doc-card" style="cursor:${freeN?'pointer':'default'};${freeN?'':'opacity:.5;'}" ${freeN?`onclick="docManPickDay(${wi},'${ds}')"`:''}>
+      <div class="c-body"><div class="c-name" style="font-size:13px;">${docCap(d.toLocaleDateString('es-PE',{weekday:'long',day:'numeric',month:'short'}))}</div><div class="c-meta">${freeN} libre${freeN===1?'':'s'}</div></div>
+      ${freeN?'<i class="ti ti-chevron-right c-chev"></i>':''}</div>`;
+  }
+  document.getElementById('doc-home-content').innerHTML=`<div class="doc-wrap">
+    <div class="doc-top"><button class="doc-iconbtn" onclick="docManRerender()"><i class="ti ti-arrow-left"></i></button><div><div style="font-size:16px;font-weight:600;line-height:1.1;">Semana ${wi+1}</div><div style="font-size:10.5px;color:#9A9183;">Elige el día</div></div></div>
+    ${days||'<div class="doc-empty">No hay días disponibles esta semana.</div>'}</div>`;
+}
+// Selector de hora dentro de un día
+function docManPickDay(wi, ds){
+  const st=docManState; const taken=docManTaken();
+  const d=new Date(ds+'T12:00:00');
+  let rows='';
+  for(let h=6;h<=22;h++){
+    const k=ds+'|'+h, busy=st.occ.set.has(k), mine=taken.has(k);
+    if(mine){ rows+=`<div style="display:flex;align-items:center;justify-content:space-between;background:#EEEDFE;border-radius:10px;padding:11px 13px;margin-bottom:6px;"><span style="font-size:13px;color:#3C3489;">${docHourLbl(h)}</span><span style="font-size:11px;color:#3C3489;">ya elegida</span></div>`; }
+    else if(busy){ rows+=`<div style="display:flex;align-items:center;justify-content:space-between;background:#F1EFE8;border-radius:10px;padding:11px 13px;margin-bottom:6px;"><span style="font-size:13px;color:#888780;">${docHourLbl(h)}</span><span style="font-size:11px;color:#888780;">${docEsc(st.occ.labels[k]||'ocupado')}</span></div>`; }
+    else { rows+=`<div onclick="docManAdd(${wi},'${ds}',${h})" style="display:flex;align-items:center;justify-content:space-between;background:#fff;border:1px solid #E6E0D4;border-radius:10px;padding:11px 13px;margin-bottom:6px;cursor:pointer;"><span style="font-size:13px;">${docHourLbl(h)}</span><span style="font-size:11px;color:#3B6D11;">libre</span></div>`; }
+  }
+  document.getElementById('doc-home-content').innerHTML=`<div class="doc-wrap">
+    <div class="doc-top"><button class="doc-iconbtn" onclick="docManAddStart(${wi})"><i class="ti ti-arrow-left"></i></button><div><div style="font-size:16px;font-weight:600;line-height:1.1;">${docCap(d.toLocaleDateString('es-PE',{weekday:'long',day:'numeric',month:'short'}))}</div><div style="font-size:10.5px;color:#9A9183;">Elige la hora</div></div></div>
+    ${rows}</div>`;
+}
+function docManAdd(wi, ds, h){ docManState.weeks[wi].slots.push({ date:ds, hour:h }); showToast('✓ Agregada','success'); docManRerender(); }
+async function docManConfirm(){
+  const st=docManState;
+  const slots=[]; st.weeks.forEach(w=>w.slots.forEach(s=>slots.push(s)));
+  if(!slots.length){ showToast('Agrega al menos una terapia','info'); return; }
+  slots.sort((a,b)=> a.date<b.date?-1:a.date>b.date?1:a.hour-b.hour);
+  try{
+    const isIndef=st.plan.mode==='indefinite';
+    const { data:plan, error:pe }=await sb.from('therapy_plans').insert({
+      patient_id:st.pid, doctor_id:docState.doctorId, mode:st.plan.mode||'fixed',
+      freq_per_week:st.plan.freq, weeks:isIndef?null:st.numWeeks, total_sessions:slots.length,
+      start_date:slots[0].date, end_date:slots[slots.length-1].date,
+      reminder_type:isIndef?st.plan.remType:null, reminder_value:isIndef?st.plan.remVal:null,
+      status:'active', note:'manual'
+    }).select().single();
+    if(pe) throw pe;
+    const rows=slots.map(s=>({ patient_id:st.pid, doctor_id:docState.doctorId, plan_id:plan.id, recurrence_id:null, location_id:st.locationId, session_date:s.date, hour:s.hour, duration_min:60, status:'scheduled' }));
+    const { error:se }=await sb.from('therapy_sessions').insert(rows);
+    if(se) throw se;
+    await sb.from('therapy_patients').update({ freq_per_week:st.plan.freq, pending_since:null }).eq('id',st.pid);
+    docCache.patients=null;
+    showToast('✓ Terapias agendadas','success');
+    docManDone(slots);
+  }catch(e){ showToast('Error: '+(e.message||''),'error'); }
+}
+async function docManDone(slots){
+  const cont=document.getElementById('doc-home-content'); if(!cont) return;
+  const st=docManState; const pts=await docLoadPatients(); const p=pts.find(x=>x.id===st.pid)||{};
+  const sede=docSede(st.locationId).name, name=(p.first_name||'').trim()||'';
+  const next=slots.slice(0,3).map(s=>`📅 ${docCap(docDateShort(s.date))} · ${docHourLbl(s.hour)}`);
+  const msg=`¡Listo, ${name}! Quedaron reservadas tus ${slots.length} terapias 🙌\n\nTus próximas:\n${next.join('\n')}\n\n📍 Sede ${sede}. ¡Nos vemos!`;
+  docRecState={ pid:st.pid, msg };
+  cont.innerHTML=`<div class="doc-wrap" style="text-align:center;">
+    <div style="width:64px;height:64px;border-radius:50%;background:#E1F3E9;color:#0B7A3E;display:flex;align-items:center;justify-content:center;margin:24px auto 14px;"><i class="ti ti-calendar-check" style="font-size:30px;"></i></div>
+    <div style="font-size:18px;font-weight:600;">¡Agendado!</div>
+    <div style="font-size:12.5px;color:#9A9183;margin-top:4px;">${slots.length} terapias agendadas a mano</div>
+    <div style="text-align:left;background:#fff;border:1px solid #E6E0D4;border-radius:14px;padding:13px 14px;margin:18px 0;font-size:12.5px;color:#3A352E;line-height:1.6;white-space:pre-wrap;">${docEsc(msg)}</div>
+    <div onclick="docCopy(docRecState.msg,'Mensaje copiado ✓')" style="display:flex;align-items:center;justify-content:center;gap:8px;background:#E1F3E9;border:1px solid #B5E0C8;border-radius:12px;padding:13px;font-size:13px;color:#0B5C2E;font-weight:500;cursor:pointer;margin-bottom:10px;"><i class="ti ti-brand-whatsapp" style="font-size:19px;color:#0B7A3E;"></i> Copiar para WhatsApp</div>
+    <button class="doc-primary" onclick="docRenderPatient('${st.pid}','pacientes')"><i class="ti ti-user"></i> Ir al perfil</button></div>`;
 }
 
 </script>
