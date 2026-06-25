@@ -28611,11 +28611,46 @@ async function docRenderPatient(id, origin){
       return `<div class="doc-card" style="cursor:default;"><div class="c-time"><div class="c-h" style="font-size:13px;">${docHourH(s.hour)}</div><div class="c-ap">${docHourAp(s.hour)}</div></div><div class="c-div"></div><div class="c-body"><div class="c-name" style="font-size:12.5px;">${dl}</div><div class="c-meta"><span class="c-dot" style="background:${ss.color};width:7px;height:7px;border-radius:50%;display:inline-block;"></span> ${docEsc(ss.name)}</div></div></div>`;
     }).join('');
   }
+  html+=`<button class="doc-linkbtn" onclick="docRenderRecordatorio('${id}','${(origin==='hoy'?'hoy':'pacientes')}')"><i class="ti ti-bell"></i> Copiar recordatorio</button>`;
   html+=`<button class="doc-primary" onclick="docRenderAgendar('${id}')"><i class="ti ti-calendar-plus"></i> Agendar terapia</button></div>`;
   cont.innerHTML=html;
 }
 
-// ---- Editar paciente ----
+// ---- Recordatorio (copiar mensaje en cualquier momento) ----
+let docRecState={};
+async function docRenderRecordatorio(pid, origin){
+  const cont=document.getElementById('doc-home-content'); if(!cont) return;
+  cont.innerHTML='<div class="doc-wrap"><div class="doc-loading">…</div></div>';
+  const pts=await docLoadPatients();
+  const p=pts.find(x=>x.id===pid); if(!p){ docRenderPacientes(); return; }
+  const back=(origin==='hoy'?'hoy':'pacientes');
+  const today=docYMD(new Date());
+  let sess=[];
+  try{ const { data }=await sb.from('therapy_sessions').select('session_date,hour,location_id').eq('patient_id',pid).gte('session_date',today).eq('status','scheduled').order('session_date').order('hour'); sess=data||[]; }catch(e){}
+  const name=docEsc(((p.first_name||'')+' '+(p.last_name||'')).trim());
+  const head=`<div class="doc-top"><button class="doc-iconbtn" onclick="docRenderPatient('${pid}','${back}')"><i class="ti ti-arrow-left"></i></button><div style="font-size:16px;font-weight:600;">Recordatorio</div></div>`;
+  if(!sess.length){
+    cont.innerHTML=`<div class="doc-wrap">${head}<div class="doc-info"><div style="padding:16px 2px;font-size:12.5px;color:#9A9183;">${name} no tiene terapias pendientes. Agéndalas primero para poder enviar un recordatorio.</div></div></div>`;
+    return;
+  }
+  const msg=docMsgRecordatorio(p, sess);
+  docRecState={ pid, msg };
+  cont.innerHTML=`<div class="doc-wrap">${head}
+    <div style="display:flex;align-items:center;gap:11px;margin-bottom:14px;">
+      <div style="width:42px;height:42px;border-radius:50%;background:#F0ECE2;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:600;">${docEsc(docInitials(p))}</div>
+      <div><div style="font-size:15px;font-weight:600;">${name}</div><div style="font-size:10.5px;color:#9A9183;margin-top:2px;">${sess.length} terapia${sess.length===1?'':'s'} pendiente${sess.length===1?'':'s'}${p.freq_per_week?' · '+p.freq_per_week+'×/sem':''}</div></div>
+    </div>
+    <div style="text-align:left;background:#fff;border:1px solid #E6E0D4;border-radius:14px;padding:13px 14px;margin-bottom:14px;font-size:12.5px;color:#3A352E;line-height:1.6;white-space:pre-wrap;">${docEsc(msg)}</div>
+    <div onclick="docCopy(docRecState.msg,'Mensaje copiado ✓')" style="display:flex;align-items:center;justify-content:center;gap:8px;background:#E1F3E9;border:1px solid #B5E0C8;border-radius:12px;padding:13px;font-size:13px;color:#0B5C2E;font-weight:500;cursor:pointer;"><i class="ti ti-brand-whatsapp" style="font-size:19px;color:#0B7A3E;"></i> Copiar para WhatsApp</div></div>`;
+}
+function docMsgRecordatorio(p, sess){
+  const name=(p.first_name||'').trim()||'';
+  const sede=docSede(p.location_id).name;
+  const next=sess.slice(0,3).map(s=>`📅 ${docCap(docDateShort(s.session_date))} · ${docHourLbl(s.hour)}`);
+  const freqLine=p.freq_per_week?`Tu terapia es de ${docFreqWord(p.freq_per_week)}. `:'';
+  const n=sess.length;
+  return `Hola ${name} 👋 Te recuerdo tus terapias con Andrés.\n\n${freqLine}Te quedan ${n} terapia${n===1?'':'s'} pendiente${n===1?'':'s'}.\n\nTus próximas:\n${next.join('\n')}\n\n📍 Sede ${sede}. ¡Te espero!`;
+}
 let docEditState={};
 async function docRenderEditar(pid, origin){
   const cont=document.getElementById('doc-home-content'); if(!cont) return;
@@ -29103,7 +29138,7 @@ function docMsgConfirm(p){
   const name=(p.first_name||'').trim()||'';
   if(st.mode==='indefinite'){
     const r=st.remType==='weeks'?`${st.remVal} semanas`:`${st.remVal} terapias`;
-    return `¡Listo, ${name}! Quedaron reservadas tus terapias 🙌\n\n📅 ${docDowsFull(st.dows)} · ${docHourLbl(st.hour)}\n📍 Sede ${sede}\n🗓 Empezamos el ${docDateFull(st.dates[0])} y seguimos de forma continua (60 min c/u). Reviso tus avances a las ${r}.\n\nSi necesitas mover alguna, me avisas con tiempo. ¡Nos vemos!`;
+    return `¡Listo, ${name}! Quedaron reservadas tus terapias 🙌\n\n📅 ${docDowsFull(st.dows)} · ${docHourLbl(st.hour)}\n📍 Sede ${sede}\n🗓 Empezamos el ${docDateFull(st.dates[0])} y seguimos de forma continua. Son ${st.total} terapias en este primer bloque (60 min c/u). Reviso tus avances a las ${r}.\n\nSi necesitas mover alguna, me avisas con tiempo. ¡Nos vemos!`;
   }
   return `¡Listo, ${name}! Quedaron reservadas tus terapias 🙌\n\n📅 ${docDowsFull(st.dows)} · ${docHourLbl(st.hour)}\n📍 Sede ${sede}\n🗓 Tu primera terapia es el ${docDateFull(st.dates[0])}. En total ${st.total} sesiones (60 min c/u), hasta el ${docDateFull(st.dates[st.dates.length-1])}.\n\nSi necesitas mover alguna, me avisas con tiempo. ¡Nos vemos!`;
 }
