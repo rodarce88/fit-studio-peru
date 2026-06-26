@@ -29275,6 +29275,28 @@ function docWeekRangeLabel(ws){
 }
 
 // Carga los slots ocupados de Andrés (sesiones + bloqueos) entre dos fechas
+// Slots donde Andrés dicta clase en FIT (en vivo), para un rango de fechas
+async function docLoadAndresClasses(startYMD, endYMD){
+  const out=[];
+  if(!docState.instructorId) return out;
+  try{
+    const { data:scheds }=await sb.from('instructor_schedules').select('location_id,day_of_week,hour,effective_from,effective_to').eq('instructor_id',docState.instructorId).eq('is_active',true);
+    const { data:cses }=await sb.from('class_sessions').select('session_date,hour,location_id,instructor_id,is_cancelled').gte('session_date',startYMD).lte('session_date',endYMD);
+    const map={};
+    let d=new Date(startYMD+'T12:00:00'); let guard=0;
+    while(docYMD(d)<=endYMD && guard<800){
+      const ds=docYMD(d), dow=d.getDay();
+      (scheds||[]).forEach(s=>{ if(s.day_of_week!==dow) return; if(s.effective_from && ds<s.effective_from) return; if(s.effective_to && ds>s.effective_to) return; map[ds+'|'+s.hour+'|'+s.location_id]={ds, hour:s.hour, loc:s.location_id}; });
+      d.setDate(d.getDate()+1); guard++;
+    }
+    (cses||[]).forEach(cs=>{ const key=cs.session_date+'|'+cs.hour+'|'+cs.location_id;
+      if(cs.is_cancelled){ delete map[key]; return; }
+      if(cs.instructor_id===docState.instructorId){ map[key]={ds:cs.session_date, hour:cs.hour, loc:cs.location_id}; return; }
+      if(cs.instructor_id){ delete map[key]; return; }
+    });
+    return Object.values(map);
+  }catch(e){ return out; }
+}
 async function docLoadOccupied(startYMD, endYMD){
   const set=new Set(), labels={};
   try{
@@ -29290,11 +29312,16 @@ async function docLoadOccupied(startYMD, endYMD){
     while(docYMD(d)<=end && guard<500){
       const ds=docYMD(d), dow=d.getDay();
       blks.forEach(b=>{
+        if(b.block_type==='pilates') return; // el Pilates lo da la clase real de FIT (abajo)
         const hit = b.recurrence==='once' ? (b.block_date===ds) : (b.dow===dow && (!b.start_date||b.start_date<=ds) && (!b.end_date||b.end_date>=ds));
-        if(hit){ const k=ds+'|'+b.hour; set.add(k); labels[k]=(b.block_type==='pilates'?'Pilates':(b.reason||'Bloqueado')); }
+        if(hit){ const k=ds+'|'+b.hour; set.add(k); labels[k]=(b.reason||'Bloqueado'); }
       });
       d.setDate(d.getDate()+1); guard++;
     }
+  }catch(e){}
+  try{
+    const classes=await docLoadAndresClasses(startYMD,endYMD);
+    classes.forEach(c=>{ const k=c.ds+'|'+c.hour; if(!set.has(k)){ set.add(k); labels[k]='Clase de Pilates · '+docSede(c.loc).name; } });
   }catch(e){}
   return { set, labels };
 }
@@ -29681,17 +29708,8 @@ async function docRenderAgendaMaestra(){
   // Clases que dicta Andrés en FIT (en vivo: refleja cambios de su horario en FIT)
   if(docState.instructorId){
     try{
-      const dayList=[]; for(let di=0; di<7; di++){ const ds=docAddDaysYMD(ws,di); dayList.push({di, ds, dow:new Date(ds+'T12:00:00').getDay()}); }
-      const classMap={};
-      const { data:scheds }=await sb.from('instructor_schedules').select('location_id,day_of_week,hour,effective_from,effective_to').eq('instructor_id',docState.instructorId).eq('is_active',true);
-      (scheds||[]).forEach(s=>{ const day=dayList.find(d=>d.dow===s.day_of_week); if(!day) return; if(s.effective_from && day.ds<s.effective_from) return; if(s.effective_to && day.ds>s.effective_to) return; classMap[day.ds+'|'+s.hour+'|'+s.location_id]={di:day.di, hour:s.hour, loc:s.location_id}; });
-      const { data:cses }=await sb.from('class_sessions').select('session_date,hour,location_id,instructor_id,is_cancelled').gte('session_date',ws).lte('session_date',we);
-      (cses||[]).forEach(cs=>{ const key=cs.session_date+'|'+cs.hour+'|'+cs.location_id; const day=dayList.find(d=>d.ds===cs.session_date); if(!day) return;
-        if(cs.is_cancelled){ delete classMap[key]; return; }
-        if(cs.instructor_id===docState.instructorId){ classMap[key]={di:day.di, hour:cs.hour, loc:cs.location_id}; return; }
-        if(cs.instructor_id){ delete classMap[key]; return; } /* otro profe; null = sin override → respeta base */
-      });
-      Object.values(classMap).forEach(c=>{ const k=c.di+'|'+c.hour; (cells[k]=cells[k]||[]).push({type:'class', sede:docSede(c.loc)}); });
+      const classes=await docLoadAndresClasses(ws, we);
+      classes.forEach(c=>{ const di=Math.round((new Date(c.ds+'T12:00:00')-new Date(ws+'T12:00:00'))/86400000); const k=di+'|'+c.hour; (cells[k]=cells[k]||[]).push({type:'class', sede:docSede(c.loc)}); });
     }catch(e){}
   }
   cont.innerHTML=docAgmHtml(cells);
