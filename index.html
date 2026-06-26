@@ -3617,7 +3617,7 @@ body:not(.doctor-mode) .doc-bottomnav{ display:none; }
 #view-doctor-home .agm-hcell span{ font-size:8px; }
 #view-doctor-home .agm-cell{ min-height:42px; border-top:1px solid #EFEAE0; border-left:1px solid #EFEAE0; padding:3px; }
 #view-doctor-home .agm-free{ background:#FCFBF8; cursor:pointer; }
-#view-doctor-home .agm-ev{ background:#F4F2FB; border-radius:5px; padding:3px 5px; font-size:10px; color:#2A2433; line-height:1.15; cursor:pointer; margin-bottom:2px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+#view-doctor-home .agm-ev{ background:#F4F2FB; border-radius:5px; padding:4px 6px; font-size:11.5px; color:#2A2433; line-height:1.2; cursor:pointer; margin-bottom:2px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 #view-doctor-home .agm-blk{ background:#F1EFE8; border-left:3px solid #C9C2B4; border-radius:5px; padding:3px 5px; font-size:9.5px; color:#7A736A; line-height:1.15; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 #view-doctor-home .agm-ev[draggable="true"]{ cursor:grab; }
 #view-doctor-home .agm-cls{ background:repeating-linear-gradient(45deg,#FAF8F3,#FAF8F3 4px,#EFEBE1 4px,#EFEBE1 8px); border-radius:5px; padding:3px 5px; font-size:9.5px; color:#6E665A; font-style:italic; line-height:1.15; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin-bottom:2px; display:flex; align-items:center; gap:3px; }
@@ -28325,16 +28325,17 @@ function docFirstName(){
   const n = (r && ((r.doctor&&r.doctor.full_name) || (r.instructor&&r.instructor.first_name) || (r.coordinator&&r.coordinator.full_name))) || 'Andrés';
   return (n||'').split(' ')[0];
 }
+function docTint(hex,a){ hex=(hex||'#888888').replace('#',''); if(hex.length===3) hex=hex.split('').map(c=>c+c).join(''); const r=parseInt(hex.slice(0,2),16),g=parseInt(hex.slice(2,4),16),b=parseInt(hex.slice(4,6),16); return `rgba(${r},${g},${b},${a})`; }
 function docSede(locId){
   const map = {
-    '11111111-1111-1111-1111-111111111111': {name:'Santa Cruz', color:'#534AB7'},
-    '22222222-2222-2222-2222-222222222222': {name:'Boutique',   color:'#A77F3D'},
-    '33333333-3333-3333-3333-333333333333': {name:'San Antonio',color:'#0E9E70'},
+    '11111111-1111-1111-1111-111111111111': {name:'Santa Cruz', color:'#534AB7', fill:'#EEEDFE', ink:'#3C3489'},
+    '22222222-2222-2222-2222-222222222222': {name:'Boutique',   color:'#A77F3D', fill:'#FAEEDA', ink:'#633806'},
+    '33333333-3333-3333-3333-333333333333': {name:'San Antonio',color:'#0E9E70', fill:'#E1F5EE', ink:'#085041'},
   };
   if (map[locId]) return map[locId];
   const loc = (STATE.locations||[]).find(l=>l.id===locId);
-  if (loc) return { name: loc.name||'—', color: loc.color||'#6A4E9C' };
-  return { name:'—', color:'#C8C0B0' };
+  if (loc){ const c=loc.color||'#6A4E9C'; return { name: loc.name||'—', color: c, fill: docTint(c,.14), ink:'#2A2433' }; }
+  return { name:'—', color:'#C8C0B0', fill:'#F1EFE8', ink:'#5F5E5A' };
 }
 
 async function docInit(){
@@ -29648,7 +29649,7 @@ function docAgmHtml(cells){
       const inner=evs.map(e=>{
         if(e.type==='session'){
           const drag=(docCanDnd() && e.status==='scheduled')?` draggable="true" data-sid="${e.id}" data-d="${dCell}" data-h="${h}"`:'';
-          return `<div class="agm-ev"${drag} style="border-left:3px solid ${e.sede.color};${(e.status==='no_show'||e.status==='to_reschedule')?'opacity:.55;':''}" onclick="docSessionSheet('${e.id}','agenda')">${docEsc(e.name)}</div>`;
+          return `<div class="agm-ev"${drag} style="background:${e.sede.fill};border-left:3px solid ${e.sede.color};color:${e.sede.ink};font-weight:500;${(e.status==='no_show'||e.status==='to_reschedule')?'opacity:.5;':''}" onclick="docSessionSheet('${e.id}','agenda')">${docEsc(e.name)}</div>`;
         }
         if(e.type==='class'){
           return `<div class="agm-cls" style="border-left:3px solid ${e.sede.color};" title="Clase de Pilates · ${docEsc(e.sede.name)}"><i class="ti ti-yoga" style="font-size:10px;"></i> Clase</div>`;
