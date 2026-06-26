@@ -3608,6 +3608,7 @@ body:not(.doctor-mode) .doc-bottomnav{ display:none; }
 #view-doctor-home .doc-fold[open]>summary{ border-bottom:1px solid var(--doc-line); }
 #view-doctor-home .doc-fold[open]>summary i{ transform:rotate(180deg); }
 #view-doctor-home .doc-fold .fold-body{ padding:6px 13px 12px; }
+@keyframes docspin{ to{ transform:rotate(360deg); } }
 #view-doctor-home .agm-wrap{ max-width:1080px; margin:0 auto; padding:0 14px; }
 #view-doctor-home .agm-grid{ display:grid; grid-template-columns:46px repeat(7, minmax(96px,1fr)); min-width:730px; border:1px solid #E6E0D4; border-radius:12px; overflow:hidden; background:#fff; }
 #view-doctor-home .agm-hd{ background:#F3EFE7; padding:6px 2px; text-align:center; font-size:10px; color:#6E665A; border-bottom:1px solid #E6E0D4; border-left:1px solid #EFEAE0; line-height:1.25; }
@@ -29851,7 +29852,9 @@ async function docRenderAgendaMaestra(){
   const cont=document.getElementById('doc-home-content'); if(!cont) return;
   docRenderBottomNav('agenda'); docState.lastMain='agenda';
   if(!docAgmState.weekStart) docAgmState.weekStart=docWeekStart(new Date());
-  cont.innerHTML='<div class="agm-wrap"><div class="doc-loading">Cargando agenda…</div></div>';
+  const hasGrid=!!cont.querySelector('.agm-grid');
+  if(hasGrid){ docAgmShowSaving(); }          // ya hay calendario: lo dejamos y mostramos "Actualizando…"
+  else { cont.innerHTML='<div class="agm-wrap"><div class="doc-loading">Cargando agenda…</div></div>'; }
   const ws=docAgmState.weekStart, we=docAddDaysYMD(ws,6);
   const cells={};
   try{
@@ -29874,8 +29877,17 @@ async function docRenderAgendaMaestra(){
     }catch(e){}
   }
   cont.innerHTML=docAgmHtml(cells);
+  docAgmHideSaving();
   if(docCanDnd()) docAgmAttachDnd();
 }
+function docAgmShowSaving(){
+  if(document.getElementById('doc-agm-saving')) return;
+  const p=document.createElement('div'); p.id='doc-agm-saving';
+  p.style.cssText='position:fixed;left:50%;top:14px;transform:translateX(-50%);z-index:9500;background:#1C1922;color:#fff;border-radius:999px;padding:7px 14px;font-family:Inter,system-ui,sans-serif;font-size:12px;display:flex;align-items:center;gap:8px;box-shadow:0 4px 16px rgba(0,0,0,.18);';
+  p.innerHTML='<span style="width:12px;height:12px;border:2px solid rgba(255,255,255,.35);border-top-color:#fff;border-radius:50%;display:inline-block;animation:docspin .6s linear infinite;"></span> Actualizando…';
+  document.body.appendChild(p);
+}
+function docAgmHideSaving(){ const p=document.getElementById('doc-agm-saving'); if(p) p.remove(); }
 function docAgmHtml(cells){
   const ws=docAgmState.weekStart, today=docYMD(new Date());
   const wsLbl=docCap(new Date(ws+'T12:00:00').toLocaleDateString('es-PE',{day:'numeric',month:'short'}));
