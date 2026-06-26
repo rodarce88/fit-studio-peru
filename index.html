@@ -3608,6 +3608,17 @@ body:not(.doctor-mode) .doc-bottomnav{ display:none; }
 #view-doctor-home .doc-fold[open]>summary{ border-bottom:1px solid var(--doc-line); }
 #view-doctor-home .doc-fold[open]>summary i{ transform:rotate(180deg); }
 #view-doctor-home .doc-fold .fold-body{ padding:6px 13px 12px; }
+#view-doctor-home .agm-wrap{ max-width:1080px; margin:0 auto; padding:0 14px; }
+#view-doctor-home .agm-grid{ display:grid; grid-template-columns:46px repeat(7, minmax(96px,1fr)); min-width:730px; border:1px solid #E6E0D4; border-radius:12px; overflow:hidden; background:#fff; }
+#view-doctor-home .agm-hd{ background:#F3EFE7; padding:6px 2px; text-align:center; font-size:10px; color:#6E665A; border-bottom:1px solid #E6E0D4; border-left:1px solid #EFEAE0; line-height:1.25; }
+#view-doctor-home .agm-hd.today{ background:#1C1922; color:#fff; }
+#view-doctor-home .agm-corner{ background:#F3EFE7; border-bottom:1px solid #E6E0D4; }
+#view-doctor-home .agm-hcell{ background:#FAF8F3; font-size:9.5px; color:#A39B8C; text-align:center; padding:4px 2px; border-top:1px solid #EFEAE0; line-height:1.1; }
+#view-doctor-home .agm-hcell span{ font-size:8px; }
+#view-doctor-home .agm-cell{ min-height:42px; border-top:1px solid #EFEAE0; border-left:1px solid #EFEAE0; padding:3px; }
+#view-doctor-home .agm-free{ background:#FCFBF8; }
+#view-doctor-home .agm-ev{ background:#F4F2FB; border-radius:5px; padding:3px 5px; font-size:10px; color:#2A2433; line-height:1.15; cursor:pointer; margin-bottom:2px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+#view-doctor-home .agm-blk{ background:#F1EFE8; border-left:3px solid #C9C2B4; border-radius:5px; padding:3px 5px; font-size:9.5px; color:#7A736A; line-height:1.15; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 /* selector de rol */
 #doc-role-chooser{ display:none; position:fixed; inset:0; z-index:9999; background:
   radial-gradient(120% 70% at 12% 0%, #FFFFFF 0%, rgba(255,255,255,0) 50%),
@@ -28401,6 +28412,7 @@ function docRenderBottomNav(active){
 }
 function docGoTab(t){
   if (t==='hoy'){ docState.date=docYMD(new Date()); docRenderHoy(); return; }
+  if (t==='agenda'){ docRenderAgendaMaestra(); return; }
   if (t==='pacientes'){ docRenderPacientes(); return; }
   if (t==='nuevo'){ docRenderNuevo(docState.lastMain); return; }
   if (t==='mas'){ docRoleMenu(); return; }
@@ -28592,12 +28604,17 @@ async function docRenderPatient(id, origin){
     fitInner=`<button class="doc-linkbtn" style="margin-top:8px;" onclick="docLinkFit('${p.id}')"><i class="ti ti-link"></i> Enlazar con un alumno de FIT</button>`;
   }
   let html=`<div class="doc-wrap">
-    <div class="doc-top"><button class="doc-iconbtn" onclick="docBackTo('${(origin==='hoy'?'hoy':'pacientes')}')"><i class="ti ti-arrow-left"></i></button><div style="flex:1;"></div><button class="doc-iconbtn" onclick="docRenderEditar('${id}','${(origin==='hoy'?'hoy':'pacientes')}')"><i class="ti ti-pencil"></i></button></div>
+    <div class="doc-top"><button class="doc-iconbtn" onclick="docBackTo('${(origin==='hoy'?'hoy':'pacientes')}')"><i class="ti ti-arrow-left"></i></button><div style="flex:1;"></div></div>
     <div style="display:flex;align-items:center;gap:13px;margin-bottom:10px;">
       <div style="width:54px;height:54px;border-radius:50%;background:#F0ECE2;color:#1C1922;display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:600;">${docEsc(docInitials(p))}</div>
       <div><div style="font-size:18px;font-weight:600;">${name}</div>
       <div style="font-size:11px;color:#9A9183;display:flex;align-items:center;gap:5px;margin-top:2px;"><span class="c-dot" style="background:${sede.color};width:8px;height:8px;border-radius:50%;display:inline-block;"></span>${docEsc(sede.name)} · ${freq}</div></div>
     </div>
+    <details class="doc-fold"><summary><span>Datos de contacto y FIT</span><span style="display:flex;align-items:center;gap:13px;"><i class="ti ti-pencil" onclick="event.preventDefault();event.stopPropagation();docRenderEditar('${id}','${(origin==='hoy'?'hoy':'pacientes')}')" style="font-size:15px;cursor:pointer;color:#6E665A;"></i><i class="ti ti-chevron-down"></i></span></summary><div class="fold-body">
+      <div class="doc-inforow"><span>Teléfono</span><b>${p.phone?`<a href="https://wa.me/${docWa(p.phone)}" target="_blank" style="color:#3E7A52;">${docEsc(p.phone)}</a>`:'—'}</b></div>
+      <div class="doc-inforow"><span>Correo</span><b>${p.email?docEsc(p.email):'—'}</b></div>
+      ${fitInner}
+    </div></details>
     <div class="doc-info" style="margin-bottom:6px;"><div style="display:flex;align-items:center;justify-content:space-between;padding:10px 2px;">
       <div><div style="font-size:11px;color:#9A9183;">Terapias efectivas</div><div style="font-size:22px;font-weight:600;line-height:1.1;">${effTotal}</div></div>
       <div style="font-size:10.5px;color:#9A9183;text-align:right;line-height:1.6;">${effSched} programada${effSched===1?'':'s'}<br>${effDone} asistida${effDone===1?'':'s'}</div>
@@ -28609,11 +28626,6 @@ async function docRenderPatient(id, origin){
     html+=`<div class="doc-sec">Historial de terapias</div>`;
     html+=marked.map(s=>docSessRow(s,_ctx)).join('');
   }
-  html+=`<details class="doc-fold"><summary>Datos de contacto y FIT <i class="ti ti-chevron-down"></i></summary><div class="fold-body">
-      <div class="doc-inforow"><span>Teléfono</span><b>${p.phone?`<a href="https://wa.me/${docWa(p.phone)}" target="_blank" style="color:#3E7A52;">${docEsc(p.phone)}</a>`:'—'}</b></div>
-      <div class="doc-inforow"><span>Correo</span><b>${p.email?docEsc(p.email):'—'}</b></div>
-      ${fitInner}
-    </div></details>`;
   if(p.notes){ html+=`<div class="doc-sec">Notas</div><div class="doc-info"><div style="font-size:12.5px;color:#5A5248;line-height:1.5;padding:9px 0;">${docEsc(p.notes)}</div></div>`; }
   if(plans.length){
     html+=`<div class="doc-sec">Historial de planes</div>`;
@@ -28740,6 +28752,7 @@ async function docDeleteSession(id){
 function docSessReturn(){
   const ctx=docSessCtx;
   if(ctx==='hoy'){ docRenderHoy(); return; }
+  if(ctx==='agenda'){ docRenderAgendaMaestra(); return; }
   if(ctx && ctx.indexOf('pat:')===0){ const parts=ctx.split(':'); docRenderPatient(parts[1], parts[2]||'pacientes'); return; }
   docRenderHoy();
 }
@@ -29392,6 +29405,71 @@ async function docManDone(slots){
     <div onclick="docCopy(docRecState.msg,'Mensaje copiado ✓')" style="display:flex;align-items:center;justify-content:center;gap:8px;background:#E1F3E9;border:1px solid #B5E0C8;border-radius:12px;padding:13px;font-size:13px;color:#0B5C2E;font-weight:500;cursor:pointer;margin-bottom:10px;"><i class="ti ti-brand-whatsapp" style="font-size:19px;color:#0B7A3E;"></i> Copiar para WhatsApp</div>
     <button class="doc-primary" onclick="docRenderPatient('${st.pid}','pacientes')"><i class="ti ti-user"></i> Ir al perfil</button></div>`;
 }
+
+// ============================================
+// MÓDULO DOCTOR — Agenda Maestra (calendario semanal)
+// ============================================
+let docAgmState={ weekStart:null };
+function docWeekStart(ref){ const d=new Date(ref); const diff=(d.getDay()+6)%7; d.setDate(d.getDate()-diff); d.setHours(12,0,0,0); return docYMD(d); }
+async function docRenderAgendaMaestra(){
+  const cont=document.getElementById('doc-home-content'); if(!cont) return;
+  docRenderBottomNav('agenda'); docState.lastMain='agenda';
+  if(!docAgmState.weekStart) docAgmState.weekStart=docWeekStart(new Date());
+  cont.innerHTML='<div class="agm-wrap"><div class="doc-loading">Cargando agenda…</div></div>';
+  const ws=docAgmState.weekStart, we=docAddDaysYMD(ws,6);
+  const cells={};
+  try{
+    const { data:sess }=await sb.from('therapy_sessions').select('id, session_date, hour, status, location_id, therapy_patients(first_name)')
+      .eq('doctor_id',docState.doctorId).gte('session_date',ws).lte('session_date',we).not('status','in','(cancelled,deleted)').order('hour');
+    (sess||[]).forEach(s=>{ const di=Math.round((new Date(s.session_date+'T12:00:00')-new Date(ws+'T12:00:00'))/86400000); const k=di+'|'+s.hour; (cells[k]=cells[k]||[]).push({type:'session', id:s.id, status:s.status, sede:docSede(s.location_id), name:((s.therapy_patients&&s.therapy_patients.first_name)||'Paciente')}); });
+  }catch(e){}
+  try{
+    const { data:bl }=await sb.from('doctor_blocks').select('*').eq('doctor_id',docState.doctorId).eq('is_active',true);
+    const blks=bl||[];
+    for(let di=0; di<7; di++){ const ds=docAddDaysYMD(ws,di), dow=new Date(ds+'T12:00:00').getDay();
+      blks.forEach(b=>{ const hit=b.recurrence==='once'?(b.block_date===ds):(b.dow===dow && (!b.start_date||b.start_date<=ds)&&(!b.end_date||b.end_date>=ds)); if(hit){ const k=di+'|'+b.hour; (cells[k]=cells[k]||[]).push({type:'block', label:(b.block_type==='pilates'?'Pilates':(b.reason||'Bloqueo'))}); } });
+    }
+  }catch(e){}
+  cont.innerHTML=docAgmHtml(cells);
+}
+function docAgmHtml(cells){
+  const ws=docAgmState.weekStart, today=docYMD(new Date());
+  const wsLbl=docCap(new Date(ws+'T12:00:00').toLocaleDateString('es-PE',{day:'numeric',month:'short'}));
+  const weLbl=docCap(new Date(docAddDaysYMD(ws,6)+'T12:00:00').toLocaleDateString('es-PE',{day:'numeric',month:'short'}));
+  let header=`<div class="agm-corner"></div>`;
+  for(let di=0; di<7; di++){ const ds=docAddDaysYMD(ws,di), d=new Date(ds+'T12:00:00'); header+=`<div class="agm-hd${ds===today?' today':''}">${DOC_DOW_SHORT[d.getDay()]}<br><b>${d.getDate()}</b></div>`; }
+  let rows='';
+  for(let h=6; h<=22; h++){
+    rows+=`<div class="agm-hcell">${docHourH(h)}<br><span>${docHourAp(h)}</span></div>`;
+    for(let di=0; di<7; di++){
+      const evs=cells[di+'|'+h]||[];
+      if(!evs.length){ rows+=`<div class="agm-cell agm-free"></div>`; continue; }
+      const inner=evs.map(e=> e.type==='session'
+        ? `<div class="agm-ev" style="border-left:3px solid ${e.sede.color};${(e.status==='no_show'||e.status==='to_reschedule')?'opacity:.55;':''}" onclick="docSessionSheet('${e.id}','agenda')">${docEsc(e.name)}</div>`
+        : `<div class="agm-blk">${docEsc(e.label)}</div>`).join('');
+      rows+=`<div class="agm-cell">${inner}</div>`;
+    }
+  }
+  return `<div class="agm-wrap">
+    <div class="doc-top"><div><div style="font-size:18px;font-weight:600;line-height:1.05;">Agenda Maestra</div><div style="font-size:10.5px;color:#9A9183;">Todas las terapias y horas libres de Andrés</div></div>
+      <button class="doc-rolepill" onclick="docOpenRoleSwitch()"><i class="ti ti-stethoscope" style="font-size:15px;"></i> Doctor <i class="ti ti-chevron-down" style="font-size:13px;opacity:.7;"></i></button></div>
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
+      <button class="doc-iconbtn" onclick="docAgmNav(-7)"><i class="ti ti-chevron-left"></i></button>
+      <div style="flex:1;text-align:center;font-size:13px;font-weight:600;">${wsLbl} – ${weLbl}</div>
+      <button class="doc-iconbtn" onclick="docAgmNav(7)"><i class="ti ti-chevron-right"></i></button>
+      <button class="doc-chip" onclick="docAgmToday()">Hoy</button>
+    </div>
+    <div style="overflow-x:auto;-webkit-overflow-scrolling:touch;"><div class="agm-grid">${header}${rows}</div></div>
+    <div style="display:flex;gap:14px;flex-wrap:wrap;margin-top:12px;font-size:10.5px;color:#6E665A;">
+      <span><span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:#534AB7;vertical-align:middle;"></span> Santa Cruz</span>
+      <span><span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:#A77F3D;vertical-align:middle;"></span> Boutique</span>
+      <span><span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:#0E9E70;vertical-align:middle;"></span> San Antonio</span>
+      <span><span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:#C9C2B4;vertical-align:middle;"></span> Bloqueo</span>
+    </div>
+    <div style="height:14px;"></div></div>`;
+}
+function docAgmNav(d){ docAgmState.weekStart=docAddDaysYMD(docAgmState.weekStart, d); docRenderAgendaMaestra(); }
+function docAgmToday(){ docAgmState.weekStart=docWeekStart(new Date()); docRenderAgendaMaestra(); }
 
 </script>
 
