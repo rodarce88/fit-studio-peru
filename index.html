@@ -3663,6 +3663,11 @@ body:not(.doctor-mode) .doc-bottomnav{ display:none; }
 #view-doctor-home .doc-selcheck{ display:flex; align-items:center; font-size:21px; color:#B8B0A2; padding-right:2px; }
 #view-doctor-home .doc-selrow.on{ background:#FCEBEB !important; border-color:#E7B7B7 !important; }
 #view-doctor-home .doc-selrow.on .doc-selcheck{ color:#A32D2D; }
+#view-doctor-home .doc-paytag{ display:inline-block; font-size:9px; font-weight:600; padding:1px 6px; border-radius:999px; vertical-align:middle; margin-left:3px; }
+#view-doctor-home .doc-paytag.paid{ background:#E1F5EE; color:#0F6E56; }
+#view-doctor-home .doc-paytag.due{ background:#F3F0E9; color:#A39B8C; }
+#view-doctor-home .doc-paychip{ border:1.5px solid #ECE6DA; background:#fff; color:#5A5248; border-radius:999px; padding:7px 13px; font-size:12px; cursor:pointer; font-family:inherit; }
+#view-doctor-home .doc-paychip.on{ border-color:#0F6E56; background:#0F6E56; color:#fff; }
 #view-doctor-home .doc-weekhdr .wk-label{ font-size:11.5px; font-weight:600; color:#6E665A; }
 #view-doctor-home .doc-weekhdr .wk-count{ font-size:10px; font-weight:600; color:#9A9183; background:#F0ECE2; border-radius:999px; padding:1px 8px; }
 #view-doctor-home .doc-info{ background:#fff;border:1px solid #ECE6DA;border-radius:13px;padding:2px 13px; }
@@ -28597,15 +28602,17 @@ async function docRenderPatient(id, origin){
   const pts=await docLoadPatients();
   const p=pts.find(x=>x.id===id);
   if(!p){ cont.innerHTML='<div class="doc-wrap"><div class="doc-empty">No encontrado.</div></div>'; return; }
-  let sess=[], marked=[], deleted=[], effDone=0, effSched=0;
+  let sess=[], marked=[], deleted=[], payments=[], effDone=0, effSched=0;
   try{
     const today=docYMD(new Date());
-    const r1=await sb.from('therapy_sessions').select('id, session_date, hour, location_id, status').eq('patient_id', id).gte('session_date', today).eq('status','scheduled').order('session_date').order('hour').limit(150);
+    const r1=await sb.from('therapy_sessions').select('id, session_date, hour, location_id, status, payment_id').eq('patient_id', id).gte('session_date', today).eq('status','scheduled').order('session_date').order('hour').limit(150);
     sess=r1.data||[];
-    const r2=await sb.from('therapy_sessions').select('id, session_date, hour, location_id, status').eq('patient_id', id).in('status',['done','no_show','to_reschedule']).order('session_date',{ascending:false}).limit(300);
+    const r2=await sb.from('therapy_sessions').select('id, session_date, hour, location_id, status, payment_id').eq('patient_id', id).in('status',['done','no_show','to_reschedule']).order('session_date',{ascending:false}).limit(300);
     marked=r2.data||[];
     const r3=await sb.from('therapy_sessions').select('id, session_date, hour, deleted_at, deleted_by_name, delete_reason').eq('patient_id', id).eq('status','deleted').order('deleted_at',{ascending:false}).limit(200);
     deleted=r3.data||[];
+    const r4=await sb.from('therapy_payments').select('id, method, session_count, subtotal, discount, amount, paid_at, note').eq('patient_id', id).order('paid_at',{ascending:false}).limit(100);
+    payments=r4.data||[];
     const c1=await sb.from('therapy_sessions').select('id',{count:'exact',head:true}).eq('patient_id', id).eq('status','done'); effDone=c1.count||0;
     const c2=await sb.from('therapy_sessions').select('id',{count:'exact',head:true}).eq('patient_id', id).eq('status','scheduled'); effSched=c2.count||0;
   }catch(e){}
@@ -28644,9 +28651,12 @@ async function docRenderPatient(id, origin){
       <div><div style="font-size:11px;color:#9A9183;">Terapias efectivas</div><div style="font-size:22px;font-weight:600;line-height:1.1;">${effTotal}</div></div>
       <div style="font-size:10.5px;color:#9A9183;text-align:right;line-height:1.6;">${effSched} programada${effSched===1?'':'s'}<br>${effDone} asistida${effDone===1?'':'s'}</div>
     </div></div>
-    <div style="display:flex;align-items:center;justify-content:space-between;margin:16px 0 8px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin:16px 0 8px;">
       <div class="doc-sec" style="margin:0;">Próximas terapias</div>
-      ${(!selMode && (sess.length||marked.length))?`<button onclick="docPatSelEnter('${id}','${_bk}')" style="background:none;border:none;color:#A32D2D;font-size:11.5px;font-weight:500;cursor:pointer;display:flex;align-items:center;gap:4px;padding:4px;"><i class="ti ti-trash" style="font-size:14px;"></i> Eliminar citas</button>`:''}
+      ${(!selMode && (sess.length||marked.length))?`<div style="display:flex;gap:6px;">
+        <button onclick="docPatSelEnter('${id}','${_bk}','pay')" style="background:none;border:none;color:#0F6E56;font-size:11.5px;font-weight:500;cursor:pointer;display:flex;align-items:center;gap:4px;padding:4px;"><i class="ti ti-cash" style="font-size:14px;"></i> Registrar pago</button>
+        <button onclick="docPatSelEnter('${id}','${_bk}','delete')" style="background:none;border:none;color:#A32D2D;font-size:11.5px;font-weight:500;cursor:pointer;display:flex;align-items:center;gap:4px;padding:4px;"><i class="ti ti-trash" style="font-size:14px;"></i> Eliminar</button>
+      </div>`:''}
     </div>`;
   if(!sess.length){ html+=`<div class="doc-info"><div style="font-size:12px;color:#9A9183;padding:9px 0;">Sin terapias próximas.</div></div>`; }
   else {
@@ -28677,6 +28687,18 @@ async function docRenderPatient(id, origin){
         <div style="font-size:10.5px;color:#9A9183;margin-top:3px;">Creado ${created} · ${stTag}</div></div></div>`;
     }).join('');
   }
+  if(payments.length){
+    const methodLbl={cash:'Efectivo',yape:'Yape',plin:'Plin',transfer:'Transferencia',pos:'POS',other:'Otro'};
+    const totalPaid=payments.reduce((a,p)=>a+(parseFloat(p.amount)||0),0);
+    const payRows=payments.map(p=>{
+      const when=p.paid_at?docDateShort(p.paid_at.slice(0,10)):'';
+      const disc=(parseFloat(p.discount)||0)>0?` · dscto S/${p.discount}`:'';
+      return `<div class="doc-info" style="margin-bottom:7px;"><div style="display:flex;align-items:center;justify-content:space-between;padding:10px 2px;">
+        <div><div style="font-size:12.5px;font-weight:600;">S/${p.amount} <span style="font-size:10.5px;color:#9A9183;font-weight:400;">· ${methodLbl[p.method]||p.method}</span></div>
+        <div style="font-size:10.5px;color:#9A9183;margin-top:2px;">${p.session_count} terapia${p.session_count===1?'':'s'}${disc} · ${when}</div></div></div></div>`;
+    }).join('');
+    html+=`<details class="doc-fold" style="margin-top:16px;"><summary><span>Pagos registrados · S/${totalPaid}</span><i class="ti ti-chevron-down"></i></summary><div class="fold-body">${payRows}</div></details>`;
+  }
   if(deleted.length){
     const delRows=deleted.map(s=>{
       const d=new Date(s.session_date+'T12:00:00');
@@ -28699,12 +28721,21 @@ async function docRenderPatient(id, origin){
   }
   html+=`</div>`;
   if(selMode){
-    html+=`<div id="doc-selbar" style="position:fixed;left:0;right:0;bottom:0;z-index:9000;background:#fff;border-top:1px solid #E6E0D4;padding:10px 14px;display:flex;align-items:center;gap:9px;max-width:520px;margin:0 auto;box-shadow:0 -4px 18px rgba(0,0,0,.06);">
-      <button onclick="docPatSelAll()" style="background:none;border:1px solid #E6E0D4;border-radius:10px;padding:9px 12px;font-size:12px;color:#5A5248;cursor:pointer;font-family:inherit;">Todas</button>
-      <div style="flex:1;font-size:12px;color:#6E665A;"><b id="doc-selbar-count">0</b> seleccionadas</div>
-      <button onclick="docPatSelExit()" style="background:none;border:none;color:#9A9183;font-size:13px;cursor:pointer;padding:9px;font-family:inherit;">Cancelar</button>
-      <button id="doc-selbar-del" onclick="docPatBulkDelete()" style="background:#A32D2D;border:none;color:#fff;border-radius:10px;padding:9px 14px;font-size:13px;font-weight:500;cursor:pointer;opacity:.4;pointer-events:none;font-family:inherit;display:flex;align-items:center;gap:5px;"><i class="ti ti-trash"></i> Eliminar</button>
-    </div>`;
+    if(docSelAction==='pay'){
+      html+=`<div id="doc-selbar" style="position:fixed;left:0;right:0;bottom:0;z-index:9000;background:#fff;border-top:1px solid #E6E0D4;padding:10px 14px;display:flex;align-items:center;gap:9px;max-width:520px;margin:0 auto;box-shadow:0 -4px 18px rgba(0,0,0,.06);">
+        <button onclick="docPatSelAll()" style="background:none;border:1px solid #E6E0D4;border-radius:10px;padding:9px 12px;font-size:12px;color:#5A5248;cursor:pointer;font-family:inherit;">Todas</button>
+        <div style="flex:1;font-size:12px;color:#6E665A;"><b id="doc-selbar-count">0</b> · <b id="doc-selbar-total">S/0</b></div>
+        <button onclick="docPatSelExit()" style="background:none;border:none;color:#9A9183;font-size:13px;cursor:pointer;padding:9px;font-family:inherit;">Cancelar</button>
+        <button id="doc-selbar-go" onclick="docPayOpen()" style="background:#0F6E56;border:none;color:#fff;border-radius:10px;padding:9px 14px;font-size:13px;font-weight:500;cursor:pointer;opacity:.4;pointer-events:none;font-family:inherit;display:flex;align-items:center;gap:5px;"><i class="ti ti-cash"></i> Cobrar</button>
+      </div>`;
+    } else {
+      html+=`<div id="doc-selbar" style="position:fixed;left:0;right:0;bottom:0;z-index:9000;background:#fff;border-top:1px solid #E6E0D4;padding:10px 14px;display:flex;align-items:center;gap:9px;max-width:520px;margin:0 auto;box-shadow:0 -4px 18px rgba(0,0,0,.06);">
+        <button onclick="docPatSelAll()" style="background:none;border:1px solid #E6E0D4;border-radius:10px;padding:9px 12px;font-size:12px;color:#5A5248;cursor:pointer;font-family:inherit;">Todas</button>
+        <div style="flex:1;font-size:12px;color:#6E665A;"><b id="doc-selbar-count">0</b> seleccionadas</div>
+        <button onclick="docPatSelExit()" style="background:none;border:none;color:#9A9183;font-size:13px;cursor:pointer;padding:9px;font-family:inherit;">Cancelar</button>
+        <button id="doc-selbar-del" onclick="docPatBulkDelete()" style="background:#A32D2D;border:none;color:#fff;border-radius:10px;padding:9px 14px;font-size:13px;font-weight:500;cursor:pointer;opacity:.4;pointer-events:none;font-family:inherit;display:flex;align-items:center;gap:5px;"><i class="ti ti-trash"></i> Eliminar</button>
+      </div>`;
+    }
   }
   cont.innerHTML=html;
   if(selMode) docPatSelUpdateBar();
@@ -28752,10 +28783,21 @@ function docStatusBadge(status){
   const x=m[status]; if(!x) return '';
   return ` <span style="display:inline-block;background:${x[1]};color:${x[0]};font-size:9.5px;font-weight:600;padding:2px 7px;border-radius:999px;vertical-align:middle;">${x[2]}</span>`;
 }
-function docSessRow(s, ctx, selMode){
+function docSessRow(s, ctx, selMode, action){
   const ss=docSede(s.location_id); const d=new Date(s.session_date+'T12:00:00');
   const dl=docCap(d.toLocaleDateString('es-PE',{weekday:'short',day:'numeric',month:'short'}));
+  const paid=!!s.payment_id;
+  const payTag = paid ? `<span class="doc-paytag paid">pagada</span>` : `<span class="doc-paytag due">por pagar</span>`;
   if(selMode){
+    const selectable = (action==='pay') ? !paid : true;
+    if(!selectable){
+      return `<div class="doc-card" style="opacity:.55;">
+        <div class="doc-selcheck" style="color:#9FCBB4;"><i class="ti ti-circle-check"></i></div>
+        <div class="c-time"><div class="c-h" style="font-size:13px;">${docHourH(s.hour)}</div><div class="c-ap">${docHourAp(s.hour)}</div></div>
+        <div class="c-div"></div>
+        <div class="c-body"><div class="c-name" style="font-size:12.5px;">${dl} ${payTag}</div><div class="c-meta"><span class="c-dot" style="background:${ss.color};width:7px;height:7px;border-radius:50%;display:inline-block;"></span> ${docEsc(ss.name)}</div></div>
+      </div>`;
+    }
     const on=docSel.has(s.id);
     return `<div class="doc-card doc-selrow${on?' on':''}" data-sid="${s.id}" style="cursor:pointer;" onclick="docPatToggleSel('${s.id}')">
       <div class="doc-selcheck"><i class="ti ti-${on?'square-check':'square'}"></i></div>
@@ -28767,12 +28809,12 @@ function docSessRow(s, ctx, selMode){
   return `<div class="doc-card" style="cursor:pointer;" onclick="docSessionSheet('${s.id}','${ctx}')">
     <div class="c-time"><div class="c-h" style="font-size:13px;">${docHourH(s.hour)}</div><div class="c-ap">${docHourAp(s.hour)}</div></div>
     <div class="c-div"></div>
-    <div class="c-body"><div class="c-name" style="font-size:12.5px;">${dl}${docStatusBadge(s.status)}</div><div class="c-meta"><span class="c-dot" style="background:${ss.color};width:7px;height:7px;border-radius:50%;display:inline-block;"></span> ${docEsc(ss.name)}</div></div>
+    <div class="c-body"><div class="c-name" style="font-size:12.5px;">${dl}${docStatusBadge(s.status)}</div><div class="c-meta"><span class="c-dot" style="background:${ss.color};width:7px;height:7px;border-radius:50%;display:inline-block;"></span> ${docEsc(ss.name)} ${payTag}</div></div>
     <i class="ti ti-dots-vertical c-chev"></i></div>`;
 }
-// ---- Selección múltiple para eliminar citas ----
-let docSelMode=false; const docSel=new Set(); let docPatSelCtx={id:null, origin:'pacientes'};
-function docPatSelEnter(id, origin){ docSelMode=true; docSel.clear(); docRenderPatient(id, origin); }
+// ---- Selección múltiple (eliminar o cobrar) ----
+let docSelMode=false, docSelAction='delete'; const docSel=new Set(); let docPatSelCtx={id:null, origin:'pacientes'};
+function docPatSelEnter(id, origin, action){ docSelMode=true; docSelAction=action||'delete'; docSel.clear(); docRenderPatient(id, origin); }
 function docPatSelExit(){ docSelMode=false; docSel.clear(); docRenderPatient(docPatSelCtx.id, docPatSelCtx.origin); }
 function docPatSelSetRow(row, on){ if(!row) return; row.classList.toggle('on',on); const ic=row.querySelector('.doc-selcheck i'); if(ic) ic.className='ti ti-'+(on?'square-check':'square'); }
 function docPatToggleSel(id){
@@ -28788,7 +28830,9 @@ function docPatSelAll(){
 }
 function docPatSelUpdateBar(){
   const c=document.getElementById('doc-selbar-count'); if(c) c.textContent=docSel.size;
-  const b=document.getElementById('doc-selbar-del'); if(b){ b.style.opacity=docSel.size?'1':'.4'; b.style.pointerEvents=docSel.size?'auto':'none'; }
+  const t=document.getElementById('doc-selbar-total'); if(t) t.textContent='S/'+(docSel.size*120);
+  const on=docSel.size>0;
+  ['doc-selbar-del','doc-selbar-go'].forEach(idn=>{ const b=document.getElementById(idn); if(b){ b.style.opacity=on?'1':'.4'; b.style.pointerEvents=on?'auto':'none'; } });
 }
 async function docPatBulkDelete(){
   const ids=[...docSel]; if(!ids.length) return;
@@ -28798,6 +28842,62 @@ async function docPatBulkDelete(){
     const { error }=await sb.from('therapy_sessions').update(payload).in('id', ids); if(error) throw error;
     showToast(ids.length+(ids.length===1?' cita eliminada':' citas eliminadas'),'success');
     docSelMode=false; docSel.clear(); docRenderPatient(docPatSelCtx.id, docPatSelCtx.origin);
+  }catch(e){ showToast('Error: '+(e.message||''),'error'); }
+}
+// ---- Cobro ----
+let docPayState=null;
+const DOC_PAY_METHODS=[['cash','Efectivo'],['yape','Yape'],['plin','Plin'],['transfer','Transferencia'],['pos','POS'],['other','Otro']];
+function docPayOpen(){
+  const ids=[...docSel]; if(!ids.length) return;
+  docPayState={ ids, count:ids.length, method:'cash' };
+  docPaySheet();
+}
+function docPaySheet(){
+  const st=docPayState; const sub=st.count*120;
+  const chips=DOC_PAY_METHODS.map(([v,l])=>`<button onclick="docPaySetMethod('${v}')" class="doc-paychip${st.method===v?' on':''}">${docEsc(l)}</button>`).join('');
+  docMountSheet(`
+    <div style="font-size:14px;font-weight:600;color:#1C1922;">Registrar pago</div>
+    <div style="font-size:11px;color:#9A9183;margin-bottom:12px;">${st.count} terapia${st.count===1?'':'s'} · S/120 c/u</div>
+    <div style="background:#fff;border:1px solid #ECE6DA;border-radius:12px;padding:12px 13px;margin-bottom:14px;">
+      <div style="display:flex;justify-content:space-between;font-size:12.5px;color:#5A5248;margin-bottom:8px;">Subtotal <b style="color:#1C1922;">S/${sub}</b></div>
+      <div style="display:flex;justify-content:space-between;align-items:center;font-size:12.5px;color:#5A5248;margin-bottom:8px;">Descuento <span style="display:flex;align-items:center;gap:5px;">S/ <input id="doc-pay-disc" type="number" min="0" max="${sub}" value="0" oninput="docPayRecalc()" style="width:84px;border:1px solid #E6E0D4;border-radius:8px;padding:6px 8px;font-size:12.5px;font-family:inherit;text-align:right;"></span></div>
+      <div style="display:flex;justify-content:space-between;font-size:15px;font-weight:600;color:#1C1922;border-top:1px solid #EFEAE0;padding-top:8px;">Total a cobrar <span id="doc-pay-total">S/${sub}</span></div>
+      <div style="font-size:10.5px;color:#9A9183;text-align:right;margin-top:3px;">Precio por clase: <span id="doc-pay-unit">S/120</span></div>
+    </div>
+    <div style="font-size:11px;color:#9A9183;margin-bottom:7px;">Método de pago</div>
+    <div style="display:flex;flex-wrap:wrap;gap:7px;margin-bottom:16px;">${chips}</div>
+    <button class="doc-primary" onclick="docDoPayment()"><i class="ti ti-cash"></i> Registrar pago</button>
+    <div onclick="docSessClose()" style="text-align:center;padding:11px;font-size:13px;color:#9A9183;cursor:pointer;">Cancelar</div>`);
+}
+function docPaySetMethod(m){ docPayState.method=m; docPaySheet(); }
+function docPayCalc(){
+  const st=docPayState; const sub=st.count*120;
+  let disc=parseFloat((document.getElementById('doc-pay-disc')||{}).value)||0; if(disc<0)disc=0; if(disc>sub)disc=sub;
+  const amount=sub-disc; const unit=st.count?Math.round((amount/st.count)*100)/100:0;
+  return { sub, disc, amount, unit };
+}
+function docPayFmt(n){ return 'S/'+( (n%1) ? n.toFixed(2) : n ); }
+function docPayRecalc(){
+  const r=docPayCalc();
+  const t=document.getElementById('doc-pay-total'); if(t) t.textContent=docPayFmt(r.amount);
+  const u=document.getElementById('doc-pay-unit'); if(u) u.textContent=docPayFmt(r.unit);
+}
+async function docDoPayment(){
+  const st=docPayState; if(!st||!st.ids.length) return;
+  const r=docPayCalc();
+  try{
+    const { data:pay, error }=await sb.from('therapy_payments').insert({
+      doctor_id:docState.doctorId, patient_id:docPatSelCtx.id, method:st.method,
+      session_count:st.count, unit_price:r.unit, subtotal:r.sub, discount:r.disc, amount:r.amount,
+      created_by:(CURRENT_USER&&CURRENT_USER.authUser&&CURRENT_USER.authUser.id)||null,
+      created_by_name:(typeof getCurrentActorLabel==='function'?getCurrentActorLabel():null)
+    }).select().single();
+    if(error) throw error;
+    const { error:e2 }=await sb.from('therapy_sessions').update({ payment_id:pay.id }).in('id', st.ids);
+    if(e2) throw e2;
+    docSessClose(); showToast('✓ Pago registrado · '+docPayFmt(r.amount),'success');
+    docSelMode=false; docSel.clear(); docPayState=null;
+    docRenderPatient(docPatSelCtx.id, docPatSelCtx.origin);
   }catch(e){ showToast('Error: '+(e.message||''),'error'); }
 }
 let docSessCtx=null;
