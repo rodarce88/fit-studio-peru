@@ -28713,7 +28713,7 @@ let docSessCtx=null;
 async function docSessionSheet(id, ctx){
   docSessCtx=ctx;
   let s=null;
-  try{ const { data }=await sb.from('therapy_sessions').select('id,session_date,hour,status,patient_id,therapy_patients(first_name,last_name)').eq('id',id).maybeSingle(); s=data; }catch(e){}
+  try{ const { data }=await sb.from('therapy_sessions').select('id,session_date,hour,status,patient_id,location_id,therapy_patients(first_name,last_name)').eq('id',id).maybeSingle(); s=data; }catch(e){}
   if(!s){ showToast('No se pudo abrir la sesión','error'); return; }
   const nm=s.therapy_patients?(((s.therapy_patients.first_name||'')+' '+(s.therapy_patients.last_name||'')).trim()):'';
   const when=docCap(docDateShort(s.session_date))+' · '+docHourLbl(s.hour);
@@ -28728,6 +28728,7 @@ async function docSessionSheet(id, ctx){
     <div style="font-size:14px;font-weight:600;color:#1C1922;">${docEsc(nm)}</div>
     <div style="font-size:11px;color:#9A9183;margin-bottom:14px;">${when}</div>
     ${s.patient_id?opt('ti-user','#3C3489','Ver perfil',`docSessClose(); docRenderPatient('${s.patient_id}','${profOrigin}')`, false):''}
+    ${s.patient_id?opt('ti-map-pin','#854F0B','Cambiar sede',`docSedeChangeSheet('${id}','${s.patient_id}','${s.location_id||''}','${s.session_date}')`, false):''}
     <div style="height:4px;border-top:1px solid #ECE6DA;margin:6px 0 10px;"></div>
     ${opt('ti-circle-check','#0F6E56','Asistió',`docSetSessionStatus('${id}','done')`, s.status==='done')}
     ${opt('ti-calendar-up','#854F0B','No vino · reagendar',`docSetSessionStatus('${id}','to_reschedule')`, s.status==='to_reschedule')}
@@ -28748,6 +28749,51 @@ function docMountSheet(inner){
   sheet.style.cssText='position:fixed;inset:0;z-index:10000;background:rgba(28,25,34,.42);display:flex;align-items:flex-end;justify-content:center;';
   sheet.innerHTML=`<div style="width:100%;max-width:440px;background:#F7F5F0;border-radius:20px 20px 0 0;padding:16px 16px 22px;font-family:'Inter',system-ui,sans-serif;"><div style="width:38px;height:4px;border-radius:2px;background:#D8D2C6;margin:0 auto 14px;"></div>${inner}</div>`;
   document.body.appendChild(sheet);
+}
+// ---- Cambiar sede de una paciente (solo esta cita / todas) ----
+let docSedeChg=null;
+const DOC_SEDE_IDS=['11111111-1111-1111-1111-111111111111','22222222-2222-2222-2222-222222222222','33333333-3333-3333-3333-333333333333'];
+function docSedeChangeSheet(sessionId, patientId, curLoc, sessionDate){
+  docSedeChg={ sessionId, patientId, curLoc, sessionDate, newLoc:null };
+  const rows=DOC_SEDE_IDS.map(id=>{ const s=docSede(id); const cur=(id===curLoc);
+    return `<div onclick="docSedeChangeScope('${id}')" style="display:flex;align-items:center;gap:11px;padding:13px 14px;border-radius:12px;background:${cur?'#F0ECE2':'#fff'};border:1px solid #ECE6DA;margin-bottom:8px;cursor:pointer;">
+      <span style="width:11px;height:11px;border-radius:50%;background:${s.color};flex:none;"></span>
+      <div style="flex:1;font-size:13.5px;color:#1C1922;">${docEsc(s.name)}${cur?' <span style="color:#9A9183;font-size:11px;">· actual</span>':''}</div>
+      <i class="ti ti-chevron-right" style="font-size:15px;color:#C9C2B4;"></i></div>`;
+  }).join('');
+  docMountSheet(`
+    <div style="font-size:14px;font-weight:600;color:#1C1922;">Cambiar sede</div>
+    <div style="font-size:11px;color:#9A9183;margin-bottom:14px;">¿En qué sede la atenderás?</div>
+    ${rows}
+    <div onclick="docSessionSheet('${docSedeChg.sessionId}','agenda')" style="text-align:center;padding:11px;font-size:13px;color:#9A9183;cursor:pointer;">Atrás</div>`);
+}
+function docSedeChangeScope(newLoc){
+  docSedeChg.newLoc=newLoc; const s=docSede(newLoc);
+  const when=docCap(docDateShort(docSedeChg.sessionDate));
+  const opt=(icon,label,sub,onclick)=>`<div onclick="${onclick}" style="display:flex;align-items:flex-start;gap:11px;padding:13px 14px;border-radius:12px;background:#fff;border:1px solid #ECE6DA;margin-bottom:8px;cursor:pointer;"><i class="ti ${icon}" style="font-size:19px;color:#1C1922;margin-top:1px;"></i><div style="flex:1;"><div style="font-size:13.5px;color:#1C1922;">${label}</div><div style="font-size:10.5px;color:#9A9183;margin-top:2px;">${sub}</div></div></div>`;
+  docMountSheet(`
+    <div style="font-size:14px;font-weight:600;color:#1C1922;">Mover a ${docEsc(s.name)}</div>
+    <div style="font-size:11px;color:#9A9183;margin-bottom:14px;">¿Para cuándo aplica?</div>
+    ${opt('ti-calendar-event','Solo esta cita','Únicamente la del '+when+'. Su sede de siempre no cambia.',`docApplySede('one')`)}
+    ${opt('ti-calendar-repeat','Todas sus citas','Cambia su sede en el perfil y en las próximas terapias.',`docApplySede('all')`)}
+    <div onclick="docSedeChangeSheet('${docSedeChg.sessionId}','${docSedeChg.patientId}','${docSedeChg.curLoc||''}','${docSedeChg.sessionDate}')" style="text-align:center;padding:11px;font-size:13px;color:#9A9183;cursor:pointer;">Atrás</div>`);
+}
+async function docApplySede(scope){
+  const st=docSedeChg; if(!st||!st.newLoc) return;
+  try{
+    if(scope==='one'){
+      const { error }=await sb.from('therapy_sessions').update({ location_id:st.newLoc }).eq('id',st.sessionId);
+      if(error) throw error;
+    } else {
+      const today=docYMD(new Date());
+      const { error:e1 }=await sb.from('therapy_patients').update({ location_id:st.newLoc }).eq('id',st.patientId);
+      if(e1) throw e1;
+      try{ await sb.from('therapy_recurrences').update({ location_id:st.newLoc }).eq('patient_id',st.patientId).eq('is_active',true); }catch(e){}
+      try{ await sb.from('therapy_sessions').update({ location_id:st.newLoc }).eq('patient_id',st.patientId).gte('session_date',today).in('status',['scheduled','to_reschedule']); }catch(e){}
+      docCache.patients=null;
+    }
+    docSessClose(); showToast('✓ Sede actualizada','success'); docRenderAgendaMaestra();
+  }catch(e){ showToast('Error: '+(e.message||''),'error'); }
 }
 // ---- Tocar un slot libre: agendar o bloquear ----
 let docSlotState=null;
@@ -28889,21 +28935,19 @@ function docEditSetSede(id){
 }
 async function docUpdatePatient(pid){
   const first=(document.getElementById('ep-first').value||'').trim();
-  if(!first){ showToast('Falta el nombre','error'); return; }
   const email=(document.getElementById('ep-email').value||'').trim();
   if(email && !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)){ showToast('El correo no es válido','error'); return; }
   const numDigits=(document.getElementById('ep-phone-num')?.value||'').replace(/\D/g,'');
-  if(!numDigits){ showToast('Falta el celular','error'); return; }
-  if(numDigits.length<6 || numDigits.length>15){ showToast('El número de celular no es válido','error'); return; }
+  if(numDigits && (numDigits.length<6 || numDigits.length>15)){ showToast('El número de celular no es válido','error'); return; }
   if(!docEditState.sede){ showToast('Elige una sede','error'); return; }
   const payload={
-    first_name: first,
     last_name: (document.getElementById('ep-last').value||'').trim()||null,
-    phone: readPhoneFieldValue('ep'),
+    phone: numDigits?readPhoneFieldValue('ep'):null,
     email: email||null,
     location_id: docEditState.sede,
     notes: (document.getElementById('ep-notes').value||'').trim()||null
   };
+  if(first) payload.first_name=first; // si lo dejan vacío, no se borra el nombre actual
   try{
     const { error }=await sb.from('therapy_patients').update(payload).eq('id',pid);
     if(error) throw error;
@@ -28988,13 +29032,12 @@ async function docCreatePatient(){
   if(email && !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)){ showToast('El correo no es válido','error'); return; }
   const numDigits=(document.getElementById('np-phone-num')?.value||'').replace(/\D/g,'');
   if(numDigits && (numDigits.length<6 || numDigits.length>15)){ showToast('El número de celular no es válido','error'); return; }
-  if(!numDigits){ showToast('Falta el celular','error'); return; }
   if(!docNuevoState.sede){ showToast('Elige una sede','error'); return; }
   const payload={
     doctor_id: docState.doctorId,
     first_name: first,
     last_name: (document.getElementById('np-last').value||'').trim()||null,
-    phone: readPhoneFieldValue('np'),
+    phone: numDigits?readPhoneFieldValue('np'):null,
     email: email||null,
     location_id: docNuevoState.sede,
     student_id: (docNuevoState.student&&docNuevoState.student.id)||null,
