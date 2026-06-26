@@ -3616,7 +3616,7 @@ body:not(.doctor-mode) .doc-bottomnav{ display:none; }
 #view-doctor-home .agm-hcell{ background:#FAF8F3; font-size:9.5px; color:#A39B8C; text-align:center; padding:4px 2px; border-top:1px solid #EFEAE0; line-height:1.1; }
 #view-doctor-home .agm-hcell span{ font-size:8px; }
 #view-doctor-home .agm-cell{ min-height:42px; border-top:1px solid #EFEAE0; border-left:1px solid #EFEAE0; padding:3px; }
-#view-doctor-home .agm-free{ background:#FCFBF8; }
+#view-doctor-home .agm-free{ background:#FCFBF8; cursor:pointer; }
 #view-doctor-home .agm-ev{ background:#F4F2FB; border-radius:5px; padding:3px 5px; font-size:10px; color:#2A2433; line-height:1.15; cursor:pointer; margin-bottom:2px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 #view-doctor-home .agm-blk{ background:#F1EFE8; border-left:3px solid #C9C2B4; border-radius:5px; padding:3px 5px; font-size:9.5px; color:#7A736A; line-height:1.15; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 /* selector de rol */
@@ -28713,10 +28713,11 @@ let docSessCtx=null;
 async function docSessionSheet(id, ctx){
   docSessCtx=ctx;
   let s=null;
-  try{ const { data }=await sb.from('therapy_sessions').select('id,session_date,hour,status,therapy_patients(first_name,last_name)').eq('id',id).maybeSingle(); s=data; }catch(e){}
+  try{ const { data }=await sb.from('therapy_sessions').select('id,session_date,hour,status,patient_id,therapy_patients(first_name,last_name)').eq('id',id).maybeSingle(); s=data; }catch(e){}
   if(!s){ showToast('No se pudo abrir la sesión','error'); return; }
   const nm=s.therapy_patients?(((s.therapy_patients.first_name||'')+' '+(s.therapy_patients.last_name||'')).trim()):'';
   const when=docCap(docDateShort(s.session_date))+' · '+docHourLbl(s.hour);
+  const profOrigin=(ctx==='hoy')?'hoy':'pacientes';
   const opt=(icon,color,label,onclick,active)=>`<div onclick="${onclick}" style="display:flex;align-items:center;gap:11px;padding:13px 14px;border-radius:12px;background:${active?'#F0ECE2':'#fff'};border:1px solid #ECE6DA;margin-bottom:8px;cursor:pointer;"><i class="ti ${icon}" style="font-size:19px;color:${color};"></i><div style="flex:1;font-size:13.5px;color:#1C1922;">${label}</div>${active?'<i class="ti ti-check" style="font-size:16px;color:#1C1922;"></i>':''}</div>`;
   const sheet=document.createElement('div');
   sheet.id='doc-sess-ov';
@@ -28726,6 +28727,8 @@ async function docSessionSheet(id, ctx){
     <div style="width:38px;height:4px;border-radius:2px;background:#D8D2C6;margin:0 auto 14px;"></div>
     <div style="font-size:14px;font-weight:600;color:#1C1922;">${docEsc(nm)}</div>
     <div style="font-size:11px;color:#9A9183;margin-bottom:14px;">${when}</div>
+    ${s.patient_id?opt('ti-user','#3C3489','Ver perfil',`docSessClose(); docRenderPatient('${s.patient_id}','${profOrigin}')`, false):''}
+    <div style="height:4px;border-top:1px solid #ECE6DA;margin:6px 0 10px;"></div>
     ${opt('ti-circle-check','#0F6E56','Asistió',`docSetSessionStatus('${id}','done')`, s.status==='done')}
     ${opt('ti-calendar-up','#854F0B','No vino · reagendar',`docSetSessionStatus('${id}','to_reschedule')`, s.status==='to_reschedule')}
     ${opt('ti-circle-x','#A32D2D','No vino · perdida',`docSetSessionStatus('${id}','no_show')`, s.status==='no_show')}
@@ -28737,6 +28740,61 @@ async function docSessionSheet(id, ctx){
   document.body.appendChild(sheet);
 }
 function docSessClose(){ const ov=document.getElementById('doc-sess-ov'); if(ov) ov.remove(); }
+// ---- Overlay genérico tipo sheet ----
+function docMountSheet(inner){
+  docSessClose();
+  const sheet=document.createElement('div'); sheet.id='doc-sess-ov';
+  sheet.setAttribute('onclick','if(event.target===this)docSessClose()');
+  sheet.style.cssText='position:fixed;inset:0;z-index:10000;background:rgba(28,25,34,.42);display:flex;align-items:flex-end;justify-content:center;';
+  sheet.innerHTML=`<div style="width:100%;max-width:440px;background:#F7F5F0;border-radius:20px 20px 0 0;padding:16px 16px 22px;font-family:'Inter',system-ui,sans-serif;"><div style="width:38px;height:4px;border-radius:2px;background:#D8D2C6;margin:0 auto 14px;"></div>${inner}</div>`;
+  document.body.appendChild(sheet);
+}
+// ---- Bloquear un horario (GYM/BICI/Pilates/Otro) ----
+let docBlkState=null;
+const DOC_BLK_TYPES=[['gym','GYM','ti-barbell'],['bici','BICI','ti-bike'],['pilates','Pilates','ti-yoga'],['otro','Otro','ti-lock']];
+function docBlockSheet(ds, hour){ docBlkState={ds, hour, type:null, recur:'weekly'}; docBlkRender(); }
+function docBlkRender(){
+  const st=docBlkState; const when=docCap(docDateShort(st.ds))+' · '+docHourLbl(st.hour);
+  const typeBtns=DOC_BLK_TYPES.map(([v,l,ic])=>`<button onclick="docBlkSet('type','${v}')" style="flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;gap:4px;padding:11px 4px;border-radius:11px;border:1.5px solid ${st.type===v?'#1C1922':'#ECE6DA'};background:${st.type===v?'#1C1922':'#fff'};color:${st.type===v?'#fff':'#1C1922'};cursor:pointer;font-family:inherit;font-size:11px;"><i class="ti ${ic}" style="font-size:18px;"></i>${l}</button>`).join('');
+  const recBtn=(v,l)=>`<button class="${st.recur===v?'on':''}" onclick="docBlkSet('recur','${v}')">${l}</button>`;
+  const ready=!!st.type;
+  docMountSheet(`
+    <div style="font-size:14px;font-weight:600;color:#1C1922;">Bloquear horario</div>
+    <div style="font-size:11px;color:#9A9183;margin-bottom:14px;">${when}</div>
+    <div style="font-size:11px;color:#9A9183;margin-bottom:6px;">¿Qué bloqueas?</div>
+    <div style="display:flex;gap:7px;margin-bottom:14px;">${typeBtns}</div>
+    <div style="font-size:11px;color:#9A9183;margin-bottom:6px;">¿Cada cuánto?</div>
+    <div class="doc-segsm" style="margin-bottom:16px;">${recBtn('once','Solo este día')}${recBtn('weekly','Cada semana')}</div>
+    <button class="doc-primary" ${ready?'':'disabled style="opacity:.4;pointer-events:none;"'} onclick="docBlkConfirm()"><i class="ti ti-lock"></i> Bloquear</button>
+    <div onclick="docSessClose()" style="text-align:center;padding:11px;font-size:13px;color:#9A9183;cursor:pointer;">Cancelar</div>`);
+}
+function docBlkSet(k,v){ docBlkState[k]=v; docBlkRender(); }
+async function docBlkConfirm(){
+  const st=docBlkState; if(!st.type) return;
+  let block_type='personal', reason=null;
+  if(st.type==='gym'){ reason='GYM'; }
+  else if(st.type==='bici'){ reason='BICI'; }
+  else if(st.type==='pilates'){ block_type='pilates'; reason='Pilates'; }
+  else { reason=(prompt('¿Qué bloqueas? (ej. Profesorado)')||'').trim()||'Bloqueo'; }
+  const payload={ doctor_id:docState.doctorId, block_type, reason, recurrence:st.recur, hour:st.hour, is_active:true };
+  if(st.recur==='once'){ payload.block_date=st.ds; }
+  else { payload.dow=new Date(st.ds+'T12:00:00').getDay(); payload.start_date=st.ds; }
+  try{ const { error }=await sb.from('doctor_blocks').insert(payload); if(error) throw error; docSessClose(); showToast('✓ Bloqueado','success'); docRenderAgendaMaestra(); }
+  catch(e){ showToast('Error: '+(e.message||''),'error'); }
+}
+// ---- Quitar un bloqueo ----
+function docBlockRemoveSheet(id, label){
+  docMountSheet(`
+    <div style="font-size:14px;font-weight:600;color:#1C1922;">${docEsc(label||'Bloqueo')}</div>
+    <div style="font-size:11px;color:#9A9183;margin-bottom:14px;">Bloqueo en la agenda de Andrés</div>
+    <div onclick="docBlkRemove('${id}')" style="display:flex;align-items:center;gap:11px;padding:13px 14px;border-radius:12px;background:#fff;border:1px solid #ECE6DA;margin-bottom:8px;cursor:pointer;"><i class="ti ti-lock-open" style="font-size:19px;color:#A32D2D;"></i><div style="flex:1;font-size:13.5px;color:#1C1922;">Quitar bloqueo</div></div>
+    <div style="font-size:10px;color:#A8A092;margin:2px 2px 10px;">Si es "cada semana", se quita en todas las semanas.</div>
+    <div onclick="docSessClose()" style="text-align:center;padding:11px;font-size:13px;color:#9A9183;cursor:pointer;">Cerrar</div>`);
+}
+async function docBlkRemove(id){
+  try{ const { error }=await sb.from('doctor_blocks').update({ is_active:false }).eq('id',id); if(error) throw error; docSessClose(); showToast('Bloqueo quitado','success'); docRenderAgendaMaestra(); }
+  catch(e){ showToast('Error: '+(e.message||''),'error'); }
+}
 async function docSetSessionStatus(id, status){
   try{ const { error }=await sb.from('therapy_sessions').update({ status }).eq('id',id); if(error) throw error; docSessClose(); showToast('✓ Actualizada','success'); docSessReturn(); }
   catch(e){ showToast('Error: '+(e.message||''),'error'); }
@@ -29427,7 +29485,7 @@ async function docRenderAgendaMaestra(){
     const { data:bl }=await sb.from('doctor_blocks').select('*').eq('doctor_id',docState.doctorId).eq('is_active',true);
     const blks=bl||[];
     for(let di=0; di<7; di++){ const ds=docAddDaysYMD(ws,di), dow=new Date(ds+'T12:00:00').getDay();
-      blks.forEach(b=>{ const hit=b.recurrence==='once'?(b.block_date===ds):(b.dow===dow && (!b.start_date||b.start_date<=ds)&&(!b.end_date||b.end_date>=ds)); if(hit){ const k=di+'|'+b.hour; (cells[k]=cells[k]||[]).push({type:'block', label:(b.block_type==='pilates'?'Pilates':(b.reason||'Bloqueo'))}); } });
+      blks.forEach(b=>{ const hit=b.recurrence==='once'?(b.block_date===ds):(b.dow===dow && (!b.start_date||b.start_date<=ds)&&(!b.end_date||b.end_date>=ds)); if(hit){ const k=di+'|'+b.hour; (cells[k]=cells[k]||[]).push({type:'block', id:b.id, label:(b.block_type==='pilates'?'Pilates':(b.reason||'Bloqueo'))}); } });
     }
   }catch(e){}
   cont.innerHTML=docAgmHtml(cells);
@@ -29443,10 +29501,10 @@ function docAgmHtml(cells){
     rows+=`<div class="agm-hcell">${docHourH(h)}<br><span>${docHourAp(h)}</span></div>`;
     for(let di=0; di<7; di++){
       const evs=cells[di+'|'+h]||[];
-      if(!evs.length){ rows+=`<div class="agm-cell agm-free"></div>`; continue; }
+      if(!evs.length){ rows+=`<div class="agm-cell agm-free" onclick="docBlockSheet('${docAddDaysYMD(ws,di)}',${h})"></div>`; continue; }
       const inner=evs.map(e=> e.type==='session'
         ? `<div class="agm-ev" style="border-left:3px solid ${e.sede.color};${(e.status==='no_show'||e.status==='to_reschedule')?'opacity:.55;':''}" onclick="docSessionSheet('${e.id}','agenda')">${docEsc(e.name)}</div>`
-        : `<div class="agm-blk">${docEsc(e.label)}</div>`).join('');
+        : `<div class="agm-blk" onclick="docBlockRemoveSheet('${e.id}','${docEsc((e.label||'').replace(/'/g,''))}')">${docEsc(e.label)}</div>`).join('');
       rows+=`<div class="agm-cell">${inner}</div>`;
     }
   }
