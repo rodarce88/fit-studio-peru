@@ -3620,6 +3620,7 @@ body:not(.doctor-mode) .doc-bottomnav{ display:none; }
 #view-doctor-home .agm-ev{ background:#F4F2FB; border-radius:5px; padding:3px 5px; font-size:10px; color:#2A2433; line-height:1.15; cursor:pointer; margin-bottom:2px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 #view-doctor-home .agm-blk{ background:#F1EFE8; border-left:3px solid #C9C2B4; border-radius:5px; padding:3px 5px; font-size:9.5px; color:#7A736A; line-height:1.15; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 #view-doctor-home .agm-ev[draggable="true"]{ cursor:grab; }
+#view-doctor-home .agm-cls{ background:repeating-linear-gradient(45deg,#FAF8F3,#FAF8F3 4px,#EFEBE1 4px,#EFEBE1 8px); border-radius:5px; padding:3px 5px; font-size:9.5px; color:#6E665A; font-style:italic; line-height:1.15; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin-bottom:2px; display:flex; align-items:center; gap:3px; }
 #view-doctor-home .agm-ev[draggable="true"]:active{ cursor:grabbing; }
 #view-doctor-home .agm-ev.dragging{ opacity:.35; }
 #view-doctor-home .agm-cell.drop-ok{ background:#E3F4EA !important; box-shadow:inset 0 0 0 2px #6FC295; }
@@ -28343,6 +28344,15 @@ async function docInit(){
   if (!STATE.locations || !STATE.locations.length){
     try { const { data } = await sb.from('locations').select('*'); STATE.locations = data || []; } catch(e){}
   }
+  // Resolver el instructor_id de FIT del doctor (para reflejar sus clases que dicta)
+  if (docState.instructorId===undefined){
+    docState.instructorId=null;
+    try{
+      const { data:doc }=await sb.from('doctors').select('user_id').eq('id',docState.doctorId).maybeSingle();
+      const uid=doc&&doc.user_id;
+      if(uid){ const { data:inst }=await sb.from('instructors').select('id').eq('auth_user_id',uid).eq('is_active',true).maybeSingle(); if(inst) docState.instructorId=inst.id; }
+    }catch(e){}
+  }
 }
 
 // ---- Selector de rol ----
@@ -29600,9 +29610,25 @@ async function docRenderAgendaMaestra(){
     const { data:bl }=await sb.from('doctor_blocks').select('*').eq('doctor_id',docState.doctorId).eq('is_active',true);
     const blks=bl||[];
     for(let di=0; di<7; di++){ const ds=docAddDaysYMD(ws,di), dow=new Date(ds+'T12:00:00').getDay();
-      blks.forEach(b=>{ const hit=b.recurrence==='once'?(b.block_date===ds):(b.dow===dow && (!b.start_date||b.start_date<=ds)&&(!b.end_date||b.end_date>=ds)); if(hit){ const k=di+'|'+b.hour; (cells[k]=cells[k]||[]).push({type:'block', id:b.id, label:(b.block_type==='pilates'?'Pilates':(b.reason||'Bloqueo'))}); } });
+      blks.forEach(b=>{ if(b.block_type==='pilates') return; /* el pilates lo muestra la clase real de FIT */ const hit=b.recurrence==='once'?(b.block_date===ds):(b.dow===dow && (!b.start_date||b.start_date<=ds)&&(!b.end_date||b.end_date>=ds)); if(hit){ const k=di+'|'+b.hour; (cells[k]=cells[k]||[]).push({type:'block', id:b.id, label:(b.reason||'Bloqueo')}); } });
     }
   }catch(e){}
+  // Clases que dicta Andrés en FIT (en vivo: refleja cambios de su horario en FIT)
+  if(docState.instructorId){
+    try{
+      const dayList=[]; for(let di=0; di<7; di++){ const ds=docAddDaysYMD(ws,di); dayList.push({di, ds, dow:new Date(ds+'T12:00:00').getDay()}); }
+      const classMap={};
+      const { data:scheds }=await sb.from('instructor_schedules').select('location_id,day_of_week,hour,effective_from,effective_to').eq('instructor_id',docState.instructorId).eq('is_active',true);
+      (scheds||[]).forEach(s=>{ const day=dayList.find(d=>d.dow===s.day_of_week); if(!day) return; if(s.effective_from && day.ds<s.effective_from) return; if(s.effective_to && day.ds>s.effective_to) return; classMap[day.ds+'|'+s.hour+'|'+s.location_id]={di:day.di, hour:s.hour, loc:s.location_id}; });
+      const { data:cses }=await sb.from('class_sessions').select('session_date,hour,location_id,instructor_id,is_cancelled').gte('session_date',ws).lte('session_date',we);
+      (cses||[]).forEach(cs=>{ const key=cs.session_date+'|'+cs.hour+'|'+cs.location_id; const day=dayList.find(d=>d.ds===cs.session_date); if(!day) return;
+        if(cs.is_cancelled){ delete classMap[key]; return; }
+        if(cs.instructor_id===docState.instructorId){ classMap[key]={di:day.di, hour:cs.hour, loc:cs.location_id}; return; }
+        if(cs.instructor_id){ delete classMap[key]; return; } /* otro profe; null = sin override → respeta base */
+      });
+      Object.values(classMap).forEach(c=>{ const k=c.di+'|'+c.hour; (cells[k]=cells[k]||[]).push({type:'class', sede:docSede(c.loc)}); });
+    }catch(e){}
+  }
   cont.innerHTML=docAgmHtml(cells);
   if(docCanDnd()) docAgmAttachDnd();
 }
@@ -29624,6 +29650,9 @@ function docAgmHtml(cells){
           const drag=(docCanDnd() && e.status==='scheduled')?` draggable="true" data-sid="${e.id}" data-d="${dCell}" data-h="${h}"`:'';
           return `<div class="agm-ev"${drag} style="border-left:3px solid ${e.sede.color};${(e.status==='no_show'||e.status==='to_reschedule')?'opacity:.55;':''}" onclick="docSessionSheet('${e.id}','agenda')">${docEsc(e.name)}</div>`;
         }
+        if(e.type==='class'){
+          return `<div class="agm-cls" style="border-left:3px solid ${e.sede.color};" title="Clase de Pilates · ${docEsc(e.sede.name)}"><i class="ti ti-yoga" style="font-size:10px;"></i> Clase</div>`;
+        }
         return `<div class="agm-blk" onclick="docBlockRemoveSheet('${e.id}','${docEsc((e.label||'').replace(/'/g,''))}')">${docEsc(e.label)}</div>`;
       }).join('');
       rows+=`<div class="agm-cell" data-d="${dCell}" data-h="${h}">${inner}</div>`;
@@ -29644,6 +29673,7 @@ function docAgmHtml(cells){
       <span><span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:#A77F3D;vertical-align:middle;"></span> Boutique</span>
       <span><span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:#0E9E70;vertical-align:middle;"></span> San Antonio</span>
       <span><span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:#C9C2B4;vertical-align:middle;"></span> Bloqueo</span>
+      <span><span style="display:inline-block;width:11px;height:9px;border-radius:2px;background:repeating-linear-gradient(45deg,#FAF8F3,#FAF8F3 2px,#E2DCCF 2px,#E2DCCF 4px);vertical-align:middle;"></span> Clase que dicta</span>
     </div>
     <div style="height:14px;"></div></div>`;
 }
@@ -29684,8 +29714,9 @@ function docDndDrop(e){
   let warn='';
   if(occupied){
     const blks=[...cell.querySelectorAll('.agm-blk')].map(x=>(x.textContent||'').trim()).filter(Boolean);
+    const cls=cell.querySelectorAll('.agm-cls').length;
     const pats=[...cell.querySelectorAll('.agm-ev')].map(x=>(x.textContent||'').trim()).filter(Boolean);
-    warn = blks.length ? ('A esa hora tienes: '+blks.join(', ')) : (pats.length ? ('Ya hay otra paciente a esa hora: '+pats.join(', ')) : 'Ese horario ya tiene algo asignado.');
+    warn = cls ? 'A esa hora Andrés dicta clase de Pilates.' : (blks.length ? ('A esa hora tienes: '+blks.join(', ')) : (pats.length ? ('Ya hay otra paciente a esa hora: '+pats.join(', ')) : 'Ese horario ya tiene algo asignado.'));
   }
   docDndCleanup();
   if(occupied) docDndConfirm(dnd, toD, toH, warn);
