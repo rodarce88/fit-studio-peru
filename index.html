@@ -3653,6 +3653,9 @@ body:not(.doctor-mode) .doc-bottomnav{ display:none; }
 #view-doctor-home .doc-iconbtn{ width:34px;height:34px;border-radius:10px;border:1px solid var(--doc-line);background:#fff;display:flex;align-items:center;justify-content:center;color:#8C857A;cursor:pointer; }
 #view-doctor-home .doc-iconbtn i{ font-size:18px; }
 #view-doctor-home .doc-sec{ font-size:10px;color:#A39B8C;text-transform:uppercase;letter-spacing:0.06em;margin:16px 0 8px; }
+#view-doctor-home .doc-weekhdr{ display:flex; align-items:center; justify-content:space-between; margin:13px 2px 7px; }
+#view-doctor-home .doc-weekhdr .wk-label{ font-size:11.5px; font-weight:600; color:#6E665A; }
+#view-doctor-home .doc-weekhdr .wk-count{ font-size:10px; font-weight:600; color:#9A9183; background:#F0ECE2; border-radius:999px; padding:1px 8px; }
 #view-doctor-home .doc-info{ background:#fff;border:1px solid #ECE6DA;border-radius:13px;padding:2px 13px; }
 #view-doctor-home .doc-inforow{ display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid #F2EEE5;font-size:12.5px; }
 #view-doctor-home .doc-inforow:last-child{ border-bottom:none; }
@@ -28578,9 +28581,9 @@ async function docRenderPatient(id, origin){
   let sess=[], marked=[], deleted=[], effDone=0, effSched=0;
   try{
     const today=docYMD(new Date());
-    const r1=await sb.from('therapy_sessions').select('id, session_date, hour, location_id, status').eq('patient_id', id).gte('session_date', today).eq('status','scheduled').order('session_date').order('hour').limit(8);
+    const r1=await sb.from('therapy_sessions').select('id, session_date, hour, location_id, status').eq('patient_id', id).gte('session_date', today).eq('status','scheduled').order('session_date').order('hour').limit(150);
     sess=r1.data||[];
-    const r2=await sb.from('therapy_sessions').select('id, session_date, hour, location_id, status').eq('patient_id', id).in('status',['done','no_show','to_reschedule']).order('session_date',{ascending:false}).limit(12);
+    const r2=await sb.from('therapy_sessions').select('id, session_date, hour, location_id, status').eq('patient_id', id).in('status',['done','no_show','to_reschedule']).order('session_date',{ascending:false}).limit(300);
     marked=r2.data||[];
     const r3=await sb.from('therapy_sessions').select('id, session_date, hour, deleted_at, deleted_by_name, delete_reason').eq('patient_id', id).eq('status','deleted').order('deleted_at',{ascending:false}).limit(12);
     deleted=r3.data||[];
@@ -28621,10 +28624,18 @@ async function docRenderPatient(id, origin){
     </div></div>
     <div class="doc-sec">Próximas terapias</div>`;
   if(!sess.length){ html+=`<div class="doc-info"><div style="font-size:12px;color:#9A9183;padding:9px 0;">Sin terapias próximas.</div></div>`; }
-  else { html+=sess.map(s=>docSessRow(s,_ctx)).join(''); }
+  else {
+    const groups=docGroupSessionsByWeek(sess);
+    const vis=groups.slice(0,3), hidden=groups.slice(3);
+    const renderGroup=(g)=>`<div class="doc-weekhdr"><span class="wk-label">${docEsc(docWeekRangeLabel(g.ws))}</span><span class="wk-count">${g.items.length}</span></div>`+g.items.map(s=>docSessRow(s,_ctx)).join('');
+    html+=vis.map(renderGroup).join('');
+    if(hidden.length){
+      const moreCount=hidden.reduce((a,g)=>a+g.items.length,0);
+      html+=`<details class="doc-fold" style="margin-top:10px;"><summary><span>Ver ${moreCount} terapia${moreCount===1?'':'s'} más · ${hidden.length} semana${hidden.length===1?'':'s'}</span><i class="ti ti-chevron-down"></i></summary><div class="fold-body">${hidden.map(renderGroup).join('')}</div></details>`;
+    }
+  }
   if(marked.length){
-    html+=`<div class="doc-sec">Historial de terapias</div>`;
-    html+=marked.map(s=>docSessRow(s,_ctx)).join('');
+    html+=`<details class="doc-fold" style="margin-top:16px;"><summary><span>Historial de terapias · ${marked.length}</span><i class="ti ti-chevron-down"></i></summary><div class="fold-body">${marked.map(s=>docSessRow(s,_ctx)).join('')}</div></details>`;
   }
   if(p.notes){ html+=`<div class="doc-sec">Notas</div><div class="doc-info"><div style="font-size:12.5px;color:#5A5248;line-height:1.5;padding:9px 0;">${docEsc(p.notes)}</div></div>`; }
   if(plans.length){
@@ -29169,6 +29180,19 @@ function docDateFull(ds){ const d=new Date(ds+'T12:00:00'); return d.toLocaleDat
 function docFreqWord(f){ return f===1?'1 vez por semana':`${f} veces por semana`; }
 function docIsPending(p){ if(!p||!p.pending_since) return false; const t=new Date(p.pending_since).getTime(); return (Date.now()-t)>=40*60*1000; }
 function docAddDaysYMD(ds, n){ const d=new Date(ds+'T12:00:00'); d.setDate(d.getDate()+n); return docYMD(d); }
+function docGroupSessionsByWeek(list){
+  const map=new Map();
+  (list||[]).forEach(s=>{ const ws=docWeekStart(new Date(s.session_date+'T12:00:00')); if(!map.has(ws)) map.set(ws,[]); map.get(ws).push(s); });
+  return [...map.entries()].sort((a,b)=>a[0]<b[0]?-1:1).map(([ws,items])=>({ws,items}));
+}
+function docWeekRangeLabel(ws){
+  const dm=(ymd)=>{ const d=new Date(ymd+'T12:00:00'); return d.toLocaleDateString('es-PE',{day:'numeric',month:'short'}).replace(/\./g,''); };
+  const we=docAddDaysYMD(ws,6); const todayWs=docWeekStart(new Date());
+  let pre='';
+  if(ws===todayWs) pre='Esta semana · ';
+  else if(ws===docAddDaysYMD(todayWs,7)) pre='Próxima semana · ';
+  return pre+dm(ws)+' – '+dm(we);
+}
 
 // Carga los slots ocupados de Andrés (sesiones + bloqueos) entre dos fechas
 async function docLoadOccupied(startYMD, endYMD){
