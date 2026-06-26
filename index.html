@@ -3668,6 +3668,14 @@ body:not(.doctor-mode) .doc-bottomnav{ display:none; }
 #view-doctor-home .doc-paytag.due{ background:#F3F0E9; color:#A39B8C; }
 #view-doctor-home .doc-paychip{ border:1.5px solid #ECE6DA; background:#fff; color:#5A5248; border-radius:999px; padding:7px 13px; font-size:12px; cursor:pointer; font-family:inherit; }
 #view-doctor-home .doc-paychip.on{ border-color:#0F6E56; background:#0F6E56; color:#fff; }
+.docpaychip{ border:1.5px solid #ECE6DA; background:#fff; color:#5A5248; border-radius:999px; padding:8px 14px; font-size:12.5px; cursor:pointer; font-family:'Inter',system-ui,sans-serif; transition:border-color .12s, background .12s, color .12s; }
+.docpaychip:hover{ border-color:#C9C2B4; }
+.docpaychip.on{ border-color:#0F6E56; background:#0F6E56; color:#fff; }
+.docpaybtn{ width:100%; border:none; border-radius:12px; padding:14px; font-size:14px; font-weight:600; font-family:'Inter',system-ui,sans-serif; display:flex; align-items:center; justify-content:center; gap:7px; margin-bottom:2px; transition:background .12s, transform .08s; }
+.docpaybtn.off{ background:#E8E2D6; color:#AEA699; cursor:not-allowed; }
+.docpaybtn.ready{ background:#0F6E56; color:#fff; cursor:pointer; }
+.docpaybtn.ready:hover{ background:#0C5C48; }
+.docpaybtn.ready:active{ transform:scale(.99); }
 #view-doctor-home .doc-weekhdr .wk-label{ font-size:11.5px; font-weight:600; color:#6E665A; }
 #view-doctor-home .doc-weekhdr .wk-count{ font-size:10px; font-weight:600; color:#9A9183; background:#F0ECE2; border-radius:999px; padding:1px 8px; }
 #view-doctor-home .doc-info{ background:#fff;border:1px solid #ECE6DA;border-radius:13px;padding:2px 13px; }
@@ -28849,12 +28857,12 @@ let docPayState=null;
 const DOC_PAY_METHODS=[['cash','Efectivo'],['yape','Yape'],['plin','Plin'],['transfer','Transferencia'],['pos','POS'],['other','Otro']];
 function docPayOpen(){
   const ids=[...docSel]; if(!ids.length) return;
-  docPayState={ ids, count:ids.length, method:'cash' };
+  docPayState={ ids, count:ids.length, method:null };
   docPaySheet();
 }
 function docPaySheet(){
   const st=docPayState; const sub=st.count*120;
-  const chips=DOC_PAY_METHODS.map(([v,l])=>`<button onclick="docPaySetMethod('${v}')" class="doc-paychip${st.method===v?' on':''}">${docEsc(l)}</button>`).join('');
+  const chips=DOC_PAY_METHODS.map(([v,l])=>`<button data-m="${v}" onclick="docPaySetMethod('${v}')" class="docpaychip${st.method===v?' on':''}">${docEsc(l)}</button>`).join('');
   docMountSheet(`
     <div style="font-size:14px;font-weight:600;color:#1C1922;">Registrar pago</div>
     <div style="font-size:11px;color:#9A9183;margin-bottom:12px;">${st.count} terapia${st.count===1?'':'s'} · S/120 c/u</div>
@@ -28866,10 +28874,24 @@ function docPaySheet(){
     </div>
     <div style="font-size:11px;color:#9A9183;margin-bottom:7px;">Método de pago</div>
     <div style="display:flex;flex-wrap:wrap;gap:7px;margin-bottom:16px;">${chips}</div>
-    <button class="doc-primary" onclick="docDoPayment()"><i class="ti ti-cash"></i> Registrar pago</button>
-    <div onclick="docSessClose()" style="text-align:center;padding:11px;font-size:13px;color:#9A9183;cursor:pointer;">Cancelar</div>`);
+    ${docPayBtnHtml()}
+    <div onclick="docSessClose()" style="text-align:center;padding:12px;font-size:13px;color:#9A9183;cursor:pointer;">Cancelar</div>`);
 }
-function docPaySetMethod(m){ docPayState.method=m; docPaySheet(); }
+function docPayBtnHtml(){
+  const r=docPayCalc(); const ready=!!docPayState.method;
+  return `<button id="doc-pay-btn" class="docpaybtn ${ready?'ready':'off'}" onclick="docDoPayment()">${ready?('<i class="ti ti-cash"></i> Registrar pago · '+docPayFmt(r.amount)):'Elige un método de pago'}</button>`;
+}
+function docPayUpdateBtn(){
+  const b=document.getElementById('doc-pay-btn'); if(!b) return;
+  const r=docPayCalc(); const ready=!!docPayState.method;
+  b.className='docpaybtn '+(ready?'ready':'off');
+  b.innerHTML= ready ? ('<i class="ti ti-cash"></i> Registrar pago · '+docPayFmt(r.amount)) : 'Elige un método de pago';
+}
+function docPaySetMethod(m){
+  docPayState.method=m;
+  document.querySelectorAll('#doc-sess-ov .docpaychip').forEach(c=>c.classList.toggle('on', c.dataset.m===m));
+  docPayUpdateBtn();
+}
 function docPayCalc(){
   const st=docPayState; const sub=st.count*120;
   let disc=parseFloat((document.getElementById('doc-pay-disc')||{}).value)||0; if(disc<0)disc=0; if(disc>sub)disc=sub;
@@ -28881,9 +28903,11 @@ function docPayRecalc(){
   const r=docPayCalc();
   const t=document.getElementById('doc-pay-total'); if(t) t.textContent=docPayFmt(r.amount);
   const u=document.getElementById('doc-pay-unit'); if(u) u.textContent=docPayFmt(r.unit);
+  docPayUpdateBtn();
 }
 async function docDoPayment(){
   const st=docPayState; if(!st||!st.ids.length) return;
+  if(!st.method){ showToast('Elige un método de pago','error'); return; }
   const r=docPayCalc();
   try{
     const { data:pay, error }=await sb.from('therapy_payments').insert({
