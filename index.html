@@ -3619,6 +3619,11 @@ body:not(.doctor-mode) .doc-bottomnav{ display:none; }
 #view-doctor-home .agm-free{ background:#FCFBF8; cursor:pointer; }
 #view-doctor-home .agm-ev{ background:#F4F2FB; border-radius:5px; padding:3px 5px; font-size:10px; color:#2A2433; line-height:1.15; cursor:pointer; margin-bottom:2px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 #view-doctor-home .agm-blk{ background:#F1EFE8; border-left:3px solid #C9C2B4; border-radius:5px; padding:3px 5px; font-size:9.5px; color:#7A736A; line-height:1.15; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+#view-doctor-home .agm-ev[draggable="true"]{ cursor:grab; }
+#view-doctor-home .agm-ev[draggable="true"]:active{ cursor:grabbing; }
+#view-doctor-home .agm-ev.dragging{ opacity:.35; }
+#view-doctor-home .agm-cell.drop-ok{ background:#E3F4EA !important; box-shadow:inset 0 0 0 2px #6FC295; }
+#view-doctor-home .agm-cell.drop-warn{ background:#FAEEDA !important; box-shadow:inset 0 0 0 2px #E0B879; }
 /* selector de rol */
 #doc-role-chooser{ display:none; position:fixed; inset:0; z-index:9999; background:
   radial-gradient(120% 70% at 12% 0%, #FFFFFF 0%, rgba(255,255,255,0) 50%),
@@ -29599,6 +29604,7 @@ async function docRenderAgendaMaestra(){
     }
   }catch(e){}
   cont.innerHTML=docAgmHtml(cells);
+  if(docCanDnd()) docAgmAttachDnd();
 }
 function docAgmHtml(cells){
   const ws=docAgmState.weekStart, today=docYMD(new Date());
@@ -29610,12 +29616,17 @@ function docAgmHtml(cells){
   for(let h=6; h<=22; h++){
     rows+=`<div class="agm-hcell">${docHourH(h)}<br><span>${docHourAp(h)}</span></div>`;
     for(let di=0; di<7; di++){
+      const dCell=docAddDaysYMD(ws,di);
       const evs=cells[di+'|'+h]||[];
-      if(!evs.length){ rows+=`<div class="agm-cell agm-free" onclick="docSlotSheet('${docAddDaysYMD(ws,di)}',${h})"></div>`; continue; }
-      const inner=evs.map(e=> e.type==='session'
-        ? `<div class="agm-ev" style="border-left:3px solid ${e.sede.color};${(e.status==='no_show'||e.status==='to_reschedule')?'opacity:.55;':''}" onclick="docSessionSheet('${e.id}','agenda')">${docEsc(e.name)}</div>`
-        : `<div class="agm-blk" onclick="docBlockRemoveSheet('${e.id}','${docEsc((e.label||'').replace(/'/g,''))}')">${docEsc(e.label)}</div>`).join('');
-      rows+=`<div class="agm-cell">${inner}</div>`;
+      if(!evs.length){ rows+=`<div class="agm-cell agm-free" data-d="${dCell}" data-h="${h}" onclick="docSlotSheet('${dCell}',${h})"></div>`; continue; }
+      const inner=evs.map(e=>{
+        if(e.type==='session'){
+          const drag=(docCanDnd() && e.status==='scheduled')?` draggable="true" data-sid="${e.id}" data-d="${dCell}" data-h="${h}"`:'';
+          return `<div class="agm-ev"${drag} style="border-left:3px solid ${e.sede.color};${(e.status==='no_show'||e.status==='to_reschedule')?'opacity:.55;':''}" onclick="docSessionSheet('${e.id}','agenda')">${docEsc(e.name)}</div>`;
+        }
+        return `<div class="agm-blk" onclick="docBlockRemoveSheet('${e.id}','${docEsc((e.label||'').replace(/'/g,''))}')">${docEsc(e.label)}</div>`;
+      }).join('');
+      rows+=`<div class="agm-cell" data-d="${dCell}" data-h="${h}">${inner}</div>`;
     }
   }
   return `<div class="agm-wrap">
@@ -29635,6 +29646,85 @@ function docAgmHtml(cells){
       <span><span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:#C9C2B4;vertical-align:middle;"></span> Bloqueo</span>
     </div>
     <div style="height:14px;"></div></div>`;
+}
+// ---- Arrastrar y soltar (solo PC, mueve UNA cita) ----
+function docCanDnd(){ try{ return !!(window.matchMedia && window.matchMedia('(hover:hover) and (pointer:fine)').matches); }catch(_){ return false; } }
+let docDnd=null, docDndPending=null, docDndToastTimer=null;
+function docAgmAttachDnd(){
+  const grid=document.querySelector('#view-doctor-home .agm-grid'); if(!grid) return;
+  grid.addEventListener('dragstart', docDndStart);
+  grid.addEventListener('dragover', docDndOver);
+  grid.addEventListener('dragleave', docDndLeave);
+  grid.addEventListener('drop', docDndDrop);
+  grid.addEventListener('dragend', docDndEnd);
+}
+function docDndStart(e){
+  const chip=e.target.closest('.agm-ev[draggable="true"]'); if(!chip) return;
+  docDnd={ sid:chip.dataset.sid, fromD:chip.dataset.d, fromH:+chip.dataset.h, name:(chip.textContent||'').trim() };
+  chip.classList.add('dragging');
+  try{ e.dataTransfer.effectAllowed='move'; e.dataTransfer.setData('text/plain', chip.dataset.sid); }catch(_){}
+}
+function docDndClearHi(except){ document.querySelectorAll('#view-doctor-home .agm-cell.drop-ok,#view-doctor-home .agm-cell.drop-warn').forEach(c=>{ if(c!==except) c.classList.remove('drop-ok','drop-warn'); }); }
+function docDndOver(e){
+  if(!docDnd) return; const cell=e.target.closest('.agm-cell'); if(!cell) return;
+  e.preventDefault(); try{ e.dataTransfer.dropEffect='move'; }catch(_){}
+  docDndClearHi(cell);
+  const same=(cell.dataset.d===docDnd.fromD && +cell.dataset.h===docDnd.fromH);
+  if(same){ cell.classList.remove('drop-ok','drop-warn'); return; }
+  const occupied=!cell.classList.contains('agm-free');
+  cell.classList.remove(occupied?'drop-ok':'drop-warn');
+  cell.classList.add(occupied?'drop-warn':'drop-ok');
+}
+function docDndLeave(e){ const cell=e.target.closest('.agm-cell'); if(cell) cell.classList.remove('drop-ok','drop-warn'); }
+function docDndDrop(e){
+  if(!docDnd) return; const cell=e.target.closest('.agm-cell'); if(!cell) return; e.preventDefault();
+  const dnd=docDnd; const toD=cell.dataset.d, toH=+cell.dataset.h;
+  if(toD===dnd.fromD && toH===dnd.fromH){ docDndCleanup(); return; }
+  const occupied=!cell.classList.contains('agm-free');
+  let warn='';
+  if(occupied){
+    const blks=[...cell.querySelectorAll('.agm-blk')].map(x=>(x.textContent||'').trim()).filter(Boolean);
+    const pats=[...cell.querySelectorAll('.agm-ev')].map(x=>(x.textContent||'').trim()).filter(Boolean);
+    warn = blks.length ? ('A esa hora tienes: '+blks.join(', ')) : (pats.length ? ('Ya hay otra paciente a esa hora: '+pats.join(', ')) : 'Ese horario ya tiene algo asignado.');
+  }
+  docDndCleanup();
+  if(occupied) docDndConfirm(dnd, toD, toH, warn);
+  else docDndMove(dnd, toD, toH);
+}
+function docDndEnd(){ docDndCleanup(); }
+function docDndCleanup(){ docDndClearHi(null); const dr=document.querySelector('#view-doctor-home .agm-ev.dragging'); if(dr) dr.classList.remove('dragging'); docDnd=null; }
+function docDndConfirm(dnd, toD, toH, warn){
+  docDndPending={ dnd, toD, toH };
+  const when=docCap(docDateShort(toD))+' · '+docHourLbl(toH);
+  docMountSheet(`
+    <div style="font-size:14px;font-weight:600;color:#1C1922;">Mover terapia</div>
+    <div style="font-size:11px;color:#9A9183;margin-bottom:12px;">${docEsc(dnd.name)} → ${when}</div>
+    <div style="display:flex;gap:9px;align-items:flex-start;background:#FAEEDA;border:1px solid #EAD6AE;border-radius:11px;padding:10px 12px;margin-bottom:14px;"><i class="ti ti-alert-triangle" style="font-size:17px;color:#854F0B;margin-top:1px;"></i><div style="font-size:12px;color:#6B4E14;line-height:1.4;">${docEsc(warn)}</div></div>
+    <button class="doc-primary" onclick="docDndConfirmMove()"><i class="ti ti-check"></i> Mover igual</button>
+    <div onclick="docSessClose()" style="text-align:center;padding:11px;font-size:13px;color:#9A9183;cursor:pointer;">Cancelar</div>`);
+}
+function docDndConfirmMove(){ const p=docDndPending; docDndPending=null; docSessClose(); if(p) docDndMove(p.dnd, p.toD, p.toH); }
+async function docDndMove(dnd, toD, toH){
+  try{
+    const { error }=await sb.from('therapy_sessions').update({ session_date:toD, hour:toH }).eq('id',dnd.sid);
+    if(error) throw error;
+    await docRenderAgendaMaestra();
+    docDndToast(dnd.name+' → '+docCap(docDateShort(toD))+' · '+docHourLbl(toH), ()=>docDndUndo(dnd.sid, dnd.fromD, dnd.fromH));
+  }catch(e){ showToast('Error: '+(e.message||''),'error'); }
+}
+async function docDndUndo(sid, d, h){
+  try{ const { error }=await sb.from('therapy_sessions').update({ session_date:d, hour:h }).eq('id',sid); if(error) throw error; await docRenderAgendaMaestra(); showToast('Movimiento deshecho','success'); }
+  catch(e){ showToast('Error: '+(e.message||''),'error'); }
+}
+function docDndToast(msg, undoFn){
+  const old=document.getElementById('doc-dnd-toast'); if(old) old.remove();
+  const t=document.createElement('div'); t.id='doc-dnd-toast';
+  t.style.cssText='position:fixed;left:50%;bottom:26px;transform:translateX(-50%);z-index:10001;background:#1C1922;color:#fff;border-radius:12px;padding:11px 15px;display:flex;align-items:center;gap:16px;font-family:Inter,system-ui,sans-serif;font-size:12.5px;box-shadow:0 8px 26px rgba(0,0,0,.28);max-width:92vw;';
+  t.innerHTML=`<span>${docEsc(msg)}</span><span style="color:#9FD9B9;font-weight:600;cursor:pointer;white-space:nowrap;">Deshacer</span>`;
+  document.body.appendChild(t);
+  t.lastChild.onclick=()=>{ t.remove(); if(docDndToastTimer)clearTimeout(docDndToastTimer); undoFn&&undoFn(); };
+  if(docDndToastTimer)clearTimeout(docDndToastTimer);
+  docDndToastTimer=setTimeout(()=>{ if(t&&t.parentNode)t.remove(); }, 6500);
 }
 function docAgmNav(d){ docAgmState.weekStart=docAddDaysYMD(docAgmState.weekStart, d); docRenderAgendaMaestra(); }
 function docAgmToday(){ docAgmState.weekStart=docWeekStart(new Date()); docRenderAgendaMaestra(); }
