@@ -28749,6 +28749,49 @@ function docMountSheet(inner){
   sheet.innerHTML=`<div style="width:100%;max-width:440px;background:#F7F5F0;border-radius:20px 20px 0 0;padding:16px 16px 22px;font-family:'Inter',system-ui,sans-serif;"><div style="width:38px;height:4px;border-radius:2px;background:#D8D2C6;margin:0 auto 14px;"></div>${inner}</div>`;
   document.body.appendChild(sheet);
 }
+// ---- Tocar un slot libre: agendar o bloquear ----
+let docSlotState=null;
+function docSlotSheet(ds, hour){
+  docSlotState={ds, hour};
+  const when=docCap(docDateShort(ds))+' · '+docHourLbl(hour);
+  const opt=(icon,color,label,onclick)=>`<div onclick="${onclick}" style="display:flex;align-items:center;gap:11px;padding:13px 14px;border-radius:12px;background:#fff;border:1px solid #ECE6DA;margin-bottom:8px;cursor:pointer;"><i class="ti ${icon}" style="font-size:19px;color:${color};"></i><div style="flex:1;font-size:13.5px;color:#1C1922;">${label}</div><i class="ti ti-chevron-right" style="font-size:15px;color:#C9C2B4;"></i></div>`;
+  docMountSheet(`
+    <div style="font-size:14px;font-weight:600;color:#1C1922;">Horario libre</div>
+    <div style="font-size:11px;color:#9A9183;margin-bottom:14px;">${when}</div>
+    ${opt('ti-user-plus','#3C3489','Agendar paciente','docSlotPickPatient()')}
+    ${opt('ti-lock','#854F0B','Bloquear horario','docBlockSheet(docSlotState.ds, docSlotState.hour)')}
+    <div onclick="docSessClose()" style="text-align:center;padding:11px;font-size:13px;color:#9A9183;cursor:pointer;">Cancelar</div>`);
+}
+async function docSlotPickPatient(){
+  const st=docSlotState; const when=docCap(docDateShort(st.ds))+' · '+docHourLbl(st.hour);
+  const pts=await docLoadPatients();
+  docMountSheet(`
+    <div style="font-size:14px;font-weight:600;color:#1C1922;">Agendar a…</div>
+    <div style="font-size:11px;color:#9A9183;margin-bottom:12px;">${when}</div>
+    <div class="doc-search" style="cursor:text;background:#fff;"><i class="ti ti-search" style="font-size:15px;"></i><input id="doc-slot-search" placeholder="Buscar paciente…" oninput="docSlotFilter(this.value)" style="border:none;background:none;outline:none;flex:1;font-size:12.5px;color:#1C1922;font-family:inherit;"></div>
+    <div id="doc-slot-list" style="max-height:46vh;overflow:auto;margin-top:8px;"></div>
+    <div onclick="docSlotSheet(docSlotState.ds, docSlotState.hour)" style="text-align:center;padding:11px;font-size:13px;color:#9A9183;cursor:pointer;">Atrás</div>`);
+  docSlotRenderList(pts);
+}
+function docSlotRenderList(list){
+  const box=document.getElementById('doc-slot-list'); if(!box) return;
+  if(!list.length){ box.innerHTML='<div style="font-size:12px;color:#9A9183;padding:12px 2px;">Sin resultados.</div>'; return; }
+  box.innerHTML=list.map(p=>{ const sede=docSede(p.location_id); const nm=docEsc(((p.first_name||'')+' '+(p.last_name||'')).trim());
+    return `<div onclick="docSlotBook('${p.id}')" style="display:flex;align-items:center;gap:9px;padding:10px 11px;border:1px solid #ECE6DA;border-radius:11px;background:#fff;margin-bottom:6px;cursor:pointer;">
+      <div style="width:30px;height:30px;border-radius:50%;background:#F0ECE2;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;flex:none;">${docEsc(docInitials(p))}</div>
+      <div style="flex:1;min-width:0;"><div style="font-size:12.5px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${nm}</div><div style="font-size:10px;color:#9A9183;"><span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:${sede.color};"></span> ${docEsc(sede.name)}</div></div>
+      <i class="ti ti-plus" style="font-size:16px;color:#3C3489;"></i></div>`;
+  }).join('');
+}
+function docSlotFilter(q){ q=(q||'').toLowerCase().trim(); const list=(docCache.patients||[]).filter(p=>(((p.first_name||'')+' '+(p.last_name||'')).toLowerCase().includes(q))); docSlotRenderList(list); }
+async function docSlotBook(pid){
+  const st=docSlotState; const p=(docCache.patients||[]).find(x=>x.id===pid); if(!p) return;
+  try{
+    const { error }=await sb.from('therapy_sessions').insert({ patient_id:pid, doctor_id:docState.doctorId, location_id:p.location_id, session_date:st.ds, hour:st.hour, duration_min:60, status:'scheduled' });
+    if(error) throw error;
+    docSessClose(); showToast('✓ Terapia agendada','success'); docRenderAgendaMaestra();
+  }catch(e){ showToast('Error: '+(e.message||''),'error'); }
+}
 // ---- Bloquear un horario (GYM/BICI/Pilates/Otro) ----
 let docBlkState=null;
 const DOC_BLK_TYPES=[['gym','GYM','ti-barbell'],['bici','BICI','ti-bike'],['pilates','Pilates','ti-yoga'],['otro','Otro','ti-lock']];
@@ -29501,7 +29544,7 @@ function docAgmHtml(cells){
     rows+=`<div class="agm-hcell">${docHourH(h)}<br><span>${docHourAp(h)}</span></div>`;
     for(let di=0; di<7; di++){
       const evs=cells[di+'|'+h]||[];
-      if(!evs.length){ rows+=`<div class="agm-cell agm-free" onclick="docBlockSheet('${docAddDaysYMD(ws,di)}',${h})"></div>`; continue; }
+      if(!evs.length){ rows+=`<div class="agm-cell agm-free" onclick="docSlotSheet('${docAddDaysYMD(ws,di)}',${h})"></div>`; continue; }
       const inner=evs.map(e=> e.type==='session'
         ? `<div class="agm-ev" style="border-left:3px solid ${e.sede.color};${(e.status==='no_show'||e.status==='to_reschedule')?'opacity:.55;':''}" onclick="docSessionSheet('${e.id}','agenda')">${docEsc(e.name)}</div>`
         : `<div class="agm-blk" onclick="docBlockRemoveSheet('${e.id}','${docEsc((e.label||'').replace(/'/g,''))}')">${docEsc(e.label)}</div>`).join('');
