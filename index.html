@@ -26476,20 +26476,34 @@ async function reconMarkReviewed() {
 }
 
 // -------- Reporte (sub-vista de Reportes) --------
+// Trae TODAS las filas paginando (el cliente Supabase corta en 1000 por defecto)
+async function reconFetchAll(table, columns, applyFilters) {
+  const out = []; let from = 0; const size = 1000;
+  while (true) {
+    let q = sb.from(table).select(columns).range(from, from + size - 1);
+    if (applyFilters) q = applyFilters(q);
+    const { data, error } = await q;
+    if (error) throw error;
+    out.push(...(data || []));
+    if (!data || data.length < size) break;
+    from += size;
+  }
+  return out;
+}
+
 async function reconLoadRows() {
   RECON_STATE.loading = true;
-  const [pkgRes, attRes, logRes] = await Promise.all([
-    sb.from('student_packages')
-      .select('id, student_id, classes_total, status, is_frozen, purchase_date, students(first_name, last_name, location_id)'),
-    sb.from('attendance').select('student_package_id').eq('counts_against_package', true),
-    sb.from('package_reconcile_log').select('package_id')
+  const [pkgs, atts, logs] = await Promise.all([
+    reconFetchAll('student_packages', 'id, student_id, classes_total, status, is_frozen, purchase_date, students(first_name, last_name, location_id)'),
+    reconFetchAll('attendance', 'student_package_id', q => q.eq('counts_against_package', true)),
+    reconFetchAll('package_reconcile_log', 'package_id')
   ]);
   const usedBy = {};
-  (attRes.data || []).forEach(a => { if (a.student_package_id) usedBy[a.student_package_id] = (usedBy[a.student_package_id] || 0) + 1; });
-  const done = new Set((logRes.data || []).map(l => l.package_id).filter(Boolean));
+  atts.forEach(a => { if (a.student_package_id) usedBy[a.student_package_id] = (usedBy[a.student_package_id] || 0) + 1; });
+  const done = new Set(logs.map(l => l.package_id).filter(Boolean));
   const locName = {}; (STATE.locations || []).forEach(l => locName[l.id] = l.name);
 
-  const rows = (pkgRes.data || [])
+  const rows = pkgs
     .filter(p => !p.is_frozen && (!p.status || p.status === 'active'))
     .map(p => ({
       pkgId: p.id, studentId: p.student_id,
