@@ -29227,6 +29227,16 @@ function docGuardRO(){
 }
 async function openTherapyReadonly(navEl){
   if (!CURRENT_USER || CURRENT_USER.role !== 'coordinator') return;
+  // Si esta cuenta TAMBIÉN es doctor (Andrés), entra con ACCESO TOTAL como doctor
+  // (equivale a cambiar de rol). El modo lectura es solo para coordinadores no-doctores.
+  if ((CURRENT_USER.availableRoles || []).includes('doctor')){
+    docState.readonly = false;
+    docState.doctorId = null;
+    docState.instructorId = undefined;
+    document.body.classList.remove('doc-readonly');
+    docActivateRole('doctor');
+    return;
+  }
   let docId = null;
   try {
     const { data } = await sb.from('doctors').select('id').eq('is_active', true).order('created_at').limit(1).maybeSingle();
