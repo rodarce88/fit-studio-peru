@@ -3677,6 +3677,11 @@ body:not(.doctor-mode) .doc-bottomnav{ display:none; }
 #view-doctor-home .doc-skel{ display:grid; grid-template-columns:repeat(7,1fr); gap:6px; padding:8px 0; }
 #view-doctor-home .doc-skelcol{ display:flex; flex-direction:column; gap:6px; }
 #view-doctor-home .doc-skelcell{ height:34px; border-radius:7px; background:linear-gradient(90deg,#EFEBE2 25%,#F6F3EC 50%,#EFEBE2 75%); background-size:200% 100%; animation:docshimmer 1.2s linear infinite; }
+#view-doctor-home .doc-skelbar{ border-radius:8px; margin-bottom:11px; background:linear-gradient(90deg,#EFEBE2 25%,#F6F3EC 50%,#EFEBE2 75%); background-size:200% 100%; animation:docshimmer 1.2s linear infinite; }
+#view-doctor-home .doc-skelwrap{ display:flex; flex-direction:column; padding:2px; }
+#view-doctor-home .doc-fadein{ animation:docfade .38s cubic-bezier(.22,1,.36,1); }
+@keyframes docfade{ from{ opacity:0; transform:translateY(5px); } to{ opacity:1; transform:none; } }
+#view-doctor-home .doc-cancelstick{ position:sticky; top:78px; z-index:30; background:#F7F5F0; padding-bottom:12px; }
 @keyframes docshimmer{ 0%{background-position:200% 0;} 100%{background-position:-200% 0;} }
 #view-doctor-home .agm-grid{ display:grid; grid-template-columns:46px repeat(7, minmax(96px,1fr)); min-width:730px; max-width:1052px; margin-left:auto; margin-right:auto; border:1px solid #E6E0D4; border-radius:12px; overflow:hidden; background:#fff; }
 #view-doctor-home .agm-hd{ background:#F3EFE7; padding:6px 2px; text-align:center; font-size:10px; color:#6E665A; border-bottom:1px solid #E6E0D4; border-left:1px solid #EFEAE0; line-height:1.25; }
@@ -30055,12 +30060,13 @@ async function docRenderAgendaMaestra(){
   try{ docSessBarHide(); docCenterLoading(false); }catch(_){}
   docRenderBottomNav('agenda'); docState.lastMain='agenda';
   if(!docAgmState.weekStart) docAgmState.weekStart=docWeekStart(new Date());
-  const hasGrid=!!cont.querySelector('.agm-grid');
-  if(hasGrid){ docAgmShowSaving(); }
-  else { cont.innerHTML='<div class="agm-wrap"><div class="doc-loading">Cargando agenda…</div></div>'; }
+  const hasAgenda=!!cont.querySelector('.agm-wrap');
+  if(hasAgenda){ docAgmShowSaving(); }
+  else { cont.innerHTML=`<div class="agm-wrap"><div class="doc-top"><div><div style="font-size:18px;font-weight:600;line-height:1.05;">Agenda Maestra</div><div style="font-size:10.5px;color:#9A9183;">Todas las terapias y horas libres de Andrés</div></div></div>${docCalNavSkel(docAgmState.weekStart)}</div>`; }
   const ws=docAgmState.weekStart, we=docAddDaysYMD(ws,6);
   const cells=await docAgmLoadCells(ws, we);
   cont.innerHTML=docAgmHtml(cells);
+  if(!hasAgenda){ const w=cont.querySelector('.agm-wrap'); if(w) w.classList.add('doc-fadein'); }
   docAgmHideSaving();
   if(docCanDnd()) docAgmAttachDnd();
 }
@@ -30143,16 +30149,27 @@ function docAgmSessionTap(sid, pid){
 }
 async function docRenderPlanBuilder(pid, focusSid){
   const cont=document.getElementById('doc-home-content'); if(!cont) return;
-  docCenterLoading(true);
+  try{ docSessBarHide(); }catch(_){}
+  // 1) Shell + skeletons al instante (header desde cache si está)
+  let p=(docCache.patients||[]).find(x=>x.id===pid)||null;
+  const hadCache=!!p;
+  docPlanState={ pid, p:p||{first_name:'',last_name:'',location_id:null,phone:'',notes:''}, locationId:p?p.location_id:null, sede:docSede(p?p.location_id:null), picks:[], delIds:new Set(), existing:[], weekStart:docWeekStart(new Date()), cellsByWeek:{}, tab:'manual', cfg:docPlanResetCfg(), opts:[], optSel:null };
+  cont.innerHTML=docPlanShell(docPlanState.p);
+  docPlanBottomNav();
+  const L=document.getElementById('doc-plan-left'); if(L) L.innerHTML=docPlanLeftSkeleton();
+  const E=document.getElementById('doc-plan-existing'); if(E) E.innerHTML=docPlanExistSkeleton();
+  const C=document.getElementById('doc-plan-cal'); if(C) C.innerHTML=docCalNavSkel(docPlanState.weekStart);
+  // 2) Cargar datos reales
   const pts=await docLoadPatients(true);
-  const p=pts.find(x=>x.id===pid); if(!p){ docCenterLoading(false); docRenderPacientes(); return; }
-  docPlanState={ pid, p, locationId:p.location_id, sede:docSede(p.location_id), picks:[], delIds:new Set(), existing:[], weekStart:docWeekStart(new Date()), cellsByWeek:{}, tab:'manual', cfg:{path:null,freq:null,weeks:null,sessions:null,remType:null,remVal:null,specDay:null,months:null}, opts:[], optSel:null };
+  p=pts.find(x=>x.id===pid); if(!p){ docRenderPacientes(); return; }
+  docPlanState.p=p; docPlanState.locationId=p.location_id; docPlanState.sede=docSede(p.location_id);
   docPlanState.existing=await docPlanLoadExisting(pid);
   if(focusSid){ try{ const { data }=await sb.from('therapy_sessions').select('session_date').eq('id',focusSid).maybeSingle(); if(data&&data.session_date) docPlanState.weekStart=docWeekStart(new Date(data.session_date+'T12:00:00')); }catch(_){} }
-  cont.innerHTML=docPlanShell(p);
-  docPlanRenderLeft(); docPlanRenderExisting(); docPlanBottomNav();
-  await docPlanRenderCalendar();
-  docCenterLoading(false);
+  // 3) Si el header era skeleton (sin cache), recrear shell con datos reales
+  if(!hadCache){ cont.innerHTML=docPlanShell(p); docPlanBottomNav(); }
+  // 4) Rellenar paneles reales con fade sutil
+  docPlanRenderLeft(); docPlanRenderExisting(); await docPlanRenderCalendar();
+  docFadeIn('doc-plan-left'); docFadeIn('doc-plan-cal'); docFadeIn('doc-plan-existing');
   if(focusSid) docSessBar(focusSid);
 }
 function docCenterLoading(show, msg){
@@ -30160,6 +30177,31 @@ function docCenterLoading(show, msg){
   if(show){ if(!el){ el=document.createElement('div'); el.id='doc-center-load'; el.innerHTML=`<div class="dcl-card"><div class="dcl-ring"><span></span><span></span></div><div class="dcl-txt">${docEsc(msg||'Cargando al paciente…')}</div></div>`; document.body.appendChild(el); requestAnimationFrame(()=>el.classList.add('show')); } return; }
   if(el){ el.classList.remove('show'); setTimeout(()=>{ if(el&&el.parentNode) el.parentNode.removeChild(el); },200); }
 }
+// ---- Skeletons (calendario con headers/horas visibles + celdas shimmer) ----
+function docCalSkeleton(ws){
+  const today=docYMD(new Date());
+  let html=`<div class="agm-corner"></div>`;
+  for(let di=0;di<7;di++){ const ds=docAddDaysYMD(ws,di), d=new Date(ds+'T12:00:00'); html+=`<div class="agm-hd${ds===today?' today':''}">${DOC_DOW_SHORT[d.getDay()]}<br><b>${d.getDate()}</b></div>`; }
+  for(let h=6;h<=22;h++){
+    html+=`<div class="agm-hcell">${docHourH(h)}<br><span>${docHourAp(h)}</span></div>`;
+    for(let di=0;di<7;di++){ html+=`<div class="agm-cell"><div class="doc-skelcell" style="height:22px;margin:5px 2px;border-radius:6px;opacity:.4;"></div></div>`; }
+  }
+  return html;
+}
+function docCalNavSkel(ws){
+  const wsLbl=docCap(new Date(ws+'T12:00:00').toLocaleDateString('es-PE',{day:'numeric',month:'short'}));
+  const weLbl=docCap(new Date(docAddDaysYMD(ws,6)+'T12:00:00').toLocaleDateString('es-PE',{day:'numeric',month:'short'}));
+  return `<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;"><button class="doc-iconbtn"><i class="ti ti-chevron-left"></i></button><div style="flex:1;text-align:center;font-size:13px;font-weight:600;">${wsLbl} – ${weLbl}</div><button class="doc-iconbtn"><i class="ti ti-chevron-right"></i></button><button class="doc-chip">Hoy</button></div><div style="overflow-x:auto;-webkit-overflow-scrolling:touch;"><div class="agm-grid">${docCalSkeleton(ws)}</div></div>`;
+}
+function docPlanLeftSkeleton(){
+  const bar=(w,h,r)=>`<div class="doc-skelbar" style="width:${w};height:${h}px;${r?('border-radius:'+r+';'):''}"></div>`;
+  return `<div class="doc-skelwrap">${bar('45%',16)}${bar('100%',40,'12px')}<div style="height:8px;"></div>${bar('90%',13)}${bar('100%',13)}${bar('70%',13)}<div style="height:14px;"></div>${bar('100%',48,'12px')}</div>`;
+}
+function docPlanExistSkeleton(){
+  const row=`<div class="doc-skelbar" style="width:100%;height:34px;border-radius:10px;"></div>`;
+  return `<div class="doc-skelwrap">${'<div class="doc-skelbar" style="width:50%;height:14px;"></div>'}<div style="height:4px;"></div>${row}${row}${row}</div>`;
+}
+function docFadeIn(id){ const el=document.getElementById(id); if(el){ el.classList.remove('doc-fadein'); void el.offsetWidth; el.classList.add('doc-fadein'); } }
 function docPlanBottomNav(){
   const nav=document.getElementById('doc-bottomnav'); if(!nav) return;
   nav.innerHTML=`<button class="doc-planback" onclick="docRenderAgendaMaestra()"><i class="ti ti-arrow-left"></i> Volver a la agenda</button>`;
@@ -30342,7 +30384,7 @@ function docPlanLeftInner(st){
     : docPlanWizardHtml();
   const picksSorted=[...st.picks].sort((a,b)=> a.ds<b.ds?-1:a.ds>b.ds?1:a.hour-b.hour);
   const chips = n ? `<div style="max-height:26vh;overflow:auto;margin-bottom:12px;">${picksSorted.map(pk=>`<div class="doc-pickrow" onclick="docPlanToggle('${pk.ds}',${pk.hour})"><span>${docCap(docDateShort(pk.ds))} · ${docHourLbl(pk.hour)}</span><i class="ti ti-x"></i></div>`).join('')}</div>` : '';
-  return `${agendarActive?`<button class="doc-secbtn" style="margin:0 0 14px;border-color:#E6E0D4;" onclick="docPlanCancelAgendar()"><i class="ti ti-arrow-back-up"></i> Cancelar y desbloquear eliminar</button>`:''}
+  return `${agendarActive?`<div class="doc-cancelstick"><button class="doc-secbtn" style="border-color:#E6E0D4;margin:0;" onclick="docPlanCancelAgendar()"><i class="ti ti-arrow-back-up"></i> Cancelar y desbloquear eliminar</button></div>`:''}
     <div class="doc-sec" style="margin-top:0;">Arma el plan</div>
     <div class="doc-seg2" style="margin-bottom:14px;">${tabBtn('manual','Manual')}${tabBtn('auto','Con opciones')}</div>
     ${body}
@@ -30492,7 +30534,7 @@ async function docPlanLoadWeek(ws){
 async function docPlanRenderCalendar(){
   const box=document.getElementById('doc-plan-cal'); if(!box) return;
   const ws=docPlanState.weekStart;
-  if(!docPlanState.cellsByWeek[ws]) box.innerHTML='<div class="doc-skel">'+Array.from({length:7}).map(()=>'<div class="doc-skelcol">'+Array.from({length:6}).map(()=>'<div class="doc-skelcell"></div>').join('')+'</div>').join('')+'</div>';
+  if(!docPlanState.cellsByWeek[ws]) box.innerHTML=docCalNavSkel(ws);
   const cells=await docPlanLoadWeek(ws);
   if(docPlanState.weekStart!==ws) return; // cambió de semana mientras cargaba
   box.innerHTML=docPlanCalHtml(cells);
