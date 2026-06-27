@@ -26523,7 +26523,7 @@ async function reconFetchAll(table, columns, applyFilters) {
 async function reconLoadRows() {
   RECON_STATE.loading = true;
   const [pkgs, atts, logs] = await Promise.all([
-    reconFetchAll('student_packages', 'id, student_id, classes_total, status, is_frozen, purchase_date, students(first_name, last_name, location_id)'),
+    reconFetchAll('student_packages', 'id, student_id, classes_total, status, is_frozen, purchase_date, students(first_name, last_name, location_id, status)'),
     reconFetchAll('attendance', 'student_package_id', q => q.eq('counts_against_package', true)),
     reconFetchAll('package_reconcile_log', 'package_id')
   ]);
@@ -26534,6 +26534,7 @@ async function reconLoadRows() {
 
   const rows = pkgs
     .filter(p => !p.is_frozen && (!p.status || p.status === 'active'))
+    .filter(p => !(p.students && p.students.status === 'inactive')) // alumno desactivado: fuera
     .map(p => ({
       pkgId: p.id, studentId: p.student_id,
       name: ((p.students && p.students.first_name) || '') + ' ' + ((p.students && p.students.last_name) || ''),
@@ -26623,7 +26624,7 @@ async function unmarkedFetchAllRows() {
   const today = dateToIsoLocal(new Date());
   const [bookings, atts] = await Promise.all([
     reconFetchAll('session_bookings',
-      'id, student_id, session_id, cancelled_at, students(first_name, last_name), class_sessions!inner(session_date, hour, location_id, instructor_id, is_cancelled)',
+      'id, student_id, session_id, cancelled_at, students(first_name, last_name, status), class_sessions!inner(session_date, hour, location_id, instructor_id, is_cancelled)',
       q => q.is('cancelled_at', null).eq('class_sessions.is_cancelled', false).lt('class_sessions.session_date', today)),
     reconFetchAll('attendance', 'booking_id')
   ]);
@@ -26634,6 +26635,7 @@ async function unmarkedFetchAllRows() {
   const rows = [];
   for (const b of bookings) {
     if (marked.has(b.id)) continue;
+    if (b.students && b.students.status === 'inactive') continue; // alumno desactivado: no mostrar
     const cs = b.class_sessions; if (!cs) continue;
     rows.push({
       bookingId: b.id, sessionId: b.session_id, studentId: b.student_id,
