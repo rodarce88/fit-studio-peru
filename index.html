@@ -3681,7 +3681,7 @@ body:not(.doctor-mode) .doc-bottomnav{ display:none; }
 #view-doctor-home .doc-skelwrap{ display:flex; flex-direction:column; padding:2px; }
 #view-doctor-home .doc-fadein{ animation:docfade .38s cubic-bezier(.22,1,.36,1); }
 @keyframes docfade{ from{ opacity:0; transform:translateY(5px); } to{ opacity:1; transform:none; } }
-#view-doctor-home .doc-cancelstick{ position:sticky; top:78px; z-index:30; background:#F7F5F0; padding-bottom:12px; }
+#view-doctor-home .doc-cancelstick{ position:sticky; top:66px; z-index:30; background:#F7F5F0; padding:8px 0 12px; box-shadow:0 -20px 0 0 #F7F5F0; }
 @keyframes docshimmer{ 0%{background-position:200% 0;} 100%{background-position:-200% 0;} }
 #view-doctor-home .agm-grid{ display:grid; grid-template-columns:46px repeat(7, minmax(96px,1fr)); min-width:730px; max-width:1052px; margin-left:auto; margin-right:auto; border:1px solid #E6E0D4; border-radius:12px; overflow:hidden; background:#fff; }
 #view-doctor-home .agm-hd{ background:#F3EFE7; padding:6px 2px; text-align:center; font-size:10px; color:#6E665A; border-bottom:1px solid #E6E0D4; border-left:1px solid #EFEAE0; line-height:1.25; }
@@ -29090,19 +29090,20 @@ function docMountSheet(inner){
 // ---- Cambiar sede de una paciente (solo esta cita / todas) ----
 let docSedeChg=null;
 const DOC_SEDE_IDS=['11111111-1111-1111-1111-111111111111','22222222-2222-2222-2222-222222222222','33333333-3333-3333-3333-333333333333'];
-function docSedeChangeSheet(sessionId, patientId, curLoc, sessionDate){
-  docSedeChg={ sessionId, patientId, curLoc, sessionDate, newLoc:null };
+function docSedeChangeSheet(sessionId, patientId, curLoc, sessionDate, fromPlan){
+  docSedeChg={ sessionId, patientId, curLoc, sessionDate, newLoc:null, fromPlan:!!fromPlan };
   const rows=DOC_SEDE_IDS.map(id=>{ const s=docSede(id); const cur=(id===curLoc);
     return `<div onclick="docSedeChangeScope('${id}')" style="display:flex;align-items:center;gap:11px;padding:13px 14px;border-radius:12px;background:${cur?'#F0ECE2':'#fff'};border:1px solid #ECE6DA;margin-bottom:8px;cursor:pointer;">
       <span style="width:11px;height:11px;border-radius:50%;background:${s.color};flex:none;"></span>
       <div style="flex:1;font-size:13.5px;color:#1C1922;">${docEsc(s.name)}${cur?' <span style="color:#9A9183;font-size:11px;">· actual</span>':''}</div>
       <i class="ti ti-chevron-right" style="font-size:15px;color:#C9C2B4;"></i></div>`;
   }).join('');
+  const back = docSedeChg.fromPlan ? `docSessClose()` : `docSessionSheet('${docSedeChg.sessionId}','agenda')`;
   docMountSheet(`
-    <div style="font-size:14px;font-weight:600;color:#1C1922;">Cambiar sede</div>
+    <div style="font-size:14px;font-weight:600;color:#1C1922;">Cambiar sede de esta cita</div>
     <div style="font-size:11px;color:#9A9183;margin-bottom:14px;">¿En qué sede la atenderás?</div>
     ${rows}
-    <div onclick="docSessionSheet('${docSedeChg.sessionId}','agenda')" style="text-align:center;padding:11px;font-size:13px;color:#9A9183;cursor:pointer;">Atrás</div>`);
+    <div onclick="${back}" style="text-align:center;padding:11px;font-size:13px;color:#9A9183;cursor:pointer;">Atrás</div>`);
 }
 function docSedeChangeScope(newLoc){
   docSedeChg.newLoc=newLoc; const s=docSede(newLoc);
@@ -29112,8 +29113,8 @@ function docSedeChangeScope(newLoc){
     <div style="font-size:14px;font-weight:600;color:#1C1922;">Mover a ${docEsc(s.name)}</div>
     <div style="font-size:11px;color:#9A9183;margin-bottom:14px;">¿Para cuándo aplica?</div>
     ${opt('ti-calendar-event','Solo esta cita','Únicamente la del '+when+'. Su sede de siempre no cambia.',`docApplySede('one')`)}
-    ${opt('ti-calendar-repeat','Todas sus citas','Cambia su sede en el perfil y en las próximas terapias.',`docApplySede('all')`)}
-    <div onclick="docSedeChangeSheet('${docSedeChg.sessionId}','${docSedeChg.patientId}','${docSedeChg.curLoc||''}','${docSedeChg.sessionDate}')" style="text-align:center;padding:11px;font-size:13px;color:#9A9183;cursor:pointer;">Atrás</div>`);
+    ${opt('ti-calendar-repeat','Todas sus citas futuras','Cambia su sede en el perfil y en las próximas terapias programadas.',`docApplySede('all')`)}
+    <div onclick="docSedeChangeSheet('${docSedeChg.sessionId}','${docSedeChg.patientId}','${docSedeChg.curLoc||''}','${docSedeChg.sessionDate}',${docSedeChg.fromPlan})" style="text-align:center;padding:11px;font-size:13px;color:#9A9183;cursor:pointer;">Atrás</div>`);
 }
 async function docApplySede(scope){
   const st=docSedeChg; if(!st||!st.newLoc) return;
@@ -29129,7 +29130,14 @@ async function docApplySede(scope){
       try{ await sb.from('therapy_sessions').update({ location_id:st.newLoc }).eq('patient_id',st.patientId).gte('session_date',today).in('status',['scheduled','to_reschedule']); }catch(e){}
       docCache.patients=null;
     }
-    docSessClose(); showToast('✓ Sede actualizada','success'); docRenderAgendaMaestra();
+    docSessClose(); showToast('✓ Sede actualizada','success');
+    if(st.fromPlan && docPlanState){
+      docSessBarHide(); docPlanState.cellsByWeek={};
+      if(scope!=='one'){ docPlanState.locationId=st.newLoc; docPlanState.sede=docSede(st.newLoc); if(docPlanState.p) docPlanState.p.location_id=st.newLoc; docPlanRerenderShell(); }
+      else { docPlanRefresh(); }
+      return;
+    }
+    docRenderAgendaMaestra();
   }catch(e){ showToast('Error: '+(e.message||''),'error'); }
 }
 // ---- Tocar un slot libre: agendar o bloquear ----
@@ -30222,7 +30230,7 @@ function docPlanCitaClick(sid, editable){
 // ---- Bar fijo inferior, NO bloqueante (estilo detalle de pago) ----
 async function docSessBar(id){
   let s=null;
-  try{ const { data }=await sb.from('therapy_sessions').select('id,session_date,hour,status,patient_id,therapy_patients(first_name,last_name)').eq('id',id).maybeSingle(); s=data; }catch(e){}
+  try{ const { data }=await sb.from('therapy_sessions').select('id,session_date,hour,status,patient_id,location_id,therapy_patients(first_name,last_name)').eq('id',id).maybeSingle(); s=data; }catch(e){}
   if(!s){ showToast('No se pudo abrir la cita','error'); return; }
   const nm=s.therapy_patients?(((s.therapy_patients.first_name||'')+' '+(s.therapy_patients.last_name||'')).trim()):'';
   const when=docCap(docDateShort(s.session_date))+' · '+docHourLbl(s.hour);
@@ -30237,6 +30245,7 @@ async function docSessBar(id){
       ${act('ti-calendar-up','#854F0B','Reagendar',`docMiniStatus('${id}','to_reschedule')`, s.status==='to_reschedule')}
       ${act('ti-circle-x','#A32D2D','Perdida',`docMiniStatus('${id}','no_show')`, s.status==='no_show')}
       ${s.status!=='scheduled'?act('ti-arrow-back-up','#5F5E5A','Programada',`docMiniStatus('${id}','scheduled')`, false):''}
+      ${act('ti-map-pin','#854F0B','Cambiar sede',`docSedeChangeSheet('${id}','${s.patient_id}','${s.location_id||''}','${s.session_date}',true)`, false)}
       <button class="docbar-act danger" onclick="docMiniDelete('${id}')"><i class="ti ti-trash" style="font-size:17px;"></i><span>Eliminar</span></button>
       <button class="docbar-act ghost" onclick="docSessBarHide()"><i class="ti ti-x" style="font-size:17px;"></i><span>Cancelar</span></button>
     </div></div>`;
@@ -30308,7 +30317,7 @@ function docPatSedeSheet(pid){
   const rows=DOC_SEDE_IDS.map(id=>{ const s=docSede(id); const cur=(docPlanState&&docPlanState.locationId===id);
     return `<div onclick="docPatSedeApply('${pid}','${id}')" style="display:flex;align-items:center;gap:11px;padding:13px 14px;border-radius:12px;background:${cur?'#F0ECE2':'#fff'};border:1px solid #ECE6DA;margin-bottom:8px;cursor:pointer;"><span style="width:11px;height:11px;border-radius:50%;background:${s.color};flex:none;"></span><div style="flex:1;font-size:13.5px;">${docEsc(s.name)}</div>${cur?'<i class="ti ti-check" style="font-size:16px;"></i>':''}</div>`;
   }).join('');
-  docMountSheet(`<div style="font-size:14px;font-weight:600;margin-bottom:4px;">Cambiar sede</div><div style="font-size:11px;color:#9A9183;margin-bottom:14px;">Se aplica al paciente y a sus terapias futuras.</div>${rows}<div onclick="docSessClose()" style="text-align:center;padding:11px;font-size:13px;color:#9A9183;cursor:pointer;">Cancelar</div>`);
+  docMountSheet(`<div style="font-size:14px;font-weight:600;margin-bottom:4px;">Cambiar sede del paciente</div><div style="font-size:11.5px;color:#6E665A;margin-bottom:14px;line-height:1.5;">Las futuras citas programadas se agendarán en esta sede. Si quieres cambiar solo una cita en particular, usa <b>Acciones rápidas</b> seleccionando la cita en el calendario.</div>${rows}<div onclick="docSessClose()" style="text-align:center;padding:11px;font-size:13px;color:#9A9183;cursor:pointer;">Cancelar</div>`);
 }
 async function docPatSedeApply(pid, loc){
   try{
