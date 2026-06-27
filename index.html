@@ -23407,6 +23407,7 @@ function renderStudentDetail() {
           <button class="btn btn-ghost" onclick="generateStudentPDF('${stud.id}')" style="padding: 8px 14px; font-size: 12px;">Generar PDF</button>
           <button class="btn btn-ghost" onclick="openConfirmClassesModal('${stud.id}')" style="padding: 8px 14px; font-size: 12px;">Confirmar clases</button>
           <button class="btn btn-ghost" onclick="${_agendarDisabled ? '' : `openStudentScheduleEditor('${stud.id}')`}" ${_agendarDisabled ? 'disabled' : ''} title="${escape(_agendarTooltip)}" style="padding: 8px 14px; font-size: 12px; ${_agendarDisabled ? 'opacity: 0.45; cursor: not-allowed;' : ''}">Agendar clases</button>
+          <button class="btn btn-ghost" onclick="reconOpenModal('${stud.id}')" style="padding: 8px 14px; font-size: 12px;">Reconciliar</button>
           <button class="btn btn-primary" onclick="openAssignPackageFromDetail('${stud.id}')" style="padding: 8px 14px; font-size: 12px;">${_hasCompletedPkgs && _hasNoActivePkg ? 'Renovar paquete' : 'Asignar paquete'}</button>
         </div>
       </div>
@@ -26290,6 +26291,257 @@ function initPaymentsReportState() {
   }
 }
 
+// ============================================================
+// RECONCILIACIÓN DE PAQUETES (corrección temporal de desbordados)
+// ============================================================
+const RECON_STATE = { sedeFilter: 'all', rows: null, loading: false };
+
+function reconShortDate(ymd) {
+  if (!ymd) return '—';
+  const d = new Date(ymd + 'T12:00:00');
+  return d.toLocaleDateString('es-PE', { day: '2-digit', month: 'short' });
+}
+function reconPkgLabel(p) {
+  if (!p) return 'sin paquete';
+  const nm = (p.packages && p.packages.name) ? p.packages.name : (p.classes_total + ' clases');
+  return nm + ' · ' + reconShortDate(p.purchase_date || p.start_date);
+}
+function reconPkgStart(p) { return p.purchase_date || p.start_date || '1900-01-01'; }
+
+// Núcleo: calcula la re-asignación FIFO por fecha para un alumno.
+async function reconCompute(studentId) {
+  const [pkgRes, attRes] = await Promise.all([
+    sb.from('student_packages')
+      .select('id, package_id, classes_total, purchase_date, start_date, status, is_frozen, price_paid, packages(name, price_pen)')
+      .eq('student_id', studentId),
+    sb.from('attendance')
+      .select('id, student_package_id, counts_against_package, class_sessions!attendance_session_id_fkey(session_date)')
+      .eq('student_id', studentId)
+  ]);
+  const packages = pkgRes.data || [];
+  const atts = (attRes.data || []).filter(a => a.counts_against_package);
+
+  // Paquetes elegibles como destino: activos/null, no congelados. (Se excluyen 'changed'/'cancelled'.)
+  const eligible = packages
+    .filter(p => !p.is_frozen && (!p.status || p.status === 'active'))
+    .sort((a, b) => {
+      const da = reconPkgStart(a), db = reconPkgStart(b);
+      if (da !== db) return da.localeCompare(db);
+      return (a.created_at || '').localeCompare(b.created_at || '');
+    });
+
+  // Ordenar asistencias por fecha de sesión (las que cuentan clase)
+  const sorted = atts.slice().sort((a, b) => {
+    const da = (a.class_sessions && a.class_sessions.session_date) || '9999-12-31';
+    const db = (b.class_sessions && b.class_sessions.session_date) || '9999-12-31';
+    return da.localeCompare(db);
+  });
+
+  const assigned = {}; eligible.forEach(p => assigned[p.id] = 0);
+  const moves = [];      // {att, fromId, toId, toLabel, date}
+  const surplus = [];    // {att, date}
+  const pkgById = {}; packages.forEach(p => pkgById[p.id] = p);
+
+  for (const a of sorted) {
+    const date = (a.class_sessions && a.class_sessions.session_date) || null;
+    const target = eligible.find(p =>
+      reconPkgStart(p) <= (date || '9999-12-31') &&
+      assigned[p.id] < (p.classes_total || 0)
+    );
+    if (target) {
+      assigned[target.id]++;
+      if (a.student_package_id !== target.id) {
+        moves.push({ attId: a.id, fromId: a.student_package_id, toId: target.id, toLabel: reconPkgLabel(target), date });
+      }
+    } else {
+      surplus.push({ attId: a.id, date });
+    }
+  }
+  return { packages, eligible, pkgById, totalCounting: atts.length, moves, surplus };
+}
+
+let RECON_CURRENT = null;
+async function reconOpenModal(studentId) {
+  reconCloseModal();
+  const ov = document.createElement('div');
+  ov.id = 'recon-ov';
+  ov.style.cssText = 'position:fixed;inset:0;z-index:11000;background:rgba(28,25,34,.45);display:flex;align-items:center;justify-content:center;padding:18px;';
+  ov.innerHTML = '<div style="background:#fff;border-radius:16px;max-width:560px;width:100%;max-height:86vh;overflow:auto;padding:22px;"><div style="text-align:center;color:#9A9183;padding:30px;">Calculando reconciliación…</div></div>';
+  ov.addEventListener('click', e => { if (e.target === ov) reconCloseModal(); });
+  document.body.appendChild(ov);
+
+  let r;
+  try { r = await reconCompute(studentId); }
+  catch (e) { showToast('Error al calcular: ' + (e.message || ''), 'error'); reconCloseModal(); return; }
+  RECON_CURRENT = { studentId, ...r };
+
+  const stud = STATE.students.find(s => s.id === studentId);
+  const nm = stud ? escape((stud.first_name || '') + ' ' + (stud.last_name || '')) : '';
+
+  const movesHtml = r.moves.length
+    ? r.moves.map(m => `<div style="display:flex;justify-content:space-between;gap:8px;padding:7px 0;border-bottom:1px solid #F3EFE7;font-size:13px;"><span style="color:#5F5E5A;">Clase ${reconShortDate(m.date)}</span><span style="color:#1C1922;font-weight:500;text-align:right;">→ ${escape(m.toLabel)}</span></div>`).join('')
+    : '<div style="color:#9A9183;font-size:13px;padding:6px 0;">No hay clases que reubicar.</div>';
+
+  const surplusHtml = r.surplus.length
+    ? `<div style="background:#FBF1E8;border:1px solid #F0DCC4;border-radius:12px;padding:12px 14px;margin-top:12px;"><div style="font-weight:600;color:#854F0B;font-size:13px;">${r.surplus.length} clase(s) sin paquete que las cubra</div><div style="font-size:12px;color:#9A7B45;margin-top:4px;">Se creará un paquete <strong>por cobrar</strong> de ${r.surplus.length} clase(s) (fechas: ${r.surplus.map(s => reconShortDate(s.date)).join(', ')}). Anahí define el precio luego.</div></div>`
+    : '';
+
+  ov.querySelector('div').innerHTML = `
+    <div style="font-size:17px;font-weight:600;color:#1C1922;">Reconciliar paquetes</div>
+    <div style="font-size:13px;color:#9A9183;margin:2px 0 14px;">${nm} · ${r.totalCounting} clases que consumen</div>
+    <div style="font-size:12px;font-weight:600;color:#9A9183;text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px;">Vista previa (no aplica nada todavía)</div>
+    ${movesHtml}
+    ${surplusHtml}
+    <div style="display:flex;gap:8px;margin-top:18px;flex-wrap:wrap;">
+      <button onclick="reconApply()" style="flex:1;min-width:150px;background:#6A4E9C;color:#fff;border:none;border-radius:10px;padding:12px;font-size:14px;font-weight:600;cursor:pointer;">Aplicar reconciliación</button>
+      <button onclick="reconMarkReviewed()" style="flex:1;min-width:150px;background:#fff;color:#5F5E5A;border:1px solid #E6E0D4;border-radius:10px;padding:12px;font-size:14px;cursor:pointer;">Marcar revisado</button>
+    </div>
+    <input id="recon-note" placeholder="Nota (opcional)" style="width:100%;margin-top:10px;padding:9px 12px;border:1px solid #E6E0D4;border-radius:9px;font-size:13px;box-sizing:border-box;" />
+    <div onclick="reconCloseModal()" style="text-align:center;color:#9A9183;font-size:13px;margin-top:12px;cursor:pointer;">Cancelar</div>
+  `;
+}
+function reconCloseModal() { const ov = document.getElementById('recon-ov'); if (ov) ov.remove(); }
+
+async function reconApply() {
+  const st = RECON_CURRENT; if (!st) return;
+  const note = (document.getElementById('recon-note') || {}).value || '';
+  const actor = (typeof getCurrentActorLabel === 'function') ? getCurrentActorLabel() : '';
+  try {
+    // 1. Reasignar las clases que se mueven (agrupadas por destino)
+    const byTarget = {};
+    st.moves.forEach(m => { (byTarget[m.toId] = byTarget[m.toId] || []).push(m.attId); });
+    for (const toId of Object.keys(byTarget)) {
+      const { error } = await sb.from('attendance').update({ student_package_id: toId }).in('id', byTarget[toId]);
+      if (error) throw error;
+    }
+    // 2. Sobrantes → crear paquete por cobrar
+    let surplusPkgId = null;
+    if (st.surplus.length) {
+      const refPkg = st.eligible.length ? st.eligible[st.eligible.length - 1] : (st.packages[0] || null);
+      const dates = st.surplus.map(s => s.date).filter(Boolean).sort();
+      const startIso = dates[0] || dateToIsoLocal(new Date());
+      const ins = await sb.from('student_packages').insert({
+        student_id: st.studentId,
+        package_id: refPkg ? refPkg.package_id : null,
+        purchase_date: startIso,
+        start_date: startIso,
+        classes_total: st.surplus.length,
+        sessions_total: st.surplus.length,
+        classes_used: 0,
+        classes_recoverable: 0,
+        is_frozen: false,
+        price_paid: 0,
+        status: 'active',
+      }).select('id').single();
+      if (ins.error) throw ins.error;
+      surplusPkgId = ins.data.id;
+      const { error: e2 } = await sb.from('attendance').update({ student_package_id: surplusPkgId }).in('id', st.surplus.map(s => s.attId));
+      if (e2) throw e2;
+    }
+    // 3. Recalcular contadores
+    if (typeof recalcPackageCounters === 'function') await recalcPackageCounters(st.studentId);
+    // 4. Bitácora
+    await sb.from('package_reconcile_log').insert({
+      student_id: st.studentId,
+      package_id: st.moves[0] ? st.moves[0].fromId : (st.packages[0] ? st.packages[0].id : null),
+      action: surplusPkgId ? 'surplus_created' : 'reconciled',
+      moved_count: st.moves.length,
+      surplus_count: st.surplus.length,
+      note, actor,
+    });
+    showToast('✓ Reconciliado' + (surplusPkgId ? ' · paquete por cobrar creado' : ''), 'success');
+    reconCloseModal();
+    RECON_STATE.rows = null;
+    if (STATE.studentDetailId === st.studentId) await openStudentDetail(st.studentId);
+  } catch (e) { showToast('Error: ' + (e.message || ''), 'error'); }
+}
+
+async function reconMarkReviewed() {
+  const st = RECON_CURRENT; if (!st) return;
+  const note = (document.getElementById('recon-note') || {}).value || '';
+  const actor = (typeof getCurrentActorLabel === 'function') ? getCurrentActorLabel() : '';
+  try {
+    await sb.from('package_reconcile_log').insert({
+      student_id: st.studentId,
+      package_id: st.packages[0] ? st.packages[0].id : null,
+      action: 'reviewed',
+      moved_count: 0,
+      surplus_count: st.surplus.length,
+      note, actor,
+    });
+    showToast('✓ Marcado como revisado', 'success');
+    reconCloseModal();
+    RECON_STATE.rows = null;
+  } catch (e) { showToast('Error: ' + (e.message || ''), 'error'); }
+}
+
+// -------- Reporte (sub-vista de Reportes) --------
+async function reconLoadRows() {
+  RECON_STATE.loading = true;
+  const [pkgRes, attRes, logRes] = await Promise.all([
+    sb.from('student_packages')
+      .select('id, student_id, classes_total, status, is_frozen, purchase_date, students(first_name, last_name, location_id)'),
+    sb.from('attendance').select('student_package_id').eq('counts_against_package', true),
+    sb.from('package_reconcile_log').select('package_id')
+  ]);
+  const usedBy = {};
+  (attRes.data || []).forEach(a => { if (a.student_package_id) usedBy[a.student_package_id] = (usedBy[a.student_package_id] || 0) + 1; });
+  const done = new Set((logRes.data || []).map(l => l.package_id).filter(Boolean));
+  const locName = {}; (STATE.locations || []).forEach(l => locName[l.id] = l.name);
+
+  const rows = (pkgRes.data || [])
+    .filter(p => !p.is_frozen && (!p.status || p.status === 'active'))
+    .map(p => ({
+      pkgId: p.id, studentId: p.student_id,
+      name: ((p.students && p.students.first_name) || '') + ' ' + ((p.students && p.students.last_name) || ''),
+      sede: (p.students && locName[p.students.location_id]) || '—',
+      total: p.classes_total || 0, used: usedBy[p.id] || 0,
+    }))
+    .filter(r => r.used > r.total && !done.has(r.pkgId))
+    .map(r => ({ ...r, over: r.used - r.total }))
+    .sort((a, b) => b.over - a.over);
+
+  RECON_STATE.rows = rows;
+  RECON_STATE.loading = false;
+}
+
+async function renderReconcileReport() {
+  const container = document.getElementById('reports-container');
+  if (!container) return;
+  if (RECON_STATE.rows === null && !RECON_STATE.loading) {
+    container.innerHTML = '<div style="padding:40px;text-align:center;color:#9A9183;">Cargando paquetes desbordados…</div>';
+    try { await reconLoadRows(); } catch (e) { container.innerHTML = '<div style="padding:30px;color:#A32D2D;">Error: ' + escape(e.message || '') + '</div>'; return; }
+  }
+  const all = RECON_STATE.rows || [];
+  const sedes = ['all', ...Array.from(new Set(all.map(r => r.sede)))];
+  const rows = RECON_STATE.sedeFilter === 'all' ? all : all.filter(r => r.sede === RECON_STATE.sedeFilter);
+  const countBySede = {}; all.forEach(r => countBySede[r.sede] = (countBySede[r.sede] || 0) + 1);
+
+  const chips = sedes.map(s => {
+    const on = RECON_STATE.sedeFilter === s;
+    const lbl = s === 'all' ? `Todas (${all.length})` : `${escape(s)} (${countBySede[s] || 0})`;
+    return `<button onclick="RECON_STATE.sedeFilter='${s.replace(/'/g, "\\'")}'; renderReconcileReport();" style="padding:7px 13px;border-radius:999px;border:1px solid ${on ? '#6A4E9C' : '#E6E0D4'};background:${on ? '#EFEBF8' : '#fff'};color:${on ? '#3C3489' : '#5F5E5A'};font-size:12.5px;font-weight:${on ? 600 : 400};cursor:pointer;">${lbl}</button>`;
+  }).join('');
+
+  const list = rows.length ? rows.map(r => `
+    <div onclick="openStudentDetail('${r.studentId}')" style="display:flex;align-items:center;gap:12px;padding:13px 14px;border-bottom:1px solid #F3EFE7;cursor:pointer;" onmouseover="this.style.background='#FAF8F3';" onmouseout="this.style.background='';">
+      <div style="flex:1;min-width:0;"><div style="font-size:14px;font-weight:600;color:#1C1922;">${escape(r.name)}</div><div style="font-size:11.5px;color:#9A9183;">${escape(r.sede)}</div></div>
+      <div style="text-align:right;"><div style="font-size:13px;font-weight:600;color:#A32D2D;">${r.used}/${r.total}</div><div style="font-size:11px;color:#9A9183;">+${r.over}</div></div>
+      <i class="ti ti-chevron-right" style="color:#C2BCAF;"></i>
+    </div>`).join('') : '<div style="padding:40px;text-align:center;color:#0F6E56;font-size:14px;">🎉 No quedan paquetes desbordados</div>';
+
+  container.innerHTML = `
+    <div class="page-header"><div>
+      <div onclick="reportsBackToHub()" style="font-size:12.5px;color:#6A4E9C;cursor:pointer;margin-bottom:6px;">← Volver a Reportes</div>
+      <h1 class="page-title">Reconciliación de paquetes</h1>
+      <div class="page-sub">${all.length} paquete(s) desbordado(s) por revisar. Toca uno para abrir su perfil y reconciliar.</div>
+    </div></div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin:6px 0 14px;">${chips}
+      <button onclick="RECON_STATE.rows=null; renderReconcileReport();" style="margin-left:auto;padding:7px 13px;border-radius:999px;border:1px solid #E6E0D4;background:#fff;color:#5F5E5A;font-size:12.5px;cursor:pointer;">↻ Refrescar</button>
+    </div>
+    <div style="background:#fff;border:1px solid #E6E0D4;border-radius:14px;overflow:hidden;">${list}</div>`;
+}
+
 function renderReportsHubHTML() {
   const container = document.getElementById('reports-container');
   if (!container) return;
@@ -26335,6 +26587,18 @@ function renderReportsHubHTML() {
           Vista mensual: facturado, descuentos, paquetes vendidos por tamaño, razones de descuento. Exportable a Excel.
         </div>
         <div style="margin-top: 14px; color: var(--fit-purple); font-size: 12.5px; font-weight: 500;">Ver reporte →</div>
+      </div>
+
+      <div onclick="RECON_STATE.sedeFilter='all'; RECON_STATE.rows=null; REPORTS_STATE.subView='reconcile'; renderReportsView();"
+           style="background: white; border: 1px solid var(--line); border-radius: 14px; padding: 24px; cursor: pointer; transition: all 0.15s;"
+           onmouseover="this.style.borderColor='var(--fit-purple-soft)'; this.style.transform='translateY(-2px)';"
+           onmouseout="this.style.borderColor='var(--line)'; this.style.transform='';">
+        <div style="width: 48px; height: 48px; border-radius: 12px; background: var(--warn-soft); display: flex; align-items: center; justify-content: center; margin-bottom: 14px; font-size: 24px;">🩹</div>
+        <h3 style="font-family: var(--display); font-style: italic; font-size: 22px; color: var(--fit-purple); margin: 0 0 6px; font-weight: 500;">Reconciliación de paquetes</h3>
+        <div style="color: var(--ink-mute); font-size: 13px; line-height: 1.5;">
+          Lista de paquetes desbordados. Abre el perfil de la alumna y reconcilia (vista previa antes de aplicar) o marca como revisado. Temporal: se quita cuando llegue a 0.
+        </div>
+        <div style="margin-top: 14px; color: var(--fit-purple); font-size: 12.5px; font-weight: 500;">Ver lista →</div>
       </div>
     </div>
   `;
@@ -28003,6 +28267,10 @@ async function renderReportsView() {
     container.innerHTML = '<div style="padding: 40px; text-align: center; color: var(--ink-mute);">Cargando pagos...</div>';
     await loadPaymentsReportData();
     renderPaymentsReportHTML();
+    return;
+  }
+  if (REPORTS_STATE.subView === 'reconcile') {
+    await renderReconcileReport();
     return;
   }
   // subView === 'monthly' — reporte mensual original
