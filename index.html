@@ -21810,7 +21810,7 @@ async function generateStudentPDF(studentId) {
 
   const html = _pdfBuildHTML(stud, data);
   const container = document.createElement('div');
-  container.style.cssText = 'position:absolute; left:-9999px; top:0; width:210mm; background:white;';
+  container.style.cssText = 'position:absolute; left:-9999px; top:0; width:84mm; background:white;';
   container.innerHTML = html;
   document.body.appendChild(container);
 
@@ -21818,9 +21818,9 @@ async function generateStudentPDF(studentId) {
     await html2pdf().set({
       margin: 0,
       filename: _pdfBuildFilename(stud),
-      image: { type: 'jpeg', quality: 0.98 },
-      html2canvas: { scale: 2, useCORS: true, logging: false, backgroundColor: '#ffffff' },
-      jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+      image: { type: 'jpeg', quality: 0.9 },
+      html2canvas: { scale: 1.6, useCORS: true, logging: false, backgroundColor: '#ffffff' },
+      jsPDF: { unit: 'mm', format: [84, 240], orientation: 'portrait' },
       pagebreak: { mode: ['css', 'legacy'] }
     }).from(container.firstElementChild).save();
     showToast('✓ PDF descargado', 'success');
@@ -21898,17 +21898,9 @@ function _pdfBuildCalendarSection(takenAtts, upcomingBookings, activePkg, todayI
   const today = new Date(todayIso + 'T00:00:00');
   const todayY = today.getFullYear(), todayM = today.getMonth();
 
-  // Rango: mes pasado siempre, hasta max(mes próximo, último upcoming). Cap 6 meses.
+  // Rango fijo para móvil: mes pasado, actual y próximo (3 meses) — más liviano.
   const startIdx = todayY * 12 + (todayM - 1);
-  let endIdx = todayY * 12 + (todayM + 1);
-  upcomingBookings.forEach(b => {
-    const sd = b.class_sessions && b.class_sessions.session_date;
-    if (!sd) return;
-    const parts = sd.split('-').map(Number);
-    const bIdx = parts[0] * 12 + (parts[1] - 1);
-    if (bIdx > endIdx) endIdx = bIdx;
-  });
-  if (endIdx - startIdx + 1 > 6) endIdx = startIdx + 5;
+  const endIdx = todayY * 12 + (todayM + 1);
 
   const months = [];
   for (let idx = startIdx; idx <= endIdx; idx++) {
@@ -22078,34 +22070,30 @@ function _pdfBuildHTML(stud, data) {
     const isInvalid = INVALID_PKG_STATUSES.has(p.status);
 
     let statusText = meta.label;
-    if (statusKey === 'active') statusText += ` · ${remaining} restantes`;
 
-    // Para paquetes cambiados/cancelados/expirados: NO mostrar "debe", solo el monto pagado original.
-    // El saldo pendiente real está reflejado en el paquete vigente que lo reemplaza.
-    let pkgPaidCell;
+    // Línea de pago (compacta, para tarjeta)
+    let payLine;
     if (isInvalid) {
-      pkgPaidCell = paid > 0
-        ? `<span class="pkg-amount" style="text-decoration:line-through;color:var(--ink-mute);">S/ ${paid.toFixed(2)}</span><div style="font-size:9px;color:var(--ink-mute);margin-top:2px;">pago original</div>`
-        : `<span class="pkg-amount" style="color:var(--ink-mute);">—</span>`;
+      payLine = paid > 0 ? `Pago original S/ ${paid.toFixed(2)}` : '';
     } else if (owed === 0) {
-      pkgPaidCell = `<span class="pkg-amount">S/ ${price.toFixed(2)}</span>`;
+      payLine = `Pagado S/ ${price.toFixed(2)}`;
     } else {
-      pkgPaidCell = `<span class="pkg-amount">S/ ${paid.toFixed(2)}</span><div style="font-size:9px;color:var(--ink-mute);margin-top:2px;">debe S/ ${owed.toFixed(2)}</div>`;
+      payLine = `Pagado S/ ${paid.toFixed(2)} · debe S/ ${owed.toFixed(2)}`;
     }
+    const progLine = (statusKey === 'completed' || total === 0)
+      ? `${used} de ${total} usadas`
+      : `${used} de ${total} usadas · ${remaining} disponible${remaining === 1 ? '' : 's'}`;
 
     return `
-      <tr>
-        <td class="pkg-name">${name}</td>
-        <td>${formatDate(p.purchase_date)}</td>
-        <td>
-          <span class="pkg-progress">
-            <span class="progress-bar"><span class="${fillCls}" style="width: ${progressPct}%"></span></span>
-            ${used} / ${total}
-          </span>
-        </td>
-        <td class="num">${pkgPaidCell}</td>
-        <td><span class="pkg-status ${statusKey}"><span class="dot">${meta.dot}</span> ${escape(statusText)}</span></td>
-      </tr>
+      <div class="pkg-card ${isInvalid ? 'invalid' : ''}">
+        <div class="pkg-card-top">
+          <span class="pkg-card-name">${name}</span>
+          <span class="pkg-badge ${statusKey}">${escape(statusText)}</span>
+        </div>
+        <div class="pkg-card-date">Adquirido en ${formatDate(p.purchase_date)}</div>
+        ${total > 0 ? `<div class="pkg-card-prog"><span class="progress-bar"><span class="${fillCls}" style="width: ${progressPct}%"></span></span></div>` : ''}
+        <div class="pkg-card-meta">${progLine}${payLine ? ` · ${payLine}` : ''}</div>
+      </div>
     `;
   }).join('');
 
@@ -22338,18 +22326,8 @@ function _pdfBuildHTML(stud, data) {
         <h2 class="section-title">Tus paquetes</h2>
         <span class="section-sub">${visiblePkgs.length} registro${visiblePkgs.length === 1 ? '' : 's'}</span>
       </div>
-      <table class="pkg-table">
-        <thead>
-          <tr>
-            <th style="width: 24%">Paquete</th>
-            <th style="width: 20%">Compra</th>
-            <th style="width: 24%">Progreso</th>
-            <th class="num" style="width: 14%">Pagado</th>
-            <th style="width: 18%">Estado</th>
-          </tr>
-        </thead>
-        <tbody>${pkgRows}</tbody>
-      </table>
+      <div class="pkg-note">"Adquirido en" es la fecha en que se registró el paquete, no necesariamente la del pago.</div>
+      <div class="pkg-cards">${pkgRows}</div>
     </section>
   ` : '';
 
@@ -22608,6 +22586,60 @@ function _pdfBuildHTML(stud, data) {
         .pdf-page .cal-dot.upcoming { border: 1.5px solid var(--fit-purple); box-sizing: border-box; }
         .pdf-page .cal-dot.today { background: var(--fit-lavender-pale); border: 1.5px solid var(--fit-purple); box-sizing: border-box; }
         .pdf-page .cal-legend-note { margin-left: auto; color: #8B6F1A; font-style: italic; font-family: 'Fraunces', Georgia, serif; font-size: 10px; }
+
+        /* ===================== READAPTACIÓN MÓVIL ===================== */
+        /* Página angosta tipo teléfono, una columna, scroll liviano. */
+        .pdf-page {
+          width: 84mm !important; min-height: 0 !important;
+          padding: 9mm 7mm 8mm 7mm !important;
+        }
+        .pdf-page .pdf-header { flex-direction: column; align-items: stretch; gap: 8px; padding-bottom: 11px; }
+        .pdf-page .brand-mark { width: 34px; height: 34px; font-size: 11px; }
+        .pdf-page .brand-name { font-size: 16px; }
+        .pdf-page .header-meta { text-align: left; }
+        .pdf-page .header-meta-label { margin-bottom: 2px; }
+        .pdf-page .student-block { flex-direction: column; align-items: stretch; gap: 12px; margin-top: 14px; padding-bottom: 14px; }
+        .pdf-page .student-name { font-size: 24px; }
+        .pdf-page .student-meta { font-size: 11px; gap: 0 10px; }
+        .pdf-page .balance-card { min-width: 0; width: 100%; text-align: left; padding: 12px 14px; }
+        .pdf-page .balance-amount { font-size: 24px; }
+        .pdf-page .section { margin-top: 18px; }
+        .pdf-page .section-title { font-size: 14px; }
+        /* Paquetes: tarjetas en columna */
+        .pdf-page .pkg-note { font-size: 9.5px; color: var(--ink-mute); font-style: italic; margin: 0 0 9px; line-height: 1.4; }
+        .pdf-page .pkg-cards { display: flex; flex-direction: column; gap: 8px; }
+        .pdf-page .pkg-card { border: 1px solid var(--line); border-radius: 12px; padding: 11px 13px; page-break-inside: avoid; }
+        .pdf-page .pkg-card.invalid .pkg-card-name { color: var(--ink-mute); text-decoration: line-through; }
+        .pdf-page .pkg-card-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+        .pdf-page .pkg-card-name { font-size: 13.5px; font-weight: 600; color: var(--ink); }
+        .pdf-page .pkg-badge { font-size: 9.5px; font-weight: 600; padding: 3px 8px; border-radius: 999px; white-space: nowrap; }
+        .pdf-page .pkg-badge.active { color: #3B6D11; background: #EAF3DE; }
+        .pdf-page .pkg-badge.completed { color: #854F0B; background: #FAEEDA; }
+        .pdf-page .pkg-badge.upcoming, .pdf-page .pkg-badge.frozen,
+        .pdf-page .pkg-badge.changed, .pdf-page .pkg-badge.cancelled,
+        .pdf-page .pkg-badge.expired { color: var(--ink-mute); background: var(--fit-lavender-pale); }
+        .pdf-page .pkg-card-date { font-size: 10px; color: var(--ink-mute); margin-top: 3px; }
+        .pdf-page .pkg-card-prog { margin-top: 9px; }
+        .pdf-page .pkg-card-prog .progress-bar { width: 100%; height: 6px; }
+        .pdf-page .pkg-card-meta { font-size: 10.5px; color: var(--ink-soft); margin-top: 6px; line-height: 1.4; }
+        /* Listas de clases: una columna */
+        .pdf-page .classes-grid { grid-template-columns: 1fr !important; grid-auto-flow: row !important; grid-template-rows: none !important; gap: 0 !important; }
+        .pdf-page .class-row { grid-template-columns: 50px 34px 1fr auto; gap: 8px; font-size: 11px; }
+        /* Calendario angosto */
+        .pdf-page .cal-stats { gap: 18px; margin-bottom: 14px; flex-wrap: wrap; }
+        .pdf-page .cal-stat-num { font-size: 24px; }
+        .pdf-page .cal-constancia { margin-left: 0; width: 100%; }
+        .pdf-page .cal-months { gap: 16px; }
+        .pdf-page .cal-day { font-size: 9px; }
+        .pdf-page .cal-legend { gap: 14px; font-size: 9.5px; }
+        .pdf-page .cal-legend-note { margin-left: 0; width: 100%; }
+        /* Tabla de pagos compacta */
+        .pdf-page .pay-table { font-size: 10.5px; }
+        .pdf-page .pay-table thead th { font-size: 8.5px; }
+        .pdf-page .pay-table tbody td { padding: 8px 0; }
+        /* Footer apilado */
+        .pdf-page .pdf-footer { flex-direction: column; align-items: flex-start; gap: 6px; margin-top: 22px; padding-top: 14px; }
+        .pdf-page .footer-contact { flex-wrap: wrap; gap: 8px; }
       </style>
 
       <header class="pdf-header">
