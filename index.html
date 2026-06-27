@@ -3030,6 +3030,11 @@
       <span class="nav-icon"><svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="m7.5 4.27 9 5.15"/><path d="M21 8 12 13 3 8"/><path d="M3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8z"/></svg></span>
       Paquetes
     </button>
+    <button class="nav-item" onclick="openTherapyReadonly(this)">
+      <span class="nav-icon"><svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M4 3v7a4 4 0 0 0 8 0V3"/><path d="M6 3v1M10 3v1"/><path d="M12 14a6 6 0 0 0 6 6"/><circle cx="20" cy="9" r="2"/></svg></span>
+      Terapias
+      <span class="nav-badge" style="background:var(--fit-lavender);color:var(--fit-purple);">ver</span>
+    </button>
   </div>
 
   <!-- Botón Sistema (engranaje) con popover. Sticky al fondo del sidebar. -->
@@ -29207,6 +29212,43 @@ async function docInit(){
   }
 }
 
+// ============================================
+// MODO SOLO LECTURA del módulo de terapias (para coordinadores/admin, NO Andrés).
+// Ve agenda, "Hoy" y fichas de pacientes; no puede modificar nada.
+// El cerrojo real es RLS (SELECT-only en therapy_*); esto es la capa de UI.
+// ============================================
+function docGuardRO(){
+  if (docState && docState.readonly){ showToast('Modo solo lectura', 'info'); return true; }
+  return false;
+}
+async function openTherapyReadonly(navEl){
+  if (!CURRENT_USER || CURRENT_USER.role !== 'coordinator') return;
+  let docId = null;
+  try {
+    const { data } = await sb.from('doctors').select('id').eq('is_active', true).order('created_at').limit(1).maybeSingle();
+    docId = data && data.id;
+  } catch(e){}
+  if (!docId){ showToast('No hay módulo de terapias disponible', 'error'); return; }
+  // Marcar la pestaña activa en el sidebar
+  document.querySelectorAll('.sidebar .nav-item.is-active').forEach(n => n.classList.remove('is-active'));
+  if (navEl) navEl.classList.add('is-active');
+  // Entrar al módulo del doctor en modo lectura
+  docState.doctorId = docId;
+  docState.readonly = true;
+  docState.instructorId = undefined; // se re-resuelve en docInit
+  docState.date = docYMD(new Date());
+  document.body.classList.add('doctor-mode', 'no-sidebar', 'doc-readonly');
+  await docInit();
+  showView('doctor-home', null);
+  docRenderHoy();
+}
+function docExitReadonly(){
+  docState.readonly = false;
+  document.body.classList.remove('doctor-mode', 'no-sidebar', 'doc-readonly', 'role-doctor');
+  showAppLayout();
+  initForRole(); // vuelve al panel de coordinación
+}
+
 // ---- Selector de rol ----
 function docShowRoleChooser(){
   const _rc=document.getElementById('doc-role-chooser');
@@ -29276,15 +29318,22 @@ function docGoDate(ymd){ docState.date=ymd; docRenderHoy(); }
 function docRenderBottomNav(active){
   const nav=document.getElementById('doc-bottomnav'); if(!nav) return;
   const it=(id,ic,lbl)=>`<button class="doc-nav ${active===id?'is-active':''}" onclick="docGoTab('${id}')"><i class="ti ${ic}"></i> ${lbl}</button>`;
+  if (docState.readonly){
+    // Coordinador en solo lectura: sin "+", y "Salir" en vez de "Más"
+    nav.innerHTML = it('hoy','ti-sun','Hoy')+it('agenda','ti-calendar-month','Agenda')
+      +it('pacientes','ti-users','Pacientes')+it('salir','ti-logout','Salir');
+    return;
+  }
   nav.innerHTML = it('hoy','ti-sun','Hoy')+it('agenda','ti-calendar-month','Agenda')
     +`<button class="doc-fab" onclick="docGoTab('nuevo')"><i class="ti ti-plus"></i></button>`
     +it('pacientes','ti-users','Pacientes')+it('mas','ti-dots','Más');
 }
 function docGoTab(t){
+  if (t==='salir'){ docExitReadonly(); return; }
   if (t==='hoy'){ docState.date=docYMD(new Date()); docRenderHoy(); return; }
   if (t==='agenda'){ docRenderAgendaMaestra(); return; }
   if (t==='pacientes'){ docRenderPacientes(); return; }
-  if (t==='nuevo'){ docRenderNuevo(docState.lastMain); return; }
+  if (t==='nuevo'){ if(docGuardRO()) return; docRenderNuevo(docState.lastMain); return; }
   if (t==='mas'){ docRoleMenu(); return; }
   showToast('Esa sección llega en el siguiente paso 🙌','info');
 }
@@ -29756,7 +29805,7 @@ function docSessRow(s, ctx, selMode, action){
 }
 // ---- Selección múltiple (eliminar o cobrar) ----
 let docSelMode=false, docSelAction='delete'; const docSel=new Set(); let docPatSelCtx={id:null, origin:'pacientes'};
-function docPatSelEnter(id, origin, action){ docSelMode=true; docSelAction=action||'delete'; docSel.clear(); docRenderPatient(id, origin); }
+function docPatSelEnter(id, origin, action){ if(docGuardRO())return; docSelMode=true; docSelAction=action||'delete'; docSel.clear(); docRenderPatient(id, origin); }
 function docPatSelExit(){ docSelMode=false; docSel.clear(); docRenderPatient(docPatSelCtx.id, docPatSelCtx.origin); }
 function docPatSelSetRow(row, on){ if(!row) return; row.classList.toggle('on',on); const ic=row.querySelector('.doc-selcheck i'); if(ic) ic.className='ti ti-'+(on?'square-check':'square'); }
 function docPatToggleSel(id){
@@ -29776,7 +29825,7 @@ function docPatSelUpdateBar(){
   const on=docSel.size>0;
   ['doc-selbar-del','doc-selbar-go','doc-selbar-unpay'].forEach(idn=>{ const b=document.getElementById(idn); if(b){ b.style.opacity=on?'1':'.4'; b.style.pointerEvents=on?'auto':'none'; } });
 }
-async function docPatBulkDelete(){
+async function docPatBulkDelete(){ if(docGuardRO())return;
   const ids=[...docSel]; if(!ids.length) return;
   const reason=(prompt('Motivo (opcional) para eliminar '+ids.length+' cita(s):')||'').trim()||null;
   try{
@@ -29839,7 +29888,7 @@ function docPayRecalc(){
   const u=document.getElementById('doc-pay-unit'); if(u) u.textContent=docPayFmt(r.unit);
   docPayUpdateBtn();
 }
-async function docDoPayment(){
+async function docDoPayment(){ if(docGuardRO())return;
   const st=docPayState; if(!st||!st.ids.length) return;
   if(!st.method){ showToast('Elige un método de pago','error'); return; }
   const r=docPayCalc();
@@ -29858,7 +29907,7 @@ async function docDoPayment(){
     docRenderPatient(docPatSelCtx.id, docPatSelCtx.origin);
   }catch(e){ showToast('Error: '+(e.message||''),'error'); }
 }
-async function docUnpayDo(){
+async function docUnpayDo(){ if(docGuardRO())return;
   const ids=[...docSel]; if(!ids.length) return;
   if(!confirm('¿Quitar el pago de '+ids.length+' cita'+(ids.length===1?'':'s')+'? Volverán a quedar como "por pagar".')) return;
   try{
@@ -29900,6 +29949,7 @@ async function docSessionSheet(id, ctx){
     <div style="font-size:15px;font-weight:600;color:#1C1922;">${docEsc(nm)}</div>
     <div style="display:flex;align-items:center;gap:6px;font-size:11.5px;color:#9A9183;margin:3px 0 14px;"><span style="width:8px;height:8px;border-radius:50%;background:${sede.color};flex:none;"></span><span style="color:${sede.ink};font-weight:500;">${docEsc(sede.name)}</span> · ${when}</div>
     ${s.patient_id?opt('ti-user','#3C3489','Ver perfil',`docSessClose(); docRenderPatient('${s.patient_id}','${profOrigin}')`, false):''}
+    ${docState.readonly ? '' : `
     ${s.patient_id?opt('ti-arrows-move','#3C3489','Mover de horario',`docMoveStart('${id}','${s.patient_id}')`, false):''}
     ${s.patient_id?opt('ti-map-pin','#854F0B','Cambiar sede',`docSedeChangeSheet('${id}','${s.patient_id}','${s.location_id||''}','${s.session_date}')`, false):''}
     <div style="height:4px;border-top:1px solid #ECE6DA;margin:6px 0 10px;"></div>
@@ -29908,7 +29958,7 @@ async function docSessionSheet(id, ctx){
     ${opt('ti-circle-x','#A32D2D','No vino · perdida',`docSetSessionStatus('${id}','no_show')`, s.status==='no_show')}
     ${s.status!=='scheduled'?opt('ti-arrow-back-up','#5F5E5A','Volver a programada',`docSetSessionStatus('${id}','scheduled')`, false):''}
     <div style="height:4px;border-top:1px solid #ECE6DA;margin:6px 0 10px;"></div>
-    ${opt('ti-trash','#A32D2D','Eliminar (interno)',`docDeleteSession('${id}')`, false)}
+    ${opt('ti-trash','#A32D2D','Eliminar (interno)',`docDeleteSession('${id}')`, false)}`}
     <div onclick="docSessClose()" style="text-align:center;padding:11px;font-size:13px;color:#9A9183;cursor:pointer;">Cerrar</div>
   </div>`;
   document.body.appendChild(sheet);
@@ -29936,7 +29986,7 @@ function docMountSheet(inner){
 // ---- Cambiar sede de una paciente (solo esta cita / todas) ----
 let docSedeChg=null;
 const DOC_SEDE_IDS=['11111111-1111-1111-1111-111111111111','22222222-2222-2222-2222-222222222222','33333333-3333-3333-3333-333333333333'];
-function docSedeChangeSheet(sessionId, patientId, curLoc, sessionDate, fromPlan){
+function docSedeChangeSheet(sessionId, patientId, curLoc, sessionDate, fromPlan){ if(docGuardRO())return;
   docSedeChg={ sessionId, patientId, curLoc, sessionDate, newLoc:null, fromPlan:!!fromPlan };
   const rows=DOC_SEDE_IDS.map(id=>{ const s=docSede(id); const cur=(id===curLoc);
     return `<div onclick="docSedeChangeScope('${id}')" style="display:flex;align-items:center;gap:11px;padding:13px 14px;border-radius:12px;background:${cur?'#F0ECE2':'#fff'};border:1px solid #ECE6DA;margin-bottom:8px;cursor:pointer;">
@@ -29962,7 +30012,7 @@ function docSedeChangeScope(newLoc){
     ${opt('ti-calendar-repeat','Todas sus citas futuras','Cambia su sede en el perfil y en las próximas terapias programadas.',`docApplySede('all')`)}
     <div onclick="docSedeChangeSheet('${docSedeChg.sessionId}','${docSedeChg.patientId}','${docSedeChg.curLoc||''}','${docSedeChg.sessionDate}',${docSedeChg.fromPlan})" style="text-align:center;padding:11px;font-size:13px;color:#9A9183;cursor:pointer;">Atrás</div>`);
 }
-async function docApplySede(scope){
+async function docApplySede(scope){ if(docGuardRO())return;
   const st=docSedeChg; if(!st||!st.newLoc) return;
   try{
     if(scope==='one'){
@@ -30021,7 +30071,7 @@ function docSlotRenderList(list){
   }).join('');
 }
 function docSlotFilter(q){ q=(q||'').toLowerCase().trim(); const list=(docCache.patients||[]).filter(p=>(((p.first_name||'')+' '+(p.last_name||'')).toLowerCase().includes(q))); docSlotRenderList(list); }
-async function docSlotBook(pid){
+async function docSlotBook(pid){ if(docGuardRO())return;
   const st=docSlotState; const p=(docCache.patients||[]).find(x=>x.id===pid); if(!p) return;
   try{
     const { error }=await sb.from('therapy_sessions').insert({ patient_id:pid, doctor_id:docState.doctorId, location_id:p.location_id, session_date:st.ds, hour:st.hour, duration_min:60, status:'scheduled' });
@@ -30049,7 +30099,7 @@ function docBlkRender(){
     <div onclick="docSessClose()" style="text-align:center;padding:11px;font-size:13px;color:#9A9183;cursor:pointer;">Cancelar</div>`);
 }
 function docBlkSet(k,v){ docBlkState[k]=v; docBlkRender(); }
-async function docBlkConfirm(){
+async function docBlkConfirm(){ if(docGuardRO())return;
   const st=docBlkState; if(!st.type) return;
   let block_type='personal', reason=null;
   if(st.type==='gym'){ reason='GYM'; }
@@ -30071,15 +30121,15 @@ function docBlockRemoveSheet(id, label){
     <div style="font-size:10px;color:#A8A092;margin:2px 2px 10px;">Si es "cada semana", se quita en todas las semanas.</div>
     <div onclick="docSessClose()" style="text-align:center;padding:11px;font-size:13px;color:#9A9183;cursor:pointer;">Cerrar</div>`);
 }
-async function docBlkRemove(id){
+async function docBlkRemove(id){ if(docGuardRO())return;
   try{ const { error }=await sb.from('doctor_blocks').update({ is_active:false }).eq('id',id); if(error) throw error; docSessClose(); showToast('Bloqueo quitado','success'); docRenderAgendaMaestra(); }
   catch(e){ showToast('Error: '+(e.message||''),'error'); }
 }
-async function docSetSessionStatus(id, status){
+async function docSetSessionStatus(id, status){ if(docGuardRO())return;
   try{ const { error }=await sb.from('therapy_sessions').update({ status }).eq('id',id); if(error) throw error; docSessClose(); showToast('✓ Actualizada','success'); docSessReturn(); }
   catch(e){ showToast('Error: '+(e.message||''),'error'); }
 }
-async function docDeleteSession(id){
+async function docDeleteSession(id){ if(docGuardRO())return;
   const reason=(prompt('Motivo de eliminación (opcional):')||'').trim()||null;
   try{
     const payload={ status:'deleted', deleted_at:new Date().toISOString(), deleted_by:(CURRENT_USER&&CURRENT_USER.authUser&&CURRENT_USER.authUser.id)||null, deleted_by_name:(typeof getCurrentActorLabel==='function'?getCurrentActorLabel():null), delete_reason:reason };
@@ -30095,7 +30145,7 @@ function docSessReturn(){
   docRenderHoy();
 }
 let docEditState={};
-async function docRenderEditar(pid, origin){
+async function docRenderEditar(pid, origin){ if(docGuardRO())return;
   const cont=document.getElementById('doc-home-content'); if(!cont) return;
   cont.innerHTML='<div class="doc-wrap"><div class="doc-loading">…</div></div>';
   const pts=await docLoadPatients();
@@ -30124,7 +30174,7 @@ function docEditSetSede(id){
   docEditState.sede=id;
   document.querySelectorAll('#ep-sedes .doc-sedebtn').forEach(b=>b.classList.toggle('on', b.dataset.sede===id));
 }
-async function docUpdatePatient(pid){
+async function docUpdatePatient(pid){ if(docGuardRO())return;
   const first=(document.getElementById('ep-first').value||'').trim();
   const email=(document.getElementById('ep-email').value||'').trim();
   if(email && !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)){ showToast('El correo no es válido','error'); return; }
@@ -30149,7 +30199,7 @@ async function docUpdatePatient(pid){
 }
 
 // ---- Enlazar a FIT desde el perfil ----
-function docLinkFit(pid){
+function docLinkFit(pid){ if(docGuardRO())return;
   const cont=document.getElementById('doc-home-content'); if(!cont) return;
   cont.innerHTML=`<div class="doc-wrap">
     <div class="doc-top"><button class="doc-iconbtn" onclick="docRenderPatient('${pid}')"><i class="ti ti-arrow-left"></i></button><div style="font-size:16px;font-weight:600;flex:1;">Enlazar con FIT</div></div>
@@ -30163,13 +30213,13 @@ async function docLinkSearch(pid,q){
   try{ const { data }=await sb.from('students').select('id,first_name,last_name,location_id').or(`first_name.ilike.%${qq}%,last_name.ilike.%${qq}%`).eq('status','active').limit(8); res=data||[]; }catch(e){}
   box.innerHTML=res.map(s=>`<div class="doc-card" onclick="docDoLink('${pid}','${s.id}')"><div class="c-body"><div class="c-name" style="font-size:12.5px;">${docEsc(((s.first_name||'')+' '+(s.last_name||'')).trim())}</div><div class="c-meta">${docEsc(docSede(s.location_id).name)}</div></div><i class="ti ti-link c-chev"></i></div>`).join('') || '<div class="doc-empty">Sin resultados.</div>';
 }
-async function docDoLink(pid,sid){
+async function docDoLink(pid,sid){ if(docGuardRO())return;
   try{ const { error }=await sb.from('therapy_patients').update({student_id:sid}).eq('id',pid); if(error) throw error; docCache.patients=null; showToast('✓ Enlazado','success'); docRenderPatient(pid); }
   catch(e){ showToast('Error: '+(e.message||''),'error'); }
 }
 
 // ---- Registrar paciente ----
-function docRenderNuevo(origin){
+function docRenderNuevo(origin){ if(docGuardRO())return;
   const cont=document.getElementById('doc-home-content'); if(!cont) return;
   docRenderBottomNav('nuevo');
   docNuevoState={ mode:'cero', student:null, sede:null };
@@ -30216,7 +30266,7 @@ function docNuevoSetSede(id){
   docNuevoState.sede=id;
   document.querySelectorAll('#np-sedes .doc-sedebtn').forEach(b=>b.classList.toggle('on', b.dataset.sede===id));
 }
-async function docCreatePatient(){
+async function docCreatePatient(){ if(docGuardRO())return;
   const first=(document.getElementById('np-first').value||'').trim();
   if(!first){ showToast('Falta el nombre','error'); return; }
   const email=(document.getElementById('np-email').value||'').trim();
@@ -30631,7 +30681,7 @@ function docMsgOpciones(p){
     : `En total serían ${st.total} terapias (${st.freq} por semana · ${st.weeks} semana${st.weeks===1?'':'s'}).`;
   return `Hola ${name} 👋 Soy Andrés. Para tus terapias (${docFreqWord(st.freq)}) tengo estos horarios libres:\n\n${lines.join('\n')}\n\nTodas en la sede ${sede}. ${totalLine}\n¿Cuál te acomoda mejor?`;
 }
-async function docCopyOpciones(){
+async function docCopyOpciones(){ if(docGuardRO())return;
   const p=(docCache.patients||[]).find(x=>x.id===docOptState.pid); if(!p) return;
   if(!docOptState.opts.length){ showToast('No hay opciones para copiar','info'); return; }
   docCopy(docMsgOpciones(p), 'Mensaje copiado ✓');
@@ -30673,7 +30723,7 @@ function docRenderConfirmar(){
     <div style="font-size:10.5px;color:#9A9183;text-align:center;margin:12px 0;line-height:1.5;">${note}</div>
     <button class="doc-primary" id="doc-conf-btn" onclick="docDoConfirm()"><i class="ti ti-calendar-check"></i> Confirmar y agendar</button></div>`;
 }
-async function docDoConfirm(){
+async function docDoConfirm(){ if(docGuardRO())return;
   const st=docConfState; const btn=document.getElementById('doc-conf-btn');
   if(btn){ btn.style.opacity='.5'; btn.style.pointerEvents='none'; btn.innerHTML='Agendando…'; }
   try{
@@ -30842,7 +30892,7 @@ function docManPickDay(wi, ds){
     ${rows}</div>`;
 }
 function docManAdd(wi, ds, h){ docManState.weeks[wi].slots.push({ date:ds, hour:h }); showToast('✓ Agregada','success'); docManRerender(); }
-async function docManConfirm(){
+async function docManConfirm(){ if(docGuardRO())return;
   const st=docManState;
   const slots=[]; st.weeks.forEach(w=>w.slots.forEach(s=>slots.push(s)));
   if(!slots.length){ showToast('Agrega al menos una terapia','info'); return; }
@@ -30939,7 +30989,7 @@ function docAgmHideSaving(){ const p=document.getElementById('doc-agm-saving'); 
 let docAgmWeekCache={};
 let docAgmAnim=false;
 let docMoveState=null;
-async function docMoveStart(sid, pid){
+async function docMoveStart(sid, pid){ if(docGuardRO())return;
   docSessClose();
   let s=null;
   try{ const { data }=await sb.from('therapy_sessions').select('session_date,hour,location_id,therapy_patients(first_name)').eq('id',sid).maybeSingle(); s=data; }catch(e){}
@@ -30948,7 +30998,7 @@ async function docMoveStart(sid, pid){
   docAgmState.mobileMode='dia';
   await docRenderAgendaMobile();
 }
-async function docMoveTo(ds, h){
+async function docMoveTo(ds, h){ if(docGuardRO())return;
   const st=docMoveState; if(!st) return;
   if(st.fromD===ds && st.fromH===h){ docMoveCancel(); return; }
   try{
@@ -31246,7 +31296,7 @@ async function docSessBar(id){
   if(docPlanState){ docPlanState.selSid=id; docPlanRepaint(); }
 }
 function docSessBarHide(){ if(docPlanState&&docPlanState.selSid){ docPlanState.selSid=null; try{ docPlanRepaint(); }catch(_){} } const bar=document.getElementById('doc-sessbar'); if(!bar) return; bar.classList.remove('show'); bar.classList.add('hide'); setTimeout(()=>{ if(bar&&bar.parentNode) bar.parentNode.removeChild(bar); },260); }
-async function docMiniStatus(id, status){
+async function docMiniStatus(id, status){ if(docGuardRO())return;
   try{ const { error }=await sb.from('therapy_sessions').update({ status }).eq('id',id); if(error) throw error;
     docSessBarHide(); docCache.patients=null; docCache.prefs=null; showToast('✓ Actualizada','success'); await docPlanRefresh();
   }catch(e){ showToast('Error: '+(e.message||''),'error'); }
@@ -31293,7 +31343,7 @@ function docDelReasonRender(){
 }
 function docDelPick(i){ const st=docDelState; if(!st) return; st.reason=(i===-1)?'__other__':st.chips[i]; docDelReasonRender(); if(i===-1){ const inp=document.getElementById('doc-rinput'); if(inp) inp.focus(); } }
 function docDelClose(){ const ov=document.getElementById('doc-del-ov'); if(ov){ ov.classList.remove('show'); setTimeout(()=>{ if(ov&&ov.parentNode) ov.parentNode.removeChild(ov); },200); } docDelState=null; }
-async function docDelConfirm(){
+async function docDelConfirm(){ if(docGuardRO())return;
   const st=docDelState; if(!st) return; const id=st.id;
   let reason=null;
   if(st.reason==='__other__') reason=(st.custom||'').trim()||null;
@@ -31312,7 +31362,7 @@ function docPatSedeSheet(pid){
   }).join('');
   docMountSheet(`<div style="font-size:14px;font-weight:600;margin-bottom:4px;">Cambiar sede del paciente</div><div style="font-size:11.5px;color:#6E665A;margin-bottom:14px;line-height:1.5;">Las futuras citas programadas se agendarán en esta sede. Si quieres cambiar solo una cita en particular, usa <b>Acciones rápidas</b> seleccionando la cita en el calendario.</div>${rows}<div onclick="docSessClose()" style="text-align:center;padding:11px;font-size:13px;color:#9A9183;cursor:pointer;">Cancelar</div>`);
 }
-async function docPatSedeApply(pid, loc){
+async function docPatSedeApply(pid, loc){ if(docGuardRO())return;
   try{
     const today=docYMD(new Date());
     await sb.from('therapy_patients').update({ location_id:loc }).eq('id',pid);
@@ -31637,7 +31687,7 @@ function docPlanRenderExisting(){
   box.innerHTML=`<div class="doc-existlist">${listHtml}</div>${foot}`;
 }
 function docPlanToggleDel(id){ const st=docPlanState; if(docPlanMode()==='agendar'){ st.picks=[]; st.cfg=docPlanResetCfg(); st.opts=[]; st.optSel=null; } docSessBarHide(); const s=st.delIds; if(s.has(id)) s.delete(id); else s.add(id); docPlanRenderExisting(); docPlanRepaint(); docPlanRenderLeft(); }
-async function docPlanDeleteNow(){
+async function docPlanDeleteNow(){ if(docGuardRO())return;
   const st=docPlanState; const ids=[...st.delIds]; if(!ids.length) return;
   const btn=document.getElementById('doc-plan-delbtn'); if(btn){ btn.style.opacity='.5'; btn.style.pointerEvents='none'; btn.innerHTML='Eliminando…'; }
   try{
@@ -31662,7 +31712,7 @@ function docPlanBusy(){ showToast('Ese horario ya está ocupado','info'); }
 function docPlanClear(){ docPlanState.picks=[]; docPlanRepaint(); docPlanRenderLeft(); docPlanRenderExisting(); }
 async function docPlanNav(d){ docPlanState.weekStart=docAddDaysYMD(docPlanState.weekStart, d); await docPlanRenderCalendar(); }
 async function docPlanToday(){ docPlanState.weekStart=docWeekStart(new Date()); await docPlanRenderCalendar(); }
-async function docPlanSave(){
+async function docPlanSave(){ if(docGuardRO())return;
   const st=docPlanState; const picks=[...st.picks];
   if(!picks.length) return;
   picks.sort((a,b)=> a.ds<b.ds?-1:a.ds>b.ds?1:a.hour-b.hour);
@@ -31710,7 +31760,7 @@ async function docPlanDone(nNew, nDel, finalList){
 // ---- Arrastrar y soltar (solo PC, mueve UNA cita) ----
 function docCanDnd(){ try{ return !!(window.matchMedia && window.matchMedia('(hover:hover) and (pointer:fine)').matches); }catch(_){ return false; } }
 let docDnd=null, docDndPending=null, docDndToastTimer=null;
-function docAgmAttachDnd(){
+function docAgmAttachDnd(){ if(docState.readonly)return;
   const grid=document.querySelector('#view-doctor-home .agm-grid'); if(!grid) return;
   grid.addEventListener('dragstart', docDndStart);
   grid.addEventListener('dragover', docDndOver);
@@ -31766,7 +31816,7 @@ function docDndConfirm(dnd, toD, toH, warn){
 }
 function docDndConfirmMove(){ const p=docDndPending; docDndPending=null; docSessClose(); if(p) docDndMove(p.dnd, p.toD, p.toH); }
 function docDndCtxLive(){ return document.getElementById('doc-plan-cal') ? 'plan' : 'agenda'; }
-async function docDndMove(dnd, toD, toH){
+async function docDndMove(dnd, toD, toH){ if(docGuardRO())return;
   try{
     const { error }=await sb.from('therapy_sessions').update({ session_date:toD, hour:toH }).eq('id',dnd.sid);
     if(error) throw error;
@@ -31775,7 +31825,7 @@ async function docDndMove(dnd, toD, toH){
     docDndToast(dnd.name+' → '+docCap(docDateShort(toD))+' · '+docHourLbl(toH), ()=>docDndUndo(dnd.sid, dnd.fromD, dnd.fromH));
   }catch(e){ showToast('Error: '+(e.message||''),'error'); }
 }
-async function docDndUndo(sid, d, h){
+async function docDndUndo(sid, d, h){ if(docGuardRO())return;
   try{ const { error }=await sb.from('therapy_sessions').update({ session_date:d, hour:h }).eq('id',sid); if(error) throw error;
     if(docDndCtxLive()==='plan' && docPlanState){ docCache.patients=null; docPlanState.weekStart=docWeekStart(new Date(d+'T12:00:00')); await docPlanRefresh(); }
     else await docRenderAgendaMaestra();
