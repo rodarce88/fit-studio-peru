@@ -21861,7 +21861,9 @@ function _pdfFmtDateShort(iso) {
   const [y, m, d] = iso.split('-').map(Number);
   if (!y) return iso;
   const months = ['ene','feb','mar','abr','may','jun','jul','ago','set','oct','nov','dic'];
-  return `${d} ${months[m - 1]}`;
+  const dows = ['dom','lun','mar','mié','jue','vie','sáb'];
+  const dow = new Date(y, m - 1, d).getDay();
+  return `${dows[dow]} ${d} ${months[m - 1]}`;
 }
 
 function _pdfPkgStatusKey(p, activePkgId) {
@@ -22615,7 +22617,8 @@ function _pdfBuildHTML(stud, data) {
         .pdf-page .pdfpk-meta { font-size: 10.5px; color: var(--ink-soft); margin-top: 6px; line-height: 1.4; text-transform: none; opacity: 1; }
         /* Listas de clases: una columna */
         .pdf-page .classes-grid { grid-template-columns: 1fr !important; grid-auto-flow: row !important; grid-template-rows: none !important; gap: 0 !important; }
-        .pdf-page .class-row { grid-template-columns: 58px 44px 1fr auto; gap: 8px; font-size: 11px; }
+        .pdf-page .class-row { grid-template-columns: 80px 40px 1fr auto; gap: 8px; font-size: 11px; }
+        .pdf-page .class-date { white-space: nowrap; }
         /* Calendario angosto, una sola columna */
         .pdf-page .cal-months { grid-template-columns: 1fr !important; gap: 16px; }
         .pdf-page .cal-stats { gap: 18px; margin-bottom: 14px; flex-wrap: wrap; }
