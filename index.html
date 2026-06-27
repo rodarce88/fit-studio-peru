@@ -29212,6 +29212,54 @@ const docState = { date: null, doctorId: null };
 function docYMD(d){ d=d||new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
 function docIsToday(ymd){ return ymd === docYMD(new Date()); }
 function docCap(s){ s=s||''; return s.charAt(0).toUpperCase()+s.slice(1); }
+
+// ===== Registro de actividad de terapias (therapy_activity_log) =====
+const DOC_LOG_ACTIONS = {
+  'terapia.asistida':     { ic:'ti-check',          cat:'asistencia', col:'#2F6B12', t:'Asistió' },
+  'terapia.no_asistio':   { ic:'ti-x',              cat:'asistencia', col:'#A32D2D', t:'No asistió' },
+  'terapia.reprogramar':  { ic:'ti-rotate',         cat:'asistencia', col:'#9A7A1E', t:'Reprogramar' },
+  'terapia.agendada':     { ic:'ti-calendar-plus',  cat:'citas',      col:'#1C1922', t:'Cita agendada' },
+  'plan.creado':          { ic:'ti-calendar-event', cat:'citas',      col:'#1C1922', t:'Plan agendado' },
+  'terapia.movida':       { ic:'ti-arrows-move',     cat:'citas',      col:'#6A4E9C', t:'Cita movida' },
+  'terapia.eliminada':    { ic:'ti-trash',          cat:'citas',      col:'#A32D2D', t:'Cita eliminada' },
+  'pago.registrado':      { ic:'ti-cash',           cat:'pagos',      col:'#0F6E56', t:'Pago registrado' },
+  'pago.anulado':         { ic:'ti-receipt-off',    cat:'pagos',      col:'#854F0B', t:'Pago anulado' },
+  'paciente.creado':      { ic:'ti-user-plus',      cat:'pacientes',  col:'#1C1922', t:'Paciente creado' },
+  'paciente.editado':     { ic:'ti-edit',           cat:'pacientes',  col:'#6E665A', t:'Paciente editado' },
+  'paciente.enlazado_fit':{ ic:'ti-link',           cat:'pacientes',  col:'#1C1922', t:'Enlazado con FIT' },
+  'bloqueo.creado':       { ic:'ti-lock',           cat:'agenda',     col:'#6E665A', t:'Horario bloqueado' },
+  'bloqueo.eliminado':    { ic:'ti-lock-open',      cat:'agenda',     col:'#6E665A', t:'Bloqueo quitado' },
+  'paciente.pdf':         { ic:'ti-file-text',      cat:'accesos',    col:'#6E665A', t:'PDF exportado' },
+  'acceso.terapias':      { ic:'ti-login',          cat:'accesos',    col:'#9A9183', t:'Entró al módulo' },
+  'rol.cambiado':         { ic:'ti-switch-horizontal', cat:'accesos', col:'#9A9183', t:'Cambió de rol' }
+};
+function _docStatusAction(status){
+  if(status==='done') return 'terapia.asistida';
+  if(status==='no_show') return 'terapia.no_asistio';
+  if(status==='to_reschedule') return 'terapia.reprogramar';
+  return null;
+}
+// Inserta una fila en el log. NUNCA rompe la acción que la dispara (try/catch silencioso).
+async function docLog(action, opts){
+  opts = opts || {};
+  try{
+    if(!docState || !docState.doctorId) return;
+    const actorRole = (docState.readonly ? 'coordinator' : ((CURRENT_USER && CURRENT_USER.role) || 'doctor'));
+    const actorName = (typeof getCurrentActorLabel==='function' ? getCurrentActorLabel() : null)
+      || (CURRENT_USER && CURRENT_USER.authUser && CURRENT_USER.authUser.email) || 'Usuario';
+    await sb.from('therapy_activity_log').insert({
+      doctor_id: docState.doctorId,
+      actor_user_id: (CURRENT_USER && CURRENT_USER.authUser && CURRENT_USER.authUser.id) || null,
+      actor_name: actorName,
+      actor_role: actorRole,
+      action: action,
+      patient_id: opts.patient_id || null,
+      session_id: opts.session_id || null,
+      label: opts.label || (DOC_LOG_ACTIONS[action] ? DOC_LOG_ACTIONS[action].t : action),
+      meta: opts.meta || {}
+    });
+  }catch(e){ /* el registro nunca interrumpe la operación */ }
+}
 function docEsc(s){ return (s==null?'':String(s)).replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
 function docHourH(h){ return (h<=12? h : h-12)+':00'; }
 function docHourAp(h){ return h<12?'am':(h===12?'m':'pm'); }
@@ -29253,6 +29301,7 @@ async function docInit(){
       if(uid){ const { data:inst }=await sb.from('instructors').select('id').eq('auth_user_id',uid).eq('is_active',true).maybeSingle(); if(inst) docState.instructorId=inst.id; }
     }catch(e){}
   }
+  try{ docLog('acceso.terapias', { meta:{ readonly: !!docState.readonly } }); }catch(_){}
 }
 
 // ============================================
@@ -29345,6 +29394,7 @@ function docPickRole(r){
   docActivateRole(r);
 }
 function docActivateRole(r){
+  try{ if(docState && docState.doctorId) docLog('rol.cambiado', { label:'Cambió a rol: '+r, meta:{ role:r } }); }catch(_){}
   CURRENT_USER.role = r;
   CURRENT_USER.record = (CURRENT_USER.records && CURRENT_USER.records[r]) || CURRENT_USER.record;
   document.body.classList.remove('doctor-mode','no-sidebar','role-doctor');
@@ -29389,8 +29439,68 @@ function docGoTab(t){
   if (t==='agenda'){ docRenderAgendaMaestra(); return; }
   if (t==='pacientes'){ docRenderPacientes(); return; }
   if (t==='nuevo'){ if(docGuardRO()) return; docRenderNuevo(docState.lastMain); return; }
-  if (t==='mas'){ docRoleMenu(); return; }
+  if (t==='mas'){ docMoreMenu(); return; }
   showToast('Esa sección llega en el siguiente paso 🙌','info');
+}
+
+// ---- Menú "Más" ----
+function docMoreMenu(){
+  docMountSheet(`
+    <div style="font-size:14px;font-weight:600;color:#1C1922;margin-bottom:12px;">Más</div>
+    <div onclick="docSessClose();docRenderRegistro();" style="display:flex;align-items:center;gap:12px;padding:13px 14px;border-radius:12px;background:#fff;border:1px solid #ECE6DA;margin-bottom:8px;cursor:pointer;"><i class="ti ti-history" style="font-size:19px;color:#1C1922;"></i><div style="flex:1;"><div style="font-size:13.5px;color:#1C1922;">Registro de actividad</div><div style="font-size:10.5px;color:#9A9183;">Todo lo que pasa en el sistema</div></div><i class="ti ti-chevron-right" style="color:#C9C1B2;"></i></div>
+    <div onclick="docSessClose();docRoleMenu();" style="display:flex;align-items:center;gap:12px;padding:13px 14px;border-radius:12px;background:#fff;border:1px solid #ECE6DA;margin-bottom:8px;cursor:pointer;"><i class="ti ti-user-circle" style="font-size:19px;color:#1C1922;"></i><div style="flex:1;"><div style="font-size:13.5px;color:#1C1922;">Cuenta y rol</div><div style="font-size:10.5px;color:#9A9183;">Cambiar de rol o cerrar sesión</div></div><i class="ti ti-chevron-right" style="color:#C9C1B2;"></i></div>
+    <div onclick="docSessClose()" style="text-align:center;padding:11px;font-size:13px;color:#9A9183;cursor:pointer;">Cerrar</div>`);
+}
+
+// ---- Registro de actividad ----
+let docRegState={ filter:'todo', rows:[] };
+async function docRenderRegistro(){
+  const cont=document.getElementById('doc-home-content'); if(!cont) return;
+  try{ docSessBarHide(); }catch(_){}
+  docRenderBottomNav('mas');
+  cont.innerHTML='<div class="doc-wrap"><div class="doc-loading">Cargando…</div></div>';
+  let rows=[];
+  try{
+    const { data }=await sb.from('therapy_activity_log').select('*').eq('doctor_id',docState.doctorId).order('created_at',{ascending:false}).limit(200);
+    rows=data||[];
+  }catch(e){}
+  docRegState={ filter:'todo', rows };
+  docRegPaint();
+}
+function docRegSet(f){ docRegState.filter=f; docRegPaint(); }
+function docRegRow(r){
+  const m=DOC_LOG_ACTIONS[r.action]||{ic:'ti-point',col:'#9A9183',t:r.action};
+  const time=(r.created_at||'').slice(11,16);
+  const who=docEsc(r.actor_name||'—');
+  const roleTag = r.actor_role==='coordinator' ? '<span style="font-size:8.5px;color:#854F0B;background:#FAEEDA;padding:1px 6px;border-radius:999px;">coord.</span>'
+    : (r.actor_role==='admin' ? '<span style="font-size:8.5px;color:#6E665A;background:#EFEBE1;padding:1px 6px;border-radius:999px;">admin</span>' : '');
+  const clickable = r.patient_id ? ` onclick="docRenderPatient('${r.patient_id}')" style="cursor:pointer;"` : '';
+  return `<div class="doc-info" style="margin-bottom:7px;"${clickable}><div style="display:flex;align-items:center;gap:11px;padding:10px 4px;">
+    <div style="width:30px;height:30px;border-radius:9px;background:#F1EDE4;display:flex;align-items:center;justify-content:center;flex:none;"><i class="ti ${m.ic}" style="font-size:16px;color:${m.col};"></i></div>
+    <div style="flex:1;min-width:0;"><div style="font-size:12.5px;color:#1C1922;">${docEsc(r.label||m.t)}</div>
+      <div style="font-size:10px;color:#9A9183;margin-top:2px;display:flex;align-items:center;gap:6px;">${who} ${roleTag} · ${time}</div></div>
+  </div></div>`;
+}
+function docRegPaint(){
+  const cont=document.getElementById('doc-home-content'); if(!cont) return;
+  const cats=[['todo','Todo'],['asistencia','Asistencia'],['pagos','Pagos'],['citas','Citas'],['pacientes','Pacientes'],['accesos','Accesos']];
+  const f=docRegState.filter;
+  const chips=cats.map(([v,l])=>`<button onclick="docRegSet('${v}')" style="padding:7px 13px;border-radius:999px;border:1px solid ${f===v?'#1C1922':'#E6E0D4'};background:${f===v?'#1C1922':'#fff'};color:${f===v?'#fff':'#8C857A'};font-size:12px;white-space:nowrap;cursor:pointer;font-family:inherit;flex:none;">${l}</button>`).join('');
+  let rows=docRegState.rows;
+  if(f!=='todo') rows=rows.filter(r=>{ const m=DOC_LOG_ACTIONS[r.action]; return m && m.cat===f; });
+  let body='';
+  if(!rows.length){ body='<div class="doc-empty">Sin actividad por aquí.</div>'; }
+  else {
+    const groups={};
+    rows.forEach(r=>{ const d=(r.created_at||'').slice(0,10); (groups[d]=groups[d]||[]).push(r); });
+    const days=Object.keys(groups).sort((a,b)=>b.localeCompare(a));
+    body=days.map(d=>`<div class="doc-weekhdr"><span class="wk-label">${docEsc(docCap(docDateShort(d)))}</span><span class="wk-count">${groups[d].length}</span></div>${groups[d].map(docRegRow).join('')}`).join('');
+  }
+  cont.innerHTML=`<div class="doc-wrap">
+    <div class="doc-top"><button class="doc-iconbtn" onclick="docGoTab('hoy')"><i class="ti ti-arrow-left"></i></button><div style="font-size:18px;font-weight:600;flex:1;">Registro de actividad</div></div>
+    <div style="display:flex;gap:6px;overflow-x:auto;padding:2px 0 12px;-webkit-overflow-scrolling:touch;">${chips}</div>
+    ${body}
+    <div style="height:30px;"></div></div>`;
 }
 
 // ---- Menú de cuenta / cambio de rol (para usuarios multi-rol) ----
@@ -29665,6 +29775,7 @@ async function generateTherapyPDF(patientId){
       pagebreak: { mode:['css','legacy'] }
     }).from(container.firstElementChild).save();
     showToast('✓ PDF descargado','success');
+    docLog('paciente.pdf', { patient_id:d.p.id, label:'PDF exportado · '+((d.p.first_name||'')+' '+(d.p.last_name||'')).trim() });
   } catch(e){
     console.error('[generateTherapyPDF]', e);
     showToast('Error generando PDF: '+e.message,'error');
@@ -30113,6 +30224,7 @@ async function docPatBulkDelete(){ if(docGuardRO())return;
     const payload={ status:'deleted', deleted_at:new Date().toISOString(), deleted_by:(CURRENT_USER&&CURRENT_USER.authUser&&CURRENT_USER.authUser.id)||null, deleted_by_name:(typeof getCurrentActorLabel==='function'?getCurrentActorLabel():null), delete_reason:reason };
     const { error }=await sb.from('therapy_sessions').update(payload).in('id', ids); if(error) throw error;
     showToast(ids.length+(ids.length===1?' cita eliminada':' citas eliminadas'),'success');
+    docLog('terapia.eliminada', { patient_id:(docPatSelCtx&&docPatSelCtx.id)||null, label:ids.length+(ids.length===1?' cita eliminada':' citas eliminadas')+(reason?' · '+reason:''), meta:{ count:ids.length, reason } });
     docSelMode=false; docSel.clear(); docRenderPatient(docPatSelCtx.id, docPatSelCtx.origin);
   }catch(e){ showToast('Error: '+(e.message||''),'error'); }
 }
@@ -30184,6 +30296,7 @@ async function docDoPayment(){ if(docGuardRO())return;
     const { error:e2 }=await sb.from('therapy_sessions').update({ payment_id:pay.id }).in('id', st.ids);
     if(e2) throw e2;
     docSessClose(); showToast('✓ Pago registrado · '+docPayFmt(r.amount),'success');
+    docLog('pago.registrado', { patient_id:docPatSelCtx.id, label:'Pago registrado · '+docPayFmt(r.amount)+' · '+st.count+(st.count===1?' terapia':' terapias'), meta:{ amount:r.amount, method:st.method, count:st.count } });
     docSelMode=false; docSel.clear(); docPayState=null;
     docRenderPatient(docPatSelCtx.id, docPatSelCtx.origin);
   }catch(e){ showToast('Error: '+(e.message||''),'error'); }
@@ -30195,6 +30308,7 @@ async function docUnpayDo(){ if(docGuardRO())return;
     const { data:rows }=await sb.from('therapy_sessions').select('id,payment_id').in('id',ids);
     const payIds=[...new Set((rows||[]).map(r=>r.payment_id).filter(Boolean))];
     const { error:e1 }=await sb.from('therapy_sessions').update({ payment_id:null }).in('id',ids); if(e1) throw e1;
+    docLog('pago.anulado', { patient_id:(docPatSelCtx&&docPatSelCtx.id)||null, label:'Pago anulado · '+ids.length+(ids.length===1?' cita':' citas'), meta:{ count:ids.length } });
     for(const pid of payIds){
       const { count }=await sb.from('therapy_sessions').select('id',{count:'exact',head:true}).eq('payment_id',pid);
       const remaining=count||0;
@@ -30359,6 +30473,7 @@ async function docSlotBook(pid){ if(docGuardRO())return;
     const { error }=await sb.from('therapy_sessions').insert({ patient_id:pid, doctor_id:docState.doctorId, location_id:p.location_id, session_date:st.ds, hour:st.hour, duration_min:60, status:'scheduled' });
     if(error) throw error;
     docSessClose(); showToast('✓ Terapia agendada','success'); docRenderAgendaMaestra();
+    docLog('terapia.agendada', { patient_id:pid, label:'Cita agendada · '+docCap(docDateShort(st.ds))+' · '+docHourLbl(st.hour), meta:{ date:st.ds, hour:st.hour } });
   }catch(e){ showToast('Error: '+(e.message||''),'error'); }
 }
 // ---- Bloquear un horario (GYM/BICI/Pilates/Otro) ----
@@ -30391,7 +30506,7 @@ async function docBlkConfirm(){ if(docGuardRO())return;
   const payload={ doctor_id:docState.doctorId, block_type, reason, recurrence:st.recur, hour:st.hour, is_active:true };
   if(st.recur==='once'){ payload.block_date=st.ds; }
   else { payload.dow=new Date(st.ds+'T12:00:00').getDay(); payload.start_date=st.ds; }
-  try{ const { error }=await sb.from('doctor_blocks').insert(payload); if(error) throw error; docSessClose(); showToast('✓ Bloqueado','success'); docRenderAgendaMaestra(); }
+  try{ const { error }=await sb.from('doctor_blocks').insert(payload); if(error) throw error; docSessClose(); showToast('✓ Bloqueado','success'); docRenderAgendaMaestra(); docLog('bloqueo.creado', { label:'Horario bloqueado'+(reason?' · '+reason:'')+' · '+docHourLbl(st.hour), meta:{ reason, hour:st.hour, recur:st.recur } }); }
   catch(e){ showToast('Error: '+(e.message||''),'error'); }
 }
 // ---- Quitar un bloqueo ----
@@ -30404,11 +30519,11 @@ function docBlockRemoveSheet(id, label){
     <div onclick="docSessClose()" style="text-align:center;padding:11px;font-size:13px;color:#9A9183;cursor:pointer;">Cerrar</div>`);
 }
 async function docBlkRemove(id){ if(docGuardRO())return;
-  try{ const { error }=await sb.from('doctor_blocks').update({ is_active:false }).eq('id',id); if(error) throw error; docSessClose(); showToast('Bloqueo quitado','success'); docRenderAgendaMaestra(); }
+  try{ const { error }=await sb.from('doctor_blocks').update({ is_active:false }).eq('id',id); if(error) throw error; docSessClose(); showToast('Bloqueo quitado','success'); docRenderAgendaMaestra(); docLog('bloqueo.eliminado', { label:'Bloqueo quitado' }); }
   catch(e){ showToast('Error: '+(e.message||''),'error'); }
 }
 async function docSetSessionStatus(id, status){ if(docGuardRO())return;
-  try{ const { error }=await sb.from('therapy_sessions').update({ status }).eq('id',id); if(error) throw error; docSessClose(); showToast('✓ Actualizada','success'); docSessReturn(); }
+  try{ const { error }=await sb.from('therapy_sessions').update({ status }).eq('id',id); if(error) throw error; docSessClose(); showToast('✓ Actualizada','success'); docSessReturn(); const _la=_docStatusAction(status); if(_la) docLog(_la, { session_id:id }); }
   catch(e){ showToast('Error: '+(e.message||''),'error'); }
 }
 async function docDeleteSession(id){ if(docGuardRO())return;
@@ -30417,6 +30532,7 @@ async function docDeleteSession(id){ if(docGuardRO())return;
     const payload={ status:'deleted', deleted_at:new Date().toISOString(), deleted_by:(CURRENT_USER&&CURRENT_USER.authUser&&CURRENT_USER.authUser.id)||null, deleted_by_name:(typeof getCurrentActorLabel==='function'?getCurrentActorLabel():null), delete_reason:reason };
     const { error }=await sb.from('therapy_sessions').update(payload).eq('id',id); if(error) throw error;
     docSessClose(); showToast('Eliminada (interno)','success'); docSessReturn();
+    docLog('terapia.eliminada', { session_id:id, label:'Cita eliminada'+(reason?' · '+reason:''), meta:{ reason } });
   }catch(e){ showToast('Error: '+(e.message||''),'error'); }
 }
 function docSessReturn(){
@@ -30477,6 +30593,7 @@ async function docUpdatePatient(pid){ if(docGuardRO())return;
     docCache.patients=null;
     showToast('✓ Cambios guardados','success');
     docRenderPatient(pid, docEditState.origin);
+    docLog('paciente.editado', { patient_id:pid });
   }catch(e){ showToast('Error: '+(e.message||''),'error'); }
 }
 
@@ -30496,7 +30613,7 @@ async function docLinkSearch(pid,q){
   box.innerHTML=res.map(s=>`<div class="doc-card" onclick="docDoLink('${pid}','${s.id}')"><div class="c-body"><div class="c-name" style="font-size:12.5px;">${docEsc(((s.first_name||'')+' '+(s.last_name||'')).trim())}</div><div class="c-meta">${docEsc(docSede(s.location_id).name)}</div></div><i class="ti ti-link c-chev"></i></div>`).join('') || '<div class="doc-empty">Sin resultados.</div>';
 }
 async function docDoLink(pid,sid){ if(docGuardRO())return;
-  try{ const { error }=await sb.from('therapy_patients').update({student_id:sid}).eq('id',pid); if(error) throw error; docCache.patients=null; showToast('✓ Enlazado','success'); docRenderPatient(pid); }
+  try{ const { error }=await sb.from('therapy_patients').update({student_id:sid}).eq('id',pid); if(error) throw error; docCache.patients=null; showToast('✓ Enlazado','success'); docRenderPatient(pid); docLog('paciente.enlazado_fit', { patient_id:pid }); }
   catch(e){ showToast('Error: '+(e.message||''),'error'); }
 }
 
@@ -30572,6 +30689,7 @@ async function docCreatePatient(){ if(docGuardRO())return;
     docCache.patients=null;
     showToast('✓ Paciente creado','success');
     docRenderAgendar(data.id);
+    docLog('paciente.creado', { patient_id:data.id, label:'Paciente creado · '+first });
   }catch(e){ showToast('Error: '+(e.message||''),'error'); }
 }
 
@@ -31039,6 +31157,7 @@ async function docDoConfirm(){ if(docGuardRO())return;
     docCache.patients=null;
     showToast('✓ Terapias agendadas','success');
     docRenderAgendado();
+    docLog('plan.creado', { patient_id:st.pid, label:'Plan agendado · '+(st.total||rows.length)+' terapias · '+st.freq+'×/sem', meta:{ total:st.total, freq:st.freq } });
   }catch(e){
     showToast('Error: '+(e.message||''),'error');
     if(btn){ btn.style.opacity='1'; btn.style.pointerEvents='auto'; btn.innerHTML='<i class="ti ti-calendar-check"></i> Confirmar y agendar'; }
@@ -31196,6 +31315,7 @@ async function docManConfirm(){ if(docGuardRO())return;
     docCache.patients=null;
     showToast('✓ Terapias agendadas','success');
     docManDone(slots);
+    docLog('plan.creado', { patient_id:st.pid, label:'Plan agendado · '+slots.length+' terapias (manual)', meta:{ total:slots.length } });
   }catch(e){ showToast('Error: '+(e.message||''),'error'); }
 }
 async function docManDone(slots){
@@ -31288,6 +31408,7 @@ async function docMoveTo(ds, h){ if(docGuardRO())return;
     if(error) throw error;
     docMoveState=null; docAgmWeekCache={}; docAgmState.day=ds; docAgmState.mobileMode='dia';
     showToast('✓ Movida','success');
+    docLog('terapia.movida', { session_id:st.sid, label:'Cita movida · '+docCap(docDateShort(ds))+' · '+docHourLbl(h), meta:{ date:ds, hour:h } });
     docRenderAgendaMaestra();
   }catch(e){ showToast('Error: '+(e.message||''),'error'); }
 }
@@ -31584,6 +31705,7 @@ function docSessBarHide(){ if(docPlanState&&docPlanState.selSid){ docPlanState.s
 async function docMiniStatus(id, status){ if(docGuardRO())return;
   try{ const { error }=await sb.from('therapy_sessions').update({ status }).eq('id',id); if(error) throw error;
     docSessBarHide(); docCache.patients=null; docCache.prefs=null; showToast('✓ Actualizada','success'); await docPlanRefresh();
+    const _la=_docStatusAction(status); if(_la) docLog(_la, { session_id:id });
   }catch(e){ showToast('Error: '+(e.message||''),'error'); }
 }
 const DOC_DEL_REASONS=['Paciente canceló','Reprogramada a otra fecha','No asistió varias veces','Viaje','Error al agendar','Duplicada'];
@@ -32015,6 +32137,7 @@ async function docPlanSave(){ if(docGuardRO())return;
     const { error:se }=await sb.from('therapy_sessions').insert(rows);
     if(se) throw se;
     await sb.from('therapy_patients').update({ pending_since:null }).eq('id',st.pid);
+    docLog('plan.creado', { patient_id:st.pid, label:'Plan agendado · '+picks.length+' terapias', meta:{ total:picks.length } });
     docCache.patients=null; docCache.prefs=null;
     const finalList=st.existing.map(s=>({ds:s.ds,hour:s.hour}))
       .concat(picks.map(p=>({ds:p.ds,hour:p.hour})))
@@ -32107,6 +32230,7 @@ async function docDndMove(dnd, toD, toH){ if(docGuardRO())return;
     if(error) throw error;
     if(docDndCtxLive()==='plan' && docPlanState){ docCache.patients=null; docCache.prefs=null; docPlanState.weekStart=docWeekStart(new Date(toD+'T12:00:00')); await docPlanRefresh(); }
     else await docRenderAgendaMaestra();
+    docLog('terapia.movida', { session_id:dnd.sid, label:'Cita movida · '+docCap(docDateShort(toD))+' · '+docHourLbl(toH), meta:{ date:toD, hour:toH } });
     docDndToast(dnd.name+' → '+docCap(docDateShort(toD))+' · '+docHourLbl(toH), ()=>docDndUndo(dnd.sid, dnd.fromD, dnd.fromH));
   }catch(e){ showToast('Error: '+(e.message||''),'error'); }
 }
