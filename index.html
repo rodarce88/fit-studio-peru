@@ -3755,6 +3755,34 @@ body:not(.doctor-mode) .doc-bottomnav{ display:none; }
 #doc-role-sheet .drs-item:last-child{ border-bottom:none; }
 #doc-role-sheet .drs-item i{ font-size:20px; color:#6A4E9C; }
 #doc-role-sheet .drs-danger, #doc-role-sheet .drs-danger i{ color:#A32D2D; }
+
+/* === Modal de cuenta (click en el chip de usuario) — todos los roles === */
+#account-modal{ display:none; position:fixed; inset:0; z-index:10001; font-family:'Inter',-apple-system,sans-serif; }
+#account-modal.open{ display:block; }
+#account-modal .am-back{ position:absolute; inset:0; background:rgba(28,25,34,0.42); animation:am-fade .18s ease; }
+#account-modal .am-card{ position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); width:min(340px,92vw); background:#fff; border-radius:18px; overflow:hidden; box-shadow:0 16px 44px rgba(0,0,0,0.24); animation:am-pop .2s ease; }
+#account-modal .am-head{ display:flex; align-items:center; gap:14px; padding:22px 20px 18px; border-bottom:1px solid var(--line); }
+#account-modal .am-avatar{ width:52px; height:52px; border-radius:50%; background:var(--fit-purple); color:#fff; display:grid; place-items:center; font-weight:600; font-size:18px; flex-shrink:0; }
+#account-modal .am-name{ font-size:16px; font-weight:600; color:#1C1922; line-height:1.2; }
+#account-modal .am-email{ font-size:12.5px; color:var(--ink-mute); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+#account-modal .am-roles{ padding:14px 20px 4px; }
+#account-modal .am-roles-lbl{ font-size:11px; letter-spacing:0.1em; text-transform:uppercase; color:#A39B8C; margin-bottom:8px; }
+#account-modal .am-role{ width:100%; display:flex; align-items:center; gap:11px; padding:10px 12px; margin-bottom:7px; border:1px solid var(--line); background:#fff; border-radius:11px; cursor:pointer; text-align:left; font-family:inherit; }
+#account-modal .am-role i{ font-size:19px; color:#8C857A; }
+#account-modal .am-role .am-role-t{ flex:1; font-size:13.5px; font-weight:500; color:#1C1922; }
+#account-modal .am-role.is-active{ border:1.5px solid var(--fit-purple-soft); background:var(--fit-lavender-pale); }
+#account-modal .am-role.is-active i, #account-modal .am-role.is-active .am-role-t{ color:var(--fit-purple); }
+#account-modal .am-foot{ padding:12px 20px 18px; }
+#account-modal .am-logout{ width:100%; display:flex; align-items:center; justify-content:center; gap:8px; padding:12px; border:1px solid #F0D2D2; background:#FBEAEA; border-radius:11px; cursor:pointer; font-family:inherit; }
+#account-modal .am-logout i{ font-size:17px; color:var(--danger); }
+#account-modal .am-logout span{ font-size:13.5px; font-weight:500; color:var(--danger); }
+@keyframes am-fade{ from{opacity:0;} to{opacity:1;} }
+@keyframes am-pop{ from{opacity:0; transform:translate(-50%,-46%) scale(.97);} to{opacity:1; transform:translate(-50%,-50%) scale(1);} }
+@keyframes am-slide{ from{transform:translateY(100%);} to{transform:translateY(0);} }
+@media (max-width:600px){
+  #account-modal .am-card{ top:auto; bottom:0; left:0; transform:none; width:100%; border-radius:18px 18px 0 0; animation:am-slide .22s ease; }
+}
+
 /* Chunk 2: perfil / formularios */
 #view-doctor-home .doc-iconbtn{ width:34px;height:34px;border-radius:10px;border:1px solid var(--doc-line);background:#fff;display:flex;align-items:center;justify-content:center;color:#8C857A;cursor:pointer; }
 #view-doctor-home .doc-iconbtn i{ font-size:18px; }
@@ -16805,18 +16833,15 @@ function renderTopbarUser() {
 
   if (role === 'coordinator') {
     const rec = CURRENT_USER.record || {};
-    const handle = rec.handle || 'Coordinación';
-    const fullName = rec.full_name || handle;
+    const fullName = rec.full_name || rec.handle || 'Admin';
+    const name = (fullName.trim().split(/\s+/)[0]) || 'Admin';
     const initials = deriveCoordInitials(fullName);
     const currentLoc = (typeof getCurrentLocation === 'function') ? getCurrentLocation() : null;
-    const color = (currentLoc && currentLoc.color) || '#7C3AED';
-    const sedeName = currentLoc ? currentLoc.name : '';
-    const subText = sedeName ? `Coord · ${escape(sedeName)}` : 'Coordinación';
+    const color = (currentLoc && currentLoc.color) || '#5B2A8F';
     userPill.innerHTML = `
       <div class="user-avatar" style="background: ${color};">${escape(initials)}</div>
       <div class="user-info">
-        <div class="user-name">${escape(handle)}</div>
-        <div class="user-role" id="user-role-text">${subText}</div>
+        <div class="user-name">${escape(name)}</div>
       </div>
     `;
   } else if (role === 'instructor') {
@@ -29275,9 +29300,92 @@ function docGoTab(t){
 
 // ---- Menú de cuenta / cambio de rol (para usuarios multi-rol) ----
 function docUserPillClick(){
-  if (CURRENT_USER && (CURRENT_USER.availableRoles||[]).length > 1) docRoleMenu();
-  else if (confirm('¿Cerrar sesión?')) logout();
+  accountModal();
 }
+
+// ============================================
+// MODAL DE CUENTA — click en el chip de usuario (todos los roles).
+// Muestra avatar + nombre + correo (delata "no soy yo" en teléfono compartido),
+// cambio de rol inline si la cuenta tiene varios, y Cerrar sesión.
+// ============================================
+function accountModal(){
+  if (!CURRENT_USER) return;
+  let m = document.getElementById('account-modal');
+  if (!m){ m = document.createElement('div'); m.id = 'account-modal'; document.body.appendChild(m); }
+
+  const role  = CURRENT_USER.role;
+  const rec   = CURRENT_USER.record || {};
+  const email = (CURRENT_USER.authUser && CURRENT_USER.authUser.email) || '';
+
+  // Nombre completo, iniciales y color de avatar según el rol activo
+  let fullName = '', initials = '?', avatarColor = 'var(--fit-purple)';
+  if (role === 'coordinator'){
+    fullName = rec.full_name || rec.handle || 'Admin';
+    initials = deriveCoordInitials(fullName);
+    const cl = (typeof getCurrentLocation === 'function') ? getCurrentLocation() : null;
+    avatarColor = (cl && cl.color) || 'var(--fit-purple)';
+  } else if (role === 'doctor'){
+    fullName = rec.full_name || 'Doctor';
+    initials = deriveCoordInitials(fullName);
+    avatarColor = rec.color || 'var(--fit-purple)';
+  } else if (role === 'instructor'){
+    fullName = [rec.first_name, rec.last_name].filter(Boolean).join(' ').trim() || rec.full_name || rec.handle || 'Profesor';
+    initials = rec.initials || deriveCoordInitials(fullName);
+    avatarColor = rec.color || 'var(--fit-purple)';
+  } else if (role === 'student'){
+    fullName = [rec.first_name, rec.last_name].filter(Boolean).join(' ').trim() || 'Alumno';
+    initials = deriveCoordInitials(fullName);
+  } else {
+    fullName = email || 'Usuario';
+    initials = deriveCoordInitials(fullName);
+  }
+
+  const ROLE_META = {
+    coordinator: { ic:'ti-layout-dashboard', label:'Admin' },
+    doctor:      { ic:'ti-stethoscope',      label:'Doctor' },
+    instructor:  { ic:'ti-yoga',             label:'Profesor' },
+    student:     { ic:'ti-user',             label:'Alumno' },
+  };
+  const order = ['coordinator','doctor','instructor','student'];
+  const avail = CURRENT_USER.availableRoles || [];
+
+  let rolesHtml = '';
+  if (avail.length > 1){
+    rolesHtml = '<div class="am-roles"><div class="am-roles-lbl">Entrar como</div>';
+    order.filter(r => avail.includes(r)).forEach(r => {
+      const mt = ROLE_META[r] || { ic:'ti-user', label:r };
+      const active = (r === role);
+      rolesHtml += `<button class="am-role ${active?'is-active':''}" onclick="accountPickRole('${r}')">
+        <i class="ti ${mt.ic}"></i><span class="am-role-t">${escape(mt.label)}</span>${active?'<i class="ti ti-check"></i>':''}
+      </button>`;
+    });
+    rolesHtml += '</div>';
+  }
+
+  m.innerHTML = `
+    <div class="am-back" onclick="closeAccountModal()"></div>
+    <div class="am-card" role="dialog" aria-modal="true">
+      <div class="am-head">
+        <div class="am-avatar" style="background:${avatarColor};">${escape(initials)}</div>
+        <div style="min-width:0;">
+          <div class="am-name">${escape(fullName)}</div>
+          ${email ? `<div class="am-email">${escape(email)}</div>` : ''}
+        </div>
+      </div>
+      ${rolesHtml}
+      <div class="am-foot">
+        <button class="am-logout" onclick="if(confirm('¿Cerrar sesión?')) logout();"><i class="ti ti-logout"></i><span>Cerrar sesión</span></button>
+      </div>
+    </div>`;
+  m.classList.add('open');
+}
+function accountPickRole(r){
+  closeAccountModal();
+  if (!CURRENT_USER || CURRENT_USER.role === r) return;
+  docActivateRole(r);
+}
+function closeAccountModal(){ const m = document.getElementById('account-modal'); if (m) m.classList.remove('open'); }
+
 function docRoleMenu(){
   let s=document.getElementById('doc-role-sheet');
   if(!s){ s=document.createElement('div'); s.id='doc-role-sheet'; document.body.appendChild(s); }
