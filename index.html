@@ -23358,6 +23358,16 @@ async function openStudentDetail(id) {
     }
   }
 
+  // Ordenar el historial por FECHA DE CLASE (session_date), no por marked_at,
+  // para que se vea cronológico (las marcas tardías ya no aparecen en desorden).
+  if (STATE.studentDetailData && Array.isArray(STATE.studentDetailData.attendances)) {
+    STATE.studentDetailData.attendances.sort((a, b) => {
+      const da = (a.class_sessions?.session_date || '') + String(a.class_sessions?.hour ?? 0).padStart(2, '0');
+      const db = (b.class_sessions?.session_date || '') + String(b.class_sessions?.hour ?? 0).padStart(2, '0');
+      return db.localeCompare(da); // descendente: más reciente primero
+    });
+  }
+
   showView('student-detail', null);
   renderStudentDetail();
 }
