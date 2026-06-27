@@ -14124,7 +14124,16 @@ async function getOrCreateActivePackageId(studentId) {
   );
   if (active2) return active2.id;
 
-  // Clonar el último paquete (sin pago — quedará en "Por cobrar")
+  // Opción A: NO auto-crear cuando hay paquetes pero están llenos.
+  // Desbordar el paquete vivo más NUEVO (status active/null, no congelado) y dejar que
+  // aparezca en el reporte de reconciliación para que una persona decida (crear por cobrar).
+  const overflowTarget = (pkgs || [])
+    .filter(p => !p.is_frozen && (!p.status || p.status === 'active'))
+    .sort((a, b) => (b.purchase_date || b.start_date || '1900-01-01').localeCompare(a.purchase_date || a.start_date || '1900-01-01'))[0];
+  if (overflowTarget) return overflowTarget.id;
+
+  // Residual: el alumno solo tiene paquetes congelados/cambiados/cancelados y ninguno usable.
+  // Necesita registrar la clase → clonamos el último (queda "por cobrar"). Caso raro.
   const todayIso = dateToIsoLocal(new Date());
   const { data: created, error } = await sb.from('student_packages').insert({
     student_id: studentId,
@@ -14140,11 +14149,11 @@ async function getOrCreateActivePackageId(studentId) {
   }).select('id').single();
 
   if (error) {
-    console.error('[getOrCreateActivePackageId] Error auto-creando paquete:', error);
+    console.error('[getOrCreateActivePackageId] Error creando paquete residual:', error);
     return null;
   }
 
-  showToast('⚠ Auto-renové paquete (sin pago). Aparece en "Por cobrar" — edítalo si necesitas.', 'warning');
+  showToast('⚠ El alumno no tenía paquete activo usable; creé uno por cobrar.', 'warning');
   return created.id;
 }
 
@@ -26366,7 +26375,12 @@ async function reconCompute(studentId) {
     const price = refTotal ? Math.round(catalog * total / refTotal) : 0;
     surplusPlan = { refPkg, refTotal, total, price, free: total - surplus.length };
   }
-  return { packages, eligible, pkgById, totalCounting: atts.length, moves, surplus, surplusPlan };
+  // Paquetes actualmente DESBORDADOS (uso real en vivo > total) — para marcar revisado contra el id correcto
+  const curUsed = {};
+  atts.forEach(a => { if (a.student_package_id) curUsed[a.student_package_id] = (curUsed[a.student_package_id] || 0) + 1; });
+  const overflowed = packages.filter(p => (curUsed[p.id] || 0) > (p.classes_total || 0)).map(p => p.id);
+
+  return { packages, eligible, pkgById, totalCounting: atts.length, moves, surplus, surplusPlan, overflowed };
 }
 
 let RECON_CURRENT = null;
@@ -26455,7 +26469,7 @@ async function reconApply() {
     // 4. Bitácora
     await sb.from('package_reconcile_log').insert({
       student_id: st.studentId,
-      package_id: st.moves[0] ? st.moves[0].fromId : (st.packages[0] ? st.packages[0].id : null),
+      package_id: (st.overflowed && st.overflowed[0]) || (st.moves[0] ? st.moves[0].fromId : (st.packages[0] ? st.packages[0].id : null)),
       action: surplusPkgId ? 'surplus_created' : 'reconciled',
       moved_count: st.moves.length,
       surplus_count: st.surplus.length,
@@ -26473,14 +26487,16 @@ async function reconMarkReviewed() {
   const note = (document.getElementById('recon-note') || {}).value || '';
   const actor = (typeof getCurrentActorLabel === 'function') ? getCurrentActorLabel() : '';
   try {
-    await sb.from('package_reconcile_log').insert({
-      student_id: st.studentId,
-      package_id: st.packages[0] ? st.packages[0].id : null,
-      action: 'reviewed',
-      moved_count: 0,
-      surplus_count: st.surplus.length,
-      note, actor,
-    });
+    // Registrar contra el/los paquete(s) realmente desbordado(s), que es lo que muestra el reporte.
+    const ids = (st.overflowed && st.overflowed.length)
+      ? st.overflowed
+      : [st.packages[0] ? st.packages[0].id : null];
+    const rows = ids.map(pid => ({
+      student_id: st.studentId, package_id: pid, action: 'reviewed',
+      moved_count: 0, surplus_count: st.surplus.length, note, actor,
+    }));
+    const { error } = await sb.from('package_reconcile_log').insert(rows);
+    if (error) throw error;
     showToast('✓ Marcado como revisado', 'success');
     reconCloseModal();
     RECON_STATE.rows = null;
