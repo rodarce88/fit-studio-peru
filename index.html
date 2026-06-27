@@ -26603,6 +26603,21 @@ function unmarkedDateLabel(iso) {
   const d = new Date(iso + 'T00:00:00');
   return d.toLocaleDateString('es-PE', { weekday: 'short', day: '2-digit', month: 'short' });
 }
+// Días hábiles (lun-sáb, sin domingo) transcurridos DESPUÉS de la fecha, hasta hoy inclusive.
+// Ej: clase lunes → mar=1, mié=2, jue=3, vie=4. Auto-perdida cuando >= 4 (más de 3 días hábiles).
+function unmarkedBusinessDaysAfter(iso) {
+  if (!iso) return 0;
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const d = new Date(iso + 'T00:00:00');
+  let count = 0;
+  while (true) {
+    d.setDate(d.getDate() + 1);
+    if (d > today) break;
+    if (d.getDay() !== 0) count++; // excluir domingo
+  }
+  return count;
+}
+const UNMARKED_PLUS3_THRESHOLD = 4; // >3 días hábiles
 
 async function unmarkedFetchAllRows() {
   const today = dateToIsoLocal(new Date());
@@ -26641,15 +26656,17 @@ function unmarkedCountForDate(iso) {
 
 // Marca una clase sin marcar (fecha arbitraria). Espeja markAttendance:
 // resuelve el paquete por fecha en cadena, libera cupo en faltas, recalcula.
-async function markUnmarkedClass(bookingId, sessionId, studentId, status) {
-  if (!isOnline) { showToast('Necesita conexión', 'error'); return; }
+async function markUnmarkedClass(bookingId, sessionId, studentId, status, opts = {}) {
+  if (!isOnline) { if (!opts.silent) showToast('Necesita conexión', 'error'); return; }
   const isRecoverable = (status === 'recoverable');
   const countsAgainst = (status === 'attended' || status === 'lost' || status === 'no_show');
   const releaseSlot = (status === 'recoverable' || status === 'lost' || status === 'no_show');
   const statusLabel = { attended: 'asistió', recoverable: 'falta justificada (recuperable)', lost: 'cancelación tardía (perdida)', no_show: 'no vino sin avisar' }[status] || status;
   const actor = (typeof getCurrentActorLabel === 'function') ? getCurrentActorLabel() : '';
   const stamp = new Date().toLocaleString('es-PE', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
-  const finalNotes = `[${stamp}] ${statusLabel} · marcado tarde por ${actor}`;
+  const finalNotes = opts.auto
+    ? `[${stamp}] perdida automática (+3 días hábiles sin marcar) · sistema`
+    : `[${stamp}] ${statusLabel} · marcado tarde por ${actor}`;
 
   try {
     const pkgId = countsAgainst ? await getOrCreateActivePackageId(studentId) : null;
@@ -26673,12 +26690,14 @@ async function markUnmarkedClass(bookingId, sessionId, studentId, status) {
       await sb.from('class_sessions').update({ class_status: 'delivered', status_changed_at: new Date().toISOString() }).eq('id', sessionId);
     }
     await recalcPackageCounters(studentId);
-    try { logActivity('attendance.late_mark', { table: 'attendance', id: bookingId, label: statusLabel }, null); } catch (e) {}
+    try { logActivity(opts.auto ? 'attendance.auto_lost' : 'attendance.late_mark', { table: 'attendance', id: bookingId, label: statusLabel }, null); } catch (e) {}
 
     if (UNMARKED_STATE.all) UNMARKED_STATE.all = UNMARKED_STATE.all.filter(r => r.bookingId !== bookingId);
-    showToast({ attended: '✓ Asistió', recoverable: '⊙ Recuperable · cupo liberado', lost: '⚠ Perdida · consume clase', no_show: '✗ No vino' }[status] || '✓ Marcado', 'success');
-    if (typeof renderUnmarkedReport === 'function') renderUnmarkedReport();
-  } catch (e) { showToast('Error: ' + (e.message || ''), 'error'); }
+    if (!opts.silent) {
+      showToast({ attended: '✓ Asistió', recoverable: '⊙ Recuperable · cupo liberado', lost: '⚠ Perdida · consume clase', no_show: '✗ No vino' }[status] || '✓ Marcado', 'success');
+      if (typeof renderUnmarkedReport === 'function' && REPORTS_STATE.subView === 'unmarked') renderUnmarkedReport();
+    }
+  } catch (e) { if (!opts.silent) showToast('Error: ' + (e.message || ''), 'error'); else console.warn('[autolost mark]', e); }
 }
 
 async function renderUnmarkedReport() {
@@ -26754,7 +26773,7 @@ async function renderUnmarkedReport() {
 // Se arma si la coordinadora registra >=5 actividades entre 8-10am (lun-sáb).
 // Una vez armado, insiste cada 30 min mientras haya pendientes de ayer hábil.
 // ============================================================
-const UNMARKED_NAG = { timer: null, modalOpen: false, started: false };
+const UNMARKED_NAG = { timer: null, modalOpen: false, started: false, autoLostArmed: false };
 
 function unmarkedTodayWindow() {
   const s = new Date(); s.setHours(8, 0, 0, 0);
@@ -26795,10 +26814,69 @@ async function unmarkedNagCheck() {
   try {
     if (UNMARKED_NAG.modalOpen) return;
     if (!(await unmarkedCoordIsArmed())) return;
+    // Cargar lista completa de sin-marcar (para evaluar +3 días y pendientes de ayer)
+    await unmarkedFetchAllRows();
+    const all = UNMARKED_STATE.all || [];
+
+    // 1) Vencidas +3 días hábiles → última oportunidad + auto-perdida en 30 min.
+    const plus3 = all.filter(r => unmarkedBusinessDaysAfter(r.date) >= UNMARKED_PLUS3_THRESHOLD);
+    if (plus3.length && !UNMARKED_NAG.autoLostArmed) {
+      UNMARKED_NAG.autoLostArmed = true;
+      showUnmarkedLastChanceModal(plus3.length);
+      setTimeout(runAutoLostPlus3, 30 * 60 * 1000);
+      return;
+    }
+
+    // 2) Pendientes del día hábil anterior → modal que insiste cada 30 min.
     const day = unmarkedPrevBusinessDay();
-    const n = await unmarkedCountForDateRemote(day);
+    const n = all.filter(r => r.date === day).length;
     if (n > 0) showUnmarkedNagModal(n, day);
   } catch (e) { console.warn('[nag] check', e); }
+}
+
+// Marca como PERDIDA (auto) las clases vencidas +3 días hábiles que sigan sin marcar.
+// Solo front, máx 40 por corrida (salvaguarda), cada una queda en activity_log.
+async function runAutoLostPlus3() {
+  try {
+    await unmarkedFetchAllRows(); // re-evaluar: Lucía pudo marcar algunas en estos 30 min
+    let plus3 = (UNMARKED_STATE.all || []).filter(r => unmarkedBusinessDaysAfter(r.date) >= UNMARKED_PLUS3_THRESHOLD);
+    plus3 = plus3.slice(0, 40);
+    let done = 0;
+    for (const r of plus3) {
+      await markUnmarkedClass(r.bookingId, r.sessionId, r.studentId, 'lost', { silent: true, auto: true });
+      done++;
+    }
+    if (done) {
+      showToast(`Se marcaron ${done} clase(s) vencidas (+3 días) como perdidas automáticamente`, 'info');
+      if (REPORTS_STATE.subView === 'unmarked') { UNMARKED_STATE.all = null; renderReportsView(); }
+    }
+  } catch (e) { console.warn('[autolost]', e); }
+  finally { UNMARKED_NAG.autoLostArmed = false; } // permitir re-armar si quedan/aparecen nuevas
+}
+
+function showUnmarkedLastChanceModal(n) {
+  if (document.getElementById('unmarked-nag-modal')) return;
+  UNMARKED_NAG.modalOpen = true;
+  const el = document.createElement('div');
+  el.id = 'unmarked-nag-modal';
+  el.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(40,10,10,.6);backdrop-filter:blur(3px);display:flex;align-items:center;justify-content:center;padding:24px;';
+  el.innerHTML = `<div style="background:white;border-radius:18px;max-width:440px;width:100%;padding:28px;box-shadow:0 20px 60px rgba(0,0,0,.35);text-align:center;">
+    <div style="font-size:40px;margin-bottom:8px;">⏰</div>
+    <h2 style="font-family:var(--display);font-style:italic;color:#B0322E;font-size:24px;margin:0 0 8px;font-weight:500;">Última oportunidad</h2>
+    <p style="color:var(--ink);font-size:15px;line-height:1.5;margin:0 0 4px;">Hay <strong>${n}</strong> clase(s) que llevan <strong>más de 3 días hábiles</strong> sin marcar.</p>
+    <p style="color:#B0322E;font-size:13px;margin:0 0 20px;font-weight:600;">En 30 minutos, las que sigan sin marcar se darán por PERDIDAS (consumen clase).</p>
+    <button onclick="unmarkedLastChanceGo()" style="width:100%;background:var(--fit-purple);color:white;border:none;border-radius:10px;padding:13px;font-size:15px;font-weight:600;cursor:pointer;margin-bottom:8px;">Ir a marcar ahora</button>
+    <button onclick="unmarkedNagClose()" style="width:100%;background:transparent;color:var(--ink-mute);border:none;padding:8px;font-size:13px;cursor:pointer;">Entendido (el conteo sigue corriendo)</button>
+  </div>`;
+  document.body.appendChild(el);
+}
+function unmarkedLastChanceGo() {
+  unmarkedNagClose();
+  UNMARKED_STATE.all = null; UNMARKED_STATE.scope = 'all';
+  UNMARKED_STATE.sedeFilter = 'all'; UNMARKED_STATE.instrFilter = 'all';
+  REPORTS_STATE.subView = 'unmarked';
+  try { showView('reports', null); } catch (e) {}
+  renderReportsView();
 }
 
 function startUnmarkedNag() {
