@@ -3611,8 +3611,9 @@ body:not(.doctor-mode) .doc-bottomnav{ display:none; }
 @keyframes docspin{ to{ transform:rotate(360deg); } }
 #view-doctor-home .agm-wrap{ max-width:1080px; margin:0 auto; padding:0 14px; }
 #view-doctor-home .doc-planwrap{ max-width:1480px; margin:0 auto; padding:0 24px; }
+#view-doctor-home .doc-planhdr{ position:sticky; top:0; z-index:40; display:flex; align-items:center; gap:12px; padding:12px 0 11px; margin-bottom:10px; background:#F7F5F0; border-bottom:1px solid #E6E0D4; }
 #view-doctor-home .doc-plangrid{ display:grid; grid-template-columns:300px 1fr; gap:30px; align-items:start; }
-#view-doctor-home .doc-planright{ position:sticky; top:14px; align-self:start; }
+#view-doctor-home .doc-planright{ position:sticky; top:78px; align-self:start; }
 @media (max-width:880px){ #view-doctor-home .doc-plangrid{ grid-template-columns:1fr; gap:14px; } #view-doctor-home .doc-planright{ position:static; } }
 #view-doctor-home .doc-pickrow{ display:flex; align-items:center; justify-content:space-between; padding:8px 11px; border:1px solid #E6E0D4; border-radius:10px; background:#fff; margin-bottom:6px; font-size:12px; cursor:pointer; }
 #view-doctor-home .doc-pickrow i{ color:#A32D2D; font-size:14px; }
@@ -4819,13 +4820,18 @@ if ('serviceWorker' in navigator) {
 // recargamos para asegurar versión nueva y data fresca de Supabase.
 // Si solo cambia de pestaña por unos segundos, no recarga.
 let __lastBlurAt = Date.now();
-const __INACTIVITY_RELOAD_MS = 5 * 60 * 1000; // 5 minutos
+const __INACTIVITY_RELOAD_MS = 30 * 60 * 1000; // 30 minutos (más tolerante: Andrés agenda mientras habla con la paciente)
+function __reloadBlocked(){
+  // No recargar si el armador de plan está abierto (se perdería lo que se está agendando)
+  try{ if(document.getElementById('doc-plan-cal')) return true; }catch(_){}
+  return false;
+}
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'hidden') {
     __lastBlurAt = Date.now();
   } else if (document.visibilityState === 'visible') {
     const elapsed = Date.now() - __lastBlurAt;
-    if (elapsed > __INACTIVITY_RELOAD_MS) {
+    if (elapsed > __INACTIVITY_RELOAD_MS && !__reloadBlocked()) {
       console.log(`[autoreload] inactivo ${Math.round(elapsed/1000)}s, recargando...`);
       window.location.reload();
     }
@@ -30082,9 +30088,22 @@ async function docRenderPlanBuilder(pid){
 }
 function docPlanShell(p){
   const name=docEsc(((p.first_name||'')+' '+(p.last_name||'')).trim()); const sede=docPlanState.sede;
+  const init=docEsc(docInitials(p));
+  const phone = p.phone ? `<a href="https://wa.me/${docWa(p.phone)}" target="_blank" style="color:#0B7A3E;text-decoration:none;display:inline-flex;align-items:center;gap:3px;"><i class="ti ti-brand-whatsapp" style="font-size:13px;"></i>${docEsc(p.phone)}</a>` : '';
+  const note = p.notes ? `<span style="color:#9A9183;display:inline-flex;align-items:center;gap:3px;"><i class="ti ti-note" style="font-size:12px;"></i>${docEsc(p.notes.length>54?p.notes.slice(0,54)+'…':p.notes)}</span>` : '';
   return `<div class="doc-planwrap">
-    <div class="doc-top"><button class="doc-iconbtn" onclick="docRenderPatient('${docPlanState.pid}','pacientes')"><i class="ti ti-arrow-left"></i></button>
-      <div><div style="font-size:16px;font-weight:600;line-height:1.1;">Agendar</div><div style="font-size:10.5px;color:#9A9183;">${name} · <span style="color:${sede.color};">●</span> ${docEsc(sede.name)}</div></div></div>
+    <div class="doc-planhdr">
+      <button class="doc-iconbtn" onclick="docRenderPatient('${docPlanState.pid}','pacientes')"><i class="ti ti-arrow-left"></i></button>
+      <div style="width:40px;height:40px;border-radius:50%;background:#F0ECE2;color:#1C1922;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:600;flex:none;">${init}</div>
+      <div style="min-width:0;flex:1;">
+        <div style="font-size:15px;font-weight:600;line-height:1.15;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${name}</div>
+        <div style="font-size:11px;color:#6E665A;display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:2px;">
+          <span style="display:inline-flex;align-items:center;gap:4px;"><span style="width:8px;height:8px;border-radius:50%;background:${sede.color};display:inline-block;"></span>${docEsc(sede.name)}</span>
+          ${phone}${note}
+        </div>
+      </div>
+      <div style="font-size:11px;color:#9A9183;font-weight:500;flex:none;display:flex;align-items:center;gap:5px;"><i class="ti ti-calendar-plus" style="font-size:14px;"></i> Agendar terapia</div>
+    </div>
     <div class="doc-plangrid">
       <div class="doc-planleft" id="doc-plan-left"></div>
       <div class="doc-planright"><div id="doc-plan-cal"></div></div>
