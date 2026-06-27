@@ -3610,9 +3610,10 @@ body:not(.doctor-mode) .doc-bottomnav{ display:none; }
 #view-doctor-home .doc-fold .fold-body{ padding:6px 13px 12px; }
 @keyframes docspin{ to{ transform:rotate(360deg); } }
 #view-doctor-home .agm-wrap{ max-width:1080px; margin:0 auto; padding:0 14px; }
-#view-doctor-home .doc-planwrap{ max-width:1320px; margin:0; padding:0 22px 0 28px; }
-#view-doctor-home .doc-plangrid{ display:grid; grid-template-columns:300px 1fr; gap:26px; align-items:start; }
-@media (max-width:880px){ #view-doctor-home .doc-plangrid{ grid-template-columns:1fr; gap:14px; } }
+#view-doctor-home .doc-planwrap{ max-width:1480px; margin:0 auto; padding:0 24px; }
+#view-doctor-home .doc-plangrid{ display:grid; grid-template-columns:300px 1fr; gap:30px; align-items:start; }
+#view-doctor-home .doc-planright{ position:sticky; top:14px; align-self:start; }
+@media (max-width:880px){ #view-doctor-home .doc-plangrid{ grid-template-columns:1fr; gap:14px; } #view-doctor-home .doc-planright{ position:static; } }
 #view-doctor-home .doc-pickrow{ display:flex; align-items:center; justify-content:space-between; padding:8px 11px; border:1px solid #E6E0D4; border-radius:10px; background:#fff; margin-bottom:6px; font-size:12px; cursor:pointer; }
 #view-doctor-home .doc-pickrow i{ color:#A32D2D; font-size:14px; }
 #view-doctor-home .agm-pick{ border:1.5px dashed; border-radius:5px; padding:3px 5px; font-size:10px; font-weight:600; display:flex; align-items:center; gap:3px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
