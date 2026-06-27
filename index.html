@@ -26357,7 +26357,16 @@ async function reconCompute(studentId) {
       surplus.push({ attId: a.id, date });
     }
   }
-  return { packages, eligible, pkgById, totalCounting: atts.length, moves, surplus };
+  let surplusPlan = null;
+  if (surplus.length) {
+    const refPkg = eligible.length ? eligible[eligible.length - 1] : (packages[0] || null);
+    const refTotal = (refPkg && refPkg.classes_total) ? refPkg.classes_total : surplus.length;
+    const total = surplus.length <= refTotal ? refTotal : surplus.length; // paquete de tamaño completo
+    const catalog = (refPkg && refPkg.packages && refPkg.packages.price_pen) || (refPkg && refPkg.price_paid) || 0;
+    const price = refTotal ? Math.round(catalog * total / refTotal) : 0;
+    surplusPlan = { refPkg, refTotal, total, price, free: total - surplus.length };
+  }
+  return { packages, eligible, pkgById, totalCounting: atts.length, moves, surplus, surplusPlan };
 }
 
 let RECON_CURRENT = null;
@@ -26382,8 +26391,9 @@ async function reconOpenModal(studentId) {
     ? r.moves.map(m => `<div style="display:flex;justify-content:space-between;gap:8px;padding:7px 0;border-bottom:1px solid #F3EFE7;font-size:13px;"><span style="color:#5F5E5A;">Clase ${reconShortDate(m.date)}</span><span style="color:#1C1922;font-weight:500;text-align:right;">→ ${escape(m.toLabel)}</span></div>`).join('')
     : '<div style="color:#9A9183;font-size:13px;padding:6px 0;">No hay clases que reubicar.</div>';
 
+  const sp = r.surplusPlan;
   const surplusHtml = r.surplus.length
-    ? `<div style="background:#FBF1E8;border:1px solid #F0DCC4;border-radius:12px;padding:12px 14px;margin-top:12px;"><div style="font-weight:600;color:#854F0B;font-size:13px;">${r.surplus.length} clase(s) sin paquete que las cubra</div><div style="font-size:12px;color:#9A7B45;margin-top:4px;">Se creará un paquete <strong>por cobrar</strong> de ${r.surplus.length} clase(s) (fechas: ${r.surplus.map(s => reconShortDate(s.date)).join(', ')}). Anahí define el precio luego.</div></div>`
+    ? `<div style="background:#FBF1E8;border:1px solid #F0DCC4;border-radius:12px;padding:12px 14px;margin-top:12px;"><div style="font-weight:600;color:#854F0B;font-size:13px;">${r.surplus.length} clase(s) tomada(s) de más, sin paquete que las cubra</div><div style="font-size:12px;color:#9A7B45;margin-top:6px;">Opción 1 — <strong>Aplicar</strong>: se crea un paquete <strong>por cobrar de ${sp.total} clases</strong> (las ${r.surplus.length} de más quedan usadas, ${sp.free} libre(s)). Precio S/ ${sp.price} — queda por cobrar.</div><div style="font-size:12px;color:#9A7B45;margin-top:4px;">Opción 2 — <strong>Marcar revisado</strong>: no crea nada, lo dejas como está y sale del reporte.</div><div style="font-size:11px;color:#B79B6B;margin-top:6px;">Clases de más: ${r.surplus.map(s => reconShortDate(s.date)).join(', ')}</div></div>`
     : '';
 
   ov.querySelector('div').innerHTML = `
@@ -26417,20 +26427,22 @@ async function reconApply() {
     // 2. Sobrantes → crear paquete por cobrar
     let surplusPkgId = null;
     if (st.surplus.length) {
-      const refPkg = st.eligible.length ? st.eligible[st.eligible.length - 1] : (st.packages[0] || null);
+      const sp = st.surplusPlan || {};
+      const refPkg = sp.refPkg || (st.eligible.length ? st.eligible[st.eligible.length - 1] : (st.packages[0] || null));
       const dates = st.surplus.map(s => s.date).filter(Boolean).sort();
       const startIso = dates[0] || dateToIsoLocal(new Date());
+      const total = sp.total || st.surplus.length;
       const ins = await sb.from('student_packages').insert({
         student_id: st.studentId,
         package_id: refPkg ? refPkg.package_id : null,
         purchase_date: startIso,
         start_date: startIso,
-        classes_total: st.surplus.length,
-        sessions_total: st.surplus.length,
+        classes_total: total,
+        sessions_total: total,
         classes_used: 0,
         classes_recoverable: 0,
         is_frozen: false,
-        price_paid: 0,
+        price_paid: sp.price || 0,
         status: 'active',
       }).select('id').single();
       if (ins.error) throw ins.error;
