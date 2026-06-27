@@ -29537,6 +29537,71 @@ function docGenDates(dows, total, anchorYMD, stepWeeks){
   }
   dates.sort(); return dates.slice(0,total);
 }
+// ---- Aprendizaje de preferencias: lee el historial real de Andrés ----
+async function docLoadPrefs(){
+  if(docCache.prefs) return docCache.prefs;
+  const hourW={}, dowW={};
+  try{
+    const { data }=await sb.from('therapy_sessions').select('session_date,hour')
+      .eq('doctor_id',docState.doctorId).not('status','in','(cancelled,deleted)');
+    (data||[]).forEach(s=>{ hourW[s.hour]=(hourW[s.hour]||0)+1; const dw=new Date(s.session_date+'T12:00:00').getDay(); dowW[dw]=(dowW[dw]||0)+1; });
+  }catch(e){}
+  docCache.prefs={hourW,dowW};
+  return docCache.prefs;
+}
+function docCartesian(lists){
+  return lists.reduce((acc,list)=>{ const r=[]; acc.forEach(a=>list.forEach(x=>r.push(a.concat([x])))); return r; }, [[]]);
+}
+// Generador inteligente: 10 opciones, horas distintas por día, aprende de preferencias
+function docBuildOptionsSmart(combos, total, anchorYMD, occ, stepWeeks, prefs){
+  prefs=prefs||{hourW:{},dowW:{}};
+  const cands=[];
+  for(const combo of combos){
+    const dates=docGenDates(combo, total, anchorYMD, stepWeeks);
+    if(!dates.length) continue;
+    const datesByDow={}; combo.forEach(dw=>datesByDow[dw]=dates.filter(ds=>new Date(ds+'T12:00:00').getDay()===dw));
+    const rankByDow={};
+    combo.forEach(dw=>{
+      const arr=[];
+      for(let h=6;h<=22;h++){
+        let conf=0; (datesByDow[dw]||[]).forEach(ds=>{ if(occ.has(ds+'|'+h)) conf++; });
+        const wH=(prefs.hourW[h]||0), wD=(prefs.dowW[dw]||0);
+        const pref=wH*2 + wD*0.4;                 // bonus por horas/días que Andrés suele usar
+        const oddPen=(h<7?(7-h)*8:0)+(h>21?(h-21)*8:0); // solo castiga horas muy extremas
+        arr.push({h, conf, pref, score: conf*1000 + oddPen - pref*3 + h*0.05});
+      }
+      arr.sort((a,b)=>a.score-b.score); rankByDow[dw]=arr;
+    });
+    const K = combo.length===1?10 : (combo.length===2?4:3);
+    const lists=combo.map(dw=>rankByDow[dw].slice(0,K));
+    docCartesian(lists).forEach(asg=>{
+      const hourByDow={}; let conflicts=0, prefSum=0; const hours=[];
+      combo.forEach((dw,idx)=>{ hourByDow[dw]=asg[idx].h; conflicts+=asg[idx].conf; prefSum+=asg[idx].pref; hours.push(asg[idx].h); });
+      const sameHour=hours.every(h=>h===hours[0]);
+      const score=conflicts*1000 + docComboSpacingPenalty(combo) - prefSum*3 - (sameHour?6:0) + hours.reduce((a,b)=>a+b,0)*0.05;
+      cands.push({dows:combo, hourByDow, dates, conflicts, sameHour, score});
+    });
+  }
+  cands.sort((a,b)=>a.score-b.score);
+  const out=[], perCombo={}, seen=new Set();
+  for(const c of cands){
+    const ck=c.dows.slice().sort((a,b)=>a-b).join('-');
+    const sig=ck+':'+c.dows.map(d=>c.hourByDow[d]).join(',');
+    if(seen.has(sig)) continue; seen.add(sig);
+    perCombo[ck]=(perCombo[ck]||0); if(perCombo[ck]>=3) continue; perCombo[ck]++;
+    out.push(c); if(out.length>=10) break;
+  }
+  return out;
+}
+function docOptDows(o){ return o.dows.slice().sort((a,b)=>(a===0?7:a)-(b===0?7:b)); }
+function docOptLabel(o){
+  if(o.sameHour) return docDowsShort(o.dows)+' · '+docHourLbl(o.hourByDow[o.dows[0]]);
+  return docOptDows(o).map(d=>DOC_DOW_SHORT[d]+' '+docHourLbl(o.hourByDow[d])).join(' · ');
+}
+function docOptMsgLine(o){
+  if(o.sameHour) return docDowsFull(o.dows)+' · '+docHourLbl(o.hourByDow[o.dows[0]]);
+  return docOptDows(o).map(d=>docCap(DOC_DOW_FULL[d])+' '+docHourLbl(o.hourByDow[d])).join(' · ');
+}
 function docBuildOptionsG(combos, total, anchorYMD, occ, stepWeeks){
   const cands=[];
   for(let h=6;h<=22;h++){
@@ -29934,6 +29999,17 @@ function docAgmShowSaving(){
   document.body.appendChild(p);
 }
 function docAgmHideSaving(){ const p=document.getElementById('doc-agm-saving'); if(p) p.remove(); }
+function docSessTag(status, ds, h){
+  // devuelve { ic, icColor, lbl, lblColor, dim, strike } según el estado (o pasada sin marcar)
+  if(status==='done')          return { ic:'ti-check',        icColor:'#0F6E56', lbl:'asistió',   lblColor:'#0F6E56', dim:false, strike:false };
+  if(status==='to_reschedule') return { ic:'ti-calendar-up',  icColor:'#854F0B', lbl:'reagendar', lblColor:'#854F0B', dim:false, strike:false };
+  if(status==='no_show')       return { ic:'ti-circle-x',     icColor:'#A32D2D', lbl:'perdida',   lblColor:'#A32D2D', dim:true,  strike:true  };
+  // programada: si ya pasó (fecha/hora) y sigue sin marcar → "sin marcar"
+  const now=new Date(), todayY=docYMD(now), curH=now.getHours();
+  const isPast = ds<todayY || (ds===todayY && h<curH);
+  if(isPast) return { ic:'ti-alert-circle', icColor:'#9A9183', lbl:'sin marcar', lblColor:'#9A9183', dim:false, strike:false };
+  return null; // programada normal: sin ícono ni texto
+}
 function docAgmHtml(cells){
   const ws=docAgmState.weekStart, today=docYMD(new Date());
   const wsLbl=docCap(new Date(ws+'T12:00:00').toLocaleDateString('es-PE',{day:'numeric',month:'short'}));
@@ -29950,7 +30026,11 @@ function docAgmHtml(cells){
       const inner=evs.map(e=>{
         if(e.type==='session'){
           const drag=(docCanDnd() && e.status==='scheduled')?` draggable="true" data-sid="${e.id}" data-d="${dCell}" data-h="${h}"`:'';
-          return `<div class="agm-ev"${drag} style="background:${e.sede.fill};border-left:3px solid ${e.sede.color};color:${e.sede.ink};font-weight:500;${(e.status==='no_show'||e.status==='to_reschedule')?'opacity:.5;':''}" onclick="docSessionSheet('${e.id}','agenda')">${docEsc(e.name)}</div>`;
+          const tag=docSessTag(e.status, dCell, h);
+          const icon = tag&&tag.ic ? `<i class="ti ${tag.ic}" style="font-size:11px;color:${tag.icColor};flex:none;"></i>` : '';
+          const right = tag&&tag.lbl ? `<span style="font-size:9px;font-weight:600;color:${tag.lblColor};flex:none;margin-left:auto;padding-left:4px;">${tag.lbl}</span>` : '';
+          const nameStyle = (tag&&tag.strike)?'text-decoration:line-through;':'';
+          return `<div class="agm-ev"${drag} style="background:${e.sede.fill};border-left:3px solid ${e.sede.color};color:${e.sede.ink};font-weight:500;display:flex;align-items:center;gap:3px;${tag&&tag.dim?'opacity:.6;':''}" onclick="docSessionSheet('${e.id}','agenda')">${icon}<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;${nameStyle}">${docEsc(e.name)}</span>${right}</div>`;
         }
         if(e.type==='class'){
           return `<div class="agm-cls" style="border-left:3px solid ${e.sede.color};" title="Clase de Pilates · ${docEsc(e.sede.name)}"><i class="ti ti-yoga" style="font-size:10px;"></i> Clase</div>`;
@@ -30084,7 +30164,7 @@ function docPlanWizardHtml(){
       const on=docPlanState.optSel===i, free=o.conflicts===0;
       const sub=free?`<span style="color:#3B6D11;">Libre · 1ª ${docDateShort(o.dates[0])}</span>`:`<span style="color:#854F0B;">${o.conflicts} con choque</span>`;
       return `<div class="doc-card" style="cursor:pointer;${on?'border:1.5px solid #1C1922;':''}" onclick="docPlanPickOption(${i})">
-        <div class="c-body"><div class="c-name" style="font-size:13px;">${docDowsShort(o.dows)} · ${docHourLbl(o.hour)}</div><div style="font-size:10.5px;margin-top:3px;">${sub}</div></div>
+        <div class="c-body"><div class="c-name" style="font-size:13px;">${docOptLabel(o)}</div><div style="font-size:10.5px;margin-top:3px;">${sub}</div></div>
         <div style="width:20px;height:20px;border-radius:50%;${on?'background:#1C1922;color:#fff;':'border:1.5px solid #D3CFC4;'}display:flex;align-items:center;justify-content:center;flex:none;">${on?'<i class="ti ti-check" style="font-size:12px;"></i>':''}</div></div>`;
     }).join('');
     h+=`<div onclick="docPlanCopyOpts()" style="display:flex;align-items:center;justify-content:center;gap:7px;background:#fff;border:1px solid #E6E0D4;border-radius:11px;padding:10px;font-size:12px;color:#5A5248;margin-top:8px;cursor:pointer;"><i class="ti ti-brand-whatsapp" style="font-size:15px;color:#0B7A3E;"></i> Copiar opciones para la paciente</div>`;
@@ -30131,15 +30211,15 @@ async function docPlanGenerate(){
   // si la semana elegida es la actual (o anterior), arrancamos mañana para no proponer días/horas ya pasados
   const anchor = startMon>today ? startMon : tomorrow;
   const horizon=docAddDaysYMD(anchor, (cfg.total*cfg.stepWeeks+4)*7);
-  const occ=await docLoadOccupied(anchor, horizon);
-  docPlanState.opts=docBuildOptionsG(cfg.combos, cfg.total, anchor, occ.set, cfg.stepWeeks);
+  const [occ, prefs]=await Promise.all([ docLoadOccupied(anchor, horizon), docLoadPrefs() ]);
+  docPlanState.opts=docBuildOptionsSmart(cfg.combos, cfg.total, anchor, occ.set, cfg.stepWeeks, prefs);
   docPlanState.optSel=null;
   docPlanRenderLeft();
 }
 function docPlanPickOption(i){
   const o=docPlanState.opts[i]; if(!o) return;
   docPlanState.optSel=i;
-  docPlanState.picks=o.dates.map(ds=>({ds, hour:o.hour}));
+  docPlanState.picks=o.dates.map(ds=>({ds, hour:o.hourByDow[new Date(ds+'T12:00:00').getDay()]}));
   // mover el calendario a la semana de la 1ª terapia
   docPlanState.weekStart=docWeekStart(new Date(o.dates[0]+'T12:00:00'));
   docPlanRenderLeft();
@@ -30149,7 +30229,7 @@ function docPlanCopyOpts(){
   const st=docPlanState; if(!st.opts.length) return;
   const name=(st.p.first_name||'').trim()||''; const sede=st.sede.name;
   const nums=['1️⃣','2️⃣','3️⃣','4️⃣','5️⃣'];
-  const lines=st.opts.slice(0,5).map((o,i)=>`${nums[i]} ${docDowsFull(o.dows)} · ${docHourLbl(o.hour)} (desde ${docDateShort(o.dates[0])})`);
+  const lines=st.opts.slice(0,5).map((o,i)=>`${nums[i]} ${docOptMsgLine(o)} (desde ${docDateShort(o.dates[0])})`);
   const msg=`Hola ${name} 👋 Soy Andrés. Para tus terapias tengo estos horarios libres:\n\n${lines.join('\n')}\n\nTodas en la sede ${sede}.\n¿Cuál te acomoda mejor?`;
   docCopy(msg,'Opciones copiadas ✓');
 }
@@ -30235,7 +30315,7 @@ async function docPlanSave(){
     const { error:se }=await sb.from('therapy_sessions').insert(rows);
     if(se) throw se;
     await sb.from('therapy_patients').update({ pending_since:null }).eq('id',st.pid);
-    docCache.patients=null;
+    docCache.patients=null; docCache.prefs=null;
     showToast('✓ '+picks.length+' terapias agendadas','success');
     docPlanDone(picks);
   }catch(e){ showToast('Error: '+(e.message||''),'error'); if(btn){ btn.style.opacity='1'; btn.style.pointerEvents='auto'; btn.innerHTML='<i class="ti ti-calendar-check"></i> Guardar'; } }
