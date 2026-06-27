@@ -30944,12 +30944,73 @@ async function docLoadPrefs(){
 function docCartesian(lists){
   return lists.reduce((acc,list)=>{ const r=[]; acc.forEach(a=>list.forEach(x=>r.push(a.concat([x])))); return r; }, [[]]);
 }
-// Generador inteligente: 10 opciones, horas distintas por día, aprende de preferencias
-function docBuildOptionsSmart(combos, total, anchorYMD, occ, stepWeeks, prefs){
-  prefs=prefs||{hourW:{},dowW:{}};
+// ---- Aprendizaje por PACIENTE (rutina propia, con recencia) ----
+async function docLoadPatientPrefs(pid){
+  const hourW={}, dowW={}; let total=0;
+  if(!pid) return { hourW, dowW, total };
+  try{
+    const { data }=await sb.from('therapy_sessions').select('session_date,hour')
+      .eq('doctor_id',docState.doctorId).eq('patient_id',pid).not('status','in','(cancelled,deleted)');
+    const now=new Date();
+    (data||[]).forEach(srow=>{
+      const d=new Date(srow.session_date+'T12:00:00');
+      const ageDays=Math.max(0,(now-d)/86400000);
+      const w=Math.pow(0.5, ageDays/60); // vida media 60 días: lo reciente pesa más
+      hourW[srow.hour]=(hourW[srow.hour]||0)+w;
+      const dw=d.getDay(); dowW[dw]=(dowW[dw]||0)+w; total+=w;
+    });
+  }catch(e){}
+  return { hourW, dowW, total };
+}
+// Densidad de horas suavizada (kernel gaussiano sigma=1) → vecinos reciben crédito parcial
+function _docHourDensity(hourW){
+  const dens={}; let max=0;
+  for(let h=6;h<=22;h++){
+    let v=0; for(const k in hourW){ const ho=+k; v+=hourW[k]*Math.exp(-((h-ho)*(h-ho))/2); }
+    dens[h]=v; if(v>max) max=v;
+  }
+  return { dens, max };
+}
+function _docDowScoreFrom(dowW, dw){
+  let max=0; for(const k in dowW){ if(dowW[k]>max) max=dowW[k]; }
+  return max>0 ? (dowW[dw]||0)/max : 0;
+}
+// Razón humana de por qué una opción es buena
+function docOptReason(o){
+  if(o.conflicts>0) return o.conflicts+(o.conflicts===1?' choque · por lo demás buena':' choques · revisa');
+  if(o.nD>1 && o.sameHour){
+    return (o.pConf>=0.4 && o.sFit>=0.6) ? ('Su rutina · mismo horario los '+o.nD+' días')
+                                         : ('Mismo horario los '+o.nD+' días · libre');
+  }
+  if(o.pConf>=0.4 && o.sFit>=0.62) return 'Coincide con su horario habitual';
+  if(o.sCompact>=0.5) return 'Libre y compacta con tu agenda';
+  if(o.sSoon>=0.8) return 'Disponible y empieza pronto';
+  return 'Horario libre';
+}
+// Generador inteligente v2: factibilidad dura + sub-señales normalizadas + MMR (diversidad). Devuelve 6.
+function docBuildOptionsSmart(combos, total, anchorYMD, occ, stepWeeks, ctx){
+  ctx=ctx||{};
+  const P=ctx.patient||{hourW:{},dowW:{},total:0};
+  const Dd=ctx.doctor||{hourW:{},dowW:{}};
+  const pConf=Math.max(0, Math.min(1, (P.total||0)/4)); // confianza en la rutina del paciente (≈4 sesiones)
+  const pHD=_docHourDensity(P.hourW), dHD=_docHourDensity(Dd.hourW);
+  const dDowKeys=Object.keys(Dd.dowW).length;
+  const anchorDate=new Date(anchorYMD+'T12:00:00');
+  const hourFit=(h)=>{
+    const ph = pHD.max>0 ? pHD.dens[h]/pHD.max : 0.5;
+    const dh = dHD.max>0 ? dHD.dens[h]/dHD.max : 0.5;
+    return pConf*ph + (1-pConf)*dh;
+  };
+  const dowFit=(dw)=>{
+    const pd = (P.total>0) ? _docDowScoreFrom(P.dowW,dw) : 0.5;
+    const dd = dDowKeys ? _docDowScoreFrom(Dd.dowW,dw) : 0.5;
+    return pConf*pd + (1-pConf)*dd;
+  };
+  const bucket=(h)=> h<12?0:(h<17?1:2);
+
   const cands=[];
   for(const combo of combos){
-    if(!combo.every(docDayOpen)) continue; // salta combos con días cerrados (ej. domingo)
+    if(!combo.every(docDayOpen)) continue;
     const dates=docGenDates(combo, total, anchorYMD, stepWeeks);
     if(!dates.length) continue;
     const datesByDow={}; combo.forEach(dw=>datesByDow[dw]=dates.filter(ds=>new Date(ds+'T12:00:00').getDay()===dw));
@@ -30957,35 +31018,63 @@ function docBuildOptionsSmart(combos, total, anchorYMD, occ, stepWeeks, prefs){
     combo.forEach(dw=>{
       const arr=[];
       for(let h=6;h<=22;h++){
-        if(!docHourOpen(dw,h)) continue;          // solo horas dentro del horario de atención de ese día
+        if(!docHourOpen(dw,h)) continue;
         let conf=0; (datesByDow[dw]||[]).forEach(ds=>{ if(occ.has(ds+'|'+h)) conf++; });
-        const wH=(prefs.hourW[h]||0), wD=(prefs.dowW[dw]||0);
-        const pref=wH*2 + wD*0.4;
-        arr.push({h, conf, pref, score: conf*1000 - pref*3 + h*0.05});
+        const fit=0.5*hourFit(h)+0.5*dowFit(dw);
+        const u=(conf>0?0:1) + fit*0.5 - conf*0.4; // factibilidad manda, luego ajuste
+        arr.push({h, conf, u});
       }
-      arr.sort((a,b)=>a.score-b.score); rankByDow[dw]=arr;
+      arr.sort((a,b)=>b.u-a.u); rankByDow[dw]=arr;
       if(!arr.length) viable=false;
     });
     if(!viable) continue;
-    const K = combo.length===1?10 : (combo.length===2?4:3);
+    const K = combo.length===1?8 : (combo.length===2?4:3);
     const lists=combo.map(dw=>rankByDow[dw].slice(0,K));
     docCartesian(lists).forEach(asg=>{
-      const hourByDow={}; let conflicts=0, prefSum=0; const hours=[];
-      combo.forEach((dw,idx)=>{ hourByDow[dw]=asg[idx].h; conflicts+=asg[idx].conf; prefSum+=asg[idx].pref; hours.push(asg[idx].h); });
+      const hourByDow={}; let conflicts=0, fitSum=0; const hours=[];
+      combo.forEach((dw,idx)=>{ hourByDow[dw]=asg[idx].h; conflicts+=asg[idx].conf; hours.push(asg[idx].h); fitSum+=0.5*hourFit(asg[idx].h)+0.5*dowFit(dw); });
+      const nD=combo.length;
       const sameHour=hours.every(h=>h===hours[0]);
-      const score=conflicts*1000 + docComboSpacingPenalty(combo) - prefSum*3 - (sameHour?6:0) + hours.reduce((a,b)=>a+b,0)*0.05;
-      cands.push({dows:combo, hourByDow, dates, conflicts, sameHour, score});
+      const sFit=fitSum/nD;
+      const sConsistency= nD<=1?1:(sameHour?1:0.4);
+      const sSpacing= nD<=1?1:(1/(1+docComboSpacingPenalty(combo)/12));
+      let adj=0, tot=0;
+      combo.forEach(dw=>{ (datesByDow[dw]||[]).forEach(ds=>{ tot++; const h=hourByDow[dw]; if(occ.has(ds+'|'+(h-1))||occ.has(ds+'|'+(h+1))) adj++; }); });
+      const sCompact= tot?adj/tot:0;
+      const daysUntil=Math.max(0,(new Date(dates[0]+'T12:00:00')-anchorDate)/86400000);
+      const sSoon=Math.max(0, Math.min(1, 1 - daysUntil/21));
+      const raw=0.45*sFit + 0.18*sSpacing + 0.12*sConsistency + 0.10*sCompact + 0.15*sSoon;
+      const buckets=[...new Set(hours.map(bucket))];
+      cands.push({dows:combo, hourByDow, dates, conflicts, sameHour, match:Math.round(100*raw), raw, sFit, sSpacing, sConsistency, sCompact, sSoon, buckets, pConf, nD});
     });
   }
-  cands.sort((a,b)=>a.score-b.score);
-  const out=[], perCombo={}, seen=new Set();
-  for(const c of cands){
-    const ck=c.dows.slice().sort((a,b)=>a-b).join('-');
-    const sig=ck+':'+c.dows.map(d=>c.hourByDow[d]).join(',');
-    if(seen.has(sig)) continue; seen.add(sig);
-    perCombo[ck]=(perCombo[ck]||0); if(perCombo[ck]>=3) continue; perCombo[ck]++;
-    out.push(c); if(out.length>=10) break;
+  // dedup exacto
+  const uniq=[]; const seen=new Set();
+  cands.forEach(c=>{ const ck=c.dows.slice().sort((a,b)=>a-b).join('-'); const sig=ck+':'+c.dows.map(d=>c.hourByDow[d]).join(','); if(!seen.has(sig)){ seen.add(sig); uniq.push(c); } });
+  // relevancia: factibles primero
+  uniq.forEach(c=> c.rel = c.raw - (c.conflicts>0? 0.25*c.conflicts : 0));
+  uniq.sort((a,b)=> b.rel-a.rel);
+  // MMR: máxima relevancia con mínima similitud a lo ya elegido (diversidad real)
+  const lambda=0.72;
+  const sim=(a,b)=>{
+    const A=new Set(a.dows), B=new Set(b.dows); let inter=0; A.forEach(x=>{ if(B.has(x)) inter++; });
+    const uni=new Set([...a.dows,...b.dows]).size; const jac= uni?inter/uni:0;
+    const ba=new Set(a.buckets), bb=new Set(b.buckets); let bo=0; ba.forEach(x=>{ if(bb.has(x)) bo++; });
+    const bsim=(ba.size&&bb.size)? bo/Math.max(ba.size,bb.size):0;
+    return 0.6*jac + 0.4*bsim;
+  };
+  const out=[];
+  while(out.length<6 && uniq.length){
+    let bi=-1, bv=-Infinity;
+    for(let i=0;i<uniq.length;i++){
+      const c=uniq[i]; let ms=0; out.forEach(o=>{ const sv=sim(c,o); if(sv>ms) ms=sv; });
+      const mmr= lambda*c.rel - (1-lambda)*ms;
+      if(mmr>bv){ bv=mmr; bi=i; }
+    }
+    if(bi<0) break;
+    out.push(uniq.splice(bi,1)[0]);
   }
+  out.forEach(o=> o.reason=docOptReason(o));
   return out;
 }
 function docOptDows(o){ return o.dows.slice().sort((a,b)=>(a===0?7:a)-(b===0?7:b)); }
@@ -31927,10 +32016,11 @@ function docPlanWizardHtml(){
     h+=`<div class="doc-sec">${docPlanState.opts.length} horarios sugeridos</div>`;
     h+=docPlanState.opts.map((o,i)=>{
       const on=docPlanState.optSel===i, free=o.conflicts===0;
-      const sub=free?`<span style="color:#3B6D11;">Libre · 1ª ${docDateShort(o.dates[0])}</span>`:`<span style="color:#854F0B;">${o.conflicts} con choque</span>`;
-      return `<div class="doc-card" style="cursor:pointer;${on?'border:1.5px solid #1C1922;':''}" onclick="docPlanPickOption(${i})">
-        <div class="c-body"><div class="c-name" style="font-size:13px;">${docOptLabel(o)}</div><div style="font-size:10.5px;margin-top:3px;">${sub}</div></div>
-        <div style="width:20px;height:20px;border-radius:50%;${on?'background:#1C1922;color:#fff;':'border:1.5px solid #D3CFC4;'}display:flex;align-items:center;justify-content:center;flex:none;">${on?'<i class="ti ti-check" style="font-size:12px;"></i>':''}</div></div>`;
+      const chip=free?`<span style="font-size:9.5px;font-weight:600;color:#2F6B12;background:#E8F4DA;padding:2px 7px;border-radius:999px;">Libre</span>`:`<span style="font-size:9.5px;font-weight:600;color:#854F0B;background:#FAEEDA;padding:2px 7px;border-radius:999px;">${o.conflicts} choque${o.conflicts===1?'':'s'}</span>`;
+      const barCol=free?'#1C1922':'#C89B4F';
+      return `<div class="doc-card" style="cursor:pointer;align-items:stretch;${on?'border:1.5px solid #1C1922;':''}" onclick="docPlanPickOption(${i})">
+        <div class="c-body" style="flex:1;min-width:0;"><div style="display:flex;align-items:center;gap:7px;"><div class="c-name" style="font-size:13px;">${docOptLabel(o)}</div>${chip}</div><div style="font-size:10.5px;margin-top:3px;color:#6E665A;">${docEsc(o.reason||'')} · 1ª ${docDateShort(o.dates[0])}</div><div style="margin-top:6px;height:4px;border-radius:2px;background:#ECE6DA;overflow:hidden;"><div style="height:100%;width:${Math.max(6,o.match||0)}%;background:${barCol};"></div></div></div>
+        <div style="display:flex;flex-direction:column;align-items:center;gap:2px;flex:none;margin-left:10px;"><div style="font-size:13px;font-weight:700;color:#1C1922;line-height:1;">${o.match||0}</div><div style="font-size:8px;color:#9A9183;letter-spacing:.04em;">match</div><div style="width:20px;height:20px;border-radius:50%;${on?'background:#1C1922;color:#fff;':'border:1.5px solid #D3CFC4;'}display:flex;align-items:center;justify-content:center;margin-top:3px;">${on?'<i class="ti ti-check" style="font-size:12px;"></i>':''}</div></div></div>`;
     }).join('');
     h+=`<div onclick="docPlanCopyOpts()" style="display:flex;align-items:center;justify-content:center;gap:7px;background:#fff;border:1px solid #E6E0D4;border-radius:11px;padding:10px;font-size:12px;color:#5A5248;margin-top:8px;cursor:pointer;"><i class="ti ti-brand-whatsapp" style="font-size:15px;color:#0B7A3E;"></i> Copiar opciones para la paciente</div>`;
     h+=`<div style="font-size:10.5px;color:#9A9183;text-align:center;margin-top:8px;">Elige una y se pinta en el calendario. Luego puedes ajustar a mano →</div>`;
@@ -31976,8 +32066,8 @@ async function docPlanGenerate(){
   // si la semana elegida es la actual (o anterior), arrancamos mañana para no proponer días/horas ya pasados
   const anchor = startMon>today ? startMon : tomorrow;
   const horizon=docAddDaysYMD(anchor, (cfg.total*cfg.stepWeeks+4)*7);
-  const [occ, prefs]=await Promise.all([ docLoadOccupied(anchor, horizon), docLoadPrefs() ]);
-  docPlanState.opts=docBuildOptionsSmart(cfg.combos, cfg.total, anchor, occ.set, cfg.stepWeeks, prefs);
+  const [occ, dprefs, pprefs]=await Promise.all([ docLoadOccupied(anchor, horizon), docLoadPrefs(), docLoadPatientPrefs(docPlanState.pid) ]);
+  docPlanState.opts=docBuildOptionsSmart(cfg.combos, cfg.total, anchor, occ.set, cfg.stepWeeks, { patient:pprefs, doctor:dprefs });
   docPlanState.optSel=null;
   docPlanRenderLeft();
 }
@@ -31994,8 +32084,8 @@ function docPlanPickOption(i){
 function docPlanCopyOpts(){
   const st=docPlanState; if(!st.opts.length) return;
   const name=(st.p.first_name||'').trim()||''; const sede=st.sede.name;
-  const nums=['1️⃣','2️⃣','3️⃣','4️⃣','5️⃣'];
-  const lines=st.opts.slice(0,5).map((o,i)=>`${nums[i]} ${docOptMsgLine(o)} (desde ${docDateShort(o.dates[0])})`);
+  const nums=['1️⃣','2️⃣','3️⃣','4️⃣','5️⃣','6️⃣'];
+  const lines=st.opts.slice(0,6).map((o,i)=>`${nums[i]} ${docOptMsgLine(o)} (desde ${docDateShort(o.dates[0])})`);
   const msg=`Hola ${name} 👋 Soy Andrés. Para tus terapias tengo estos horarios libres:\n\n${lines.join('\n')}\n\nTodas en la sede ${sede}.\n¿Cuál te acomoda mejor?`;
   docCopy(msg,'Opciones copiadas ✓');
 }
