@@ -26344,10 +26344,10 @@ async function reconCompute(studentId) {
 
   for (const a of sorted) {
     const date = (a.class_sessions && a.class_sessions.session_date) || null;
-    const target = eligible.find(p =>
-      reconPkgStart(p) <= (date || '9999-12-31') &&
-      assigned[p.id] < (p.classes_total || 0)
-    );
+    // FIFO: llenar paquetes en orden de compra hasta su tope; el rebalse cae al
+    // siguiente paquete vivo (exista antes o después). La fecha solo ordena las
+    // clases, no prohíbe que entren a un paquete posterior con cupo.
+    const target = eligible.find(p => assigned[p.id] < (p.classes_total || 0));
     if (target) {
       assigned[target.id]++;
       if (a.student_package_id !== target.id) {
