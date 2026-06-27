@@ -26584,6 +26584,170 @@ async function renderReconcileReport() {
     <div style="background:#fff;border:1px solid #E6E0D4;border-radius:14px;overflow:hidden;">${list}</div>`;
 }
 
+// ============================================================
+// CLASES SIN MARCAR — reporte + marcado por fecha en cadena
+// "Sin marcar" = booking activo (cancelled_at null), sesión pasada
+// y NO cancelada, y sin fila de attendance. El marcado consume el
+// paquete correcto por fecha vía getOrCreateActivePackageId.
+// ============================================================
+const UNMARKED_STATE = { all: null, loading: false, scope: 'day', date: null, sedeFilter: 'all', instrFilter: 'all' };
+
+function unmarkedPrevBusinessDay() {
+  const d = new Date(); d.setHours(0, 0, 0, 0);
+  do { d.setDate(d.getDate() - 1); } while (d.getDay() === 0); // saltar domingo
+  return dateToIsoLocal(d);
+}
+function unmarkedDateLabel(iso) {
+  if (!iso) return '—';
+  const d = new Date(iso + 'T00:00:00');
+  return d.toLocaleDateString('es-PE', { weekday: 'short', day: '2-digit', month: 'short' });
+}
+
+async function unmarkedFetchAllRows() {
+  const today = dateToIsoLocal(new Date());
+  const [bookings, atts] = await Promise.all([
+    reconFetchAll('session_bookings',
+      'id, student_id, session_id, cancelled_at, students(first_name, last_name), class_sessions!inner(session_date, hour, location_id, instructor_id, is_cancelled)',
+      q => q.is('cancelled_at', null).eq('class_sessions.is_cancelled', false).lt('class_sessions.session_date', today)),
+    reconFetchAll('attendance', 'booking_id')
+  ]);
+  const marked = new Set(atts.map(a => a.booking_id).filter(Boolean));
+  const locName = {}; (STATE.locations || []).forEach(l => locName[l.id] = l.name);
+  const instr = {}; (STATE.instructors || []).forEach(i => instr[i.id] = i.full_name || i.initials || '—');
+
+  const rows = [];
+  for (const b of bookings) {
+    if (marked.has(b.id)) continue;
+    const cs = b.class_sessions; if (!cs) continue;
+    rows.push({
+      bookingId: b.id, sessionId: b.session_id, studentId: b.student_id,
+      name: ((b.students && b.students.first_name) || '') + ' ' + ((b.students && b.students.last_name) || ''),
+      date: cs.session_date, hour: cs.hour || '',
+      sedeId: cs.location_id, sede: locName[cs.location_id] || '—',
+      instrId: cs.instructor_id, instr: instr[cs.instructor_id] || 'Sin asignar',
+    });
+  }
+  rows.sort((a, b) => (b.date || '').localeCompare(a.date || '') || String(a.hour).localeCompare(String(b.hour)));
+  UNMARKED_STATE.all = rows;
+  return rows;
+}
+
+// Cuántas quedan sin marcar en una fecha (para el disparador del modal)
+function unmarkedCountForDate(iso) {
+  if (!UNMARKED_STATE.all) return 0;
+  return UNMARKED_STATE.all.filter(r => r.date === iso).length;
+}
+
+// Marca una clase sin marcar (fecha arbitraria). Espeja markAttendance:
+// resuelve el paquete por fecha en cadena, libera cupo en faltas, recalcula.
+async function markUnmarkedClass(bookingId, sessionId, studentId, status) {
+  if (!isOnline) { showToast('Necesita conexión', 'error'); return; }
+  const isRecoverable = (status === 'recoverable');
+  const countsAgainst = (status === 'attended' || status === 'lost' || status === 'no_show');
+  const releaseSlot = (status === 'recoverable' || status === 'lost' || status === 'no_show');
+  const statusLabel = { attended: 'asistió', recoverable: 'falta justificada (recuperable)', lost: 'cancelación tardía (perdida)', no_show: 'no vino sin avisar' }[status] || status;
+  const actor = (typeof getCurrentActorLabel === 'function') ? getCurrentActorLabel() : '';
+  const stamp = new Date().toLocaleString('es-PE', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+  const finalNotes = `[${stamp}] ${statusLabel} · marcado tarde por ${actor}`;
+
+  try {
+    const pkgId = countsAgainst ? await getOrCreateActivePackageId(studentId) : null;
+    const { data: existing } = await sb.from('attendance').select('id').eq('booking_id', bookingId).maybeSingle();
+    const payload = {
+      booking_id: bookingId, student_id: studentId, session_id: sessionId, status,
+      notes: finalNotes, is_recoverable: isRecoverable, counts_against_package: countsAgainst,
+      marked_at: new Date().toISOString(), student_package_id: pkgId,
+    };
+    if (existing) {
+      const { error } = await sb.from('attendance').update(payload).eq('id', existing.id);
+      if (error) throw error;
+    } else {
+      const { error } = await sb.from('attendance').insert(payload);
+      if (error) throw error;
+    }
+    if (releaseSlot) {
+      await sb.from('session_bookings').update({ cancelled_at: new Date().toISOString(), cancelled_reason: `Marcado como ${statusLabel} por ${actor}` }).eq('id', bookingId);
+    }
+    if (['attended', 'recoverable', 'lost', 'no_show'].includes(status)) {
+      await sb.from('class_sessions').update({ class_status: 'delivered', status_changed_at: new Date().toISOString() }).eq('id', sessionId);
+    }
+    await recalcPackageCounters(studentId);
+    try { logActivity('attendance.late_mark', { table: 'attendance', id: bookingId, label: statusLabel }, null); } catch (e) {}
+
+    if (UNMARKED_STATE.all) UNMARKED_STATE.all = UNMARKED_STATE.all.filter(r => r.bookingId !== bookingId);
+    showToast({ attended: '✓ Asistió', recoverable: '⊙ Recuperable · cupo liberado', lost: '⚠ Perdida · consume clase', no_show: '✗ No vino' }[status] || '✓ Marcado', 'success');
+    if (typeof renderUnmarkedReport === 'function') renderUnmarkedReport();
+  } catch (e) { showToast('Error: ' + (e.message || ''), 'error'); }
+}
+
+async function renderUnmarkedReport() {
+  const container = document.getElementById('reports-container');
+  if (!container) return;
+  if (UNMARKED_STATE.date === null) UNMARKED_STATE.date = unmarkedPrevBusinessDay();
+  if (!UNMARKED_STATE.all) {
+    container.innerHTML = '<div style="padding:40px;text-align:center;color:var(--ink-mute);">Cargando clases sin marcar…</div>';
+    try { await unmarkedFetchAllRows(); } catch (e) { container.innerHTML = '<div style="padding:40px;text-align:center;color:var(--danger);">Error: ' + escape(e.message || '') + '</div>'; return; }
+  }
+  const all = UNMARKED_STATE.all || [];
+
+  // Filtrado
+  let rows = all.slice();
+  if (UNMARKED_STATE.scope === 'day') rows = rows.filter(r => r.date === UNMARKED_STATE.date);
+  if (UNMARKED_STATE.sedeFilter !== 'all') rows = rows.filter(r => r.sedeId === UNMARKED_STATE.sedeFilter);
+  if (UNMARKED_STATE.instrFilter !== 'all') rows = rows.filter(r => (r.instrId || 'none') === UNMARKED_STATE.instrFilter);
+
+  const sedeOpts = '<option value="all">Todas las sedes</option>' + (STATE.locations || []).map(l => `<option value="${l.id}" ${UNMARKED_STATE.sedeFilter === l.id ? 'selected' : ''}>${escape(l.name)}</option>`).join('');
+  const instrOpts = '<option value="all">Todos los profesores</option>' + (STATE.instructors || []).map(i => `<option value="${i.id}" ${UNMARKED_STATE.instrFilter === i.id ? 'selected' : ''}>${escape(i.full_name || i.initials || '—')}</option>`).join('');
+
+  // Agrupar por fecha
+  const byDate = {};
+  rows.forEach(r => { (byDate[r.date] = byDate[r.date] || []).push(r); });
+  const dates = Object.keys(byDate).sort((a, b) => b.localeCompare(a));
+
+  const groupsHtml = dates.length ? dates.map(d => {
+    const items = byDate[d].map(r => `
+      <div style="display:flex;align-items:center;gap:10px;padding:11px 14px;border-top:1px solid var(--line);">
+        <div style="flex:0 0 64px;font-weight:600;color:var(--ink);font-size:13px;">${escape(r.hour)}</div>
+        <div style="flex:1;min-width:0;">
+          <div style="font-weight:600;color:var(--ink);font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escape(r.name)}</div>
+          <div style="font-size:11.5px;color:var(--ink-mute);">${escape(r.sede)} · ${escape(r.instr)}</div>
+        </div>
+        <div style="display:flex;gap:6px;flex:0 0 auto;">
+          <button onclick="markUnmarkedClass('${r.bookingId}','${r.sessionId}','${r.studentId}','attended')" style="border:1px solid #BBE3C4;background:#EAF7EE;color:#1F7A3D;border-radius:8px;padding:6px 10px;font-size:12px;font-weight:600;cursor:pointer;">Asistió</button>
+          <button onclick="markUnmarkedClass('${r.bookingId}','${r.sessionId}','${r.studentId}','recoverable')" style="border:1px solid #CFE0F5;background:#EEF4FC;color:#2563A8;border-radius:8px;padding:6px 10px;font-size:12px;font-weight:600;cursor:pointer;">Recuperable</button>
+          <button onclick="markUnmarkedClass('${r.bookingId}','${r.sessionId}','${r.studentId}','lost')" style="border:1px solid #F2C9C9;background:#FBEEEE;color:#B0322E;border-radius:8px;padding:6px 10px;font-size:12px;font-weight:600;cursor:pointer;">Perdida</button>
+        </div>
+      </div>`).join('');
+    return `<div style="background:white;border:1px solid var(--line);border-radius:14px;overflow:hidden;margin-bottom:12px;">
+      <div style="padding:10px 14px;background:var(--bg-soft,#FAF7F2);font-weight:600;color:var(--fit-purple);font-size:13px;">${unmarkedDateLabel(d)} · ${byDate[d].length} sin marcar</div>
+      ${items}
+    </div>`;
+  }).join('') : '<div style="padding:40px;text-align:center;color:var(--ink-mute);">🎉 No hay clases sin marcar con estos filtros.</div>';
+
+  container.innerHTML = `
+    <div style="max-width:760px;margin:0 auto;padding:8px 4px 40px;">
+      <div onclick="reportsBackToHub()" style="color:var(--fit-purple);font-size:13px;cursor:pointer;margin-bottom:14px;">← Volver a Reportes</div>
+      <h2 style="font-family:var(--display);font-style:italic;font-size:26px;color:var(--fit-purple);margin:0 0 4px;font-weight:500;">Clases sin marcar</h2>
+      <div style="color:var(--ink-mute);font-size:13px;margin-bottom:16px;">Clases agendadas cuya fecha ya pasó y nadie marcó. Márcalas aquí: consumen el paquete correcto por fecha.</div>
+
+      <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:16px;">
+        <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--ink);">
+          <input type="checkbox" ${UNMARKED_STATE.scope === 'all' ? 'checked' : ''} onchange="UNMARKED_STATE.scope=this.checked?'all':'day'; renderUnmarkedReport();">
+          Ver todas las fechas
+        </label>
+        <input type="date" value="${UNMARKED_STATE.date}" ${UNMARKED_STATE.scope === 'all' ? 'disabled' : ''}
+          onchange="UNMARKED_STATE.date=this.value; UNMARKED_STATE.scope='day'; renderUnmarkedReport();"
+          style="padding:7px 10px;border:1px solid var(--line);border-radius:9px;font-size:13px;${UNMARKED_STATE.scope === 'all' ? 'opacity:.4;' : ''}">
+        <select onchange="UNMARKED_STATE.sedeFilter=this.value; renderUnmarkedReport();" style="padding:7px 10px;border:1px solid var(--line);border-radius:9px;font-size:13px;">${sedeOpts}</select>
+        <select onchange="UNMARKED_STATE.instrFilter=this.value; renderUnmarkedReport();" style="padding:7px 10px;border:1px solid var(--line);border-radius:9px;font-size:13px;">${instrOpts}</select>
+        <button onclick="UNMARKED_STATE.all=null; renderUnmarkedReport();" style="padding:7px 12px;border:1px solid var(--line);border-radius:9px;background:white;font-size:13px;cursor:pointer;">↻ Refrescar</button>
+      </div>
+
+      <div style="font-size:13px;color:var(--ink-mute);margin-bottom:10px;">${rows.length} clase(s) sin marcar ${UNMARKED_STATE.scope === 'day' ? 'el ' + unmarkedDateLabel(UNMARKED_STATE.date) : 'en total'}</div>
+      ${groupsHtml}
+    </div>`;
+}
+
 function renderReportsHubHTML() {
   const container = document.getElementById('reports-container');
   if (!container) return;
@@ -26639,6 +26803,18 @@ function renderReportsHubHTML() {
         <h3 style="font-family: var(--display); font-style: italic; font-size: 22px; color: var(--fit-purple); margin: 0 0 6px; font-weight: 500;">Reconciliación de paquetes</h3>
         <div style="color: var(--ink-mute); font-size: 13px; line-height: 1.5;">
           Lista de paquetes desbordados. Abre el perfil de la alumna y reconcilia (vista previa antes de aplicar) o marca como revisado. Temporal: se quita cuando llegue a 0.
+        </div>
+        <div style="margin-top: 14px; color: var(--fit-purple); font-size: 12.5px; font-weight: 500;">Ver lista →</div>
+      </div>
+
+      <div onclick="UNMARKED_STATE.all=null; UNMARKED_STATE.scope='day'; UNMARKED_STATE.date=null; UNMARKED_STATE.sedeFilter='all'; UNMARKED_STATE.instrFilter='all'; REPORTS_STATE.subView='unmarked'; renderReportsView();"
+           style="background: white; border: 1px solid var(--line); border-radius: 14px; padding: 24px; cursor: pointer; transition: all 0.15s;"
+           onmouseover="this.style.borderColor='var(--fit-purple-soft)'; this.style.transform='translateY(-2px)';"
+           onmouseout="this.style.borderColor='var(--line)'; this.style.transform='';">
+        <div style="width: 48px; height: 48px; border-radius: 12px; background: var(--warn-soft); display: flex; align-items: center; justify-content: center; margin-bottom: 14px; font-size: 24px;">📋</div>
+        <h3 style="font-family: var(--display); font-style: italic; font-size: 22px; color: var(--fit-purple); margin: 0 0 6px; font-weight: 500;">Clases sin marcar</h3>
+        <div style="color: var(--ink-mute); font-size: 13px; line-height: 1.5;">
+          Clases agendadas cuya fecha ya pasó y nadie marcó. Márcalas aquí (asistió / recuperable / perdida); consumen el paquete correcto por fecha.
         </div>
         <div style="margin-top: 14px; color: var(--fit-purple); font-size: 12.5px; font-weight: 500;">Ver lista →</div>
       </div>
@@ -28313,6 +28489,10 @@ async function renderReportsView() {
   }
   if (REPORTS_STATE.subView === 'reconcile') {
     await renderReconcileReport();
+    return;
+  }
+  if (REPORTS_STATE.subView === 'unmarked') {
+    await renderUnmarkedReport();
     return;
   }
   // subView === 'monthly' — reporte mensual original
