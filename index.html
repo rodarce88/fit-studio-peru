@@ -29509,13 +29509,17 @@ function docPlanDates(dows, total, anchorYMD){
   return dates;
 }
 // Combinaciones de días según frecuencia
+// ---- Horario de atención de Andrés (un solo lugar; afecta solo a las OPCIONES automáticas) ----
+const DOC_HOURS = { 0:null, 1:[7,21], 2:[7,21], 3:[7,21], 4:[7,21], 5:[7,21], 6:[7,14] };
+function docDayOpen(dow){ return !!DOC_HOURS[dow]; }
+function docHourOpen(dow, h){ const r=DOC_HOURS[dow]; return !!r && h>=r[0] && h<=r[1]; }
 function docDowCombos(freq){
-  const days=[1,2,3,4,5,6,0]; // lun..sáb, dom al final
+  const days=[1,2,3,4,5,6,0].filter(docDayOpen); // solo días abiertos (excluye domingo)
   if(freq===1) return days.map(d=>[d]);
-  const res=[];
-  for(let i=0;i<7;i++) for(let j=i+1;j<7;j++){
+  const res=[]; const n=days.length;
+  for(let i=0;i<n;i++) for(let j=i+1;j<n;j++){
     if(freq===2){ res.push([days[i],days[j]]); }
-    else { for(let k=j+1;k<7;k++) res.push([days[i],days[j],days[k]]); }
+    else { for(let k=j+1;k<n;k++) res.push([days[i],days[j],days[k]]); }
   }
   return res;
 }
@@ -29557,21 +29561,24 @@ function docBuildOptionsSmart(combos, total, anchorYMD, occ, stepWeeks, prefs){
   prefs=prefs||{hourW:{},dowW:{}};
   const cands=[];
   for(const combo of combos){
+    if(!combo.every(docDayOpen)) continue; // salta combos con días cerrados (ej. domingo)
     const dates=docGenDates(combo, total, anchorYMD, stepWeeks);
     if(!dates.length) continue;
     const datesByDow={}; combo.forEach(dw=>datesByDow[dw]=dates.filter(ds=>new Date(ds+'T12:00:00').getDay()===dw));
-    const rankByDow={};
+    const rankByDow={}; let viable=true;
     combo.forEach(dw=>{
       const arr=[];
       for(let h=6;h<=22;h++){
+        if(!docHourOpen(dw,h)) continue;          // solo horas dentro del horario de atención de ese día
         let conf=0; (datesByDow[dw]||[]).forEach(ds=>{ if(occ.has(ds+'|'+h)) conf++; });
         const wH=(prefs.hourW[h]||0), wD=(prefs.dowW[dw]||0);
-        const pref=wH*2 + wD*0.4;                 // bonus por horas/días que Andrés suele usar
-        const oddPen=(h<7?(7-h)*8:0)+(h>21?(h-21)*8:0); // solo castiga horas muy extremas
-        arr.push({h, conf, pref, score: conf*1000 + oddPen - pref*3 + h*0.05});
+        const pref=wH*2 + wD*0.4;
+        arr.push({h, conf, pref, score: conf*1000 - pref*3 + h*0.05});
       }
       arr.sort((a,b)=>a.score-b.score); rankByDow[dw]=arr;
+      if(!arr.length) viable=false;
     });
+    if(!viable) continue;
     const K = combo.length===1?10 : (combo.length===2?4:3);
     const lists=combo.map(dw=>rankByDow[dw].slice(0,K));
     docCartesian(lists).forEach(asg=>{
