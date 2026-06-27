@@ -3614,8 +3614,10 @@ body:not(.doctor-mode) .doc-bottomnav{ display:none; }
 #view-doctor-home .doc-planhdr{ position:sticky; top:0; z-index:40; display:flex; align-items:center; gap:12px; padding:12px 0 11px; margin-bottom:10px; background:#F7F5F0; border-bottom:1px solid #E6E0D4; }
 #view-doctor-home .doc-plangrid{ display:grid; grid-template-columns:290px minmax(0,1fr) 250px; gap:24px; align-items:start; }
 #view-doctor-home .doc-planright{ position:sticky; top:78px; align-self:start; }
-#view-doctor-home .doc-planexist{ position:sticky; top:78px; align-self:start; max-height:calc(100vh - 96px); overflow:auto; }
-@media (max-width:1180px){ #view-doctor-home .doc-plangrid{ grid-template-columns:290px 1fr; } #view-doctor-home .doc-planexist{ grid-column:1/-1; position:static; max-height:none; } }
+#view-doctor-home .doc-planexist{ position:sticky; top:78px; align-self:start; max-height:calc(100vh - 96px); display:flex; flex-direction:column; }
+#view-doctor-home .doc-existlist{ overflow:auto; flex:1 1 auto; min-height:0; }
+#view-doctor-home .doc-existfoot{ flex:none; padding-top:10px; }
+@media (max-width:1180px){ #view-doctor-home .doc-plangrid{ grid-template-columns:290px 1fr; } #view-doctor-home .doc-planexist{ grid-column:1/-1; position:static; max-height:none; } #view-doctor-home .doc-existlist{ overflow:visible; } }
 @media (max-width:880px){ #view-doctor-home .doc-plangrid{ grid-template-columns:1fr; gap:14px; } #view-doctor-home .doc-planright{ position:static; } }
 #view-doctor-home .doc-pickrow{ display:flex; align-items:center; justify-content:space-between; padding:8px 11px; border:1px solid #E6E0D4; border-radius:10px; background:#fff; margin-bottom:6px; font-size:12px; cursor:pointer; }
 #view-doctor-home .doc-pickrow i{ color:#A32D2D; font-size:14px; }
@@ -3627,7 +3629,7 @@ body:not(.doctor-mode) .doc-bottomnav{ display:none; }
 #view-doctor-home .doc-numin{ width:66px; border:1.5px solid #E6E0D4; border-radius:999px; padding:6px 12px; font-size:12.5px; font-family:inherit; color:#1C1922; background:#fff; }
 #view-doctor-home .doc-numin:focus{ outline:none; border-color:#1C1922; }
 #view-doctor-home .doc-numin::placeholder{ color:#B7AF9F; }
-#view-doctor-home .doc-delbtn{ width:100%; margin-top:14px; border:none; background:#A32D2D; color:#fff; border-radius:12px; padding:13px; font-size:13px; font-weight:600; font-family:inherit; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:7px; }
+#view-doctor-home .doc-delbtn{ width:100%; border:none; background:#A32D2D; color:#fff; border-radius:12px; padding:13px; font-size:13px; font-weight:600; font-family:inherit; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:7px; }
 #view-doctor-home .doc-delbtn:hover{ background:#8A2424; }
 #view-doctor-home .doc-secbtn{ width:100%; border:1.5px solid #1C1922; background:#fff; color:#1C1922; border-radius:12px; padding:11px; font-size:12.5px; font-weight:600; font-family:inherit; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:7px; }
 #view-doctor-home .agm-grid{ display:grid; grid-template-columns:46px repeat(7, minmax(96px,1fr)); min-width:730px; border:1px solid #E6E0D4; border-radius:12px; overflow:hidden; background:#fff; }
@@ -30375,19 +30377,19 @@ function docPlanExistingHtml(){
         <i class="ti ${del?'ti-arrow-back-up':'ti-x'}" style="color:${del?'#854F0B':'#A32D2D'};"></i></div>`;
     });
   });
-  if(st.delIds.size) h+=`<div style="font-size:11px;color:#A32D2D;text-align:center;margin-top:10px;font-weight:500;">${st.delIds.size} se eliminará${st.delIds.size===1?'':'n'} al guardar</div>`;
   return h;
 }
 function docPlanRenderExisting(){
   const box=document.getElementById('doc-plan-existing'); if(!box) return;
   const st=docPlanState; const mode=docPlanMode();
-  const inner=docPlanExistingHtml();
+  const listHtml=docPlanExistingHtml();
   if(mode==='agendar'){
-    box.innerHTML=`<div style="opacity:.4;pointer-events:none;">${inner}</div>
-      <div style="font-size:11px;color:#9A9183;text-align:center;margin-top:10px;line-height:1.4;">Estás agendando nuevas. Termina o limpia para volver a quitar terapias.</div>`;
+    box.innerHTML=`<div class="doc-existlist" style="opacity:.4;pointer-events:none;">${listHtml}</div>
+      <div class="doc-existfoot" style="font-size:11px;color:#9A9183;text-align:center;line-height:1.4;">Estás agendando nuevas. Termina o limpia para volver a quitar terapias.</div>`;
     return;
   }
-  box.innerHTML=inner + (st.delIds.size?`<button id="doc-plan-delbtn" class="doc-delbtn" onclick="docPlanDeleteNow()"><i class="ti ti-trash"></i> Eliminar ${st.delIds.size}</button>`:'');
+  const foot = st.delIds.size?`<div class="doc-existfoot"><button id="doc-plan-delbtn" class="doc-delbtn" onclick="docPlanDeleteNow()"><i class="ti ti-trash"></i> Eliminar ${st.delIds.size}</button></div>`:'';
+  box.innerHTML=`<div class="doc-existlist">${listHtml}</div>${foot}`;
 }
 function docPlanToggleDel(id){ if(docPlanMode()==='agendar') return; const s=docPlanState.delIds; if(s.has(id)) s.delete(id); else s.add(id); docPlanRenderExisting(); docPlanRepaint(); docPlanRenderLeft(); }
 async function docPlanDeleteNow(){
