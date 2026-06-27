@@ -2976,10 +2976,10 @@
     <div class="date-display-full" id="date-full">—</div>
   </div>
   <button class="topbar-user">
-    <div class="user-avatar">VC</div>
+    <div class="user-avatar" style="background:var(--line);"></div>
     <div class="user-info">
-      <div class="user-name">Coordinador</div>
-      <div class="user-role" id="user-role-text">Modo demo</div>
+      <div class="user-name"></div>
+      <div class="user-role" id="user-role-text"></div>
     </div>
   </button>
 </header>
@@ -29374,7 +29374,7 @@ function accountModal(){
       </div>
       ${rolesHtml}
       <div class="am-foot">
-        <button class="am-logout" onclick="if(confirm('¿Cerrar sesión?')) logout();"><i class="ti ti-logout"></i><span>Cerrar sesión</span></button>
+        <button class="am-logout" onclick="logout()"><i class="ti ti-logout"></i><span>Cerrar sesión</span></button>
       </div>
     </div>`;
   m.classList.add('open');
@@ -29393,7 +29393,7 @@ function docRoleMenu(){
   s.innerHTML = `<div class="drs-back" onclick="docCloseRoleSheet()"></div>
     <div class="drs-card">
       ${multi?'<button class="drs-item" onclick="docCloseRoleSheet();docShowRoleChooser();"><i class="ti ti-arrows-left-right"></i> Cambiar de rol</button>':''}
-      <button class="drs-item drs-danger" onclick="docCloseRoleSheet(); if(confirm('¿Cerrar sesión?')) logout();"><i class="ti ti-logout"></i> Cerrar sesión</button>
+      <button class="drs-item drs-danger" onclick="docCloseRoleSheet(); logout();"><i class="ti ti-logout"></i> Cerrar sesión</button>
     </div>`;
   s.classList.add('open');
 }
