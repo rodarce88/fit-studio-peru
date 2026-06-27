@@ -3632,6 +3632,9 @@ body:not(.doctor-mode) .doc-bottomnav{ display:none; }
 #view-doctor-home .doc-delbtn{ width:100%; border:none; background:#A32D2D; color:#fff; border-radius:12px; padding:13px; font-size:13px; font-weight:600; font-family:inherit; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:7px; }
 #view-doctor-home .doc-delbtn:hover{ background:#8A2424; }
 #view-doctor-home .doc-secbtn{ width:100%; border:1.5px solid #1C1922; background:#fff; color:#1C1922; border-radius:12px; padding:11px; font-size:12.5px; font-weight:600; font-family:inherit; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:7px; }
+#view-doctor-home .doc-hdrbtn{ border:1px solid #E6E0D4; background:#fff; color:#3A352E; border-radius:999px; padding:7px 12px; font-size:11.5px; font-weight:500; font-family:inherit; cursor:pointer; display:inline-flex; align-items:center; gap:5px; white-space:nowrap; }
+#view-doctor-home .doc-hdrbtn:hover{ border-color:#1C1922; }
+#doc-bottomnav .doc-planback{ flex:1; width:100%; border:none; background:#1C1922; color:#fff; border-radius:12px; padding:13px; font-size:13.5px; font-weight:600; font-family:inherit; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:8px; margin:0 6px; }
 #view-doctor-home .agm-grid{ display:grid; grid-template-columns:46px repeat(7, minmax(96px,1fr)); min-width:730px; border:1px solid #E6E0D4; border-radius:12px; overflow:hidden; background:#fff; }
 #view-doctor-home .agm-hd{ background:#F3EFE7; padding:6px 2px; text-align:center; font-size:10px; color:#6E665A; border-bottom:1px solid #E6E0D4; border-left:1px solid #EFEAE0; line-height:1.25; }
 #view-doctor-home .agm-hd.today{ background:#1C1922; color:#fff; }
@@ -30055,7 +30058,7 @@ function docAgmHtml(cells){
           const icon = tag&&tag.ic ? `<i class="ti ${tag.ic}" style="font-size:11px;color:${tag.icColor};flex:none;"></i>` : '';
           const right = tag&&tag.lbl ? `<span style="font-size:9px;font-weight:600;color:${tag.lblColor};flex:none;margin-left:auto;padding-left:4px;">${tag.lbl}</span>` : '';
           const nameStyle = (tag&&tag.strike)?'text-decoration:line-through;':'';
-          return `<div class="agm-ev"${drag} style="background:${e.sede.fill};border-left:3px solid ${e.sede.color};color:${e.sede.ink};font-weight:500;display:flex;align-items:center;gap:3px;${tag&&tag.dim?'opacity:.6;':''}" onclick="docSessionSheet('${e.id}','agenda')">${icon}<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;${nameStyle}">${docEsc(e.name)}</span>${right}</div>`;
+          return `<div class="agm-ev"${drag} style="background:${e.sede.fill};border-left:3px solid ${e.sede.color};color:${e.sede.ink};font-weight:500;display:flex;align-items:center;gap:3px;${tag&&tag.dim?'opacity:.6;':''}" onclick="docAgmSessionTap('${e.id}','${e.patient_id||''}')">${icon}<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;${nameStyle}">${docEsc(e.name)}</span>${right}</div>`;
         }
         if(e.type==='class'){
           return `<div class="agm-cls" style="border-left:3px solid ${e.sede.color};" title="Clase de Pilates · ${docEsc(e.sede.name)}"><i class="ti ti-yoga" style="font-size:10px;"></i> Clase</div>`;
@@ -30088,17 +30091,91 @@ function docAgmHtml(cells){
 // MÓDULO DOCTOR — Armar plan (pantalla dividida: izquierda proceso · derecha calendario selección)
 // ============================================
 let docPlanState=null;
-async function docRenderPlanBuilder(pid){
+function docAgmSessionTap(sid, pid){
+  // PC: entra a la vista del paciente (paneles). Móvil o sin paciente: modal flotante actual.
+  if(!docCanDnd() || !pid){ docSessionSheet(sid,'agenda'); return; }
+  docRenderPlanBuilder(pid, sid);
+}
+async function docRenderPlanBuilder(pid, focusSid){
   const cont=document.getElementById('doc-home-content'); if(!cont) return;
   cont.innerHTML='<div class="doc-wrap"><div class="doc-loading">Preparando…</div></div>';
   const pts=await docLoadPatients(true);
   const p=pts.find(x=>x.id===pid); if(!p){ docRenderPacientes(); return; }
   docPlanState={ pid, p, locationId:p.location_id, sede:docSede(p.location_id), picks:[], delIds:new Set(), existing:[], weekStart:docWeekStart(new Date()), cellsByWeek:{}, tab:'manual', cfg:{path:null,freq:null,weeks:null,sessions:null,remType:null,remVal:null,specDay:null,months:null}, opts:[], optSel:null };
   docPlanState.existing=await docPlanLoadExisting(pid);
+  // si vino desde una cita concreta, abrir el calendario en esa semana
+  if(focusSid){ try{ const { data }=await sb.from('therapy_sessions').select('session_date').eq('id',focusSid).maybeSingle(); if(data&&data.session_date) docPlanState.weekStart=docWeekStart(new Date(data.session_date+'T12:00:00')); }catch(_){} }
   cont.innerHTML=docPlanShell(p);
   await docPlanRenderCalendar();
   docPlanRenderLeft();
   docPlanRenderExisting();
+  docPlanBottomNav();
+  if(focusSid) docSessMini(focusSid);
+}
+function docPlanBottomNav(){
+  const nav=document.getElementById('doc-bottomnav'); if(!nav) return;
+  nav.innerHTML=`<button class="doc-planback" onclick="docRenderAgendaMaestra()"><i class="ti ti-arrow-left"></i> Volver a la agenda</button>`;
+}
+async function docPlanRefresh(){
+  if(!docPlanState) return;
+  docPlanState.existing=await docPlanLoadExisting(docPlanState.pid);
+  docPlanState.cellsByWeek={};
+  await docPlanRenderCalendar(); docPlanRenderLeft(); docPlanRenderExisting();
+}
+// ---- Modal mínimo de una cita (dentro del armador) ----
+async function docSessMini(id){
+  let s=null;
+  try{ const { data }=await sb.from('therapy_sessions').select('id,session_date,hour,status,patient_id,location_id,therapy_patients(first_name,last_name)').eq('id',id).maybeSingle(); s=data; }catch(e){}
+  if(!s){ showToast('No se pudo abrir la cita','error'); return; }
+  const nm=s.therapy_patients?(((s.therapy_patients.first_name||'')+' '+(s.therapy_patients.last_name||'')).trim()):'';
+  const when=docCap(docDateShort(s.session_date))+' · '+docHourLbl(s.hour);
+  const opt=(icon,color,label,onclick,active)=>`<div onclick="${onclick}" style="display:flex;align-items:center;gap:11px;padding:12px 14px;border-radius:12px;background:${active?'#F0ECE2':'#fff'};border:1px solid #ECE6DA;margin-bottom:8px;cursor:pointer;"><i class="ti ${icon}" style="font-size:18px;color:${color};"></i><div style="flex:1;font-size:13.5px;color:#1C1922;">${label}</div>${active?'<i class="ti ti-check" style="font-size:16px;"></i>':''}</div>`;
+  docMountSheet(`
+    <div style="font-size:14px;font-weight:600;color:#1C1922;">${docEsc(nm)}</div>
+    <div style="font-size:11px;color:#9A9183;margin-bottom:14px;">${when}</div>
+    ${opt('ti-circle-check','#0F6E56','Asistió',`docMiniStatus('${id}','done')`, s.status==='done')}
+    ${opt('ti-calendar-up','#854F0B','No vino · reagendar',`docMiniStatus('${id}','to_reschedule')`, s.status==='to_reschedule')}
+    ${opt('ti-circle-x','#A32D2D','No vino · perdida',`docMiniStatus('${id}','no_show')`, s.status==='no_show')}
+    ${s.status!=='scheduled'?opt('ti-arrow-back-up','#5F5E5A','Volver a programada',`docMiniStatus('${id}','scheduled')`, false):''}
+    <div style="height:4px;border-top:1px solid #ECE6DA;margin:6px 0 10px;"></div>
+    ${opt('ti-trash','#A32D2D','Eliminar (interno)',`docMiniDelete('${id}')`, false)}
+    <div onclick="docSessClose()" style="text-align:center;padding:11px;font-size:13px;color:#9A9183;cursor:pointer;">Cancelar</div>`);
+}
+async function docMiniStatus(id, status){
+  try{ const { error }=await sb.from('therapy_sessions').update({ status }).eq('id',id); if(error) throw error;
+    docSessClose(); docCache.patients=null; docCache.prefs=null; showToast('✓ Actualizada','success'); await docPlanRefresh();
+  }catch(e){ showToast('Error: '+(e.message||''),'error'); }
+}
+async function docMiniDelete(id){
+  const reason=(prompt('Motivo de eliminación (opcional):')||'').trim()||null;
+  try{
+    const payload={ status:'deleted', deleted_at:new Date().toISOString(), deleted_by:(CURRENT_USER&&CURRENT_USER.authUser&&CURRENT_USER.authUser.id)||null, deleted_by_name:(typeof getCurrentActorLabel==='function'?getCurrentActorLabel():null), delete_reason:reason };
+    const { error }=await sb.from('therapy_sessions').update(payload).eq('id',id); if(error) throw error;
+    docSessClose(); docCache.patients=null; showToast('✓ Eliminada','success'); await docPlanRefresh();
+  }catch(e){ showToast('Error: '+(e.message||''),'error'); }
+}
+// ---- Cambiar sede del paciente (a nivel perfil) ----
+function docPatSedeSheet(pid){
+  const rows=DOC_SEDE_IDS.map(id=>{ const s=docSede(id); const cur=(docPlanState&&docPlanState.locationId===id);
+    return `<div onclick="docPatSedeApply('${pid}','${id}')" style="display:flex;align-items:center;gap:11px;padding:13px 14px;border-radius:12px;background:${cur?'#F0ECE2':'#fff'};border:1px solid #ECE6DA;margin-bottom:8px;cursor:pointer;"><span style="width:11px;height:11px;border-radius:50%;background:${s.color};flex:none;"></span><div style="flex:1;font-size:13.5px;">${docEsc(s.name)}</div>${cur?'<i class="ti ti-check" style="font-size:16px;"></i>':''}</div>`;
+  }).join('');
+  docMountSheet(`<div style="font-size:14px;font-weight:600;margin-bottom:4px;">Cambiar sede</div><div style="font-size:11px;color:#9A9183;margin-bottom:14px;">Se aplica al paciente y a sus terapias futuras.</div>${rows}<div onclick="docSessClose()" style="text-align:center;padding:11px;font-size:13px;color:#9A9183;cursor:pointer;">Cancelar</div>`);
+}
+async function docPatSedeApply(pid, loc){
+  try{
+    const today=docYMD(new Date());
+    await sb.from('therapy_patients').update({ location_id:loc }).eq('id',pid);
+    try{ await sb.from('therapy_recurrences').update({ location_id:loc }).eq('patient_id',pid).eq('is_active',true); }catch(e){}
+    try{ await sb.from('therapy_sessions').update({ location_id:loc }).eq('patient_id',pid).gte('session_date',today).in('status',['scheduled','to_reschedule']); }catch(e){}
+    docCache.patients=null; docSessClose(); showToast('✓ Sede actualizada','success');
+    if(docPlanState&&docPlanState.pid===pid){ docPlanState.locationId=loc; docPlanState.sede=docSede(loc); if(docPlanState.p) docPlanState.p.location_id=loc; }
+    docPlanRerenderShell();
+  }catch(e){ showToast('Error: '+(e.message||''),'error'); }
+}
+function docPlanRerenderShell(){
+  const cont=document.getElementById('doc-home-content'); if(!cont||!docPlanState) return;
+  cont.innerHTML=docPlanShell(docPlanState.p);
+  docPlanRenderCalendar(); docPlanRenderLeft(); docPlanRenderExisting(); docPlanBottomNav();
 }
 async function docPlanLoadExisting(pid){
   const today=docYMD(new Date());
@@ -30125,7 +30202,10 @@ function docPlanShell(p){
           ${phone}${note}
         </div>
       </div>
-      <div style="font-size:11px;color:#9A9183;font-weight:500;flex:none;display:flex;align-items:center;gap:5px;"><i class="ti ti-calendar-plus" style="font-size:14px;"></i> Agendar terapia</div>
+      <div style="display:flex;align-items:center;gap:7px;flex:none;">
+        <button class="doc-hdrbtn" onclick="docRenderPatient('${docPlanState.pid}','pacientes')"><i class="ti ti-user" style="font-size:14px;"></i> Ver perfil</button>
+        <button class="doc-hdrbtn" onclick="docPatSedeSheet('${docPlanState.pid}')"><i class="ti ti-map-pin" style="font-size:14px;"></i> Cambiar sede</button>
+      </div>
     </div>
     <div class="doc-plangrid">
       <div class="doc-planleft" id="doc-plan-left"></div>
@@ -30133,18 +30213,10 @@ function docPlanShell(p){
       <div class="doc-planexist" id="doc-plan-existing"></div>
     </div></div>`;
 }
-function docPlanMode(){ const st=docPlanState; if(st.delIds.size>0) return 'eliminar'; if(st.picks.length>0 || st.cfg.path) return 'agendar'; return 'neutral'; }
+function docPlanMode(){ return (docPlanState.picks.length>0 || docPlanState.cfg.path)?'agendar':'neutral'; }
 function docPlanRenderLeft(){
   const box=document.getElementById('doc-plan-left'); if(!box) return;
-  const st=docPlanState; const n=st.picks.length; const mode=docPlanMode();
-  if(mode==='eliminar'){
-    box.innerHTML=`<div class="doc-sec" style="margin-top:0;">Estás eliminando</div>
-      <div style="font-size:12px;color:#6E665A;line-height:1.5;margin-bottom:12px;">Estás quitando terapias del paciente. Para agendar nuevas, primero cancela la eliminación.</div>
-      <button class="doc-secbtn" onclick="docPlanCancelDel()"><i class="ti ti-arrow-back-up"></i> Cancelar y agendar</button>
-      <div style="opacity:.35;pointer-events:none;margin-top:16px;">${docPlanLeftInner(st)}</div>`;
-    return;
-  }
-  box.innerHTML=docPlanLeftInner(st);
+  box.innerHTML=docPlanLeftInner(docPlanState);
 }
 function docPlanLeftInner(st){
   const n=st.picks.length;
@@ -30326,16 +30398,15 @@ function docPlanCalHtml(cells){
       }
       const evs=cells[di+'|'+h]||[];
       if(evs.length){
-        const mine=evs.some(e=>e.type==='session'&&e.patient_id===st.pid&&e.status==='scheduled'&&ds>=today);
+        const mine=evs.some(e=>e.type==='session'&&e.patient_id===st.pid);
         const inner=evs.map(e=>{
           if(e.type==='session' && e.patient_id===st.pid){
             const editable = e.status==='scheduled' && ds>=today;
             if(editable){
-              const del=st.delIds.has(e.id);
-              return `<div class="agm-ev" style="background:${e.sede.fill};border-left:3px solid ${e.sede.color};color:${e.sede.ink};font-weight:500;display:flex;align-items:center;gap:3px;cursor:pointer;${del?'opacity:.55;text-decoration:line-through;':''}" onclick="event.stopPropagation();docPlanToggleDel('${e.id}')" title="${del?'Restaurar':'Quitar (se elimina al guardar)'}"><i class="ti ${del?'ti-arrow-back-up':'ti-x'}" style="font-size:10px;flex:none;"></i><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${docEsc(e.name)}</span></div>`;
+              return `<div class="agm-ev" style="background:${e.sede.fill};border-left:3px solid ${e.sede.color};color:${e.sede.ink};font-weight:500;cursor:pointer;" onclick="event.stopPropagation();docSessMini('${e.id}')" title="Acciones de la cita">${docEsc(e.name)}</div>`;
             }
-            // del paciente, NO editable: borde color completo + interior atenuado
-            return `<div class="agm-ev" style="background:${e.sede.fill};border:1.5px solid ${e.sede.color};color:${e.sede.ink};"><span style="opacity:.5;">${docEsc(e.name)}</span></div>`;
+            // del paciente, NO editable (asistió/perdida/pasada): borde color completo + interior atenuado, igual abre acciones
+            return `<div class="agm-ev" style="background:${e.sede.fill};border:1.5px solid ${e.sede.color};color:${e.sede.ink};cursor:pointer;" onclick="event.stopPropagation();docSessMini('${e.id}')"><span style="opacity:.5;">${docEsc(e.name)}</span></div>`;
           }
           // de OTRO paciente / clase / bloqueo: como ahora (la celda se atenúa abajo)
           if(e.type==='session') return `<div class="agm-ev" style="background:${e.sede.fill};border-left:3px solid ${e.sede.color};color:${e.sede.ink};">${docEsc(e.name)}</div>`;
@@ -30357,7 +30428,7 @@ function docPlanCalHtml(cells){
     <div style="overflow-x:auto;-webkit-overflow-scrolling:touch;"><div class="agm-grid">${header}${rows}</div></div>
     <div style="display:flex;gap:14px;flex-wrap:wrap;margin-top:12px;font-size:10.5px;color:#6E665A;">
       <span><span style="display:inline-block;width:12px;height:9px;border:1.5px dashed ${sede.color};background:${sede.fill};border-radius:3px;vertical-align:middle;"></span> Nueva selección</span>
-      <span><span style="display:inline-block;width:12px;height:9px;border-left:3px solid ${sede.color};background:${sede.fill};vertical-align:middle;"></span> Sus terapias (clic para quitar)</span>
+      <span><span style="display:inline-block;width:12px;height:9px;border-left:3px solid ${sede.color};background:${sede.fill};vertical-align:middle;"></span> Sus terapias (clic para acciones)</span>
       <span><span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:#C9C2B4;vertical-align:middle;"></span> Ocupado</span>
     </div>`;
 }
@@ -30367,29 +30438,20 @@ function docPlanExistingHtml(){
   if(!ex.length) return `<div class="doc-sec" style="margin-top:0;">Ya agendadas</div><div style="font-size:11.5px;color:#9A9183;padding:4px 2px;">Este paciente no tiene terapias futuras programadas.</div>`;
   const groups={}; ex.forEach(s=>{ const ws=docWeekStart(new Date(s.ds+'T12:00:00')); (groups[ws]=groups[ws]||[]).push(s); });
   const keys=Object.keys(groups).sort();
-  let h=`<div class="doc-sec" style="margin-top:0;">Ya agendadas · ${ex.length}</div><div style="font-size:11px;color:#9A9183;margin-bottom:10px;line-height:1.4;">Toca una para marcarla. Luego pulsa Eliminar abajo.</div>`;
+  let h=`<div class="doc-sec" style="margin-top:0;">Sus terapias · ${ex.length}</div><div style="font-size:11px;color:#9A9183;margin-bottom:10px;line-height:1.4;">Toca una para marcar asistencia, reagendar o eliminar.</div>`;
   keys.forEach(ws=>{
     h+=`<div class="doc-weekhdr"><span class="wk-label">${docEsc(docWeekRangeLabel(ws))}</span><span class="wk-count">${groups[ws].length}</span></div>`;
     groups[ws].forEach(s=>{
-      const del=st.delIds.has(s.id);
-      h+=`<div class="doc-pickrow" style="${del?'border-color:#E7B7B7;background:#FCEFEF;':''}" onclick="docPlanToggleDel('${s.id}')">
-        <span style="${del?'text-decoration:line-through;color:#A32D2D;':''}">${docCap(docDateShort(s.ds))} · ${docHourLbl(s.hour)}</span>
-        <i class="ti ${del?'ti-arrow-back-up':'ti-x'}" style="color:${del?'#854F0B':'#A32D2D'};"></i></div>`;
+      h+=`<div class="doc-pickrow" onclick="docSessMini('${s.id}')">
+        <span>${docCap(docDateShort(s.ds))} · ${docHourLbl(s.hour)}</span>
+        <i class="ti ti-dots" style="color:#9A9183;"></i></div>`;
     });
   });
   return h;
 }
 function docPlanRenderExisting(){
   const box=document.getElementById('doc-plan-existing'); if(!box) return;
-  const st=docPlanState; const mode=docPlanMode();
-  const listHtml=docPlanExistingHtml();
-  if(mode==='agendar'){
-    box.innerHTML=`<div class="doc-existlist" style="opacity:.4;pointer-events:none;">${listHtml}</div>
-      <div class="doc-existfoot" style="font-size:11px;color:#9A9183;text-align:center;line-height:1.4;">Estás agendando nuevas. Termina o limpia para volver a quitar terapias.</div>`;
-    return;
-  }
-  const foot = st.delIds.size?`<div class="doc-existfoot"><button id="doc-plan-delbtn" class="doc-delbtn" onclick="docPlanDeleteNow()"><i class="ti ti-trash"></i> Eliminar ${st.delIds.size}</button></div>`:'';
-  box.innerHTML=`<div class="doc-existlist">${listHtml}</div>${foot}`;
+  box.innerHTML=`<div class="doc-existlist">${docPlanExistingHtml()}</div>`;
 }
 function docPlanToggleDel(id){ if(docPlanMode()==='agendar') return; const s=docPlanState.delIds; if(s.has(id)) s.delete(id); else s.add(id); docPlanRenderExisting(); docPlanRepaint(); docPlanRenderLeft(); }
 async function docPlanDeleteNow(){
