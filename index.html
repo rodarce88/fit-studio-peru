@@ -4820,9 +4820,14 @@ if ('serviceWorker' in navigator) {
 // recargamos para asegurar versión nueva y data fresca de Supabase.
 // Si solo cambia de pestaña por unos segundos, no recarga.
 let __lastBlurAt = Date.now();
-const __INACTIVITY_RELOAD_MS = 30 * 60 * 1000; // 30 minutos (más tolerante: Andrés agenda mientras habla con la paciente)
+const __INACTIVITY_RELOAD_MS = 5 * 60 * 1000; // 5 minutos (resto de la app)
+function __inactivityThresholdMs(){
+  // En el módulo Doctor (Andrés) damos más tolerancia: 30 min
+  try{ const v=document.getElementById('view-doctor-home'); if(v && v.classList.contains('is-active')) return 30*60*1000; }catch(_){}
+  return __INACTIVITY_RELOAD_MS;
+}
 function __reloadBlocked(){
-  // No recargar si el armador de plan está abierto (se perdería lo que se está agendando)
+  // Nunca recargar mientras el armador de plan de Andrés está abierto (se perdería lo que se está agendando)
   try{ if(document.getElementById('doc-plan-cal')) return true; }catch(_){}
   return false;
 }
@@ -4831,7 +4836,7 @@ document.addEventListener('visibilitychange', () => {
     __lastBlurAt = Date.now();
   } else if (document.visibilityState === 'visible') {
     const elapsed = Date.now() - __lastBlurAt;
-    if (elapsed > __INACTIVITY_RELOAD_MS && !__reloadBlocked()) {
+    if (elapsed > __inactivityThresholdMs() && !__reloadBlocked()) {
       console.log(`[autoreload] inactivo ${Math.round(elapsed/1000)}s, recargando...`);
       window.location.reload();
     }
