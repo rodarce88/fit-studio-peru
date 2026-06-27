@@ -29482,7 +29482,7 @@ async function docRenderRegistro(){
 function docRegSet(f){ docRegState.filter=f; docRegPaint(); }
 function docRegRow(r){
   const m=DOC_LOG_ACTIONS[r.action]||{ic:'ti-point',col:'#9A9183',t:r.action};
-  const time=(r.created_at||'').slice(11,16);
+  const time=r.created_at?new Date(r.created_at).toLocaleTimeString('es-PE',{hour:'2-digit',minute:'2-digit',hour12:false}):'';
   const who=docEsc(r.actor_name||'—');
   const roleTag = r.actor_role==='coordinator' ? '<span style="font-size:8.5px;color:#854F0B;background:#FAEEDA;padding:1px 6px;border-radius:999px;">coord.</span>'
     : (r.actor_role==='admin' ? '<span style="font-size:8.5px;color:#6E665A;background:#EFEBE1;padding:1px 6px;border-radius:999px;">admin</span>' : '');
@@ -29504,7 +29504,7 @@ function docRegPaint(){
   if(!rows.length){ body='<div class="doc-empty">Sin actividad por aquí.</div>'; }
   else {
     const groups={};
-    rows.forEach(r=>{ const d=(r.created_at||'').slice(0,10); (groups[d]=groups[d]||[]).push(r); });
+    rows.forEach(r=>{ const d=r.created_at?docYMD(new Date(r.created_at)):''; (groups[d]=groups[d]||[]).push(r); });
     const days=Object.keys(groups).sort((a,b)=>b.localeCompare(a));
     body=days.map(d=>`<div class="doc-weekhdr"><span class="wk-label">${docEsc(docCap(docDateShort(d)))}</span><span class="wk-count">${groups[d].length}</span></div>${groups[d].map(docRegRow).join('')}`).join('');
   }
