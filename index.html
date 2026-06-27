@@ -14043,20 +14043,37 @@ function computeStudentDues(packages, payments) {
 // Si NO hay paquete activo: auto-crea uno del mismo tipo que el último que tuvo,
 // sin pago registrado → queda en "Por cobrar". La coordinadora puede editarlo.
 // ============================================
+async function getLiveUsedByPackage(studentId) {
+  // Conteo EN VIVO de clases consumidas por paquete (no depende de classes_used guardado)
+  const { data: atts } = await sb.from('attendance')
+    .select('student_package_id, counts_against_package')
+    .eq('student_id', studentId);
+  const m = {};
+  (atts || []).forEach(a => {
+    if (a.counts_against_package && a.student_package_id) {
+      m[a.student_package_id] = (m[a.student_package_id] || 0) + 1;
+    }
+  });
+  return m;
+}
+
 async function getOrCreateActivePackageId(studentId) {
-  // 1. Buscar paquete activo en BD (FIFO entre paquetes con status='active' o sin status)
+  // 1. Buscar paquete activo en BD (FIFO entre paquetes con status='active' o sin status).
+  //    La capacidad se evalúa con conteo EN VIVO (no con classes_used guardado, que
+  //    puede estar desfasado y provocaba sobre-capacidad / auto-creaciones erróneas).
   const { data: pkgs } = await sb.from('student_packages')
     .select('id, package_id, classes_total, classes_used, purchase_date, start_date, is_frozen, price_paid, status')
     .eq('student_id', studentId)
     .order('purchase_date', { ascending: true }).order('created_at', { ascending: true });
 
-  const active = (pkgs || []).find(p => {
+  const liveUsed = await getLiveUsedByPackage(studentId);
+  const isAliveLive = (p) => {
     if (p.is_frozen) return false;
     if (p.status && p.status !== 'active') return false; // excluir 'changed' / 'cancelled'
-    const used = p.classes_used || 0;
-    return used < (p.classes_total || 0);
-  });
+    return (liveUsed[p.id] || 0) < (p.classes_total || 0);
+  };
 
+  const active = (pkgs || []).find(isAliveLive);
   if (active) return active.id;
 
   // 2. No hay paquete activo → auto-crear uno del mismo tipo que el último que tuvo
@@ -14093,6 +14110,19 @@ async function getOrCreateActivePackageId(studentId) {
     showToast('⚠ Auto-creé un paquete (sin pago) para registrar la clase. Edítalo desde el perfil.', 'warning');
     return created.id;
   }
+
+  // Guard anti-duplicado: re-verificar EN VIVO por si otra acción concurrente acaba
+  // de crear/liberar un paquete activo (evita los duplicados del mismo minuto).
+  const { data: pkgs2 } = await sb.from('student_packages')
+    .select('id, classes_total, is_frozen, status, purchase_date, created_at')
+    .eq('student_id', studentId)
+    .order('purchase_date', { ascending: true }).order('created_at', { ascending: true });
+  const live2 = await getLiveUsedByPackage(studentId);
+  const active2 = (pkgs2 || []).find(p =>
+    !p.is_frozen && (!p.status || p.status === 'active') &&
+    ((live2[p.id] || 0) < (p.classes_total || 0))
+  );
+  if (active2) return active2.id;
 
   // Clonar el último paquete (sin pago — quedará en "Por cobrar")
   const todayIso = dateToIsoLocal(new Date());
@@ -16232,11 +16262,11 @@ async function changePkgWizardNext() {
           .eq('status', 'active')
           .maybeSingle();
         if (newPkgRow?.id) {
-          // 2. Mover attendances del viejo al nuevo
-          await sb.from('attendance')
-            .update({ student_package_id: newPkgRow.id })
-            .eq('student_package_id', wiz.pkgId);
-          // 3. Recalcular contadores del paquete nuevo (con la lógica defensiva existente)
+          // 2. NO arrastrar las asistencias históricas al paquete nuevo.
+          //    El paquete viejo conserva su historial (queda 'changed') y el nuevo
+          //    arranca en 0. El barrido anterior pegaba clases de meses pasados a un
+          //    paquete recién creado y rompía la atribución por fecha (caso Q3).
+          // 3. Recalcular contadores por si quedaron desfasados.
           if (typeof recalcPackageCounters === 'function') {
             await recalcPackageCounters(studentIdForRelink);
           }
