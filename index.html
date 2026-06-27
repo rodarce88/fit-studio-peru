@@ -26853,8 +26853,7 @@ async function unmarkedNagCheck() {
     const all = UNMARKED_STATE.all || [];
 
     // 1) Vencidas +3 días hábiles → última oportunidad + auto-perdida en 30 min.
-    // ⛔ DESACTIVADO TEMPORALMENTE (errores en el reporte). No arma timer ni modal.
-    const PLUS3_ENABLED = false;
+    const PLUS3_ENABLED = true;
     const plus3 = all.filter(r => unmarkedBusinessDaysAfter(r.date) >= UNMARKED_PLUS3_THRESHOLD);
     if (PLUS3_ENABLED && plus3.length && !UNMARKED_NAG.autoLostArmed) {
       UNMARKED_NAG.autoLostArmed = true;
@@ -26873,14 +26872,6 @@ async function unmarkedNagCheck() {
 // Marca como PERDIDA (auto) las clases vencidas +3 días hábiles que sigan sin marcar.
 // Solo front, máx 40 por corrida (salvaguarda), cada una queda en activity_log.
 async function runAutoLostPlus3() {
-  // ⛔ DESACTIVADO TEMPORALMENTE (había errores en el reporte de clases sin marcar).
-  // No marca ninguna clase como perdida hasta reactivar.
-  console.warn('[autolost] DESACTIVADO: no se marca ninguna clase.');
-  UNMARKED_NAG.autoLostArmed = false;
-  return;
-}
-
-async function runAutoLostPlus3_DISABLED() {
   try {
     await unmarkedFetchAllRows(); // re-evaluar: Lucía pudo marcar algunas en estos 30 min
     let plus3 = (UNMARKED_STATE.all || []).filter(r => unmarkedBusinessDaysAfter(r.date) >= UNMARKED_PLUS3_THRESHOLD);
