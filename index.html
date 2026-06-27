@@ -29253,6 +29253,9 @@ async function docLog(action, opts){
     if(!_subj && opts.patient_id){ try{ const { data:_pt }=await sb.from('therapy_patients').select('first_name,last_name').eq('id',opts.patient_id).maybeSingle(); if(_pt) _subj=((_pt.first_name||'')+' '+(_pt.last_name||'')).trim(); }catch(_e){} }
     let _label = opts.label || (DOC_LOG_ACTIONS[action] ? DOC_LOG_ACTIONS[action].t : action);
     if(_subj && _label.indexOf(_subj)===-1) _label = _label + ' · ' + _subj;
+    let _when = opts.when || '';
+    if(!_when && opts.session_id && ['terapia.asistida','terapia.no_asistio','terapia.reprogramar','terapia.eliminada'].indexOf(action)!==-1){ try{ const { data:_ss }=await sb.from('therapy_sessions').select('session_date,hour').eq('id',opts.session_id).maybeSingle(); if(_ss) _when=docCap(docDateShort(_ss.session_date))+' · '+docHourLbl(_ss.hour); }catch(_e){} }
+    if(_when && _label.indexOf(_when)===-1) _label = _label + ' · ' + _when;
     const actorRole = (docState.readonly ? 'coordinator' : ((CURRENT_USER && CURRENT_USER.role) || 'doctor'));
     const actorName = (typeof getCurrentActorLabel==='function' ? getCurrentActorLabel() : null)
       || (CURRENT_USER && CURRENT_USER.authUser && CURRENT_USER.authUser.email) || 'Usuario';
@@ -30341,7 +30344,7 @@ async function docSessionSheet(id, ctx){
   try{ const { data }=await sb.from('therapy_sessions').select('id,session_date,hour,status,patient_id,location_id,therapy_patients(first_name,last_name)').eq('id',id).maybeSingle(); s=data; }catch(e){}
   if(!s){ showToast('No se pudo abrir la sesión','error'); return; }
   const nm=s.therapy_patients?(((s.therapy_patients.first_name||'')+' '+(s.therapy_patients.last_name||'')).trim()):'';
-  docSessCur={ id, patient_id:s.patient_id||null, name:nm };
+  docSessCur={ id, patient_id:s.patient_id||null, name:nm, date:s.session_date, hour:s.hour };
   const sede=docSede(s.location_id);
   const when=docCap(docDateShort(s.session_date))+' · '+docHourLbl(s.hour);
   const profOrigin=(ctx==='hoy')?'hoy':'pacientes';
@@ -30534,7 +30537,7 @@ async function docBlkRemove(id){ if(docGuardRO())return;
   catch(e){ showToast('Error: '+(e.message||''),'error'); }
 }
 async function docSetSessionStatus(id, status){ if(docGuardRO())return;
-  try{ const { error }=await sb.from('therapy_sessions').update({ status }).eq('id',id); if(error) throw error; docSessClose(); showToast('✓ Actualizada','success'); docSessReturn(); const _la=_docStatusAction(status); if(_la) docLog(_la, { session_id:id, patient_id:(docSessCur&&docSessCur.id===id?docSessCur.patient_id:null) }); }
+  try{ const { error }=await sb.from('therapy_sessions').update({ status }).eq('id',id); if(error) throw error; docSessClose(); showToast('✓ Actualizada','success'); docSessReturn(); const _la=_docStatusAction(status); if(_la) docLog(_la, { session_id:id, patient_id:(docSessCur&&docSessCur.id===id?docSessCur.patient_id:null), when:(docSessCur&&docSessCur.id===id?docCap(docDateShort(docSessCur.date))+' · '+docHourLbl(docSessCur.hour):'') }); }
   catch(e){ showToast('Error: '+(e.message||''),'error'); }
 }
 async function docDeleteSession(id){ if(docGuardRO())return;
@@ -30543,7 +30546,7 @@ async function docDeleteSession(id){ if(docGuardRO())return;
     const payload={ status:'deleted', deleted_at:new Date().toISOString(), deleted_by:(CURRENT_USER&&CURRENT_USER.authUser&&CURRENT_USER.authUser.id)||null, deleted_by_name:(typeof getCurrentActorLabel==='function'?getCurrentActorLabel():null), delete_reason:reason };
     const { error }=await sb.from('therapy_sessions').update(payload).eq('id',id); if(error) throw error;
     docSessClose(); showToast('Eliminada (interno)','success'); docSessReturn();
-    docLog('terapia.eliminada', { session_id:id, patient_id:(docSessCur&&docSessCur.id===id?docSessCur.patient_id:null), label:'Cita eliminada'+(reason?' · '+reason:''), meta:{ reason } });
+    docLog('terapia.eliminada', { session_id:id, patient_id:(docSessCur&&docSessCur.id===id?docSessCur.patient_id:null), when:(docSessCur&&docSessCur.id===id?docCap(docDateShort(docSessCur.date))+' · '+docHourLbl(docSessCur.hour):''), label:'Cita eliminada'+(reason?' · '+reason:''), meta:{ reason } });
   }catch(e){ showToast('Error: '+(e.message||''),'error'); }
 }
 function docSessReturn(){
