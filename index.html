@@ -29195,8 +29195,12 @@ function docSede(locId){
 }
 
 async function docInit(){
-  docState.doctorId = (CURRENT_USER.records && CURRENT_USER.records.doctor && CURRENT_USER.records.doctor.id)
-                   || (CURRENT_USER.record && CURRENT_USER.record.id) || null;
+  // En modo lectura (coordinador) el doctorId ya viene fijado por openTherapyReadonly;
+  // no lo sobrescribimos con el registro del usuario.
+  if (!docState.readonly) {
+    docState.doctorId = (CURRENT_USER.records && CURRENT_USER.records.doctor && CURRENT_USER.records.doctor.id)
+                     || (CURRENT_USER.record && CURRENT_USER.record.id) || null;
+  }
   if (!docState.date) docState.date = docYMD(new Date());
   if (!STATE.locations || !STATE.locations.length){
     try { const { data } = await sb.from('locations').select('*'); STATE.locations = data || []; } catch(e){}
@@ -29244,6 +29248,8 @@ async function openTherapyReadonly(navEl){
 }
 function docExitReadonly(){
   docState.readonly = false;
+  docState.doctorId = null;
+  docState.instructorId = undefined;
   document.body.classList.remove('doctor-mode', 'no-sidebar', 'doc-readonly', 'role-doctor');
   showAppLayout();
   initForRole(); // vuelve al panel de coordinación
