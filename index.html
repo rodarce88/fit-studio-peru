@@ -3683,6 +3683,7 @@ body:not(.doctor-mode) .doc-bottomnav{ display:none; }
 @keyframes docfade{ from{ opacity:0; transform:translateY(5px); } to{ opacity:1; transform:none; } }
 #view-doctor-home .doc-cancelstick{ position:sticky; top:66px; z-index:30; background:#F7F5F0; padding:8px 0 12px; box-shadow:0 -20px 0 0 #F7F5F0; }
 #view-doctor-home .agm-mwrap{ max-width:560px; margin:0 auto; }
+#view-doctor-home .agm-mob-head{ position:sticky; top:0; z-index:25; background:#F7F5F0; padding-bottom:2px; }
 #view-doctor-home .agm-mob-swipe{ display:flex; overflow-x:auto; scroll-snap-type:x mandatory; gap:10px; padding:0 7%; -webkit-overflow-scrolling:touch; scrollbar-width:none; }
 #view-doctor-home .agm-mob-swipe::-webkit-scrollbar{ display:none; }
 #view-doctor-home .agm-mob-day{ flex:0 0 86%; scroll-snap-align:center; }
@@ -30079,6 +30080,7 @@ async function docRenderAgendaMaestra(){
   try{ docSessBarHide(); docCenterLoading(false); }catch(_){}
   docRenderBottomNav('agenda'); docState.lastMain='agenda';
   if(!docAgmState.weekStart) docAgmState.weekStart=docWeekStart(new Date());
+  docAgmWeekCache={};
   if(docIsMobile() && docAgmState.mobileMode!=='semana'){ await docRenderAgendaMobile(); return; }
   const hasAgenda=!!cont.querySelector('.agm-wrap');
   if(hasAgenda){ docAgmShowSaving(); }
@@ -30099,18 +30101,20 @@ function docAgmShowSaving(){
 }
 function docAgmHideSaving(){ const p=document.getElementById('doc-agm-saving'); if(p) p.remove(); }
 // ===== AGENDA — VISTA DÍA (celular) =====
+let docAgmWeekCache={};
+let docAgmAnim=false;
+async function docAgmLoadCellsCached(ws){ if(docAgmWeekCache[ws]) return docAgmWeekCache[ws]; const c=await docAgmLoadCells(ws, docAddDaysYMD(ws,6)); docAgmWeekCache[ws]=c; return c; }
 function docAgmModeToggle(active){
   const seg=(m,lbl)=>`<div onclick="docAgmSetMode('${m}')" style="font-size:12px;font-weight:600;padding:6px 13px;border-radius:999px;cursor:pointer;${active===m?'background:#1C1922;color:#fff;':'color:#7A7568;'}">${lbl}</div>`;
   return `<div style="display:flex;background:#ECE7DD;border-radius:999px;padding:3px;flex:none;">${seg('dia','Día')}${seg('semana','Semana')}</div>`;
 }
 function docAgmSetMode(m){ docAgmState.mobileMode=m; docRenderAgendaMaestra(); }
-function docAgmMobPickDay(ds){ docAgmState.day=ds; docAgmState.weekStart=docWeekStart(ds); docRenderAgendaMaestra(); }
 async function docAgmDayCells(dayYMD){
-  const ws=docWeekStart(dayYMD); const cells=await docAgmLoadCells(ws, docAddDaysYMD(ws,6));
+  const ws=docWeekStart(dayYMD); const cells=await docAgmLoadCellsCached(ws);
   let di=0; for(let i=0;i<7;i++){ if(docAddDaysYMD(ws,i)===dayYMD){ di=i; break; } }
   const out={}; for(let h=0;h<=23;h++){ const e=cells[di+'|'+h]; if(e&&e.length) out[h]=e; } return out;
 }
-function docAgmMobStrip(day){
+function docAgmMobStripInner(day){
   const ws=docWeekStart(day), today=docYMD(new Date());
   const month=docCap(new Date(day+'T12:00:00').toLocaleDateString('es-PE',{month:'long',year:'numeric'}));
   let cells='';
@@ -30120,7 +30124,8 @@ function docAgmMobStrip(day){
     const dot=(ds===today&&!sel)?'<div style="width:4px;height:4px;border-radius:50%;background:#6A4E9C;margin:3px auto 0;"></div>':'';
     cells+=`<div onclick="docAgmMobPickDay('${ds}')" style="flex:1;text-align:center;padding:8px 0;border-radius:13px;${sel?'background:#6A4E9C;':''}cursor:pointer;"><div style="font-size:10px;color:${lblC};">${DOC_DOW_SHORT[dow]}</div><div style="font-size:14px;${sel?'font-weight:600;':''}color:${numC};margin-top:3px;">${d.getDate()}</div>${dot}</div>`;
   }
-  return `<div style="padding:2px 10px 10px;"><div style="display:flex;align-items:center;justify-content:space-between;padding:0 6px 8px;"><span style="font-size:13px;font-weight:600;color:#1C1922;">${month}</span><span onclick="docAgmMobPickDay('${today}')" style="font-size:11px;color:#6A4E9C;font-weight:600;cursor:pointer;">Hoy</span></div><div style="display:flex;gap:5px;">${cells}</div></div>`;
+  const hoy=`<span onclick="docAgmMobPickDay('${today}')" style="font-size:11px;font-weight:600;color:#5B3FA0;background:#EFEBF7;border:1px solid #DDD3EF;border-radius:999px;padding:5px 12px;cursor:pointer;display:inline-flex;align-items:center;gap:5px;"><i class="ti ti-calendar-event" style="font-size:13px;"></i> Hoy</span>`;
+  return `<div style="display:flex;align-items:center;justify-content:space-between;padding:0 4px 9px;"><span style="font-size:13px;font-weight:600;color:#1C1922;">${month}</span>${hoy}</div><div style="display:flex;gap:5px;">${cells}</div>`;
 }
 function docAgmMobEv(e, ds, h){
   if(e.type==='session'){
@@ -30146,25 +30151,49 @@ function docAgmDayPanel(dayYMD, dayCells){
 async function docRenderAgendaMobile(){
   const cont=document.getElementById('doc-home-content'); if(!cont) return;
   if(!docAgmState.day) docAgmState.day=docYMD(new Date());
-  const day=docAgmState.day, prev=docAddDaysYMD(day,-1), next=docAddDaysYMD(day,1);
-  const header=`<div style="padding:14px 16px 8px;display:flex;align-items:center;justify-content:space-between;gap:10px;"><div><div style="font-size:19px;font-weight:600;color:#1C1922;line-height:1;">Agenda</div><div style="font-size:11px;color:#9A9183;margin-top:3px;">Andrés · terapias</div></div>${docAgmModeToggle('dia')}</div>`;
-  if(!cont.querySelector('.agm-mwrap')){ cont.innerHTML=`<div class="agm-mwrap">${header}${docAgmMobStrip(day)}<div class="agm-mob-body"><div class="agm-mob-day" style="margin:0 7%;"><div class="agm-mob-card"><div class="doc-skelbar" style="width:40%;height:13px;"></div>${Array.from({length:6}).map(()=>'<div class="doc-skelbar" style="width:100%;height:46px;border-radius:12px;margin-bottom:9px;"></div>').join('')}</div></div></div></div>`; }
-  const [cp,cc,cn]=await Promise.all([docAgmDayCells(prev),docAgmDayCells(day),docAgmDayCells(next)]);
+  const day=docAgmState.day;
+  const days=[]; for(let i=-6;i<=6;i++) days.push(docAddDaysYMD(day,i));
+  const headInner=`<div style="padding:14px 16px 4px;display:flex;align-items:center;justify-content:space-between;gap:10px;"><div><div style="font-size:19px;font-weight:600;color:#1C1922;line-height:1;">Agenda</div><div style="font-size:11px;color:#9A9183;margin-top:3px;">Andrés · terapias</div></div>${docAgmModeToggle('dia')}</div><div id="agm-mob-strip" style="padding:2px 10px 10px;">${docAgmMobStripInner(day)}</div>`;
+  if(!cont.querySelector('.agm-mwrap')){ cont.innerHTML=`<div class="agm-mwrap"><div class="agm-mob-head">${headInner}</div><div class="agm-mob-body"><div style="margin:0 7%;"><div class="agm-mob-card"><div class="doc-skelbar" style="width:40%;height:13px;"></div>${Array.from({length:6}).map(()=>'<div class="doc-skelbar" style="width:100%;height:46px;border-radius:12px;margin-bottom:9px;"></div>').join('')}</div></div></div></div>`; }
+  const cellsArr=await Promise.all(days.map(d=>docAgmDayCells(d)));
   if(docAgmState.day!==day) return;
-  cont.innerHTML=`<div class="agm-mwrap">${header}${docAgmMobStrip(day)}<div class="agm-mob-body"><div class="agm-mob-swipe" id="agm-mob-swipe"><div class="agm-mob-day">${docAgmDayPanel(prev,cp)}</div><div class="agm-mob-day">${docAgmDayPanel(day,cc)}</div><div class="agm-mob-day">${docAgmDayPanel(next,cn)}</div></div></div></div>`;
-  docAgmMobileBindSwipe();
+  const panels=days.map((d,i)=>`<div class="agm-mob-day" data-day="${d}">${docAgmDayPanel(d, cellsArr[i])}</div>`).join('');
+  cont.innerHTML=`<div class="agm-mwrap"><div class="agm-mob-head">${headInner}</div><div class="agm-mob-body"><div class="agm-mob-swipe" id="agm-mob-swipe">${panels}</div></div></div>`;
+  const c=document.getElementById('agm-mob-swipe'); const mid=c&&c.children[6]; if(mid){ c.scrollLeft=mid.offsetLeft-(c.clientWidth-mid.clientWidth)/2; }
+  docAgmMobileBind();
 }
-function docAgmMobileBindSwipe(){
+function docAgmMobileBind(){
   const c=document.getElementById('agm-mob-swipe'); if(!c) return;
-  const panels=[...c.children], mid=panels[1];
-  if(mid){ c.scrollLeft = mid.offsetLeft - (c.clientWidth - mid.clientWidth)/2; }
-  let t=null;
-  c.addEventListener('scroll',()=>{ if(t)clearTimeout(t); t=setTimeout(()=>{
-    const center=c.scrollLeft + c.clientWidth/2; let best=1, bd=1e9;
-    panels.forEach((p,i)=>{ const pc=p.offsetLeft+p.clientWidth/2, dd=Math.abs(pc-center); if(dd<bd){ bd=dd; best=i; } });
-    if(best===0){ docAgmState.day=docAddDaysYMD(docAgmState.day,-1); docAgmState.weekStart=docWeekStart(docAgmState.day); docRenderAgendaMaestra(); }
-    else if(best===2){ docAgmState.day=docAddDaysYMD(docAgmState.day,1); docAgmState.weekStart=docWeekStart(docAgmState.day); docRenderAgendaMaestra(); }
-  },140); });
+  let raf=null, settleT=null;
+  c.addEventListener('scroll',()=>{
+    if(docAgmAnim) return;
+    if(raf) cancelAnimationFrame(raf);
+    raf=requestAnimationFrame(()=>{
+      const center=c.scrollLeft + c.clientWidth/2; let bi=6, bd=1e9, bday=docAgmState.day;
+      [...c.children].forEach((p,i)=>{ const pc=p.offsetLeft+p.clientWidth/2, dd=Math.abs(pc-center); if(dd<bd){ bd=dd; bi=i; bday=p.dataset.day; } });
+      if(bday && bday!==docAgmState.day){ docAgmState.day=bday; const st=document.getElementById('agm-mob-strip'); if(st) st.innerHTML=docAgmMobStripInner(bday); }
+      const idxNow=bi; if(settleT) clearTimeout(settleT);
+      settleT=setTimeout(()=>{ if(!docAgmAnim && (idxNow<=2 || idxNow>=10)) docRenderAgendaMobile(); },170);
+    });
+  }, {passive:true});
+}
+function docAgmMobPickDay(ds){
+  const c=document.getElementById('agm-mob-swipe');
+  const target = c ? c.querySelector('.agm-mob-day[data-day="'+ds+'"]') : null;
+  docAgmState.day=ds;
+  const st=document.getElementById('agm-mob-strip'); if(st) st.innerHTML=docAgmMobStripInner(ds);
+  if(c && target){ docAgmAnimateScrollTo(c, target); } else { docRenderAgendaMobile(); }
+}
+function docAgmAnimateScrollTo(c, target){
+  const start=c.scrollLeft, max=c.scrollWidth-c.clientWidth;
+  let end=target.offsetLeft-(c.clientWidth-target.clientWidth)/2; end=Math.max(0,Math.min(max,end));
+  const dist=end-start; if(Math.abs(dist)<2) return;
+  const dur=Math.min(560, 240+Math.abs(dist)*0.22), t0=performance.now();
+  const easeOutBack=(x)=>{ const c1=1.5,c3=c1+1; return 1+c3*Math.pow(x-1,3)+c1*Math.pow(x-1,2); };
+  docAgmAnim=true; c.style.scrollSnapType='none';
+  const step=(now)=>{ let p=(now-t0)/dur; if(p>1)p=1; c.scrollLeft=start+dist*easeOutBack(p);
+    if(p<1){ requestAnimationFrame(step); } else { c.scrollLeft=end; c.style.scrollSnapType=''; docAgmAnim=false; const idx=[...c.children].indexOf(target); if(idx<=2||idx>=10) docRenderAgendaMobile(); } };
+  requestAnimationFrame(step);
 }
 function docSessTag(status, ds, h){
   // devuelve { ic, icColor, lbl, lblColor, dim, strike } según el estado (o pasada sin marcar)
