@@ -3621,6 +3621,9 @@ body:not(.doctor-mode) .doc-bottomnav{ display:none; }
 #view-doctor-home .doc-seg2{ display:flex; gap:6px; background:#EFEAE0; border-radius:11px; padding:3px; }
 #view-doctor-home .doc-seg2 button{ flex:1; border:none; background:none; border-radius:9px; padding:8px; font-size:12.5px; font-weight:500; color:#6E665A; cursor:pointer; font-family:inherit; }
 #view-doctor-home .doc-seg2 button.on{ background:#fff; color:#1C1922; box-shadow:0 1px 3px rgba(0,0,0,.08); }
+#view-doctor-home .doc-numin{ width:66px; border:1.5px solid #E6E0D4; border-radius:999px; padding:6px 12px; font-size:12.5px; font-family:inherit; color:#1C1922; background:#fff; }
+#view-doctor-home .doc-numin:focus{ outline:none; border-color:#1C1922; }
+#view-doctor-home .doc-numin::placeholder{ color:#B7AF9F; }
 #view-doctor-home .agm-grid{ display:grid; grid-template-columns:46px repeat(7, minmax(96px,1fr)); min-width:730px; border:1px solid #E6E0D4; border-radius:12px; overflow:hidden; background:#fff; }
 #view-doctor-home .agm-hd{ background:#F3EFE7; padding:6px 2px; text-align:center; font-size:10px; color:#6E665A; border-bottom:1px solid #E6E0D4; border-left:1px solid #EFEAE0; line-height:1.25; }
 #view-doctor-home .agm-hd.today{ background:#1C1922; color:#fff; }
@@ -30029,6 +30032,12 @@ function docPlanWizardHtml(){
   const chip=(v,cur,onc,label)=>`<button class="doc-chip ${v===cur?'on':''}" onclick="${onc}">${label}</button>`;
   const dayChips=(cur,onc)=>`<div class="doc-chips">${[1,2,3,4,5,6,0].map(d=>`<button class="doc-chip ${d===cur?'on':''}" onclick="${onc}(${d})">${DOC_DOW_SHORT[d]}</button>`).join('')}</div>`;
   const freqChips=`<div class="doc-chips">${chip(1,c.freq,"docPlanCfgSet('freq',1)","1×/sem")}${chip(2,c.freq,"docPlanCfgSet('freq',2)","2×/sem")}${chip(3,c.freq,"docPlanCfgSet('freq',3)","3×/sem")}</div>`;
+  // chips de presets + input directo
+  const numField=(k,presets,ph)=>{
+    const chipsHtml=presets.map(v=>`<button class="doc-chip ${c[k]===v?'on':''}" data-k="${k}" data-v="${v}" onclick="docPlanCfgSet('${k}',${v})">${v}</button>`).join('');
+    const inp=`<input id="doc-in-${k}" class="doc-numin" type="number" min="1" max="200" value="${c[k]!=null?c[k]:''}" placeholder="${ph||'otro'}" oninput="docPlanCfgInput('${k}',this.value)">`;
+    return `<div class="doc-chips" style="align-items:center;">${chipsHtml}${inp}</div>`;
+  };
   let h=`<div class="doc-paths" style="margin-bottom:6px;">
     ${pathRow('weeks','Por semanas','Frecuencia × nº de semanas','ti-calendar-week')}
     ${pathRow('sessions','Por cantidad','Total de terapias','ti-list-numbers')}
@@ -30039,25 +30048,36 @@ function docPlanWizardHtml(){
   </div>`;
   if(c.path==='weeks'){
     h+=`<div class="doc-sec">Veces por semana</div>${freqChips}`;
-    if(c.freq){ h+=`<div class="doc-sec">¿Cuántas semanas?</div><div class="doc-chips">${[2,3,4,5,8].map(w=>chip(w,c.weeks,`docPlanCfgSet('weeks',${w})`,w)).join('')}<button class="doc-chip" onclick="docPlanCfgEdit('weeks')"><i class="ti ti-pencil" style="font-size:11px;"></i></button></div>`; }
+    if(c.freq){ h+=`<div class="doc-sec">¿Cuántas semanas?</div>${numField('weeks',[2,3,4,5,8],'sem')}`; }
   } else if(c.path==='sessions'){
-    h+=`<div class="doc-sec">¿Cuántas terapias?</div><div class="doc-chips">${[6,8,10,12].map(t=>chip(t,c.sessions,`docPlanCfgSet('sessions',${t})`,t)).join('')}<button class="doc-chip" onclick="docPlanCfgEdit('sessions')"><i class="ti ti-pencil" style="font-size:11px;"></i></button></div>`;
+    h+=`<div class="doc-sec">¿Cuántas terapias?</div>${numField('sessions',[6,8,10,12],'nº')}`;
     if(c.sessions){ h+=`<div class="doc-sec">Veces por semana</div>${freqChips}`; }
   } else if(c.path==='inter'){
-    h+=`<div class="doc-sec">Veces por semana (en las semanas activas)</div>${freqChips}`;
-    if(c.freq){ h+=`<div class="doc-sec">¿Cuántas terapias en total?</div><div class="doc-chips">${[4,6,8,10,12].map(t=>chip(t,c.sessions,`docPlanCfgSet('sessions',${t})`,t)).join('')}<button class="doc-chip" onclick="docPlanCfgEdit('sessions')"><i class="ti ti-pencil" style="font-size:11px;"></i></button></div>`; }
+    h+=`<div class="doc-sec">Veces por semana (semanas activas)</div>${freqChips}`;
+    if(c.freq){ h+=`<div class="doc-sec">¿Cuántas terapias en total?</div>${numField('sessions',[4,6,8,10,12],'nº')}`; }
   } else if(c.path==='monthly'){
     h+=`<div class="doc-sec">¿Qué día del mes?</div>${dayChips(c.specDay,'docPlanCfgDay')}`;
-    if(c.specDay!=null){ h+=`<div class="doc-sec">¿Cuántos meses?</div><div class="doc-chips">${[3,6,9,12].map(m=>chip(m,c.months,`docPlanCfgSet('months',${m})`,m)).join('')}<button class="doc-chip" onclick="docPlanCfgEdit('months')"><i class="ti ti-pencil" style="font-size:11px;"></i></button></div>`; }
+    if(c.specDay!=null){ h+=`<div class="doc-sec">¿Cuántos meses?</div>${numField('months',[3,6,9,12],'meses')}`; }
   } else if(c.path==='specific'){
     h+=`<div class="doc-sec">¿Qué día fijo?</div>${dayChips(c.specDay,'docPlanCfgDay')}`;
-    if(c.specDay!=null){ h+=`<div class="doc-sec">¿Cuántas semanas?</div><div class="doc-chips">${[4,6,8,12].map(w=>chip(w,c.sessions,`docPlanCfgSet('sessions',${w})`,w)).join('')}<button class="doc-chip" onclick="docPlanCfgEdit('sessions')"><i class="ti ti-pencil" style="font-size:11px;"></i></button></div>`; }
+    if(c.specDay!=null){ h+=`<div class="doc-sec">¿Cuántas semanas?</div>${numField('sessions',[4,6,8,12],'sem')}`; }
   } else if(c.path==='indef'){
     h+=`<div class="doc-sec">Veces por semana</div>${freqChips}`;
-    if(c.freq){ h+=`<div class="doc-sec">Reevaluar a las…</div><div class="doc-chips">${[8,10,12].map(v=>chip(v,c.remVal,`docPlanCfgSet('remVal',${v})`,v+' terapias')).join('')}<button class="doc-chip" onclick="docPlanCfgEdit('remVal')"><i class="ti ti-pencil" style="font-size:11px;"></i></button></div>`; }
+    if(c.freq){ h+=`<div class="doc-sec">Reevaluar a las…</div>${numField('remVal',[8,10,12],'terapias')}`; }
+  }
+  if(c.path){
+    const cur=docWeekStart(new Date()), wsM=c.startWeek||cur, canPrev=wsM>cur;
+    h+=`<div class="doc-sec">Empezar desde</div>
+      <div style="display:flex;align-items:center;gap:8px;background:#fff;border:1px solid #E6E0D4;border-radius:11px;padding:6px;">
+        <button class="doc-iconbtn" style="width:30px;height:30px;${canPrev?'':'opacity:.3;pointer-events:none;'}" onclick="docPlanCfgWeek(-7)"><i class="ti ti-chevron-left" style="font-size:15px;"></i></button>
+        <div style="flex:1;text-align:center;font-size:11.5px;font-weight:600;">${docPlanWeekLbl(wsM)}</div>
+        <button class="doc-iconbtn" style="width:30px;height:30px;" onclick="docPlanCfgWeek(7)"><i class="ti ti-chevron-right" style="font-size:15px;"></i></button>
+      </div>`;
   }
   const ready=docPlanCfgReady();
-  h+=`<button class="doc-primary" style="margin-top:14px;" ${ready?'':'disabled style="opacity:.4;pointer-events:none;margin-top:14px;"'} onclick="docPlanGenerate()"><i class="ti ti-calendar-search"></i> Generar opciones</button>`;
+  const det=docPlanCfgDetail();
+  if(det) h+=`<div class="doc-info" style="margin-top:12px;"><div style="padding:10px 13px;font-size:12px;font-weight:600;color:#3A352E;">${det}</div></div>`;
+  h+=`<button class="doc-primary" style="margin-top:12px;" ${ready?'':'disabled style="opacity:.4;pointer-events:none;margin-top:12px;"'} onclick="docPlanGenerate()"><i class="ti ti-calendar-search"></i> Generar opciones</button>`;
   if(docPlanState.opts.length){
     h+=`<div class="doc-sec">${docPlanState.opts.length} horarios sugeridos</div>`;
     h+=docPlanState.opts.map((o,i)=>{
@@ -30072,10 +30092,20 @@ function docPlanWizardHtml(){
   }
   return h;
 }
-function docPlanCfgPath(p){ const c=docPlanState.cfg; c.path=p; c.freq=null; c.weeks=null; c.sessions=null; c.remType='sessions'; c.remVal=null; c.specDay=null; c.months=null; docPlanState.opts=[]; docPlanState.optSel=null; docPlanRenderLeft(); }
+function docPlanWeekLbl(ws){ const a=new Date(ws+'T12:00:00').toLocaleDateString('es-PE',{day:'numeric',month:'short'}); const b=new Date(docAddDaysYMD(ws,6)+'T12:00:00').toLocaleDateString('es-PE',{day:'numeric',month:'short'}); return docCap(a)+' – '+docCap(b); }
+function docPlanCfgDetail(){ const c=docPlanState.cfg; if(!docPlanCfgReady()) return '';
+  if(c.path==='weeks') return `${c.freq}× semana · ${c.weeks} semana${c.weeks===1?'':'s'} · total ${c.freq*c.weeks}`;
+  if(c.path==='sessions'){ const w=Math.max(1,Math.ceil(c.sessions/c.freq)); return `${c.sessions} terapias · ${c.freq}× semana · ~${w} semana${w===1?'':'s'}`; }
+  if(c.path==='inter') return `${c.freq}× semana intersemanal · ${c.sessions} terapias`;
+  if(c.path==='monthly') return `1 vez al mes · ${docCap(DOC_DOW_FULL[c.specDay])} · ${c.months} mes${c.months===1?'':'es'}`;
+  if(c.path==='specific') return `${docCap(DOC_DOW_FULL[c.specDay])} · ${c.sessions} semana${c.sessions===1?'':'s'}`;
+  if(c.path==='indef') return `Indefinido · ${c.freq}× semana · reevaluar a las ${c.remVal} terapias`;
+  return ''; }
+function docPlanCfgPath(p){ const c=docPlanState.cfg; c.path=p; c.freq=null; c.weeks=null; c.sessions=null; c.remType='sessions'; c.remVal=null; c.specDay=null; c.months=null; c.startWeek=docWeekStart(new Date()); docPlanState.opts=[]; docPlanState.optSel=null; docPlanRenderLeft(); }
 function docPlanCfgSet(k,v){ docPlanState.cfg[k]=v; docPlanState.opts=[]; docPlanState.optSel=null; docPlanRenderLeft(); }
 function docPlanCfgDay(d){ docPlanState.cfg.specDay=d; docPlanState.opts=[]; docPlanState.optSel=null; docPlanRenderLeft(); }
-function docPlanCfgEdit(k){ const lbl=k==='weeks'?'¿Cuántas semanas?':k==='months'?'¿Cuántos meses?':k==='remVal'?'¿Cada cuántas terapias?':'¿Cuántas terapias?'; const v=prompt(lbl); const n=parseInt(v); if(n>0&&n<=200) docPlanCfgSet(k,n); }
+function docPlanCfgInput(k, val){ const n=parseInt(val); const c=docPlanState.cfg; c[k]=(n>0&&n<=200)?n:null; docPlanState.opts=[]; docPlanState.optSel=null; docPlanRenderLeft(); const el=document.getElementById('doc-in-'+k); if(el){ el.focus(); const v=el.value; el.value=''; el.value=v; } }
+function docPlanCfgWeek(d){ const cur=docWeekStart(new Date()); let ws=docAddDaysYMD(docPlanState.cfg.startWeek||cur, d); if(ws<cur) ws=cur; docPlanState.cfg.startWeek=ws; docPlanState.opts=[]; docPlanState.optSel=null; docPlanRenderLeft(); }
 function docPlanCfgReady(){ const c=docPlanState.cfg;
   if(c.path==='weeks') return !!(c.freq&&c.weeks);
   if(c.path==='sessions') return !!(c.freq&&c.sessions);
@@ -30096,8 +30126,10 @@ function docPlanCfgPlan(){ const c=docPlanState.cfg; let combos, total, stepWeek
 async function docPlanGenerate(){
   if(!docPlanCfgReady()) return;
   const cfg=docPlanCfgPlan();
-  const box=document.getElementById('doc-plan-left'); const btn=box&&box.querySelector('.doc-primary'); // generar
-  const anchor=docYMD(new Date());
+  const today=docYMD(new Date()), tomorrow=docAddDaysYMD(today,1);
+  const startMon=docPlanState.cfg.startWeek||docWeekStart(new Date());
+  // si la semana elegida es la actual (o anterior), arrancamos mañana para no proponer días/horas ya pasados
+  const anchor = startMon>today ? startMon : tomorrow;
   const horizon=docAddDaysYMD(anchor, (cfg.total*cfg.stepWeeks+4)*7);
   const occ=await docLoadOccupied(anchor, horizon);
   docPlanState.opts=docBuildOptionsG(cfg.combos, cfg.total, anchor, occ.set, cfg.stepWeeks);
