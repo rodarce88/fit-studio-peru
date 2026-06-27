@@ -29625,6 +29625,227 @@ function docFilterPacientes(q){
 }
 
 // ---- Perfil de paciente ----
+// ===== PDF de terapias del paciente (móvil) — paleta del sistema del doctor =====
+// Reusa la maquinaria de html2pdf del PDF de FIT (página angosta, scale 3).
+// El encabezado es DINÁMICO por doctor (nombre traído de la tabla doctors),
+// para soportar varios doctores con sus propios pacientes.
+let docPatientPdfData = null;
+
+function _docPdfFilename(p){
+  const slug = `${p.first_name||''}-${p.last_name||''}`.toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+    .replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'');
+  return `terapias-${slug}-${docYMD(new Date())}.pdf`;
+}
+
+async function generateTherapyPDF(patientId){
+  if (typeof html2pdf === 'undefined'){ showToast('La librería de PDF aún no cargó. Intenta de nuevo.','error'); return; }
+  const d = docPatientPdfData;
+  if (!d || !d.p || d.p.id !== patientId){ showToast('Datos no cargados. Vuelve a entrar al perfil.','error'); return; }
+  showToast('Generando PDF...','success');
+  try { if (document.fonts && document.fonts.ready) await document.fonts.ready; } catch(e){}
+  // Nombre del doctor (dinámico)
+  let docName = 'Doctor';
+  try {
+    const { data: doc } = await sb.from('doctors').select('full_name').eq('id', docState.doctorId).maybeSingle();
+    if (doc && doc.full_name) docName = doc.full_name;
+  } catch(e){}
+  const html = _docPdfBuildHTML(d, docName);
+  const container = document.createElement('div');
+  container.style.cssText = 'position:absolute; left:-9999px; top:0; width:84mm; background:white;';
+  container.innerHTML = html;
+  document.body.appendChild(container);
+  try {
+    await html2pdf().set({
+      margin: 0,
+      filename: _docPdfFilename(d.p),
+      image: { type:'jpeg', quality:0.95 },
+      html2canvas: { scale:3, useCORS:true, logging:false, backgroundColor:'#ffffff' },
+      jsPDF: { unit:'mm', format:[84,240], orientation:'portrait' },
+      pagebreak: { mode:['css','legacy'] }
+    }).from(container.firstElementChild).save();
+    showToast('✓ PDF descargado','success');
+  } catch(e){
+    console.error('[generateTherapyPDF]', e);
+    showToast('Error generando PDF: '+e.message,'error');
+  } finally {
+    container.remove();
+  }
+}
+
+function _docPdfBuildHTML(d, docName){
+  const p = d.p;
+  const name = docEsc(((p.first_name||'')+' '+(p.last_name||'')).trim());
+  const sede = docSede(p.location_id);
+  const freq = p.freq_per_week ? `${p.freq_per_week}× por semana` : 'Sin horario fijo';
+  const effDone = d.effDone||0, effSched = d.effSched||0, effTotal = effDone+effSched;
+  const todayPretty = new Date().toLocaleDateString('es-PE', { day:'numeric', month:'long', year:'numeric' });
+  const docInitial = docEsc((docName||'D').trim().charAt(0).toUpperCase());
+  const methodLbl = { cash:'Efectivo', yape:'Yape', plin:'Plin', transfer:'Transferencia', pos:'POS', other:'Otro' };
+
+  // --- Plan actual (el más reciente) ---
+  const plan = (d.plans && d.plans.length) ? d.plans[0] : null;
+  let planHTML = '';
+  if (plan){
+    const detail = plan.mode==='indefinite'
+      ? `Indefinido · ${plan.freq_per_week}×/sem · reevaluar a las ${plan.reminder_value} ${plan.reminder_type==='weeks'?'sem':'terapias'}`
+      : `${plan.total_sessions} terapias · ${plan.freq_per_week}×/sem · ${plan.weeks} sem`;
+    const stKey = plan.status==='cancelled' ? 'cancelled' : (plan.status==='completed'?'completed':'active');
+    const stTxt = stKey==='cancelled'?'Cancelado':(stKey==='completed'?'Completado':'Activo');
+    const sub = [];
+    if (plan.start_date) sub.push('inicio '+docDateShort(plan.start_date));
+    if (plan.created_at) sub.push('creado '+docDateShort(plan.created_at.slice(0,10)));
+    planHTML = `<div class="dpdf-h">Plan actual</div>
+      <div class="dpdf-plan">
+        <div class="dpdf-plan-top"><span class="dpdf-plan-name">${docEsc(detail)}</span><span class="dpdf-badge ${stKey}">${stTxt}</span></div>
+        ${sub.length?`<div class="dpdf-plan-sub">${docEsc(sub.join(' · '))}</div>`:''}
+      </div>`;
+  }
+
+  // --- Próximas terapias ---
+  const sess = d.sess || [];
+  let upcomingHTML = '';
+  if (sess.length){
+    const rows = sess.map(s=>{
+      const sd = docSede(s.location_id);
+      const paid = !!s.payment_id;
+      return `<div class="dpdf-row">
+        <span class="dpdf-date">${docEsc(docDateShort(s.session_date))}</span>
+        <span class="dpdf-hour">${docEsc(docHourLbl(s.hour))}</span>
+        <span class="dpdf-sede"><span class="dpdf-dot" style="background:${sd.color};"></span>${docEsc(sd.name)}</span>
+        <span class="dpdf-chip ${paid?'ok':'warn'}">${paid?'Pagada':'Pendiente'}</span>
+      </div>`;
+    }).join('');
+    upcomingHTML = `<div class="dpdf-h-row"><span class="dpdf-h">Próximas terapias</span><span class="dpdf-count">${sess.length} CITA${sess.length===1?'':'S'}</span></div>
+      <div class="dpdf-list">${rows}</div>`;
+  }
+
+  // --- Historial de terapias (asistió / no asistió / reprogramar) ---
+  const markedAll = d.marked || [];
+  const CAP = 24;
+  const marked = markedAll.slice(0, CAP);
+  let histHTML = '';
+  if (marked.length){
+    const stMap = {
+      done:        { t:'✓ asistió',    c:'ok'  },
+      no_show:     { t:'✗ no asistió', c:'bad' },
+      to_reschedule:{ t:'↺ reprogramar', c:'mut' }
+    };
+    const rows = marked.map(s=>{
+      const sd = docSede(s.location_id);
+      const st = stMap[s.status] || { t:'—', c:'mut' };
+      return `<div class="dpdf-row">
+        <span class="dpdf-date">${docEsc(docDateShort(s.session_date))}</span>
+        <span class="dpdf-hour">${docEsc(docHourLbl(s.hour))}</span>
+        <span class="dpdf-sede">${docEsc(sd.name)}</span>
+        <span class="dpdf-status ${st.c}">${st.t}</span>
+      </div>`;
+    }).join('');
+    const moreNote = markedAll.length>CAP ? `<div class="dpdf-note">+ ${markedAll.length-CAP} terapia${markedAll.length-CAP===1?'':'s'} anterior${markedAll.length-CAP===1?'':'es'}</div>` : '';
+    histHTML = `<div class="dpdf-h">Historial de terapias</div><div class="dpdf-list">${rows}</div>${moreNote}`;
+  }
+
+  // --- Pagos registrados ---
+  const payments = d.payments || [];
+  let payHTML = '';
+  if (payments.length){
+    const total = payments.reduce((a,x)=>a+(parseFloat(x.amount)||0),0);
+    const rows = payments.map(x=>{
+      const when = x.paid_at ? docDateShort(x.paid_at.slice(0,10)) : '';
+      const disc = (parseFloat(x.discount)||0)>0 ? ` · dscto S/ ${x.discount}` : '';
+      const sub = `${methodLbl[x.method]||x.method||''} · ${x.session_count} terapia${x.session_count===1?'':'s'}${disc}`;
+      return `<div class="dpdf-pay">
+        <div><div class="dpdf-pay-date">${docEsc(when)}</div><div class="dpdf-pay-sub">${docEsc(sub)}</div></div>
+        <div class="dpdf-pay-amt">S/ ${(parseFloat(x.amount)||0).toFixed(2)}</div>
+      </div>`;
+    }).join('');
+    payHTML = `<div class="dpdf-h-row"><span class="dpdf-h">Pagos registrados</span><span class="dpdf-count">TOTAL · S/ ${total.toFixed(2)}</span></div>
+      <div class="dpdf-paylist">${rows}</div>`;
+  }
+
+  const WA = '+51 963 323 015', IG = '@fitstudio_peru';
+
+  return `<div class="dpdf-page"><style>
+    .dpdf-page{ width:84mm; box-sizing:border-box; background:#F7F5F0; color:#1C1922; padding:11mm 9mm; font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; }
+    .dpdf-page *{ box-sizing:border-box; }
+    .dpdf-serif{ font-family:Georgia,'Times New Roman',serif; font-style:italic; }
+    .dpdf-head{ display:flex; align-items:center; gap:10px; margin-bottom:16px; }
+    .dpdf-mark{ width:34px; height:34px; border-radius:50%; background:#1C1922; color:#F7F5F0; display:flex; align-items:center; justify-content:center; font-family:Georgia,serif; font-style:italic; font-size:14px; }
+    .dpdf-brand{ font-family:Georgia,serif; font-style:italic; font-size:16px; line-height:1.1; }
+    .dpdf-brand-sub{ font-size:8.5px; letter-spacing:.16em; color:#9A9183; margin-top:2px; text-transform:uppercase; }
+    .dpdf-meta{ border-top:1px solid #E6E0D4; padding-top:11px; margin-bottom:15px; }
+    .dpdf-kicker{ font-size:8.5px; letter-spacing:.16em; color:#9A9183; }
+    .dpdf-greet{ font-size:8.5px; letter-spacing:.16em; color:#9A9183; margin-bottom:3px; }
+    .dpdf-name{ font-family:Georgia,serif; font-style:italic; font-size:25px; line-height:1.05; }
+    .dpdf-where{ font-size:11px; color:#6E665A; display:flex; align-items:center; gap:6px; margin:7px 0 16px; }
+    .dpdf-dot{ width:8px; height:8px; border-radius:50%; display:inline-block; }
+    .dpdf-stat{ background:#FBFAF6; border:1px solid #E6E0D4; border-radius:12px; padding:12px 14px; display:flex; align-items:center; justify-content:space-between; margin-bottom:18px; }
+    .dpdf-stat-num{ font-family:Georgia,serif; font-size:30px; line-height:1; margin-top:2px; }
+    .dpdf-stat-lbl{ font-size:9.5px; letter-spacing:.06em; color:#9A9183; }
+    .dpdf-stat-side{ font-size:10px; color:#9A9183; text-align:right; line-height:1.7; }
+    .dpdf-h{ font-family:Georgia,serif; font-style:italic; font-size:15px; margin:18px 0 8px; }
+    .dpdf-h-row{ display:flex; align-items:baseline; justify-content:space-between; margin:18px 0 8px; }
+    .dpdf-h-row .dpdf-h{ margin:0; }
+    .dpdf-count{ font-size:9px; letter-spacing:.1em; color:#9A9183; }
+    .dpdf-plan{ background:#fff; border:1px solid #E6E0D4; border-radius:12px; padding:11px 13px; }
+    .dpdf-plan-top{ display:flex; align-items:flex-start; justify-content:space-between; gap:8px; }
+    .dpdf-plan-name{ font-size:12.5px; font-weight:600; }
+    .dpdf-plan-sub{ font-size:10px; color:#9A9183; margin-top:4px; }
+    .dpdf-badge{ font-size:9.5px; font-weight:600; padding:3px 9px; border-radius:999px; white-space:nowrap; }
+    .dpdf-badge.active{ color:#2F6B12; background:#E8F4DA; }
+    .dpdf-badge.completed{ color:#6E665A; background:#EFEBE1; }
+    .dpdf-badge.cancelled{ color:#A32D2D; background:#F6E3E3; }
+    .dpdf-list{ border-top:1px solid #ECE6DA; }
+    .dpdf-row{ display:grid; grid-template-columns:74px 40px 1fr auto; gap:8px; align-items:center; padding:9px 0; border-bottom:1px solid #ECE6DA; font-size:11px; }
+    .dpdf-date{ font-weight:600; white-space:nowrap; }
+    .dpdf-hour{ color:#9A9183; white-space:nowrap; }
+    .dpdf-sede{ color:#6E665A; display:flex; align-items:center; gap:5px; }
+    .dpdf-sede .dpdf-dot{ width:6px; height:6px; }
+    .dpdf-chip{ font-size:9px; font-weight:600; padding:2px 8px; border-radius:999px; white-space:nowrap; }
+    .dpdf-chip.ok{ color:#2F6B12; background:#E8F4DA; }
+    .dpdf-chip.warn{ color:#854F0B; background:#FAEEDA; }
+    .dpdf-status{ font-size:10.5px; font-weight:600; white-space:nowrap; }
+    .dpdf-status.ok{ color:#2F6B12; }
+    .dpdf-status.bad{ color:#A32D2D; }
+    .dpdf-status.mut{ color:#9A9183; }
+    .dpdf-note{ font-size:9.5px; color:#9A9183; padding:8px 0 0; }
+    .dpdf-paylist{ border-top:1px solid #ECE6DA; }
+    .dpdf-pay{ display:flex; align-items:flex-start; justify-content:space-between; gap:12px; padding:9px 0; border-bottom:1px solid #ECE6DA; }
+    .dpdf-pay:last-child{ border-bottom:none; }
+    .dpdf-pay-date{ font-size:11.5px; font-weight:500; }
+    .dpdf-pay-sub{ font-size:10px; color:#9A9183; margin-top:2px; }
+    .dpdf-pay-amt{ font-family:Georgia,serif; font-style:italic; font-size:13px; white-space:nowrap; }
+    .dpdf-foot{ border-top:1px solid #E6E0D4; margin-top:18px; padding-top:12px; display:flex; gap:16px; flex-wrap:wrap; font-size:10px; color:#6E665A; }
+    .dpdf-foot span{ display:inline-flex; align-items:center; gap:5px; }
+  </style>
+
+    <div class="dpdf-head">
+      <div class="dpdf-mark">${docInitial}</div>
+      <div><div class="dpdf-brand">Terapias</div><div class="dpdf-brand-sub">${docEsc(docName)}</div></div>
+    </div>
+    <div class="dpdf-meta"><div class="dpdf-kicker">REPORTE DE TERAPIAS</div><div class="dpdf-serif" style="font-size:13px;margin-top:2px;">${docEsc(todayPretty)}</div></div>
+
+    <div class="dpdf-greet">HOLA,</div>
+    <div class="dpdf-name">${name}</div>
+    <div class="dpdf-where"><span class="dpdf-dot" style="background:${sede.color};"></span>${docEsc(sede.name)} · ${docEsc(freq)}</div>
+
+    <div class="dpdf-stat">
+      <div><div class="dpdf-stat-lbl">TERAPIAS EFECTIVAS</div><div class="dpdf-stat-num">${effTotal}</div></div>
+      <div class="dpdf-stat-side">${effSched} programada${effSched===1?'':'s'}<br>${effDone} asistida${effDone===1?'':'s'}</div>
+    </div>
+
+    ${planHTML}
+    ${upcomingHTML}
+    ${histHTML}
+    ${payHTML}
+
+    <div class="dpdf-foot">
+      <span><svg width="12" height="12" viewBox="0 0 24 24" fill="#1C1922"><path d="M12.04 2C6.58 2 2.13 6.45 2.13 11.91c0 1.75.46 3.45 1.32 4.95L2 22l5.25-1.38c1.45.79 3.08 1.21 4.79 1.21h.01c5.46 0 9.91-4.45 9.91-9.91S17.5 2 12.04 2zm0 18.15c-1.52 0-3.01-.41-4.3-1.18l-.31-.18-3.12.82.83-3.04-.2-.32a8.2 8.2 0 0 1-1.26-4.36c0-4.54 3.7-8.23 8.25-8.23 2.2 0 4.27.86 5.82 2.42a8.18 8.18 0 0 1 2.41 5.82c0 4.54-3.7 8.23-8.24 8.23zm4.52-6.16c-.25-.12-1.47-.72-1.69-.81-.23-.08-.39-.12-.56.12-.16.25-.64.81-.79.97-.14.17-.29.19-.54.06-.25-.12-1.05-.39-1.99-1.23-.74-.66-1.23-1.47-1.38-1.72-.14-.25-.01-.38.11-.5.11-.11.25-.29.37-.43.13-.14.17-.25.25-.41.08-.17.04-.31-.02-.43-.06-.12-.56-1.34-.76-1.84-.2-.48-.4-.42-.56-.43h-.48c-.17 0-.43.06-.66.31-.23.25-.86.85-.86 2.07 0 1.22.89 2.4 1.01 2.56.12.17 1.75 2.67 4.23 3.74.59.26 1.05.41 1.41.52.59.19 1.13.16 1.56.1.48-.07 1.47-.6 1.68-1.18.21-.58.21-1.07.14-1.18-.06-.11-.22-.17-.47-.29z"/></svg> ${docEsc(WA)}</span>
+      <span><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#1C1922" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="1" fill="#1C1922" stroke="none"/></svg> ${docEsc(IG)}</span>
+    </div>
+  </div>`;
+}
+
 async function docRenderPatient(id, origin){
   const cont=document.getElementById('doc-home-content'); if(!cont) return;
   try{ docSessBarHide(); docCenterLoading(false); }catch(_){}
@@ -29651,6 +29872,8 @@ async function docRenderPatient(id, origin){
   if(p.student_id){ try{ const { data }=await sb.from('students').select('first_name,last_name,location_id,phone').eq('id',p.student_id).maybeSingle(); fit=data; }catch(e){} }
   let plans=[];
   try{ const { data }=await sb.from('therapy_plans').select('id, created_at, mode, freq_per_week, weeks, total_sessions, start_date, end_date, reminder_type, reminder_value, status').eq('patient_id', id).order('created_at',{ascending:false}); plans=data||[]; }catch(e){}
+  // Snapshot para el PDF de terapias (lo consume generateTherapyPDF)
+  docPatientPdfData = { p, fit, plans, sess, marked, payments, effDone, effSched };
   const sede=docSede(p.location_id);
   const name=docEsc(((p.first_name||'')+' '+(p.last_name||'')).trim());
   const freq=p.freq_per_week?`${p.freq_per_week}× por semana`:'Sin horario fijo';
@@ -29748,6 +29971,7 @@ async function docRenderPatient(id, origin){
       ${delRows}</div></details>`;
   }
   if(!selMode){
+    html+=`<button class="doc-linkbtn" onclick="generateTherapyPDF('${id}')"><i class="ti ti-file-text"></i> Descargar PDF</button>`;
     if(!docState.readonly){
       html+=`<button class="doc-linkbtn" onclick="docRenderRecordatorio('${id}','${_bk}')"><i class="ti ti-bell"></i> Copiar recordatorio</button>`;
       html+=`<button class="doc-primary" onclick="docRenderPlanBuilder('${id}')"><i class="ti ti-calendar-plus"></i> Agendar terapia</button>`;
