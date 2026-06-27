@@ -29617,7 +29617,7 @@ async function docRenderPatient(id, origin){
     const fs=docSede(fit.location_id);
     fitInner=`<div class="doc-fitcard"><div><div style="font-size:13px;font-weight:600;">${docEsc(((fit.first_name||'')+' '+(fit.last_name||'')).trim())}</div><div style="font-size:10.5px;color:#9A9183;margin-top:2px;"><span class="c-dot" style="background:${fs.color};width:7px;height:7px;border-radius:50%;display:inline-block;"></span> ${docEsc(fs.name)}</div></div><span class="doc-fittag"><i class="ti ti-link" style="font-size:12px;"></i> enlazada</span></div>`;
   } else {
-    fitInner=`<button class="doc-linkbtn" style="margin-top:8px;" onclick="docLinkFit('${p.id}')"><i class="ti ti-link"></i> Enlazar con un alumno de FIT</button>`;
+    fitInner = docState.readonly ? '<div style="font-size:11px;color:#9A9183;margin-top:8px;">Sin alumno FIT enlazado</div>' : `<button class="doc-linkbtn" style="margin-top:8px;" onclick="docLinkFit('${p.id}')"><i class="ti ti-link"></i> Enlazar con un alumno de FIT</button>`;
   }
   let html=`<div class="doc-wrap">
     <div class="doc-top"><button class="doc-iconbtn" onclick="docBackTo('${(origin==='hoy'?'hoy':'pacientes')}')"><i class="ti ti-arrow-left"></i></button><div style="flex:1;"></div></div>
@@ -29626,7 +29626,7 @@ async function docRenderPatient(id, origin){
       <div><div style="font-size:18px;font-weight:600;">${name}</div>
       <div style="font-size:11px;color:#9A9183;display:flex;align-items:center;gap:5px;margin-top:2px;"><span class="c-dot" style="background:${sede.color};width:8px;height:8px;border-radius:50%;display:inline-block;"></span>${docEsc(sede.name)} · ${freq}</div></div>
     </div>
-    <details class="doc-fold"><summary><span>Datos de contacto y FIT</span><span style="display:flex;align-items:center;gap:13px;"><i class="ti ti-pencil" onclick="event.preventDefault();event.stopPropagation();docRenderEditar('${id}','${(origin==='hoy'?'hoy':'pacientes')}')" style="font-size:15px;cursor:pointer;color:#6E665A;"></i><i class="ti ti-chevron-down"></i></span></summary><div class="fold-body">
+    <details class="doc-fold"><summary><span>Datos de contacto y FIT</span><span style="display:flex;align-items:center;gap:13px;">${docState.readonly?'':`<i class="ti ti-pencil" onclick="event.preventDefault();event.stopPropagation();docRenderEditar('${id}','${(origin==='hoy'?'hoy':'pacientes')}')" style="font-size:15px;cursor:pointer;color:#6E665A;"></i>`}<i class="ti ti-chevron-down"></i></span></summary><div class="fold-body">
       <div class="doc-inforow"><span>Teléfono</span><b>${p.phone?`<a href="https://wa.me/${docWa(p.phone)}" target="_blank" style="color:#3E7A52;">${docEsc(p.phone)}</a>`:'—'}</b></div>
       <div class="doc-inforow"><span>Correo</span><b>${p.email?docEsc(p.email):'—'}</b></div>
       ${fitInner}
@@ -29637,7 +29637,7 @@ async function docRenderPatient(id, origin){
     </div></div>
     <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin:16px 0 8px;flex-wrap:wrap;">
       <div class="doc-sec" style="margin:0;">Próximas terapias</div>
-      ${(!selMode && (sess.length||marked.length))?`<div style="display:flex;gap:4px;flex-wrap:wrap;">
+      ${(!selMode && !docState.readonly && (sess.length||marked.length))?`<div style="display:flex;gap:4px;flex-wrap:wrap;">
         ${anyUnpaid?`<button onclick="docPatSelEnter('${id}','${_bk}','pay')" style="background:none;border:none;color:#0F6E56;font-size:11.5px;font-weight:500;cursor:pointer;display:flex;align-items:center;gap:4px;padding:4px;"><i class="ti ti-cash" style="font-size:14px;"></i> Registrar pago</button>`:''}
         ${anyPaid?`<button onclick="docPatSelEnter('${id}','${_bk}','unpay')" style="background:none;border:none;color:#854F0B;font-size:11.5px;font-weight:500;cursor:pointer;display:flex;align-items:center;gap:4px;padding:4px;"><i class="ti ti-receipt-off" style="font-size:14px;"></i> Quitar pago</button>`:''}
         <button onclick="docPatSelEnter('${id}','${_bk}','delete')" style="background:none;border:none;color:#A32D2D;font-size:11.5px;font-weight:500;cursor:pointer;display:flex;align-items:center;gap:4px;padding:4px;"><i class="ti ti-trash" style="font-size:14px;"></i> Eliminar</button>
@@ -29699,8 +29699,10 @@ async function docRenderPatient(id, origin){
       ${delRows}</div></details>`;
   }
   if(!selMode){
-    html+=`<button class="doc-linkbtn" onclick="docRenderRecordatorio('${id}','${_bk}')"><i class="ti ti-bell"></i> Copiar recordatorio</button>`;
-    html+=`<button class="doc-primary" onclick="docRenderPlanBuilder('${id}')"><i class="ti ti-calendar-plus"></i> Agendar terapia</button>`;
+    if(!docState.readonly){
+      html+=`<button class="doc-linkbtn" onclick="docRenderRecordatorio('${id}','${_bk}')"><i class="ti ti-bell"></i> Copiar recordatorio</button>`;
+      html+=`<button class="doc-primary" onclick="docRenderPlanBuilder('${id}')"><i class="ti ti-calendar-plus"></i> Agendar terapia</button>`;
+    }
   } else {
     html+=`<div style="height:80px;"></div>`;
   }
@@ -30045,6 +30047,7 @@ async function docApplySede(scope){ if(docGuardRO())return;
 // ---- Tocar un slot libre: agendar o bloquear ----
 let docSlotState=null;
 function docSlotSheet(ds, hour){
+  if(docGuardRO())return;
   docSlotState={ds, hour};
   const when=docCap(docDateShort(ds))+' · '+docHourLbl(hour);
   const opt=(icon,color,label,onclick)=>`<div onclick="${onclick}" style="display:flex;align-items:center;gap:11px;padding:13px 14px;border-radius:12px;background:#fff;border:1px solid #ECE6DA;margin-bottom:8px;cursor:pointer;"><i class="ti ${icon}" style="font-size:19px;color:${color};"></i><div style="flex:1;font-size:13.5px;color:#1C1922;">${label}</div><i class="ti ti-chevron-right" style="font-size:15px;color:#C9C2B4;"></i></div>`;
@@ -31200,11 +31203,14 @@ function docAgmHtml(cells){
 // ============================================
 let docPlanState=null;
 function docAgmSessionTap(sid, pid){
+  // En solo lectura: nunca abrir el armador editable; solo el panel de vista.
+  if(docState.readonly){ docSessionSheet(sid,'agenda'); return; }
   // PC: entra a la vista del paciente (paneles). Móvil o sin paciente: modal flotante actual.
   if(!docCanDnd() || !pid){ docSessionSheet(sid,'agenda'); return; }
   docRenderPlanBuilder(pid, sid);
 }
 async function docRenderPlanBuilder(pid, focusSid){
+  if(docState.readonly){ docRenderAgendaMaestra(); return; }
   const cont=document.getElementById('doc-home-content'); if(!cont) return;
   try{ docSessBarHide(); }catch(_){}
   // 1) Shell + skeletons al instante (header desde cache si está)
