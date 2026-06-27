@@ -3610,15 +3610,15 @@ body:not(.doctor-mode) .doc-bottomnav{ display:none; }
 #view-doctor-home .doc-fold .fold-body{ padding:6px 13px 12px; }
 @keyframes docspin{ to{ transform:rotate(360deg); } }
 #view-doctor-home .agm-wrap{ max-width:1080px; margin:0 auto; padding:0 14px; }
-#view-doctor-home .doc-planwrap{ max-width:1480px; margin:0 auto; padding:0 24px; }
+#view-doctor-home .doc-planwrap{ max-width:1640px; margin:0 auto; padding:0 24px; }
 #view-doctor-home .doc-planhdr{ position:sticky; top:0; z-index:40; display:flex; align-items:center; gap:12px; padding:12px 0 11px; margin-bottom:10px; background:#F7F5F0; border-bottom:1px solid #E6E0D4; }
-#view-doctor-home .doc-plangrid{ display:grid; grid-template-columns:290px minmax(0,1fr) 250px; gap:24px; align-items:start; }
+#view-doctor-home .doc-plangrid{ display:grid; grid-template-columns:270px 1052px 225px; gap:20px; align-items:start; justify-content:center; }
 #view-doctor-home .doc-planright{ position:sticky; top:78px; align-self:start; }
 #view-doctor-home .doc-planexist{ position:sticky; top:78px; align-self:start; max-height:calc(100vh - 96px); display:flex; flex-direction:column; }
 #view-doctor-home .doc-existlist{ overflow:auto; flex:1 1 auto; min-height:0; }
 #view-doctor-home .doc-existfoot{ flex:none; padding-top:10px; }
-@media (max-width:1180px){ #view-doctor-home .doc-plangrid{ grid-template-columns:290px 1fr; } #view-doctor-home .doc-planexist{ grid-column:1/-1; position:static; max-height:none; } #view-doctor-home .doc-existlist{ overflow:visible; } }
-@media (max-width:880px){ #view-doctor-home .doc-plangrid{ grid-template-columns:1fr; gap:14px; } #view-doctor-home .doc-planright{ position:static; } }
+@media (max-width:1640px){ #view-doctor-home .doc-plangrid{ grid-template-columns:minmax(0,1fr); gap:18px; } #view-doctor-home .doc-planright{ order:-1; position:static; } #view-doctor-home .doc-planexist{ position:static; max-height:none; } #view-doctor-home .doc-existlist{ overflow:visible; } #view-doctor-home .doc-planleft,#view-doctor-home .doc-planexist{ max-width:1052px; margin-left:auto; margin-right:auto; width:100%; } }
+@media (max-width:880px){ #view-doctor-home .doc-plangrid{ gap:14px; } }
 #view-doctor-home .doc-pickrow{ display:flex; align-items:center; justify-content:space-between; padding:8px 11px; border:1px solid #E6E0D4; border-radius:10px; background:#fff; margin-bottom:6px; font-size:12px; cursor:pointer; }
 #view-doctor-home .doc-pickrow i{ color:#A32D2D; font-size:14px; }
 #view-doctor-home .agm-pick{ border:1.5px dashed; border-radius:5px; padding:3px 5px; font-size:10px; font-weight:600; display:flex; align-items:center; gap:3px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
@@ -3646,13 +3646,39 @@ body:not(.doctor-mode) .doc-bottomnav{ display:none; }
 #doc-sessbar .docbar-act.danger{ color:#A32D2D; border-color:#E6CFCF; }
 #doc-sessbar .docbar-act.ghost{ color:#9A9183; opacity:.75; }
 #doc-sessbar .docbar-act:hover{ border-color:#1C1922; }
-#doc-center-load{ position:fixed; inset:0; z-index:8500; display:flex; align-items:center; justify-content:center; pointer-events:none; }
-#doc-center-load .dcl-spin{ width:34px; height:34px; border:3px solid rgba(28,25,34,.18); border-top-color:#1C1922; border-radius:50%; animation:docspin .7s linear infinite; }
+#doc-center-load{ position:fixed; inset:0; z-index:8500; display:flex; align-items:center; justify-content:center; pointer-events:none; opacity:0; transition:opacity .2s; }
+#doc-center-load.show{ opacity:1; }
+#doc-center-load .dcl-card{ background:#fff; border:1px solid #E6E0D4; border-radius:18px; box-shadow:0 12px 40px rgba(28,25,34,.18); padding:22px 26px; display:flex; flex-direction:column; align-items:center; gap:13px; transform:translateY(6px) scale(.98); transition:transform .2s; }
+#doc-center-load.show .dcl-card{ transform:none; }
+#doc-center-load .dcl-ring{ position:relative; width:40px; height:40px; }
+#doc-center-load .dcl-ring span{ position:absolute; inset:0; border-radius:50%; border:3px solid transparent; }
+#doc-center-load .dcl-ring span:nth-child(1){ border-top-color:#6A4E9C; animation:docspin .8s linear infinite; }
+#doc-center-load .dcl-ring span:nth-child(2){ inset:7px; border-top-color:#C9A8E0; animation:docspin 1.1s linear infinite reverse; }
+#doc-center-load .dcl-txt{ font-size:12.5px; color:#6E665A; font-weight:500; font-family:'Inter',system-ui,sans-serif; }
+#doc-del-ov{ position:fixed; inset:0; z-index:10001; background:rgba(28,25,34,.42); display:flex; align-items:center; justify-content:center; padding:18px; opacity:0; transition:opacity .2s; font-family:'Inter',system-ui,sans-serif; }
+#doc-del-ov.show{ opacity:1; }
+#doc-del-ov .doc-rcard{ width:100%; max-width:420px; background:#F7F5F0; border-radius:20px; padding:20px; box-shadow:0 18px 50px rgba(28,25,34,.28); transform:translateY(8px) scale(.97); transition:transform .2s; }
+#doc-del-ov.show .doc-rcard{ transform:none; }
+#doc-del-ov .doc-rtitle{ font-size:15px; font-weight:600; color:#1C1922; display:flex; align-items:center; gap:8px; }
+#doc-del-ov .doc-rtitle .ti{ color:#A32D2D; font-size:18px; }
+#doc-del-ov .doc-rsub{ font-size:12px; color:#6E665A; margin:4px 0 14px; }
+#doc-del-ov .doc-rchips{ display:flex; flex-wrap:wrap; gap:8px; }
+#doc-del-ov .doc-rchip{ border:1px solid #E6E0D4; background:#fff; color:#3A352E; border-radius:999px; padding:8px 13px; font-size:12px; font-family:inherit; cursor:pointer; display:inline-flex; align-items:center; gap:6px; }
+#doc-del-ov .doc-rchip:hover{ border-color:#6A4E9C; }
+#doc-del-ov .doc-rchip.on{ background:#6A4E9C; border-color:#6A4E9C; color:#fff; }
+#doc-del-ov .doc-rn{ background:rgba(0,0,0,.12); border-radius:999px; padding:0 6px; font-size:10px; font-weight:600; }
+#doc-del-ov .doc-rchip.on .doc-rn{ background:rgba(255,255,255,.25); }
+#doc-del-ov .doc-rinput{ width:100%; margin-top:12px; border:1px solid #E6E0D4; border-radius:12px; padding:11px 13px; font-size:13px; font-family:inherit; color:#1C1922; box-sizing:border-box; outline:none; }
+#doc-del-ov .doc-rinput:focus{ border-color:#6A4E9C; }
+#doc-del-ov .doc-ractions{ display:flex; gap:10px; margin-top:18px; }
+#doc-del-ov .doc-rcancel{ flex:1; border:1px solid #E6E0D4; background:#fff; color:#3A352E; border-radius:12px; padding:12px; font-size:13px; font-weight:600; font-family:inherit; cursor:pointer; }
+#doc-del-ov .doc-rdel{ flex:1.4; border:none; background:#A32D2D; color:#fff; border-radius:12px; padding:12px; font-size:13px; font-weight:600; font-family:inherit; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:7px; }
+#doc-del-ov .doc-rdel:hover{ background:#8E2424; }
 #view-doctor-home .doc-skel{ display:grid; grid-template-columns:repeat(7,1fr); gap:6px; padding:8px 0; }
 #view-doctor-home .doc-skelcol{ display:flex; flex-direction:column; gap:6px; }
 #view-doctor-home .doc-skelcell{ height:34px; border-radius:7px; background:linear-gradient(90deg,#EFEBE2 25%,#F6F3EC 50%,#EFEBE2 75%); background-size:200% 100%; animation:docshimmer 1.2s linear infinite; }
 @keyframes docshimmer{ 0%{background-position:200% 0;} 100%{background-position:-200% 0;} }
-#view-doctor-home .agm-grid{ display:grid; grid-template-columns:46px repeat(7, minmax(96px,1fr)); min-width:730px; border:1px solid #E6E0D4; border-radius:12px; overflow:hidden; background:#fff; }
+#view-doctor-home .agm-grid{ display:grid; grid-template-columns:46px repeat(7, minmax(96px,1fr)); min-width:730px; max-width:1052px; margin-left:auto; margin-right:auto; border:1px solid #E6E0D4; border-radius:12px; overflow:hidden; background:#fff; }
 #view-doctor-home .agm-hd{ background:#F3EFE7; padding:6px 2px; text-align:center; font-size:10px; color:#6E665A; border-bottom:1px solid #E6E0D4; border-left:1px solid #EFEAE0; line-height:1.25; }
 #view-doctor-home .agm-hd.today{ background:#1C1922; color:#fff; }
 #view-doctor-home .agm-corner{ background:#F3EFE7; border-bottom:1px solid #E6E0D4; }
@@ -30129,10 +30155,10 @@ async function docRenderPlanBuilder(pid, focusSid){
   docCenterLoading(false);
   if(focusSid) docSessBar(focusSid);
 }
-function docCenterLoading(show){
+function docCenterLoading(show, msg){
   let el=document.getElementById('doc-center-load');
-  if(show){ if(!el){ el=document.createElement('div'); el.id='doc-center-load'; el.innerHTML='<div class="dcl-spin"></div>'; document.body.appendChild(el); } return; }
-  if(el&&el.parentNode) el.parentNode.removeChild(el);
+  if(show){ if(!el){ el=document.createElement('div'); el.id='doc-center-load'; el.innerHTML=`<div class="dcl-card"><div class="dcl-ring"><span></span><span></span></div><div class="dcl-txt">${docEsc(msg||'Cargando al paciente…')}</div></div>`; document.body.appendChild(el); requestAnimationFrame(()=>el.classList.add('show')); } return; }
+  if(el){ el.classList.remove('show'); setTimeout(()=>{ if(el&&el.parentNode) el.parentNode.removeChild(el); },200); }
 }
 function docPlanBottomNav(){
   const nav=document.getElementById('doc-bottomnav'); if(!nav) return;
@@ -30173,19 +30199,66 @@ async function docSessBar(id){
       <button class="docbar-act ghost" onclick="docSessBarHide()"><i class="ti ti-x" style="font-size:17px;"></i><span>Cancelar</span></button>
     </div></div>`;
   requestAnimationFrame(()=>bar.classList.add('show'));
+  if(docPlanState){ docPlanState.selSid=id; docPlanRepaint(); }
 }
-function docSessBarHide(){ const bar=document.getElementById('doc-sessbar'); if(!bar) return; bar.classList.remove('show'); bar.classList.add('hide'); setTimeout(()=>{ if(bar&&bar.parentNode) bar.parentNode.removeChild(bar); },260); }
+function docSessBarHide(){ if(docPlanState&&docPlanState.selSid){ docPlanState.selSid=null; try{ docPlanRepaint(); }catch(_){} } const bar=document.getElementById('doc-sessbar'); if(!bar) return; bar.classList.remove('show'); bar.classList.add('hide'); setTimeout(()=>{ if(bar&&bar.parentNode) bar.parentNode.removeChild(bar); },260); }
 async function docMiniStatus(id, status){
   try{ const { error }=await sb.from('therapy_sessions').update({ status }).eq('id',id); if(error) throw error;
     docSessBarHide(); docCache.patients=null; docCache.prefs=null; showToast('✓ Actualizada','success'); await docPlanRefresh();
   }catch(e){ showToast('Error: '+(e.message||''),'error'); }
 }
+const DOC_DEL_REASONS=['Paciente canceló','Reprogramada a otra fecha','No asistió varias veces','Viaje','Error al agendar','Duplicada'];
+let docDelState=null;
+async function docLoadDelReasons(){
+  if(docCache.delReasons) return docCache.delReasons;
+  const counts={};
+  try{
+    let q=sb.from('therapy_sessions').select('delete_reason').eq('status','deleted').not('delete_reason','is',null).limit(500);
+    if(docState&&docState.doctorId) q=q.eq('doctor_id',docState.doctorId);
+    const { data }=await q;
+    (data||[]).forEach(r=>{ const k=(r.delete_reason||'').trim(); if(k) counts[k]=(counts[k]||0)+1; });
+  }catch(e){}
+  docCache.delReasons=counts; return counts;
+}
 async function docMiniDelete(id){
-  const reason=(prompt('Motivo de eliminación (opcional):')||'').trim()||null;
+  const counts=await docLoadDelReasons();
+  const pre=[...DOC_DEL_REASONS].sort((a,b)=>(counts[b]||0)-(counts[a]||0));
+  const extra=Object.keys(counts).filter(k=>!DOC_DEL_REASONS.includes(k)&&counts[k]>=2).sort((a,b)=>counts[b]-counts[a]).slice(0,3);
+  docDelState={ id, chips:[...pre,...extra], counts, reason:null, custom:'' };
+  docDelReasonRender();
+}
+function docDelReasonRender(){
+  const st=docDelState; if(!st) return;
+  const chipHtml=st.chips.map((r,i)=>{ const n=st.counts[r]||0; const sel=(st.reason===r);
+    return `<button class="doc-rchip${sel?' on':''}" onclick="docDelPick(${i})">${docEsc(r)}${n>=2?`<span class="doc-rn">${n}</span>`:''}</button>`;
+  }).join('');
+  const otherSel=(st.reason==='__other__');
+  const inner=`<div class="doc-rcard">
+    <div class="doc-rtitle"><i class="ti ti-trash"></i> Eliminar cita</div>
+    <div class="doc-rsub">¿Por qué la eliminas? <span style="color:#9A9183;">(opcional)</span></div>
+    <div class="doc-rchips">${chipHtml}<button class="doc-rchip${otherSel?' on':''}" onclick="docDelPick(-1)"><i class="ti ti-dots" style="font-size:14px;"></i> Otro…</button></div>
+    ${otherSel?`<input id="doc-rinput" class="doc-rinput" placeholder="Escribe el motivo…" value="${docEsc(st.custom)}" oninput="docDelState.custom=this.value">`:''}
+    <div class="doc-ractions">
+      <button class="doc-rcancel" onclick="docDelClose()">Cancelar</button>
+      <button class="doc-rdel" onclick="docDelConfirm()"><i class="ti ti-trash"></i> Eliminar cita</button>
+    </div></div>`;
+  let ov=document.getElementById('doc-del-ov');
+  if(!ov){ ov=document.createElement('div'); ov.id='doc-del-ov'; ov.setAttribute('onclick','if(event.target===this)docDelClose()'); document.body.appendChild(ov); }
+  ov.innerHTML=inner;
+  requestAnimationFrame(()=>ov.classList.add('show'));
+}
+function docDelPick(i){ const st=docDelState; if(!st) return; st.reason=(i===-1)?'__other__':st.chips[i]; docDelReasonRender(); if(i===-1){ const inp=document.getElementById('doc-rinput'); if(inp) inp.focus(); } }
+function docDelClose(){ const ov=document.getElementById('doc-del-ov'); if(ov){ ov.classList.remove('show'); setTimeout(()=>{ if(ov&&ov.parentNode) ov.parentNode.removeChild(ov); },200); } docDelState=null; }
+async function docDelConfirm(){
+  const st=docDelState; if(!st) return; const id=st.id;
+  let reason=null;
+  if(st.reason==='__other__') reason=(st.custom||'').trim()||null;
+  else if(st.reason) reason=st.reason;
+  docDelClose();
   try{
     const payload={ status:'deleted', deleted_at:new Date().toISOString(), deleted_by:(CURRENT_USER&&CURRENT_USER.authUser&&CURRENT_USER.authUser.id)||null, deleted_by_name:(typeof getCurrentActorLabel==='function'?getCurrentActorLabel():null), delete_reason:reason };
     const { error }=await sb.from('therapy_sessions').update(payload).eq('id',id); if(error) throw error;
-    docSessBarHide(); docCache.patients=null; showToast('✓ Eliminada','success'); await docPlanRefresh();
+    docSessBarHide(); docCache.patients=null; docCache.delReasons=null; showToast('✓ Eliminada','success'); await docPlanRefresh();
   }catch(e){ showToast('Error: '+(e.message||''),'error'); }
 }
 // ---- Cambiar sede del paciente (a nivel perfil) ----
@@ -30444,12 +30517,19 @@ function docPlanCalHtml(cells){
         const inner=evs.map(e=>{
           if(e.type==='session' && e.patient_id===st.pid){
             const editable = e.status==='scheduled' && ds>=today;
-            if(editable){
-              const del=st.delIds.has(e.id);
-              return `<div class="agm-ev" style="background:${e.sede.fill};border-left:3px solid ${e.sede.color};color:${e.sede.ink};font-weight:500;cursor:pointer;${del?'opacity:.55;text-decoration:line-through;':''}" onclick="event.stopPropagation();docPlanCitaClick('${e.id}',true)" title="Acciones de la cita">${docEsc(e.name)}</div>`;
-            }
-            // del paciente, NO editable (asistió/perdida/pasada): borde color completo + interior atenuado
-            return `<div class="agm-ev" style="background:${e.sede.fill};border:1.5px solid ${e.sede.color};color:${e.sede.ink};cursor:pointer;" onclick="event.stopPropagation();docPlanCitaClick('${e.id}',false)"><span style="opacity:.5;">${docEsc(e.name)}</span></div>`;
+            const del=st.delIds.has(e.id);
+            const sel=(st.selSid===e.id);
+            const tag=docSessTag(e.status, ds, h);
+            const icon = tag&&tag.ic ? `<i class="ti ${tag.ic}" style="font-size:11px;color:${tag.icColor};flex:none;"></i>` : '';
+            const right = tag&&tag.lbl ? `<span style="font-size:9px;font-weight:600;color:${tag.lblColor};flex:none;margin-left:auto;padding-left:4px;">${tag.lbl}</span>` : '';
+            const strikeName = (del || (tag&&tag.strike)) ? 'text-decoration:line-through;' : '';
+            const baseBorder = editable ? `border-left:3px solid ${e.sede.color};` : `border:1.5px solid ${e.sede.color};`;
+            const dimStyle = del ? 'opacity:.55;' : (tag&&tag.dim ? 'opacity:.6;' : '');
+            const ring = sel ? `box-shadow:0 0 0 2px ${e.sede.color},0 6px 16px rgba(0,0,0,.18);transform:scale(1.02);z-index:5;` : '';
+            const bg = sel ? e.sede.color : e.sede.fill;
+            const ink = sel ? '#fff' : e.sede.ink;
+            const nameOp = (!editable && !sel) ? 'opacity:.6;' : '';
+            return `<div class="agm-ev" style="background:${bg};${baseBorder}color:${ink};font-weight:500;display:flex;align-items:center;gap:3px;cursor:pointer;transition:transform .14s,box-shadow .14s,background .14s;${dimStyle}${ring}" onclick="event.stopPropagation();docPlanCitaClick('${e.id}',${editable})" title="Acciones de la cita">${icon}<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;${strikeName}${nameOp}">${docEsc(e.name)}</span>${right}</div>`;
           }
           // de OTRO paciente / clase / bloqueo: como ahora (la celda se atenúa abajo)
           if(e.type==='session') return `<div class="agm-ev" style="background:${e.sede.fill};border-left:3px solid ${e.sede.color};color:${e.sede.ink};">${docEsc(e.name)}</div>`;
