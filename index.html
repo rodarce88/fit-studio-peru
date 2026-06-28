@@ -1925,6 +1925,56 @@
   .pay-pending-icon { width: 28px; height: 28px; background: var(--warn, #C97C2A); color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 600; flex-shrink: 0; }
   .pay-pending-text { font-size: 12px; color: var(--ink); }
   .pay-pending-text strong { color: var(--warn, #C97C2A); }
+  /* === Tus ingresos (vista nueva, sin tarjetas) === */
+  .pay2 { padding: 12px 4px 26px; }
+  .pay2-back { background: none; border: none; color: var(--ink-mute); font-size: 13px; font-family: var(--body); cursor: pointer; padding: 4px 2px; margin-bottom: 4px; }
+  .pay2-back:hover { color: var(--fit-purple-deep); }
+  .pay2-eyebrow { font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-mute); }
+  .pay2-title { font-family: var(--display); font-style: italic; font-size: 26px; color: var(--fit-purple-deep); line-height: 1.1; margin: 2px 0 16px; }
+  .pay2-nav { display: flex; align-items: center; gap: 8px; }
+  .pay2-arrow { width: 34px; height: 34px; border-radius: 50%; border: 1px solid var(--line); background: #FBFAFC; color: var(--ink-mute); font-size: 16px; cursor: pointer; line-height: 1; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .pay2-arrow:hover { background: #fff; color: var(--ink); }
+  .pay2-seg { position: relative; flex: 1; display: grid; grid-template-columns: 1fr 1fr; background: #F4F2F7; border: 1px solid var(--line); border-radius: 12px; padding: 3px; }
+  .pay2-seg-pill { position: absolute; top: 3px; bottom: 3px; left: 3px; width: calc(50% - 3px); background: #fff; border-radius: 9px; box-shadow: 0 1px 3px rgba(0,0,0,0.09); transition: transform 0.26s cubic-bezier(.22,1,.36,1); }
+  .pay2-seg[data-mode="monthly"] .pay2-seg-pill { transform: translateX(100%); }
+  .pay2-seg-btn { position: relative; z-index: 1; background: none; border: none; padding: 8px 0; font-size: 13px; font-family: var(--body); color: var(--ink-mute); cursor: pointer; font-weight: 500; }
+  .pay2-seg-btn.is-active { color: var(--fit-purple-deep); font-weight: 600; }
+  .pay2-caption { text-align: center; font-size: 12px; color: var(--ink-mute); margin: 11px 0 2px; }
+  .pay2-hero { padding: 10px 2px 2px; }
+  .pay2-hero-eyebrow { font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-mute); }
+  .pay2-hero-amount { font-family: var(--display); font-style: italic; font-size: 42px; color: var(--fit-purple-deep); line-height: 1.05; margin: 4px 0; font-variant-numeric: tabular-nums; }
+  .pay2-hero-sub { font-size: 13px; color: var(--ink-mute); }
+  .pay2-divider { height: 1px; background: var(--line); margin: 14px 0; }
+  .pay2-proj { display: flex; justify-content: space-between; align-items: baseline; font-size: 13px; color: var(--ink); }
+  .pay2-proj strong { font-family: var(--display); font-style: italic; font-size: 17px; color: var(--fit-purple-deep); }
+  .pay2-proj-extra { font-size: 11.5px; color: var(--ink-mute); margin-top: 3px; }
+  .pay2-alert { display: flex; gap: 11px; align-items: flex-start; background: #FFF4E8; border: 1px solid #F2D7B4; border-radius: 12px; padding: 13px 15px; margin: 16px 0; }
+  .pay2-alert-icon { width: 22px; height: 22px; border-radius: 50%; background: #E0822A; color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 13px; flex-shrink: 0; }
+  .pay2-alert-text { font-size: 12.5px; color: #7C4A18; line-height: 1.45; }
+  .pay2-sede { margin: 18px 0; padding-top: 16px; border-top: 1px solid var(--line); }
+  .pay2-sede-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 12px; }
+  .pay2-sede-title { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--ink-mute); font-weight: 600; }
+  .pay2-sede-note { font-size: 11px; color: var(--ink-soft); font-style: italic; }
+  .pay2-sede-row { margin-bottom: 11px; }
+  .pay2-sede-line { display: flex; align-items: center; gap: 8px; font-size: 12.5px; margin-bottom: 5px; }
+  .pay2-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+  .pay2-sede-name { font-weight: 500; color: var(--ink); }
+  .pay2-sede-cls { font-size: 11px; color: var(--ink-mute); }
+  .pay2-sede-cls.is-faint { font-style: italic; color: var(--ink-faint); }
+  .pay2-sede-amt { margin-left: auto; font-weight: 600; color: var(--ink); font-variant-numeric: tabular-nums; }
+  .pay2-bar { background: var(--line-soft); border-radius: 999px; height: 7px; overflow: hidden; }
+  .pay2-bar-fill { height: 100%; border-radius: 999px; transition: width 0.3s ease; }
+  .pay2-sede-total { display: flex; justify-content: space-between; align-items: center; margin-top: 13px; padding-top: 11px; border-top: 1px solid var(--line-soft); font-size: 12px; color: var(--ink-mute); }
+  .pay2-sede-total-amt { font-family: var(--display); font-style: italic; font-size: 20px; color: var(--fit-purple-deep); font-variant-numeric: tabular-nums; }
+  .pay2-empty { text-align: center; color: var(--ink-mute); font-size: 13px; padding: 26px 8px; }
+  .pay2-days { margin-top: 8px; }
+  .pay2-skel { background: linear-gradient(90deg, #ECEAF0 25%, #F6F4F8 37%, #ECEAF0 63%); background-size: 400% 100%; animation: pay2shimmer 1.3s ease infinite; border-radius: 8px; }
+  .pay2-skel-sm { height: 12px; margin: 9px 0; }
+  .pay2-skel-xl { height: 42px; margin: 9px 0; border-radius: 10px; }
+  .pay2-skel-md { height: 54px; border-radius: 12px; }
+  .pay2-skel-row { height: 60px; border-radius: 14px; margin-bottom: 10px; }
+  .pay2-skel-hero { padding: 10px 2px; }
+  @keyframes pay2shimmer { 0% { background-position: 100% 0; } 100% { background-position: 0 0; } }
   .pay-day-card { background: white; border: 1px solid var(--line); border-radius: 14px; overflow: hidden; margin-bottom: 10px; transition: border-color 0.15s; }
   .pay-day-card.is-today { border-color: var(--fit-purple); border-width: 1.5px; }
   .pay-day-card.is-expanded { box-shadow: 0 2px 10px rgba(91, 42, 143, 0.06); }
@@ -26765,12 +26815,153 @@ function _renderWeekNav(weekRange) {
 
 async function renderInstructorPayView() {
   const container = document.getElementById('instructor-pay-container');
-  if (!CURRENT_USER || CURRENT_USER.role !== 'instructor') return;
+  if (!container || !CURRENT_USER || CURRENT_USER.role !== 'instructor') return;
   const inst = CURRENT_USER.record;
+  const config = getPayConfigFor(inst.id);
+  if (!STATE.payViewFreq) STATE.payViewFreq = (config.period_frequency === 'monthly') ? 'monthly' : 'biweekly';
+  if (!STATE.payViewPeriodStart || STATE.payViewPeriodInstId !== inst.id) {
+    const r = getPeriodRangeFor(dateToIsoLocal(new Date()), STATE.payViewFreq);
+    STATE.payViewPeriodStart = r.start; STATE.payViewPeriodEnd = r.end; STATE.payViewPeriodLabel = r.label; STATE.payViewPeriodInstId = inst.id;
+  }
+  container.innerHTML = payShellHtml(inst);
+  await paintPayData(inst);
+}
 
-  container.innerHTML = '<div style="text-align:center; padding: 40px; color: var(--ink-mute);">Calculando tu pago…</div>';
+function payShellHtml(inst) {
+  const firstName = inst.first_name || (inst.full_name || '').split(' ')[0] || '';
+  const mode = STATE.payViewFreq || 'biweekly';
+  return `
+    <div class="pay2">
+      <button class="pay2-back" onclick="profOpenMenu()" aria-label="Volver al menú">‹ Menú</button>
+      <div class="pay2-eyebrow">Hola, ${escape(firstName)}</div>
+      <div class="pay2-title">Tus ingresos</div>
+      <div class="pay2-nav">
+        <button class="pay2-arrow" onclick="shiftPayPeriod(-1)" aria-label="Periodo anterior">‹</button>
+        <div class="pay2-seg" data-mode="${mode}">
+          <span class="pay2-seg-pill"></span>
+          <button class="pay2-seg-btn ${mode === 'biweekly' ? 'is-active' : ''}" data-m="biweekly" onclick="setPayMode('biweekly')">Quincena</button>
+          <button class="pay2-seg-btn ${mode === 'monthly' ? 'is-active' : ''}" data-m="monthly" onclick="setPayMode('monthly')">Mes</button>
+        </div>
+        <button class="pay2-arrow" onclick="shiftPayPeriod(1)" aria-label="Periodo siguiente">›</button>
+      </div>
+      <div class="pay2-caption" id="pay2-caption"></div>
+      <div id="pay2-data"></div>
+    </div>`;
+}
 
-  await _renderPayViewFor(inst, container, /*isCoordinator*/ false);
+function setPayMode(mode) {
+  if (!CURRENT_USER || CURRENT_USER.role !== 'instructor') return;
+  if (STATE.payViewFreq === mode) return;
+  STATE.payViewFreq = mode;
+  const r = getPeriodRangeFor(STATE.payViewPeriodStart, mode);
+  STATE.payViewPeriodStart = r.start; STATE.payViewPeriodEnd = r.end; STATE.payViewPeriodLabel = r.label;
+  STATE.payViewReport = null;
+  const seg = document.querySelector('.pay2-seg'); if (seg) seg.dataset.mode = mode;
+  document.querySelectorAll('.pay2-seg-btn').forEach(b => b.classList.toggle('is-active', b.dataset.m === mode));
+  paintPayData(CURRENT_USER.record);
+}
+
+async function paintPayData(inst) {
+  const dataEl = document.getElementById('pay2-data');
+  const capEl = document.getElementById('pay2-caption');
+  if (!dataEl) return;
+  if (capEl) capEl.textContent = STATE.payViewPeriodLabel || '';
+  dataEl.innerHTML = paySkeletonHtml();
+  const reqKey = `${STATE.payViewPeriodStart}/${STATE.payViewPeriodEnd}/${STATE.payViewFreq}`;
+  STATE._payReqKey = reqKey;
+  const report = await calculateInstructorPayReport(inst.id, STATE.payViewPeriodStart, STATE.payViewPeriodEnd);
+  if (STATE._payReqKey !== reqKey) return; // cambió de periodo mientras cargaba → descartar
+  STATE.payViewReport = report; STATE.payViewReportInstId = inst.id; STATE.payViewReportPeriodKey = `${STATE.payViewPeriodStart}/${STATE.payViewPeriodEnd}`;
+  dataEl.innerHTML = payDataHtml(report, inst);
+}
+
+function paySkeletonHtml() {
+  return `
+    <div class="pay2-skel-hero">
+      <div class="pay2-skel pay2-skel-sm" style="width:120px"></div>
+      <div class="pay2-skel pay2-skel-xl" style="width:62%"></div>
+      <div class="pay2-skel pay2-skel-sm" style="width:210px"></div>
+    </div>
+    <div class="pay2-skel pay2-skel-md" style="width:100%; margin-top:18px"></div>
+    <div style="margin-top:18px">
+      ${[72, 56, 64].map(w => `<div class="pay2-skel pay2-skel-row" style="width:${w}%"></div>`).join('')}
+    </div>`;
+}
+
+function _payProjExtras(report, today) {
+  const futureClasses = report.days.flatMap(d => d.classes).filter(c => !c.isEmpty && c.session_date > today).length;
+  const todayPending = report.days.flatMap(d => d.classes).filter(c => !c.isEmpty && c.session_date === today && c.countInfo.pending > 0).length;
+  const extras = [];
+  if (futureClasses > 0) extras.push(`${futureClasses} clase${futureClasses === 1 ? '' : 's'} agendada${futureClasses === 1 ? '' : 's'}`);
+  if (todayPending > 0) extras.push(`${todayPending} pendiente${todayPending === 1 ? '' : 's'} de hoy`);
+  return extras.join(' y ');
+}
+
+function payDataHtml(report, inst) {
+  const today = dateToIsoLocal(new Date());
+  const freqLabel = (STATE.payViewFreq === 'monthly') ? 'mes' : 'quincena';
+  let projHtml = '';
+  if (report.projection > report.total) {
+    const extras = _payProjExtras(report, today);
+    projHtml = `
+      <div class="pay2-divider"></div>
+      <div class="pay2-proj"><span>Proyección fin de ${freqLabel}</span><strong>~ S/ ${report.projection.toFixed(0)}</strong></div>
+      ${extras ? `<div class="pay2-proj-extra">incluye ${extras}</div>` : ''}`;
+  }
+  const pastUnmarked = report.days.flatMap(d => d.classes)
+    .filter(c => !c.isEmpty && c.session_date < today && c.countInfo && c.countInfo.byStatus && c.countInfo.byStatus.unmarked > 0).length;
+  const alertHtml = pastUnmarked > 0 ? `
+    <div class="pay2-alert">
+      <div class="pay2-alert-icon">!</div>
+      <div class="pay2-alert-text"><strong>${pastUnmarked} clase${pastUnmarked === 1 ? '' : 's'} sin marcar</strong> de días pasados · márcalas en Mi día o se cerrarán como perdidas a los 3 días hábiles.</div>
+    </div>` : '';
+  const emptyHtml = report.days.length === 0 ? `<div class="pay2-empty">Sin clases registradas en este ${freqLabel}.</div>` : '';
+  return `
+    <div class="pay2-hero">
+      <div class="pay2-hero-eyebrow">Al día de hoy · ${formatShortDay(today)}</div>
+      <div class="pay2-hero-amount">S/ ${report.total.toFixed(2)}</div>
+      <div class="pay2-hero-sub">${report.days.length} día${report.days.length === 1 ? '' : 's'} · ${report.totalClassesCounted} clases · ${report.totalStudentsCounted} alumnos</div>
+      ${projHtml}
+    </div>
+    ${alertHtml}
+    ${renderPayByLocationBreakdownPlain(report)}
+    ${emptyHtml}
+    <div class="pay2-days">
+      ${report.days.map(day => renderPayDayCard(day, today, inst.id)).join('')}
+    </div>`;
+}
+
+function renderPayByLocationBreakdownPlain(report) {
+  const allLocs = (STATE.locations || []).filter(l => l.is_active !== false);
+  if (allLocs.length <= 1) return '';
+  const totalAll = Object.values(report.byLocation || {}).reduce((s, e) => s + e.total, 0);
+  if (totalAll <= 0) return '';
+  const rows = allLocs.map(loc => {
+    const e = report.byLocation[loc.id] || { total: 0, classes: 0, students: 0 };
+    const pct = totalAll > 0 ? (e.total / totalAll) * 100 : 0;
+    return { loc, total: e.total, classes: e.classes, pct, color: loc.color || '#7C3AED' };
+  }).sort((a, b) => b.total - a.total);
+  return `
+    <div class="pay2-sede">
+      <div class="pay2-sede-head">
+        <span class="pay2-sede-title">Cobrable por sede</span>
+        <span class="pay2-sede-note">solo lo ya generado</span>
+      </div>
+      ${rows.map(r => `
+        <div class="pay2-sede-row">
+          <div class="pay2-sede-line">
+            <span class="pay2-dot" style="background:${r.color}"></span>
+            <span class="pay2-sede-name">${escape(r.loc.name)}</span>
+            ${r.classes > 0 ? `<span class="pay2-sede-cls">· ${r.classes} clase${r.classes === 1 ? '' : 's'}</span>` : `<span class="pay2-sede-cls is-faint">· sin clases</span>`}
+            <span class="pay2-sede-amt">S/ ${r.total.toFixed(2)}</span>
+          </div>
+          <div class="pay2-bar"><div class="pay2-bar-fill" style="width:${r.pct.toFixed(1)}%; background:${r.color}"></div></div>
+        </div>`).join('')}
+      <div class="pay2-sede-total">
+        <span>Total cobrable</span>
+        <span class="pay2-sede-total-amt">S/ ${totalAll.toFixed(2)}</span>
+      </div>
+    </div>`;
 }
 
 // Vista del coordinador viendo el reporte de un profesor (misma estructura, banner arriba)
@@ -27023,17 +27214,17 @@ function renderPayClassRow(cls, dateIso, instructorId) {
 function shiftPayPeriod(delta) {
   const instId = STATE.payViewPeriodInstId;
   if (!instId) return;
-  const config = getPayConfigFor(instId);
-  const r = shiftPeriod(STATE.payViewPeriodStart, config.period_frequency, delta);
+  const isInstructor = (CURRENT_USER && CURRENT_USER.role === 'instructor');
+  const freq = isInstructor ? (STATE.payViewFreq || 'biweekly') : getPayConfigFor(instId).period_frequency;
+  const r = shiftPeriod(STATE.payViewPeriodStart, freq, delta);
   STATE.payViewPeriodStart = r.start;
   STATE.payViewPeriodEnd = r.end;
   STATE.payViewPeriodLabel = r.label;
-  // Invalidar cache porque el periodo cambió → hay que re-calcular
   STATE.payViewReport = null;
-  if (CURRENT_USER && CURRENT_USER.role === 'coordinator') {
+  if (!isInstructor) {
     showInstructorPayDetail(instId);
   } else {
-    renderInstructorPayView();
+    paintPayData(CURRENT_USER.record); // solo repinta datos (con skeletons), sin recargar la cáscara
   }
 }
 
