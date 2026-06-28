@@ -1500,6 +1500,28 @@
   .inst-sheet-mov-star{ color:#E0A82E; font-size:15px; flex-shrink:0; }
   .inst-sheet-mov-txt{ font-size:12.5px; color:var(--ink); line-height:1.4; }
   .inst-sheet-mov-ago{ color:var(--ink-mute); }
+  .cr-ov{ position:fixed; inset:0; z-index:10060; background:rgba(28,25,34,.5); display:flex; align-items:center; justify-content:center; padding:20px; }
+  .cr-modal{ background:#fff; border-radius:18px; width:min(820px,96vw); max-height:88vh; display:flex; flex-direction:column; overflow:hidden; box-shadow:0 24px 70px rgba(0,0,0,.3); }
+  .cr-head{ display:flex; align-items:center; justify-content:space-between; padding:18px 22px 12px; }
+  .cr-eyebrow{ font-size:10px; letter-spacing:.12em; text-transform:uppercase; color:var(--ink-mute); font-weight:600; }
+  .cr-title{ font-family:var(--display); font-style:italic; font-size:23px; color:var(--fit-purple-deep); }
+  .cr-close{ border:none; background:var(--line-soft,#f2eef8); width:32px; height:32px; border-radius:50%; cursor:pointer; font-size:14px; color:var(--ink-mute); }
+  .cr-toolbar{ padding:0 22px 12px; display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+  .cr-search{ flex:1; min-width:180px; padding:9px 13px; border:1px solid var(--line); border-radius:10px; font-size:13px; font-family:var(--body); }
+  .cr-chips{ display:flex; gap:6px; flex-wrap:wrap; }
+  .cr-chip{ border:1px solid var(--line); background:#fff; color:var(--ink-mute); border-radius:16px; padding:6px 12px; font-size:12px; cursor:pointer; font-family:var(--body); }
+  .cr-chip.is-active{ background:var(--fit-purple); color:#fff; border-color:var(--fit-purple); }
+  .cr-body{ overflow-y:auto; padding:0 22px 18px; }
+  .cr-table{ width:100%; border-collapse:collapse; font-size:13px; }
+  .cr-table thead th{ position:sticky; top:0; background:#fff; text-align:left; padding:9px 10px; font-size:10.5px; letter-spacing:.06em; text-transform:uppercase; color:var(--ink-mute); border-bottom:1px solid var(--line); }
+  .cr-table th.num, .cr-table td.num{ text-align:right; }
+  .cr-table tbody td{ padding:10px; border-bottom:1px solid var(--line-soft,#f2eef8); }
+  .cr-nm{ font-weight:500; }
+  .cr-faltan{ color:var(--ink-mute); font-size:11px; }
+  .cr-proj{ color:var(--fit-purple-deep); font-weight:600; }
+  .cr-muted{ color:var(--ink-mute); }
+  .cr-count{ padding:12px 4px 2px; font-size:11px; color:var(--ink-mute); }
+  .cr-empty{ text-align:center; color:var(--ink-mute); font-size:13px; padding:50px 14px; line-height:1.5; }
   .m-nav-newdot { position: absolute; top: 0; right: 7px; width: 9px; height: 9px; border-radius: 50%; background: #E5484D; border: 2px solid var(--bg); }
   body.role-instructor .main { padding-bottom: calc(56px + env(safe-area-inset-bottom, 0px)); }
 
@@ -3441,6 +3463,7 @@
         <div class="page-sub" id="students-sub">Cargando...</div>
       </div>
       <div class="page-actions">
+        <button class="btn btn-ghost" onclick="openClassReport()">📊 Clases por alumna</button>
         <button class="btn btn-primary" onclick="openStudentModal()">+ Nuevo alumno</button>
       </div>
     </div>
@@ -12981,6 +13004,85 @@ function studentMatchesSearch(student, query) {
 }
 
 function filterStudents() { renderStudents(); }
+
+// ============================================================
+// REPORTE: Clases por alumna (+ proyección de hitos)
+// ============================================================
+const CLASS_MILESTONES_BASE = [10, 25, 50, 100];
+function _nextClassMilestone(total) {
+  for (const m of CLASS_MILESTONES_BASE) { if (total < m) return m; }
+  let m = 150; while (m <= total) m += 50; return m;
+}
+async function openClassReport() {
+  let ov = document.getElementById('class-report-ov');
+  if (ov) ov.remove();
+  ov = document.createElement('div'); ov.id = 'class-report-ov'; ov.className = 'cr-ov';
+  ov.onclick = (e) => { if (e.target === ov) ov.remove(); };
+  ov.innerHTML = `<div class="cr-modal">
+    <div class="cr-head">
+      <div><div class="cr-eyebrow">Reporte</div><div class="cr-title">Clases por alumna</div></div>
+      <button class="cr-close" onclick="document.getElementById('class-report-ov').remove()">✕</button>
+    </div>
+    <div class="cr-toolbar">
+      <input id="cr-search" class="cr-search" placeholder="Buscar alumna..." oninput="renderClassReport()" />
+      <div class="cr-chips" id="cr-chips">
+        <button class="cr-chip is-active" data-f="all" onclick="crSetFilter(this)">Todas</button>
+        <button class="cr-chip" data-f="10" onclick="crSetFilter(this)">≥10</button>
+        <button class="cr-chip" data-f="25" onclick="crSetFilter(this)">≥25</button>
+        <button class="cr-chip" data-f="50" onclick="crSetFilter(this)">≥50</button>
+        <button class="cr-chip" data-f="100" onclick="crSetFilter(this)">≥100</button>
+        <button class="cr-chip" data-f="near" onclick="crSetFilter(this)">✦ Cerca del hito</button>
+      </div>
+    </div>
+    <div class="cr-body" id="cr-body"><div class="cr-empty">Cargando…</div></div>
+  </div>`;
+  document.body.appendChild(ov);
+  STATE._crFilter = 'all';
+  try {
+    const { data, error } = await sb.rpc('report_student_class_counts');
+    if (error) throw error;
+    STATE._crData = (data || []).map(r => ({ ...r, total: Number(r.attended_total) || 0, dates: (r.upcoming_dates || []) }));
+    renderClassReport();
+  } catch (e) {
+    const body = document.getElementById('cr-body');
+    if (body) body.innerHTML = `<div class="cr-empty">No se pudo cargar el reporte.<br><span style="font-size:11px;color:var(--ink-mute)">${escape(e.message || 'error')} — ¿corriste el RPC report_student_class_counts?</span></div>`;
+  }
+}
+function crSetFilter(btn) {
+  document.querySelectorAll('#cr-chips .cr-chip').forEach(c => c.classList.remove('is-active'));
+  btn.classList.add('is-active');
+  STATE._crFilter = btn.dataset.f;
+  renderClassReport();
+}
+function renderClassReport() {
+  const body = document.getElementById('cr-body'); if (!body) return;
+  const q = (document.getElementById('cr-search')?.value || '').toLowerCase().trim();
+  const f = STATE._crFilter || 'all';
+  const locName = (id) => { const l = (STATE.locations || []).find(x => x.id === id); return l ? l.name : '—'; };
+  let rows = (STATE._crData || []).slice();
+  rows.forEach(r => {
+    r._next = _nextClassMilestone(r.total);
+    r._faltan = r._next - r.total;
+    r._proj = (r.dates.length >= r._faltan && r._faltan > 0) ? r.dates[r._faltan - 1] : null;
+  });
+  if (q) rows = rows.filter(r => (`${r.first_name} ${r.last_name || ''}`).toLowerCase().includes(q));
+  if (f === 'near') rows = rows.filter(r => r._faltan <= 3);
+  else if (f !== 'all') rows = rows.filter(r => r.total >= Number(f));
+  rows.sort((a, b) => b.total - a.total);
+  if (!rows.length) { body.innerHTML = '<div class="cr-empty">Sin resultados.</div>'; return; }
+  const fmt = (d) => d ? new Date(d + 'T00:00:00').toLocaleDateString('es-PE', { day: 'numeric', month: 'short' }) : '—';
+  body.innerHTML = `<table class="cr-table"><thead><tr>
+      <th>Alumna</th><th>Sede</th><th class="num">Clases</th><th>Próx. hito</th><th class="num">Agendadas</th><th>Proyección</th>
+    </tr></thead><tbody>${rows.map(r => `<tr>
+      <td class="cr-nm">${escape(r.first_name)} ${escape(r.last_name || '')}</td>
+      <td>${escape(locName(r.location_id))}</td>
+      <td class="num"><b>${r.total}</b></td>
+      <td>${r._next}<span class="cr-faltan"> · faltan ${r._faltan}</span></td>
+      <td class="num">${r.dates.length}</td>
+      <td>${r._proj ? `<span class="cr-proj">${fmt(r._proj)}</span>` : (r.dates.length ? '<span class="cr-muted">faltan agendar</span>' : '<span class="cr-muted">—</span>')}</td>
+    </tr>`).join('')}</tbody></table>
+    <div class="cr-count">${rows.length} alumnas</div>`;
+}
 function setFilter(btn) {
   document.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('is-active'));
   btn.classList.add('is-active');
