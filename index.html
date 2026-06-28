@@ -1703,8 +1703,10 @@
   .inst-stud-pkg-bar { flex: 0 1 auto; display: grid; gap: 2px; height: 5px; min-width: 60px; max-width: 140px; width: 100%; }
   .inst-stud-pkg-seg { height: 5px; border-radius: 1.5px; }
   .inst-stud-pkg-seg.used { background: #97C459; }
+  .inst-stud-pkg-seg.left { background: #E3DAEF; }
   .inst-stud-pkg-seg.warn { background: #E24B4A; }
-  .inst-stud-pkg-label { font-size: 10.5px; color: #A32D2D; font-weight: 500; white-space: nowrap; }
+  .inst-stud-pkg-label { font-size: 10.5px; color: var(--ink-mute); font-weight: 500; white-space: nowrap; }
+  .inst-stud-pkg-label.is-low { color: #A32D2D; }
 
   /* Chip de estado en la línea 1 (Asistió / Confirmada / etc.) */
   .inst-stud-statchip { font-size: 9.5px; font-weight: 500; padding: 2px 7px; border-radius: 999px; white-space: nowrap; display: inline-flex; align-items: center; gap: 3px; }
@@ -19854,27 +19856,36 @@ function renderInstructorStudentRow(item, classCtx) {
   // Para paquetes muy grandes (>14 clases), mostramos solo el contador sin la barra para no saturar.
   let pkgBarHtml = '';
   const pi = item.packageInfo;
-  if (pi && pi.remaining > 0 && pi.remaining <= 2 && pi.total <= 14) {
-    const segs = [];
-    for (let i = 0; i < pi.total; i++) {
-      const cls = (i < pi.used) ? 'used' : 'warn';
-      segs.push(`<div class="inst-stud-pkg-seg ${cls}"></div>`);
-    }
-    pkgBarHtml = `
-      <div class="inst-stud-pkg-wrap">
-        <div class="inst-stud-pkg-bar" style="grid-template-columns: repeat(${pi.total}, 1fr);">
-          ${segs.join('')}
+  if (pi && pi.remaining > 0) {
+    const low = pi.remaining <= 2;
+    if (pi.total <= 14) {
+      const segs = [];
+      for (let i = 0; i < pi.total; i++) {
+        const cls = (i < pi.used) ? 'used' : (low ? 'warn' : 'left');
+        segs.push(`<div class="inst-stud-pkg-seg ${cls}"></div>`);
+      }
+      const label = low
+        ? (pi.remaining === 1 ? 'última clase' : `${pi.remaining} restantes`)
+        : `${pi.remaining} de ${pi.total}`;
+      pkgBarHtml = `
+        <div class="inst-stud-pkg-wrap">
+          <div class="inst-stud-pkg-bar" style="grid-template-columns: repeat(${pi.total}, 1fr);">
+            ${segs.join('')}
+          </div>
+          <span class="inst-stud-pkg-label ${low ? 'is-low' : ''}">${label}</span>
         </div>
-        <span class="inst-stud-pkg-label">${pi.remaining === 1 ? 'última clase' : `${pi.remaining} restantes`}</span>
-      </div>
-    `;
-  } else if (pi && pi.remaining > 0 && pi.remaining <= 2) {
-    // Paquete grande, solo texto
-    pkgBarHtml = `
-      <div class="inst-stud-pkg-wrap">
-        <span class="inst-stud-pkg-label">⚠ ${pi.remaining === 1 ? 'última clase del paquete' : `${pi.remaining} clases restantes del paquete`}</span>
-      </div>
-    `;
+      `;
+    } else {
+      // Paquete grande: solo texto
+      const label = low
+        ? (pi.remaining === 1 ? '⚠ última clase del paquete' : `⚠ ${pi.remaining} clases restantes`)
+        : `${pi.remaining} de ${pi.total} clases`;
+      pkgBarHtml = `
+        <div class="inst-stud-pkg-wrap">
+          <span class="inst-stud-pkg-label ${low ? 'is-low' : ''}">${label}</span>
+        </div>
+      `;
+    }
   }
 
   // Línea de molestias: tags marcados (Lumbalgia, Embarazo…) + notas libres. Se corta con … si es larga.
