@@ -1480,6 +1480,19 @@
   .actf-rxadd{ display:inline-flex; align-items:center; gap:5px; height:28px; padding:0 11px; border-radius:16px; border:1px solid var(--line); background:#fff; color:var(--ink-mute); font-size:12px; font-weight:600; cursor:pointer; box-shadow:0 1px 2px rgba(0,0,0,.05); font-family:var(--body); }
   .actf-rxadd:hover{ background:var(--fit-lavender-pale); color:var(--fit-purple-deep); border-color:var(--fit-purple-soft,#D8C9F2); }
   .actf-who{ font-size:11px; color:var(--ink-mute); margin-top:6px; line-height:1.4; }
+  .actf-hito{ position:relative; overflow:hidden; margin:8px -16px; padding:18px 18px 16px; border-radius:18px; background:linear-gradient(135deg,#FFF7E6 0%,#FDEFD2 52%,#F6E7FB 100%); border:1px solid #F0D9A8; box-shadow:0 8px 26px rgba(214,160,40,.18); }
+  .actf-hito-glow{ position:absolute; top:-46px; right:-34px; width:170px; height:170px; background:radial-gradient(circle,rgba(224,168,46,.34),transparent 70%); pointer-events:none; }
+  .actf-hito-top{ display:flex; align-items:center; gap:9px; margin-bottom:9px; position:relative; }
+  .actf-hito-trophy{ font-size:26px; filter:drop-shadow(0 2px 4px rgba(214,160,40,.45)); }
+  .actf-hito-lead{ font-size:10px; letter-spacing:.14em; text-transform:uppercase; font-weight:700; color:#B8860B; }
+  .actf-hito-title{ font-family:var(--display); font-size:19px; line-height:1.25; color:var(--ink); position:relative; }
+  .actf-hito-title b{ font-weight:700; }
+  .actf-hito-num{ color:#C8870C; font-weight:700; font-style:italic; }
+  .actf-hito-sub{ font-size:12.5px; color:#7a6a52; margin-top:7px; line-height:1.45; position:relative; }
+  .actf-hito-cheer{ font-weight:600; color:#B8860B; }
+  .actf-hito-time{ font-size:11px; color:#a08a66; margin-top:7px; position:relative; }
+  .actf-hito .actf-reacts{ margin-top:12px; position:relative; }
+  .actf-hito .actf-rxadd{ background:rgba(255,255,255,.82); }
   .act-rxsheet-bd{ position:fixed; inset:0; z-index:10050; background:rgba(28,25,34,.42); opacity:0; transition:opacity .2s ease; }
   .act-rxsheet-bd.show{ opacity:1; }
   .act-rxsheet{ position:absolute; left:0; right:0; bottom:0; background:#fff; border-radius:24px 24px 0 0; padding:8px 18px calc(20px + env(safe-area-inset-bottom)); transform:translateY(100%); transition:transform .26s cubic-bezier(.22,1,.36,1); max-height:74vh; overflow-y:auto; }
@@ -13644,6 +13657,39 @@ function renderActivityRow(ev, viewerId, lastSeen) {
   const name = `<b>${escape(ev._name)}</b>`;
   const n = ev.classes_total;
   const pkgN = n ? ` de ${n} clases` : '';
+  const unseen = lastSeen ? (ev.created_at > lastSeen) : true;
+  const rx = (ev._reactions || []).map(r =>
+    `<button class="actf-rx${r.mine ? ' on' : ''}" title="${escape(r.names.join(', '))}" onclick="toggleReaction('${ev.id}','${r.emoji}')"><span class="rxe">${r.emoji}</span><span class="rxc">${r.count}</span></button>`
+  ).join('');
+  const whoLine = (ev._reactions && ev._reactions.length)
+    ? `<div class="actf-who">${ev._reactions.map(r => `${r.emoji} ${escape(r.names.join(', '))}`).join('  ·  ')}</div>` : '';
+  const reactsBlock = `<div class="actf-reacts">${rx}<button class="actf-rxadd" onclick="openReactionSheet('${ev.id}')">+ reaccionar</button></div>${whoLine}`;
+
+  // ── HITO: tarjeta especial, festiva ──────────────────────────────
+  if (ev.type === 'hito') {
+    const profs = ev._profs || [];
+    const hMine = !!(viewerId && profs.some(p => p.id === viewerId));
+    const num = n || CLASS_MILESTONE || 50;
+    let profLine;
+    if (hMine) {
+      const others = profs.filter(p => p.id !== viewerId);
+      profLine = others.length ? `La formaste tú y ${_actNamesColored(others)}.` : 'La formaste tú. 👏';
+    } else if (profs.length) {
+      profLine = `Formada por ${_actNamesColored(profs)}.`;
+    } else { profLine = 'Todo un logro del equipo FIT.'; }
+    return `<div class="actf-hito${hMine ? ' mine' : ''}${unseen ? ' unseen' : ''}">
+      <div class="actf-hito-glow"></div>
+      <div class="actf-hito-top">
+        <div class="actf-hito-trophy">🏆</div>
+        <div class="actf-hito-lead">Hito${hMine ? ' · tú' : ''}</div>
+      </div>
+      <div class="actf-hito-title">${name} llegó a <span class="actf-hito-num">${num}</span> clases en FIT</div>
+      <div class="actf-hito-sub">${profLine} <span class="actf-hito-cheer">¡A celebrarlo! 🎉</span></div>
+      <div class="actf-hito-time">${_actTimeLabel(ev.created_at)}</div>
+      ${reactsBlock}
+    </div>`;
+  }
+
   let lead = '', avatarsHtml = '', text = '', rel = '', mine = false;
 
   if (ev.type === 'renovacion') {
@@ -13687,21 +13733,13 @@ function renderActivityRow(ev, viewerId, lastSeen) {
     rel = ev._coord ? `La registró <span style="color:${ev._coord.color};font-weight:600">${escape(ev._coord.name)}</span>.` : 'Registrada por coordinación.';
   }
 
-  const unseen = lastSeen ? (ev.created_at > lastSeen) : true;
-  const rx = (ev._reactions || []).map(r =>
-    `<button class="actf-rx${r.mine ? ' on' : ''}" title="${escape(r.names.join(', '))}" onclick="toggleReaction('${ev.id}','${r.emoji}')"><span class="rxe">${r.emoji}</span><span class="rxc">${r.count}</span></button>`
-  ).join('');
-  const whoLine = (ev._reactions && ev._reactions.length)
-    ? `<div class="actf-who">${ev._reactions.map(r => `${r.emoji} ${escape(r.names.join(', '))}`).join('  ·  ')}</div>` : '';
-
   return `<div class="actf-row${mine ? ' mine' : ''}${unseen ? ' unseen' : ''}">
     ${avatarsHtml}
     <div class="actf-body">
       <div class="actf-lead">${lead}</div>
       <div class="actf-text">${text}${rel ? ` <span class="actf-rel">${rel}</span>` : ''}</div>
       <div class="actf-time">${_actTimeLabel(ev.created_at)}</div>
-      <div class="actf-reacts">${rx}<button class="actf-rxadd" onclick="openReactionSheet('${ev.id}')">+ reaccionar</button></div>
-      ${whoLine}
+      ${reactsBlock}
     </div>
   </div>`;
 }
@@ -13829,6 +13867,7 @@ async function loadRecentActivityStudents() {
 function _actMovText(mov) {
   const n = mov.classes_total;
   const pkgN = n ? ` de ${n} clases` : '';
+  if (mov.type === 'hito') return `🏆 Llegó a ${n || 50} clases en FIT`;
   if (mov.type === 'renovacion') return `Renovó su paquete${pkgN}`;
   if (mov.type === 'conversion') return `Pasó de prueba a alumna activa${pkgN ? ' —' + pkgN : ''}`;
   return `Se dio de alta${pkgN ? ' —' + pkgN : ''}`;
@@ -13838,6 +13877,53 @@ function _actMovAgo(iso) {
   if (days <= 0) return 'hoy';
   if (days === 1) return 'ayer';
   return `hace ${days} días`;
+}
+
+// Profesores que han formado a la alumna (para premiarlos en el hito)
+async function _studentFrequentInstructors(studentId) {
+  try {
+    const { data: atts } = await sb.from('attendance').select('session_id').eq('student_id', studentId).eq('status', 'attended');
+    const sids = [...new Set((atts || []).map(a => a.session_id).filter(Boolean))];
+    if (!sids.length) return [];
+    const counts = new Map();
+    // En lotes por si son muchas sesiones
+    for (let i = 0; i < sids.length; i += 200) {
+      const chunk = sids.slice(i, i + 200);
+      const { data: sess } = await sb.from('class_sessions').select('id, instructor_id, actual_instructor_id').in('id', chunk);
+      (sess || []).forEach(s => { const iid = s.actual_instructor_id || s.instructor_id; if (iid) counts.set(iid, (counts.get(iid) || 0) + 1); });
+    }
+    let ids = [...counts.entries()].filter(([, c]) => c >= 3).map(([id]) => id);
+    if (!ids.length) ids = [...counts.keys()];
+    ids.sort((a, b) => (counts.get(b) || 0) - (counts.get(a) || 0));
+    return ids.slice(0, 4);
+  } catch (e) { return []; }
+}
+
+// Hito: al marcar asistencia, si la alumna CRUZA las 50 clases por primera vez → evento especial
+async function maybeRecordClassMilestone(studentId) {
+  if (!sb || !studentId) return;
+  try {
+    const { count } = await sb.from('attendance').select('id', { count: 'exact', head: true }).eq('student_id', studentId).eq('status', 'attended');
+    const total = count || 0;
+    if (total !== CLASS_MILESTONE) return;            // solo al cruzar exactamente (no retroactivo)
+    const { count: existing } = await sb.from('studio_activity').select('id', { count: 'exact', head: true }).eq('student_id', studentId).eq('type', 'hito');
+    if (existing && existing > 0) return;             // ya tiene su hito
+    const profIds = await _studentFrequentInstructors(studentId);
+    const stud = (STATE.students || []).find(s => s.id === studentId);
+    await sb.from('studio_activity').insert({
+      type: 'hito',
+      student_id: studentId,
+      student_name: stud ? (stud.first_name || null) : null,
+      classes_total: CLASS_MILESTONE,
+      location_id: (stud && stud.location_id) || null,
+      frequent_instructor_ids: profIds,
+      registered_by: CURRENT_USER?.authUser?.id || null,
+      registered_by_name: (typeof _actMyName === 'function') ? _actMyName() : null,
+      registered_by_color: (typeof _actMyColor === 'function') ? _actMyColor() : null,
+    });
+    if (typeof refreshActivityBadge === 'function') refreshActivityBadge();
+    showToast('🏆 ¡' + (stud?.first_name || 'La alumna') + ' llegó a 50 clases!', 'success');
+  } catch (e) { console.warn('milestone', e); }
 }
 
 function profToggleMenu(btnEl) {
@@ -14256,6 +14342,7 @@ async function markAttendance(studentId, hour, status, notes) {
 
   // 5. Upsert attendance
   const existing = STATE.attendances.find(a => a.booking_id === booking.id);
+  const _prevStatus = existing ? existing.status : null;
 
   // Si la asistencia cuenta contra el paquete, obtener el paquete activo (FIFO) o auto-crear uno
   let pkgId = null;
@@ -14293,6 +14380,11 @@ async function markAttendance(studentId, hour, status, notes) {
       .single();
     if (error) { showToast('Error: ' + error.message, 'error'); return; }
     STATE.attendances.push(data);
+  }
+
+  // Hito de 50 clases (solo asistencia NUEVA, no re-marca)
+  if (status === 'attended' && _prevStatus !== 'attended' && typeof maybeRecordClassMilestone === 'function') {
+    maybeRecordClassMilestone(studentId).catch(() => {});
   }
 
   // 6. Liberar el slot (o re-activar si vuelve a attended/pending)
@@ -20682,6 +20774,11 @@ async function instructorWriteAttendance(studentId, dateIso, hour, locationId, s
 
     // 10. Background: recalc paquete counters (no bloquea)
     recalcPackageCounters(studentId).catch(e => console.warn('recalc bg:', e));
+
+    // 10b. Hito de 50 clases (solo si es asistencia NUEVA, no re-marca)
+    if (status === 'attended' && prevStatus !== 'attended' && typeof maybeRecordClassMilestone === 'function') {
+      maybeRecordClassMilestone(studentId).catch(() => {});
+    }
 
     // 11. Log de actividad (no bloquea)
     try {
