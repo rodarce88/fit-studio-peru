@@ -1477,11 +1477,23 @@
   .actf-rx .rxe{ font-size:17px; }
   .actf-rx .rxc{ font-size:12px; font-weight:600; color:var(--ink-mute); }
   .actf-rx.on .rxc{ color:var(--fit-purple-deep); }
-  .actf-rxadd{ font-size:16px; color:var(--ink-mute); background:none; border:none; cursor:pointer; opacity:.55; padding:0 2px; }
+  .actf-rxadd{ display:inline-flex; align-items:center; gap:5px; height:28px; padding:0 11px; border-radius:16px; border:1px solid var(--line); background:#fff; color:var(--ink-mute); font-size:12px; font-weight:600; cursor:pointer; box-shadow:0 1px 2px rgba(0,0,0,.05); font-family:var(--body); }
+  .actf-rxadd:hover{ background:var(--fit-lavender-pale); color:var(--fit-purple-deep); border-color:var(--fit-purple-soft,#D8C9F2); }
   .actf-who{ font-size:11px; color:var(--ink-mute); margin-top:6px; line-height:1.4; }
-  .act-rxpicker{ position:fixed; z-index:10050; background:#fff; border:1px solid var(--line); border-radius:14px; box-shadow:0 12px 40px rgba(0,0,0,.18); padding:8px; display:flex; flex-wrap:wrap; gap:4px; }
-  .act-rxpicker button{ width:38px; height:38px; border:none; background:none; font-size:21px; border-radius:10px; cursor:pointer; }
-  .act-rxpicker button:hover{ background:var(--fit-lavender-pale); }
+  .act-rxsheet-bd{ position:fixed; inset:0; z-index:10050; background:rgba(28,25,34,.42); opacity:0; transition:opacity .2s ease; }
+  .act-rxsheet-bd.show{ opacity:1; }
+  .act-rxsheet{ position:absolute; left:0; right:0; bottom:0; background:#fff; border-radius:24px 24px 0 0; padding:8px 18px calc(20px + env(safe-area-inset-bottom)); transform:translateY(100%); transition:transform .26s cubic-bezier(.22,1,.36,1); max-height:74vh; overflow-y:auto; }
+  .act-rxsheet-bd.show .act-rxsheet{ transform:translateY(0); }
+  .act-rxsheet-handle{ width:42px; height:4px; border-radius:3px; background:var(--line); margin:6px auto 12px; }
+  .act-rxsheet-head{ display:flex; align-items:center; justify-content:space-between; margin-bottom:4px; }
+  .act-rxsheet-head span{ font-family:var(--display); font-style:italic; font-size:19px; color:var(--fit-purple-deep); }
+  .act-rxsheet-done{ background:var(--fit-lavender-pale); color:var(--fit-purple-deep); border:none; border-radius:11px; padding:8px 18px; font-size:13px; font-weight:600; cursor:pointer; font-family:var(--body); }
+  .act-rxgrp{ margin:14px 0 2px; }
+  .act-rxgrp-lbl{ font-size:10.5px; letter-spacing:.06em; text-transform:uppercase; color:var(--ink-mute); margin-bottom:8px; }
+  .act-rxgrp-ems{ display:flex; flex-wrap:wrap; gap:7px; }
+  .act-rxem{ width:46px; height:46px; border-radius:13px; border:1.5px solid transparent; background:var(--line-soft,#f4f1f8); font-size:24px; cursor:pointer; display:flex; align-items:center; justify-content:center; transition:transform .1s; }
+  .act-rxem:active{ transform:scale(.92); }
+  .act-rxem.on{ background:var(--fit-lavender-pale); border-color:var(--fit-purple,#7C3AED); }
   .m-nav-newdot { position: absolute; top: 0; right: 7px; width: 9px; height: 9px; border-radius: 50%; background: #E5484D; border: 2px solid var(--bg); }
   body.role-instructor .main { padding-bottom: calc(56px + env(safe-area-inset-bottom, 0px)); }
 
@@ -13412,18 +13424,21 @@ function profNavGoto(tab, btnEl) {
       renderInstructorDay();
     }
   } else if (tab === 'week') {
-    // "Semana" abre el date picker nativo para saltar a cualquier fecha
+    // "Semana" muestra la vista de día. El date picker nativo solo se abre si YA
+    // estabas en la vista de día (segundo tap), no al volver desde Actividad/Menú.
+    const wasDay = STATE.instTab === 'day';
     showView('instructor-day', null);
     STATE.instTab = 'day';
-    // Asegurarnos que el input exista (lo crea el render del strip al final del HTML)
     if (!document.getElementById('inst-date-picker') && typeof renderInstructorDay === 'function') {
       renderInstructorDay();
     }
-    setTimeout(() => {
-      if (typeof instructorOpenDatePicker === 'function') {
-        instructorOpenDatePicker({ currentTarget: btnEl || document.querySelector('.mobile-bottom-bar-prof [data-prof-tab="week"]') });
-      }
-    }, 50);
+    if (wasDay) {
+      setTimeout(() => {
+        if (typeof instructorOpenDatePicker === 'function') {
+          instructorOpenDatePicker({ currentTarget: btnEl || document.querySelector('.mobile-bottom-bar-prof [data-prof-tab="week"]') });
+        }
+      }, 50);
+    }
   } else if (tab === 'pay') {
     showView('instructor-pay', null);
     STATE.instTab = 'pay';
@@ -13446,7 +13461,13 @@ function profNavGoto(tab, btnEl) {
 // ============================================================
 // FEED DE ACTIVIDAD — vista, carga, reacciones y badge
 // ============================================================
-const ACT_EMOJIS = ['🎉','👏','💪','🔥','🙌','✨','🧘','🤸','💜','🏆','🥳','🤩','😮','🤯','😂','🙏','🥹','😭'];
+const ACT_EMOJI_GROUPS = [
+  { label: 'Euforia / celebración', emojis: ['🎉','🥳','🙌','👏','💪','🔥','✨','🌟','🏆','💜','🤩','🥰','👑','🚀','💯'] },
+  { label: 'Sorpresa', emojis: ['😮','😲','😱','🤯','👀','😳'] },
+  { label: 'Llanto / pena', emojis: ['😢','😭','💔','🥺','😔','🫠','🥹','🙏'] },
+  { label: 'Chistosos', emojis: ['😂','🤣','😜','🤪','😎','🫡','🙈','💀','🤭'] },
+  { label: 'Pilates / ejercicio', emojis: ['🧘','🤸','🏋️','🤾','🩰','🦵'] },
+];
 
 function _actInstInfo(id) {
   if (!id) return null;
@@ -13575,7 +13596,7 @@ function renderActivityRow(ev, viewerId, lastSeen) {
       <div class="actf-lead">${lead}</div>
       <div class="actf-text">${text}${rel ? ` <span class="actf-rel">${rel}</span>` : ''}</div>
       <div class="actf-time">${_actTimeLabel(ev.created_at)}</div>
-      <div class="actf-reacts">${rx}<button class="actf-rxadd" onclick="openReactionPicker('${ev.id}', this)">+</button></div>
+      <div class="actf-reacts">${rx}<button class="actf-rxadd" onclick="openReactionSheet('${ev.id}')">+ reaccionar</button></div>
       ${whoLine}
     </div>
   </div>`;
@@ -13621,7 +13642,6 @@ async function reloadActivityReactions(activityId) {
 async function toggleReaction(activityId, emoji) {
   if (!sb || !CURRENT_USER) return;
   const uid = CURRENT_USER.authUser?.id; if (!uid) return;
-  closeReactionPicker();
   const ev = (STATE._actFeed || []).find(e => e.id === activityId);
   const grp = ev && (ev._reactions || []).find(r => r.emoji === emoji);
   const mine = grp && grp.mine;
@@ -13634,23 +13654,39 @@ async function toggleReaction(activityId, emoji) {
     await reloadActivityReactions(activityId);
   } catch (e) { console.warn('reaction', e); }
 }
-function openReactionPicker(activityId, btn) {
-  closeReactionPicker();
-  const p = document.createElement('div');
-  p.id = 'act-reaction-picker'; p.className = 'act-rxpicker';
-  p.innerHTML = ACT_EMOJIS.map(e => `<button onclick="toggleReaction('${activityId}','${e}')">${e}</button>`).join('');
-  document.body.appendChild(p);
-  const r = btn.getBoundingClientRect();
-  const w = Math.min(300, window.innerWidth - 24);
-  let left = r.left; if (left + w > window.innerWidth - 12) left = window.innerWidth - 12 - w;
-  p.style.left = Math.max(12, left) + 'px';
-  p.style.top = (r.top - 8) + 'px';
-  p.style.transform = 'translateY(-100%)';
-  p.style.width = w + 'px';
-  setTimeout(() => document.addEventListener('click', _rxPickerOutside, { once: true }), 0);
+
+function reactionSheetGrid(activityId) {
+  const ev = (STATE._actFeed || []).find(e => e.id === activityId);
+  const mineSet = new Set((ev && ev._reactions || []).filter(r => r.mine).map(r => r.emoji));
+  return ACT_EMOJI_GROUPS.map(g => `
+    <div class="act-rxgrp">
+      <div class="act-rxgrp-lbl">${g.label}</div>
+      <div class="act-rxgrp-ems">${g.emojis.map(e => `<button class="act-rxem${mineSet.has(e) ? ' on' : ''}" onclick="sheetToggle('${activityId}','${e}')">${e}</button>`).join('')}</div>
+    </div>`).join('');
 }
-function _rxPickerOutside(e){ const p=document.getElementById('act-reaction-picker'); if(p && !p.contains(e.target)) closeReactionPicker(); }
-function closeReactionPicker() { const p = document.getElementById('act-reaction-picker'); if (p) p.remove(); }
+function openReactionSheet(activityId) {
+  closeReactionSheet();
+  const bd = document.createElement('div');
+  bd.id = 'act-rxsheet-bd'; bd.className = 'act-rxsheet-bd';
+  bd.dataset.act = activityId;
+  bd.onclick = (e) => { if (e.target === bd) closeReactionSheet(); };
+  bd.innerHTML = `<div class="act-rxsheet">
+    <div class="act-rxsheet-handle"></div>
+    <div class="act-rxsheet-head"><span>Reaccionar</span><button class="act-rxsheet-done" onclick="closeReactionSheet()">Listo</button></div>
+    <div class="act-rxsheet-body" id="act-rxsheet-grid">${reactionSheetGrid(activityId)}</div>
+  </div>`;
+  document.body.appendChild(bd);
+  requestAnimationFrame(() => bd.classList.add('show'));
+}
+async function sheetToggle(activityId, emoji) {
+  await toggleReaction(activityId, emoji);
+  const grid = document.getElementById('act-rxsheet-grid');
+  if (grid) grid.innerHTML = reactionSheetGrid(activityId);
+}
+function closeReactionSheet() {
+  const bd = document.getElementById('act-rxsheet-bd');
+  if (bd) { bd.classList.remove('show'); setTimeout(() => bd.remove(), 220); }
+}
 
 function markActivitySeen() {
   try { localStorage.setItem('fit_activity_seen_' + (CURRENT_USER?.record?.id || 'x'), new Date().toISOString()); } catch (e) {}
