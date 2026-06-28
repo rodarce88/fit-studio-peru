@@ -17741,19 +17741,16 @@ function _statRing(pct, color) {
 async function loadSedeOccupancyFor(locationId, startIso, endIso) {
   const empty = { ocupacion: 0, asistencias: 0, capacidad: 0 };
   if (!isOnline || !locationId) return empty;
-  const { data: sessions } = await sb.from('class_sessions')
-    .select('id').eq('location_id', locationId)
-    .gte('session_date', startIso).lte('session_date', endIso)
-    .eq('is_cancelled', false).eq('class_status', 'delivered');
-  if (!sessions || !sessions.length) return empty;
-  const ids = sessions.map(s => s.id);
-  const { data: atts } = await sb.from('attendance').select('session_id, status').in('session_id', ids).eq('status', 'attended');
-  const bySession = new Map();
-  (atts || []).forEach(a => bySession.set(a.session_id, (bySession.get(a.session_id) || 0) + 1));
-  const l = (STATE.locations || []).find(x => x.id === locationId); const cap = l && l.capacity ? l.capacity : 0;
-  let asistencias = 0, capacidad = 0;
-  for (const s of sessions) { const att = bySession.get(s.id) || 0; if (att >= 1) { asistencias += att; capacidad += cap; } }
-  return { ocupacion: capacidad > 0 ? Math.round(asistencias / capacidad * 100) : 0, asistencias, capacidad };
+  // Vía RPC SECURITY DEFINER: calcula sobre TODOS los profesores (el RLS no deja
+  // ver clases ajenas desde el cliente, por eso no se puede sumar la sede aquí).
+  try {
+    const { data, error } = await sb.rpc('instructor_sede_occupancy', { p_location: locationId, p_start: startIso, p_end: endIso });
+    if (error || !data || !data.length) return empty;
+    const r = data[0] || {};
+    return { ocupacion: r.ocupacion || 0, asistencias: r.asistencias || 0, capacidad: r.capacidad || 0 };
+  } catch (e) {
+    return empty;
+  }
 }
 async function renderInstructorStatsSection() {
   const cont = document.getElementById('prof-stats-section');
