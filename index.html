@@ -1433,18 +1433,18 @@
     backdrop-filter: saturate(160%) blur(18px);
     border: none; border-top: 1px solid var(--line);
     border-radius: 0;
-    padding: 5px 6px calc(6px + env(safe-area-inset-bottom, 0px));
+    padding: 3px 6px calc(2px + env(safe-area-inset-bottom, 0px));
     box-shadow: 0 -6px 20px -14px rgba(60, 52, 137, 0.18);
   }
-  body.role-instructor .mobile-bottom-bar-prof .m-nav-item { color: var(--ink-mute); border-radius: 12px; padding: 4px 12px; gap: 1px; }
+  body.role-instructor .mobile-bottom-bar-prof .m-nav-item { color: var(--ink-mute); border-radius: 12px; padding: 2px 12px; gap: 1px; }
   body.role-instructor .mobile-bottom-bar-prof .m-nav-item:hover { color: var(--fit-purple); }
   body.role-instructor .mobile-bottom-bar-prof .m-nav-item.is-active { color: var(--fit-purple); background: transparent; }
   body.role-instructor .mobile-bottom-bar-prof .m-nav-item svg { width: 18px; height: 18px; }
-  body.role-instructor .mobile-bottom-bar-prof .m-nav-item span { font-size: 9.5px; }
+  body.role-instructor .mobile-bottom-bar-prof .m-nav-item span { font-size: 9.5px; line-height: 1.1; }
   body.role-instructor .mobile-bottom-bar-prof .m-nav-next { color: var(--fit-purple); }
   body.role-instructor .mobile-bottom-bar-prof .m-nav-next svg { stroke-width: 2.1; }
-  .m-nav-newdot { position: absolute; top: 1px; right: 7px; width: 9px; height: 9px; border-radius: 50%; background: #E5484D; border: 2px solid var(--bg); }
-  body.role-instructor .main { padding-bottom: calc(64px + env(safe-area-inset-bottom, 0px)); }
+  .m-nav-newdot { position: absolute; top: 0; right: 7px; width: 9px; height: 9px; border-radius: 50%; background: #E5484D; border: 2px solid var(--bg); }
+  body.role-instructor .main { padding-bottom: calc(56px + env(safe-area-inset-bottom, 0px)); }
 
   /* ===== Card "tu próxima clase" en el Menú — full-width tipo notificación del SO ===== */
   .mob-prof-next-os { width: 100%; display: flex; align-items: center; gap: 14px; border: none; border-radius: 18px; padding: 15px 16px; cursor: pointer; text-align: left; color: #fff; box-shadow: 0 12px 28px -14px rgba(60, 52, 137, 0.55); font-family: var(--body); }
@@ -1467,26 +1467,38 @@
   @keyframes inst-hour-flash { 0%, 100% { box-shadow: 0 4px 16px rgba(91, 42, 143, 0.1); } 28% { box-shadow: 0 0 0 3px var(--fit-purple-soft), 0 10px 24px rgba(91, 42, 143, 0.22); } }
 
   /* ===== Sección Estadísticas (menú del profesor) ===== */
-  .mob-stats-head { display: flex; align-items: center; justify-content: space-between; padding: 18px 20px 10px; gap: 10px; }
+  .mob-stats-head { display: flex; align-items: center; justify-content: space-between; padding: 18px 20px 6px; gap: 10px; }
   .mob-stats-head-l { display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--ink-mute); text-transform: lowercase; letter-spacing: 0.02em; }
   .mob-stats-new { font-size: 8.5px; letter-spacing: 0.06em; text-transform: uppercase; color: #fff; background: #E5484D; border-radius: 999px; padding: 2px 7px; font-weight: 600; }
   .mob-stats-seg { display: inline-flex; background: var(--fit-lavender-pale); border-radius: 999px; padding: 2px; gap: 2px; }
   .mob-stats-seg button { border: none; background: transparent; color: var(--ink-mute); font-size: 11px; font-weight: 500; padding: 5px 12px; border-radius: 999px; cursor: pointer; font-family: var(--body); }
   .mob-stats-seg button.is-active { background: #fff; color: var(--fit-purple); box-shadow: 0 1px 3px rgba(60, 52, 137, 0.12); }
-  #prof-stats-section { padding: 0 12px 6px; }
-  .mob-stats-2col { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-  .mob-stat-card { background: #fff; border: 1px solid var(--line); border-radius: 14px; padding: 13px 15px; margin-bottom: 10px; }
-  .mob-stat-card-top { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
-  .mob-stat-label { font-size: 10.5px; color: var(--ink-mute); text-transform: uppercase; letter-spacing: 0.04em; }
-  .mob-stat-value { font-family: var(--display); font-style: italic; font-size: 30px; color: var(--fit-purple-deep); line-height: 1; }
-  .mob-stat-sub { font-size: 11.5px; color: var(--ink-soft); margin-top: 5px; }
-  .mob-stat-delta { font-size: 10.5px; font-weight: 600; padding: 2px 8px; border-radius: 999px; white-space: nowrap; }
-  .mob-stat-delta.up { color: #1d7a4d; background: #E6F4EC; }
-  .mob-stat-delta.down { color: #b0344b; background: #FBE9EC; }
-  .mob-stat-delta.flat { color: var(--ink-mute); background: var(--fit-lavender-pale); }
-  .mob-stat-bar { height: 7px; background: var(--fit-lavender-pale); border-radius: 999px; overflow: hidden; margin-top: 9px; }
-  .mob-stat-bar-fill { height: 100%; border-radius: 999px; background: linear-gradient(90deg, var(--fit-purple), var(--fit-purple-deep)); transition: width 0.4s ease; }
-  .mob-stat-goal { font-size: 11px; color: var(--ink-mute); margin-top: 7px; display: flex; justify-content: space-between; gap: 8px; }
+  .mob-stats-period { padding: 0 20px 6px; font-size: 11.5px; color: var(--ink-soft); }
+  .mob-stats-period b { color: var(--ink); font-weight: 600; }
+  #prof-stats-section { padding: 0 20px 8px; }
+  /* filas planas (sin cards) */
+  .mob-stat-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 14px 0; border-top: 1px solid var(--line-soft); cursor: pointer; }
+  .mob-stat-rowwrap:first-child .mob-stat-row { border-top: none; }
+  .mob-stat-k { font-size: 11px; color: var(--ink-mute); text-transform: uppercase; letter-spacing: 0.04em; }
+  .mob-stat-n { font-family: var(--display); font-style: italic; font-size: 30px; color: var(--fit-purple-deep); line-height: 1; margin-top: 5px; display: flex; align-items: baseline; gap: 9px; }
+  .mob-stat-n small { font-size: 12.5px; font-style: normal; font-family: var(--body); color: var(--ink-soft); }
+  .mob-stat-delta { font-size: 12px; font-weight: 600; }
+  .mob-stat-delta.up { color: #1d7a4d; }
+  .mob-stat-delta.down { color: #b0344b; }
+  .mob-stat-delta.flat { color: var(--ink-mute); }
+  .mob-stat-info { width: 18px; height: 18px; flex-shrink: 0; border-radius: 50%; border: 1px solid var(--line); color: var(--ink-mute); font-size: 11px; line-height: 1; display: flex; align-items: center; justify-content: center; margin-top: 2px; font-style: italic; font-family: var(--display); }
+  .mob-stat-detail { font-size: 11.5px; color: var(--ink-soft); line-height: 1.55; padding: 0 0 12px; display: none; }
+  .mob-stat-detail.is-open { display: block; }
+  /* anillos de ocupación (círculos) */
+  .mob-stat-rings { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 14px 0 6px; border-top: 1px solid var(--line-soft); }
+  .mob-ring { display: flex; flex-direction: column; align-items: center; gap: 7px; cursor: pointer; text-align: center; }
+  .mob-ring-lbl { font-size: 11px; color: var(--ink-mute); line-height: 1.3; }
+  .mob-ring-lbl b { display: block; color: var(--ink); font-weight: 600; font-size: 11.5px; margin-bottom: 1px; }
+  /* barra (retención) con marca de meta */
+  .mob-stat-bar { height: 8px; background: var(--fit-lavender-pale); border-radius: 999px; overflow: visible; margin-top: 10px; position: relative; }
+  .mob-stat-bar-fill { height: 100%; border-radius: 999px; background: var(--fit-purple); transition: width 0.4s ease; }
+  .mob-stat-bar-meta { position: absolute; top: -3px; bottom: -3px; width: 2px; background: var(--ink-soft); border-radius: 2px; }
+  .mob-stat-goal { font-size: 11px; color: var(--ink-mute); margin-top: 8px; display: flex; justify-content: space-between; gap: 8px; }
 
   .inst-month-day { flex: 0 0 auto; min-width: calc(54px - 12px * var(--t)); scroll-snap-align: center; background: none; border: none; border-radius: 0; padding: 4px 4px calc(10px - 3px * var(--t)); text-align: center; cursor: pointer; position: relative; user-select: none; -webkit-tap-highlight-color: transparent; font-family: inherit; }
   .inst-month-day.is-past { opacity: 0.45; }
@@ -13338,10 +13350,6 @@ function profOpenMenu(btnEl) {
   if (menuBtn) menuBtn.classList.add('is-active');
   updateMobileProfMenuData();
   if (typeof renderInstructorStatsSection === 'function') renderInstructorStatsSection();
-  // Marcar la sección nueva como vista y ocultar el punto rojo
-  try { localStorage.setItem('profStatsSeen', '1'); } catch (e) {}
-  const _newDot = document.getElementById('prof-menu-newdot');
-  if (_newDot) _newDot.style.display = 'none';
 }
 
 function profCloseMenu() {
@@ -17653,9 +17661,14 @@ async function instructorGoToNextClass() {
 function updateProfNewBadge() {
   const dot = document.getElementById('prof-menu-newdot');
   if (!dot) return;
-  let seen = false;
-  try { seen = localStorage.getItem('profStatsSeen') === '1'; } catch (e) {}
-  dot.style.display = seen ? 'none' : 'block';
+  let start = null;
+  try {
+    start = localStorage.getItem('profStatsDotStart');
+    if (!start) { start = String(Date.now()); localStorage.setItem('profStatsDotStart', start); }
+  } catch (e) {}
+  let show = true;
+  if (start) { const days = (Date.now() - Number(start)) / 86400000; show = days < 7; }
+  dot.style.display = show ? 'block' : 'none';
 }
 function instSetStatsMode(mode) {
   STATE.instStatsMode = mode;
@@ -17713,6 +17726,35 @@ async function loadInstructorStatsFor(instructorId, startIso, endIso) {
   const retencion = frecuentesIds.length ? Math.round((retenidas / frecuentesIds.length) * 100) : 0;
   return { clases, asistencias, alumnas: uniq.size, capacidad, ocupacion, frecuentes: frecuentesIds.length, retenidas, retencion };
 }
+function instStatToggle(key) {
+  const el = document.getElementById('stat-detail-' + key);
+  if (el) el.classList.toggle('is-open');
+}
+function _statRing(pct, color) {
+  const r = 26, c = 2 * Math.PI * r, off = c * (1 - Math.min(100, Math.max(0, pct)) / 100);
+  return `<svg width="74" height="74" viewBox="0 0 64 64" aria-hidden="true">
+    <circle cx="32" cy="32" r="${r}" fill="none" stroke="var(--fit-lavender-pale)" stroke-width="7"/>
+    <circle cx="32" cy="32" r="${r}" fill="none" stroke="${color}" stroke-width="7" stroke-linecap="round" stroke-dasharray="${c.toFixed(1)}" stroke-dashoffset="${off.toFixed(1)}" transform="rotate(-90 32 32)"/>
+    <text x="32" y="37" text-anchor="middle" font-family="var(--display)" font-style="italic" font-size="18" fill="var(--fit-purple-deep)">${pct}%</text>
+  </svg>`;
+}
+async function loadSedeOccupancyFor(locationId, startIso, endIso) {
+  const empty = { ocupacion: 0, asistencias: 0, capacidad: 0 };
+  if (!isOnline || !locationId) return empty;
+  const { data: sessions } = await sb.from('class_sessions')
+    .select('id').eq('location_id', locationId)
+    .gte('session_date', startIso).lte('session_date', endIso)
+    .eq('is_cancelled', false).eq('class_status', 'delivered');
+  if (!sessions || !sessions.length) return empty;
+  const ids = sessions.map(s => s.id);
+  const { data: atts } = await sb.from('attendance').select('session_id, status').in('session_id', ids).eq('status', 'attended');
+  const bySession = new Map();
+  (atts || []).forEach(a => bySession.set(a.session_id, (bySession.get(a.session_id) || 0) + 1));
+  const l = (STATE.locations || []).find(x => x.id === locationId); const cap = l && l.capacity ? l.capacity : 0;
+  let asistencias = 0, capacidad = 0;
+  for (const s of sessions) { const att = bySession.get(s.id) || 0; if (att >= 1) { asistencias += att; capacidad += cap; } }
+  return { ocupacion: capacidad > 0 ? Math.round(asistencias / capacidad * 100) : 0, asistencias, capacidad };
+}
 async function renderInstructorStatsSection() {
   const cont = document.getElementById('prof-stats-section');
   if (!cont) return;
@@ -17728,58 +17770,75 @@ async function renderInstructorStatsSection() {
   const iso = d => dateToIsoLocal(d);
   const moShort = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
   const moLong = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
-  const periodLabel = mode === 'mes' ? moLong[m] : `${kind === 'q1' ? '1–15' : '16–fin'} ${moShort[m]}`;
+  const lblOf = (yy, mm) => mode === 'mes' ? `${moLong[mm]} ${yy}` : `${kind === 'q1' ? '1\u201315' : '16\u2013fin'} ${moShort[mm]} ${yy}`;
+  const curLabel = lblOf(y, m), prevLabel = lblOf(pm.getFullYear(), pm.getMonth());
+  const locId = STATE.currentLocationId;
+  const sedeName = (STATE.locations || []).find(l => l.id === locId)?.name || 'tu sede';
 
-  cont.innerHTML = '<div class="mob-prof-next-empty">Cargando estadísticas…</div>';
-  let c, p;
+  cont.innerHTML = '<div class="mob-prof-next-empty">Cargando estad\u00edsticas\u2026</div>';
+  let c, p, sedeC, sedeP;
   try {
-    [c, p] = await Promise.all([
+    [c, p, sedeC, sedeP] = await Promise.all([
       loadInstructorStatsFor(inst.id, iso(cur.start), iso(cur.end)),
       loadInstructorStatsFor(inst.id, iso(prev.start), iso(prev.end)),
+      loadSedeOccupancyFor(locId, iso(cur.start), iso(cur.end)),
+      loadSedeOccupancyFor(locId, iso(prev.start), iso(prev.end)),
     ]);
   } catch (e) {
-    cont.innerHTML = '<div class="mob-prof-next-empty">No se pudieron cargar las estadísticas.</div>';
+    cont.innerHTML = '<div class="mob-prof-next-empty">No se pudieron cargar las estad\u00edsticas.</div>';
     return;
   }
 
-  const delta = (a, b, unit) => {
-    const d = a - b;
-    const cls = d > 0 ? 'up' : (d < 0 ? 'down' : 'flat');
-    const arrow = d > 0 ? '▲' : (d < 0 ? '▼' : '·');
-    return `<span class="mob-stat-delta ${cls}">${arrow} ${Math.abs(d)}${unit === 'pp' ? ' pp' : ''}</span>`;
-  };
+  const dl = (a, b, unit) => { const d = a - b; const cls = d > 0 ? 'up' : (d < 0 ? 'down' : 'flat'); const ar = d > 0 ? '\u25B2' : (d < 0 ? '\u25BC' : '\u2014'); return `<span class="mob-stat-delta ${cls}">${ar} ${Math.abs(d)}${unit === 'pp' ? ' pp' : ''}</span>`; };
+  const dWord = (a, b, unit) => { const d = a - b; const u = unit === 'pp' ? ' puntos' : ''; if (d > 0) return `${d}${u} m\u00e1s que ${prevLabel}`; if (d < 0) return `${Math.abs(d)}${u} menos que ${prevLabel}`; return `igual que ${prevLabel}`; };
   const META = 75;
-  const retGrad = c.retencion >= META ? 'linear-gradient(90deg,#2EA66B,#1d7a4d)' : 'linear-gradient(90deg,var(--fit-purple),var(--fit-purple-deep))';
+  const retColor = c.retencion >= META ? '#2EA66B' : 'var(--fit-purple)';
+
   cont.innerHTML = `
-    <div class="mob-stats-2col">
-      <div class="mob-stat-card">
-        <div class="mob-stat-label">Clases dictadas</div>
-        <div class="mob-stat-card-top"><div class="mob-stat-value">${c.clases}</div>${delta(c.clases, p.clases)}</div>
-        <div class="mob-stat-sub">con ≥1 alumno · ${periodLabel}</div>
+    <div class="mob-stats-period" style="padding: 0 0 10px;">Evaluando <b>${curLabel}</b></div>
+
+    <div class="mob-stat-rowwrap">
+      <div class="mob-stat-row" onclick="instStatToggle('clases')">
+        <div><div class="mob-stat-k">Clases dictadas</div>
+          <div class="mob-stat-n">${c.clases} ${dl(c.clases, p.clases)}</div></div>
+        <div class="mob-stat-info">i</div>
       </div>
-      <div class="mob-stat-card">
-        <div class="mob-stat-label">Atendidos</div>
-        <div class="mob-stat-card-top"><div class="mob-stat-value">${c.asistencias}</div>${delta(c.asistencias, p.asistencias)}</div>
-        <div class="mob-stat-sub">${c.alumnas} alumna${c.alumnas === 1 ? '' : 's'} únicas</div>
+      <div class="mob-stat-detail" id="stat-detail-clases">Clases que dictaste con al menos 1 alumno presente, en ${curLabel}. El ${dl(c.clases, p.clases)} significa ${dWord(c.clases, p.clases)}.</div>
+    </div>
+
+    <div class="mob-stat-rowwrap">
+      <div class="mob-stat-row" onclick="instStatToggle('atend')">
+        <div><div class="mob-stat-k">Alumnos atendidos</div>
+          <div class="mob-stat-n">${c.asistencias} ${dl(c.asistencias, p.asistencias)} <small>${c.alumnas} \u00fanicas</small></div></div>
+        <div class="mob-stat-info">i</div>
+      </div>
+      <div class="mob-stat-detail" id="stat-detail-atend">Total de asistencias (alumnas con estado \u201Casisti\u00f3\u201D) en tus clases. Las ${c.alumnas} \u00fanicas son personas distintas; no cuentan recuperables ni faltas. ${dWord(c.asistencias, p.asistencias)}.</div>
+    </div>
+
+    <div class="mob-stat-rings">
+      <div class="mob-ring" onclick="instStatToggle('ocuptu')">
+        ${_statRing(c.ocupacion, 'var(--fit-purple)')}
+        <div class="mob-ring-lbl"><b>Tu ocupaci\u00f3n</b>${dl(c.ocupacion, p.ocupacion, 'pp')}</div>
+      </div>
+      <div class="mob-ring" onclick="instStatToggle('ocupsede')">
+        ${_statRing(sedeC.ocupacion, '#C89B4F')}
+        <div class="mob-ring-lbl"><b>${escape(sedeName)}</b>${dl(sedeC.ocupacion, sedeP.ocupacion, 'pp')}</div>
       </div>
     </div>
-    <div class="mob-stat-card">
-      <div class="mob-stat-card-top">
-        <div class="mob-stat-label">Tasa de ocupación</div>
-        ${delta(c.ocupacion, p.ocupacion, 'pp')}
+    <div class="mob-stat-detail" id="stat-detail-ocuptu" style="padding-top: 4px;">Tu ocupaci\u00f3n personal: de los cupos de TUS clases (capacidad por sede), cu\u00e1ntos se llenaron \u2014 ${c.asistencias} asistencias de ${c.capacidad} cupos. ${dWord(c.ocupacion, p.ocupacion, 'pp')}.</div>
+    <div class="mob-stat-detail" id="stat-detail-ocupsede" style="padding-top: 4px;">Ocupaci\u00f3n de toda la sede ${escape(sedeName)} (todos los profesores juntos) en ${curLabel}: ${sedeC.asistencias} asistencias de ${sedeC.capacidad} cupos. ${dWord(sedeC.ocupacion, sedeP.ocupacion, 'pp')}.</div>
+
+    <div class="mob-stat-rowwrap">
+      <div class="mob-stat-row" onclick="instStatToggle('ret')">
+        <div style="flex: 1; min-width: 0;">
+          <div class="mob-stat-k">Retenci\u00f3n de alumnos ${dl(c.retencion, p.retencion, 'pp')}</div>
+          <div class="mob-stat-n" style="margin-top: 6px;">${c.retencion}%</div>
+          <div class="mob-stat-bar"><div class="mob-stat-bar-fill" style="width: ${Math.min(100, c.retencion)}%; background: ${retColor};"></div><div class="mob-stat-bar-meta" style="left: ${META}%;"></div></div>
+          <div class="mob-stat-goal"><span>${c.retenidas} de ${c.frecuentes} frecuentes (\u22653 clases)</span><span>meta ${META}%</span></div>
+        </div>
+        <div class="mob-stat-info">i</div>
       </div>
-      <div class="mob-stat-value" style="margin-top: 5px;">${c.ocupacion}%</div>
-      <div class="mob-stat-bar"><div class="mob-stat-bar-fill" style="width: ${Math.min(100, c.ocupacion)}%;"></div></div>
-      <div class="mob-stat-sub">${c.asistencias} asistencias de ${c.capacidad} cupos · período anterior ${p.ocupacion}%</div>
-    </div>
-    <div class="mob-stat-card">
-      <div class="mob-stat-card-top">
-        <div class="mob-stat-label">Retención de alumnos</div>
-        ${delta(c.retencion, p.retencion, 'pp')}
-      </div>
-      <div class="mob-stat-value" style="margin-top: 5px;">${c.retencion}%</div>
-      <div class="mob-stat-bar"><div class="mob-stat-bar-fill" style="width: ${Math.min(100, c.retencion)}%; background: ${retGrad};"></div></div>
-      <div class="mob-stat-goal"><span>${c.retenidas} de ${c.frecuentes} frecuentes (≥3 clases)</span><span>meta ${META}%</span></div>
+      <div class="mob-stat-detail" id="stat-detail-ret">De tus alumnas frecuentes (\u22653 clases contigo en ${curLabel}), cu\u00e1ntas siguen activas o renovaron su paquete. La marca en la barra es la meta de ${META}%. ${dWord(c.retencion, p.retencion, 'pp')}.</div>
     </div>
   `;
 }
