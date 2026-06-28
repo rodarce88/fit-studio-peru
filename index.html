@@ -1424,6 +1424,44 @@
   body.role-instructor.inst-scrolled .topbar { border-bottom-color: transparent; }
   body.role-instructor [data-inst-daystrip] { display: contents; }
 
+  /* ===== Barra inferior del profesor: estática y elegante (estilo Andrés, colores del profesor) ===== */
+  body.role-instructor .mobile-bottom-bar-prof { bottom: 0; left: 0; right: 0; gap: 0; padding: 0; }
+  body.role-instructor .mobile-bottom-bar-prof .mobile-bottom-nav,
+  html.is-ios body.role-instructor .mobile-bottom-bar-prof .mobile-bottom-nav {
+    background: rgba(251, 250, 252, 0.96);
+    -webkit-backdrop-filter: saturate(160%) blur(18px);
+    backdrop-filter: saturate(160%) blur(18px);
+    border: none; border-top: 1px solid var(--line);
+    border-radius: 0;
+    padding: 9px 6px calc(10px + env(safe-area-inset-bottom, 0px));
+    box-shadow: 0 -6px 20px -14px rgba(60, 52, 137, 0.18);
+  }
+  body.role-instructor .mobile-bottom-bar-prof .m-nav-item { color: var(--ink-mute); border-radius: 12px; }
+  body.role-instructor .mobile-bottom-bar-prof .m-nav-item:hover { color: var(--fit-purple); }
+  body.role-instructor .mobile-bottom-bar-prof .m-nav-item.is-active { color: var(--fit-purple); background: transparent; }
+  body.role-instructor .mobile-bottom-bar-prof .m-nav-item span { font-size: 10px; }
+  body.role-instructor .main { padding-bottom: calc(78px + env(safe-area-inset-bottom, 0px)); }
+
+  /* ===== Card "tu próxima clase" en el Menú — full-width tipo notificación del SO ===== */
+  .mob-prof-next-os { width: 100%; display: flex; align-items: center; gap: 14px; border: none; border-radius: 18px; padding: 15px 16px; cursor: pointer; text-align: left; color: #fff; box-shadow: 0 12px 28px -14px rgba(60, 52, 137, 0.55); font-family: var(--body); }
+  .mob-prof-next-os:active { transform: scale(0.985); }
+  .mob-prof-next-os .mpn-time { font-family: var(--display); font-style: italic; font-size: 27px; line-height: 1; flex-shrink: 0; }
+  .mob-prof-next-os .mpn-div { width: 1px; align-self: stretch; background: rgba(255, 255, 255, 0.22); margin: 2px 0; }
+  .mob-prof-next-os .mpn-tag { font-size: 9.5px; letter-spacing: 0.12em; text-transform: uppercase; color: rgba(255, 255, 255, 0.64); }
+  .mob-prof-next-os .mpn-line { font-size: 13px; color: #fff; margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .mob-prof-next-os .mpn-chev { margin-left: auto; color: rgba(255, 255, 255, 0.7); font-size: 20px; flex-shrink: 0; }
+
+  /* Overlay de navegación a la próxima clase */
+  .inst-go-overlay { position: fixed; inset: 0; z-index: 400; display: flex; align-items: center; justify-content: center; background: rgba(251, 250, 252, 0.62); -webkit-backdrop-filter: blur(2px); backdrop-filter: blur(2px); opacity: 0; transition: opacity 0.18s ease; pointer-events: none; }
+  .inst-go-overlay.is-on { opacity: 1; pointer-events: auto; }
+  .inst-go-spinner { width: 30px; height: 30px; border-radius: 50%; border: 3px solid var(--fit-lavender); border-top-color: var(--fit-purple); animation: inst-go-spin 0.7s linear infinite; }
+  @keyframes inst-go-spin { to { transform: rotate(360deg); } }
+
+  /* Flash al abrir la tarjeta destino + margen para que el header fijo no la tape */
+  .inst-hour-card { scroll-margin-top: calc(var(--topbar-h) + 92px); }
+  .inst-hour-card.inst-hour-flash { animation: inst-hour-flash 1.3s ease; }
+  @keyframes inst-hour-flash { 0%, 100% { box-shadow: 0 4px 16px rgba(91, 42, 143, 0.1); } 28% { box-shadow: 0 0 0 3px var(--fit-purple-soft), 0 10px 24px rgba(91, 42, 143, 0.22); } }
+
   .inst-month-day { flex: 0 0 auto; min-width: calc(54px - 12px * var(--t)); scroll-snap-align: center; background: none; border: none; border-radius: 0; padding: 4px 4px calc(10px - 3px * var(--t)); text-align: center; cursor: pointer; position: relative; user-select: none; -webkit-tap-highlight-color: transparent; font-family: inherit; }
   .inst-month-day.is-past { opacity: 0.45; }
   .inst-month-day.is-adjacent { opacity: 0.4; }
@@ -4745,8 +4783,7 @@ body:not(.doctor-mode) .doc-bottomnav{ display:none; }
     </div>
   </div>
 
-  <div class="mob-menu-section-label">tu próxima clase</div>
-  <div class="mob-prof-next-wrap" id="prof-menu-next-wrap" onclick="profMenuJumpToNext()" style="margin: 4px 20px 6px; cursor: pointer;">
+  <div class="mob-prof-next-wrap" id="prof-menu-next-wrap" style="margin: 12px 12px 8px;">
     <div id="prof-menu-next-slot">
       <div class="mob-prof-next-empty">Cargando…</div>
     </div>
@@ -13342,16 +13379,27 @@ function updateMobileProfMenuData() {
     }
   } catch (e) { console.warn('[prof-menu] header', e); }
 
-  // Tu próxima clase: clonar el HTML del .inst-next-card que ya rendea renderInstructorNextClassBlock
-  // (incluye tag, time, info, footer con proyectado y paquetes por vencer)
+  // Tu próxima clase: card full-width tipo notificación, desde STATE.instNextClass
   try {
     const slot = document.getElementById('prof-menu-next-slot');
     if (slot) {
-      const sourceCard = document.querySelector('[data-inst-next] .inst-next-card');
-      if (sourceCard) {
-        slot.innerHTML = sourceCard.outerHTML;
+      const nc = STATE.instNextClass;
+      if (nc) {
+        const grad = (typeof getInstNextCardGradient === 'function') ? getInstNextCardGradient(nc.locationId) : 'linear-gradient(135deg,#534AB7,#3C3489)';
+        const tag = nc.inProgress ? 'en curso · ahora' : 'tu próxima clase';
+        const line = `${escape(nc.locationName || '')}${nc.whenLabel ? ` · ${nc.whenLabel}` : ''} · ${nc.studentsCount} alumno${nc.studentsCount === 1 ? '' : 's'}`;
+        slot.innerHTML = `
+          <div class="mob-prof-next-os" style="background: ${grad};" onclick="instructorGoToNextClass()" role="button" tabindex="0">
+            <div class="mpn-time">${formatHour(nc.hour)}</div>
+            <div class="mpn-div"></div>
+            <div style="min-width: 0; flex: 1;">
+              <div class="mpn-tag">${tag}</div>
+              <div class="mpn-line">${line}</div>
+            </div>
+            <div class="mpn-chev">›</div>
+          </div>`;
       } else {
-        slot.innerHTML = '<div style="background: #EEEDFE; color: #3C3489; border-radius: 16px; padding: 18px; text-align: center; font-size: 13px;">Sin clases próximas hoy</div>';
+        slot.innerHTML = '<div style="background: #EEEDFE; color: #3C3489; border-radius: 16px; padding: 16px; text-align: center; font-size: 13px;">Sin próximas clases con alumnos</div>';
       }
     }
   } catch (e) { console.warn('[prof-menu] next class', e); }
@@ -16903,7 +16951,6 @@ async function renderInstructorDay() {
           <div data-inst-classes-header></div>
           <div data-inst-past-toggle></div>
           <div data-inst-classes style="display: flex; flex-direction: column; gap: 0; min-height: 100px;"></div>
-          <div data-inst-stats></div>
         </div>
       </div>
     `;
@@ -17424,112 +17471,152 @@ async function findInstructorNextSessionLocationId(instructorId) {
 // Busca primero en classesToday; si no hay, query a DB para próximos 30 días.
 // Retorna: { inProgress, target, sessionDate } o null si no hay ninguna.
 // locationFilter (opcional): si se pasa, solo considera clases en esa sede.
-async function findInstructorNextRealClass(instructorId, classesToday, locationFilter) {
+async function findInstructorNextRealClass(instructorId) {
+  // Próxima clase REAL del profesor, CROSS-SEDE y por BLOQUE DE HORA.
+  // Reglas:
+  //  - currentHour = now.getHours(); una clase a la hora H es "próxima" durante todo H:00–H:59.
+  //    (6:23 -> 6am ; 7:00 -> 7am ; 5:23 -> 6am). Por eso filtramos hour >= currentHour HOY.
+  //  - Se salta las ya marcadas (class_status='delivered') y las canceladas.
+  //  - Debe tener AL MENOS 1 alumno (booking activo o fijo).
+  //  - Si hoy no hay ninguna candidata, pasa a la primera del siguiente día que tenga clases.
+  //  - Considera TODAS las sedes; devuelve la sede de la clase encontrada (locationId).
+  if (!isOnline) return null;
+
   const now = new Date();
   const todayIso = dateToIsoLocal(now);
   const currentHour = now.getHours();
-  const currentMin = now.getMinutes();
-
-  function isDoneNow(c) {
-    if (c.session?.is_cancelled) return true;
-    if (c.session?.class_status === 'delivered') {
-      const minsSinceStart = (currentHour - c.hour) * 60 + currentMin;
-      return minsSinceStart > 50;
-    }
-    return false;
-  }
-
-  // 1. Buscar en clases de HOY ya cargadas
-  const todaySorted = [...(classesToday || [])].sort((a, b) => a.hour - b.hour);
-
-  const inProgress = todaySorted.find(c => {
-    if (isDoneNow(c)) return false;
-    if (c.isOtherInstructor) return false;
-    if (c.students.length === 0) return false;
-    if (locationFilter && c.location?.id !== locationFilter && c.session?.location_id !== locationFilter) return false;
-    return currentHour === c.hour || (currentHour === c.hour - 1 && currentMin >= 50);
-  });
-  if (inProgress) return { inProgress: true, target: inProgress, sessionDate: todayIso };
-
-  const nextToday = todaySorted.find(c => {
-    if (isDoneNow(c)) return false;
-    if (c.isOtherInstructor) return false;
-    if (c.students.length === 0) return false;
-    if (locationFilter && c.location?.id !== locationFilter && c.session?.location_id !== locationFilter) return false;
-    return c.hour > currentHour || (c.hour === currentHour && currentMin < 10);
-  });
-  if (nextToday) return { inProgress: false, target: nextToday, sessionDate: todayIso };
-
-  // 2. No hay clase real hoy: query a DB para próximos 30 días
-  if (!isOnline) return null;
-
-  const tomorrow = new Date(now);
-  tomorrow.setDate(tomorrow.getDate() + 1);
-  const tomorrowIso = dateToIsoLocal(tomorrow);
   const cutoff = new Date(now);
   cutoff.setDate(cutoff.getDate() + 30);
   const cutoffIso = dateToIsoLocal(cutoff);
 
-  let query = sb.from('class_sessions')
+  const { data: sessions } = await sb.from('class_sessions')
     .select('id, session_date, hour, location_id, class_status, is_cancelled, instructor_id, actual_instructor_id')
     .or(`instructor_id.eq.${instructorId},actual_instructor_id.eq.${instructorId}`)
-    .gte('session_date', tomorrowIso)
+    .gte('session_date', todayIso)
     .lte('session_date', cutoffIso)
     .eq('is_cancelled', false)
     .neq('class_status', 'delivered')
     .order('session_date', { ascending: true })
     .order('hour', { ascending: true })
-    .limit(100);
-  if (locationFilter) query = query.eq('location_id', locationFilter);
-  const { data: sessions } = await query;
-
+    .limit(300);
   if (!sessions || sessions.length === 0) return null;
 
-  // Si actual_instructor_id está seteado, debe coincidir (suplencias manuales)
-  const myClassSessions = sessions.filter(s => {
-    if (s.actual_instructor_id) return s.actual_instructor_id === instructorId;
-    return s.instructor_id === instructorId;
-  });
-  if (myClassSessions.length === 0) return null;
+  // Suplencias manuales: si actual_instructor_id está seteado, debe coincidir.
+  const mine = sessions.filter(s => s.actual_instructor_id ? s.actual_instructor_id === instructorId : s.instructor_id === instructorId);
+  if (mine.length === 0) return null;
 
-  // Contar bookings activos por sesión
-  const sessionIds = myClassSessions.map(s => s.id);
+  // Hoy: descartar bloques de hora ya pasados (hour < currentHour). Días futuros: todos.
+  const candidates = mine.filter(s => s.session_date !== todayIso || s.hour >= currentHour);
+  if (candidates.length === 0) return null;
+
+  // Contar alumnos por sesión (bookings activos + fijos que matchean sede/dow/hora).
+  const ids = candidates.map(s => s.id);
   const { data: bookings } = await sb.from('session_bookings')
     .select('session_id, cancelled_at')
-    .in('session_id', sessionIds);
-
-  const countBySession = new Map();
+    .in('session_id', ids);
+  const cnt = new Map();
   (bookings || []).forEach(b => {
     if (b.cancelled_at) return;
-    countBySession.set(b.session_id, (countBySession.get(b.session_id) || 0) + 1);
+    cnt.set(b.session_id, (cnt.get(b.session_id) || 0) + 1);
   });
-
-  // Sumar fijos (fixed_bookings que matchean loc, dow, hour)
-  for (const sess of myClassSessions) {
-    const dow = new Date(sess.session_date + 'T12:00:00').getDay();
+  for (const s of candidates) {
+    const dow = new Date(s.session_date + 'T12:00:00').getDay();
     const fixedCount = (STATE.fixedBookings || []).filter(b =>
-      b.is_active && b.location_id === sess.location_id && b.day_of_week === dow && b.hour === sess.hour
+      b.is_active && b.location_id === s.location_id && b.day_of_week === dow && b.hour === s.hour
     ).length;
-    if (fixedCount > 0) {
-      countBySession.set(sess.id, (countBySession.get(sess.id) || 0) + fixedCount);
-    }
+    if (fixedCount > 0) cnt.set(s.id, (cnt.get(s.id) || 0) + fixedCount);
   }
 
-  // Primera sesión (en orden cronológico) con al menos 1 alumno
-  const targetSession = myClassSessions.find(s => (countBySession.get(s.id) || 0) > 0);
-  if (!targetSession) return null;
+  // Primera candidata (orden cronológico) con al menos 1 alumno.
+  const target = candidates.find(s => (cnt.get(s.id) || 0) > 0);
+  if (!target) return null;
 
-  const studentCount = countBySession.get(targetSession.id);
+  const studentCount = cnt.get(target.id);
+  const inProgress = target.session_date === todayIso && target.hour === currentHour;
   return {
-    inProgress: false,
-    target: {
-      hour: targetSession.hour,
-      students: new Array(studentCount).fill(null),
-      session: targetSession,
-      isOtherInstructor: false,
-    },
-    sessionDate: targetSession.session_date,
+    inProgress,
+    target: { hour: target.hour, students: new Array(studentCount).fill(null), session: target, isOtherInstructor: false },
+    sessionDate: target.session_date,
+    locationId: target.location_id,
   };
+}
+
+// ---- Navegación a la próxima clase: cambia sede + día, abre la tarjeta con animación ----
+function instShowGoLoading() {
+  let ov = document.getElementById('inst-go-overlay');
+  if (!ov) {
+    ov = document.createElement('div');
+    ov.id = 'inst-go-overlay';
+    ov.className = 'inst-go-overlay';
+    ov.innerHTML = '<div class="inst-go-spinner" aria-label="Cargando"></div>';
+    document.body.appendChild(ov);
+  }
+  requestAnimationFrame(() => ov.classList.add('is-on'));
+}
+function instHideGoLoading() {
+  const ov = document.getElementById('inst-go-overlay');
+  if (!ov) return;
+  ov.classList.remove('is-on');
+  setTimeout(() => { if (ov && ov.parentNode) ov.parentNode.removeChild(ov); }, 220);
+}
+function _instWaitForHourCard(hour, timeoutMs) {
+  const deadline = Date.now() + (timeoutMs || 3500);
+  return new Promise(resolve => {
+    (function tick() {
+      const c = document.querySelector(`.inst-hour-card[data-hour="${hour}"]`);
+      if (c || Date.now() > deadline) return resolve(c || null);
+      requestAnimationFrame(tick);
+    })();
+  });
+}
+async function instructorGoToNextClass() {
+  const nc = STATE.instNextClass;
+  if (!nc) return;
+  try {
+    if (typeof profCloseMenu === 'function') profCloseMenu();
+    instShowGoLoading();
+
+    // Cambiar de sede si la próxima clase es en otra (SIN resetear a hoy como switchLocation)
+    if (nc.locationId && nc.locationId !== STATE.currentLocationId) {
+      STATE.currentLocationId = nc.locationId;
+      if (typeof renderTopbarUser === 'function') renderTopbarUser();
+      if (typeof renderLocationSwitcher === 'function') renderLocationSwitcher();
+    }
+
+    // Ir al día de la clase, vista Hoy
+    STATE.instDayDate = nc.dateIso;
+    STATE.instTab = 'day';
+    if (typeof showView === 'function') showView('instructor-day', null);
+    document.querySelectorAll('.mobile-bottom-bar-prof .m-nav-item').forEach(b => b.classList.remove('is-active'));
+    const dayBtn = document.querySelector('.mobile-bottom-bar-prof [data-prof-tab="day"]');
+    if (dayBtn) dayBtn.classList.add('is-active');
+
+    // Asegurar que la hora destino quede EXPANDIDA
+    if (STATE.instCollapsedSet) STATE.instCollapsedSet.delete(nc.hour);
+
+    // Skeletons, beat de loading, luego revelar
+    if (typeof showInstructorSkeletons === 'function') showInstructorSkeletons();
+    await new Promise(r => setTimeout(r, 280));
+    instHideGoLoading();
+
+    // Render del día y espera de la tarjeta de esa hora
+    if (typeof renderInstructorDay === 'function') { try { await renderInstructorDay(); } catch (e) {} }
+    const card = await _instWaitForHourCard(nc.hour, 3500);
+    if (card) {
+      card.classList.remove('is-collapsed');
+      const caret = card.querySelector('.inst-hour-caret');
+      if (caret) caret.textContent = '▼';
+      requestAnimationFrame(() => {
+        card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        card.classList.add('inst-hour-flash');
+        setTimeout(() => card.classList.remove('inst-hour-flash'), 1400);
+      });
+    }
+  } catch (e) {
+    console.warn('[inst] goToNextClass', e);
+  } finally {
+    instHideGoLoading();
+  }
 }
 
 async function renderInstructorNextClassBlock(classes) {
@@ -17559,10 +17646,10 @@ async function renderInstructorNextClassBlock(classes) {
   }
 
   // Buscar la próxima clase REAL (con alumnos asignados): primero en hoy,
-  // si no hay → query a próximos 30 días.
-  // Filtra por la SEDE ACTIVA (STATE.currentLocationId): el widget refleja
-  // la próxima clase del profe EN LA SEDE QUE ESTÁ VIENDO.
-  const result = await findInstructorNextRealClass(inst.id, todayClasses, STATE.currentLocationId);
+  // si no hay → primera clase del siguiente día con clases.
+  // Cross-sede (todas las sedes); devuelve la sede de la clase encontrada.
+  const result = await findInstructorNextRealClass(inst.id);
+  if (!result) STATE.instNextClass = null;
 
   // Proyección de ganancia y paquetes por vencer: SIEMPRE sobre clases de HOY
   const tiers = inst ? getPayConfigFor(inst.id).tiers : [];
@@ -17602,6 +17689,7 @@ async function renderInstructorNextClassBlock(classes) {
     const targetSlot = _classSlotInfo(target.students || [], s => s && s.attendance);
     const studentsCount = targetSlot.occupyingCount;
     const markedCount = target.marked || 0;
+    const sedeName = (STATE.locations || []).find(l => l.id === result.locationId)?.name || '';
 
     let timeLabel = '';
     if (isInProgress) {
@@ -17629,10 +17717,12 @@ async function renderInstructorNextClassBlock(classes) {
       else { const h = Math.floor(minsToStart/60); const m = minsToStart % 60; timeLabel = `en ${h}h${m > 0 ? ` ${m}min` : ''}`; }
     }
 
+    STATE.instNextClass = { dateIso: sessionDate, hour: target.hour, locationId: result.locationId, locationName: sedeName, studentsCount, inProgress: isInProgress, whenLabel: timeLabel };
+
     mainContent = `
       <div class="inst-next-tag">${isInProgress ? 'EN CURSO · AHORA' : 'TU PRÓXIMA CLASE'}</div>
       <div class="inst-next-time">${formatHour(target.hour)}</div>
-      <div class="inst-next-info">${timeLabel} · ${studentsCount} alumno${studentsCount === 1 ? '' : 's'}${isInProgress && markedCount > 0 ? ` · ${markedCount} ya marcado${markedCount === 1 ? '' : 's'}` : ''}</div>
+      <div class="inst-next-info">${sedeName ? `${escape(sedeName)} · ` : ''}${timeLabel} · ${studentsCount} alumno${studentsCount === 1 ? '' : 's'}${isInProgress && markedCount > 0 ? ` · ${markedCount} ya marcado${markedCount === 1 ? '' : 's'}` : ''}</div>
     `;
   } else if (projectedPay > 0 || expiringCount > 0) {
     // Hay info de hoy (proyectado/paquetes) pero no hay próxima clase con alumnos en los próximos 30 días
@@ -17652,9 +17742,9 @@ async function renderInstructorNextClassBlock(classes) {
   }
   const footer = footerParts.length > 0 ? `<div class="inst-next-foot">${footerParts.join('')}</div>` : '';
 
-  // Aplicar gradient según la sede activa (cambia el color del widget al cambiar de sede)
-  const gradient = getInstNextCardGradient(STATE.currentLocationId);
-  block.innerHTML = `<div class="inst-next-card" style="background: ${gradient};">${mainContent}${footer}</div>`;
+  // Gradient según la sede de la PRÓXIMA clase (cross-sede). Si no hay, usar la sede activa.
+  const gradient = getInstNextCardGradient(result ? result.locationId : STATE.currentLocationId);
+  block.innerHTML = `<div class="inst-next-card" style="background: ${gradient};${result ? ' cursor: pointer;' : ''}"${result ? ' onclick="instructorGoToNextClass()"' : ''}>${mainContent}${footer}</div>`;
 }
 
 function renderInstructorStatsBlock(stats) {
