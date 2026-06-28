@@ -19856,33 +19856,27 @@ function renderInstructorStudentRow(item, classCtx) {
   // Para paquetes muy grandes (>14 clases), mostramos solo el contador sin la barra para no saturar.
   let pkgBarHtml = '';
   const pi = item.packageInfo;
-  if (pi && pi.remaining > 0) {
-    const low = pi.remaining <= 2;
+  if (pi && pi.remaining > 0 && pi.remaining <= 2) {
+    const lbl = pi.remaining === 1 ? 'última clase' : `${pi.remaining} últimas clases`;
     if (pi.total <= 14) {
       const segs = [];
       for (let i = 0; i < pi.total; i++) {
-        const cls = (i < pi.used) ? 'used' : (low ? 'warn' : 'left');
+        const cls = (i < pi.used) ? 'used' : 'warn';
         segs.push(`<div class="inst-stud-pkg-seg ${cls}"></div>`);
       }
-      const label = low
-        ? (pi.remaining === 1 ? 'última clase' : `${pi.remaining} restantes`)
-        : `${pi.remaining} de ${pi.total}`;
       pkgBarHtml = `
         <div class="inst-stud-pkg-wrap">
           <div class="inst-stud-pkg-bar" style="grid-template-columns: repeat(${pi.total}, 1fr);">
             ${segs.join('')}
           </div>
-          <span class="inst-stud-pkg-label ${low ? 'is-low' : ''}">${label}</span>
+          <span class="inst-stud-pkg-label is-low">${lbl}</span>
         </div>
       `;
     } else {
       // Paquete grande: solo texto
-      const label = low
-        ? (pi.remaining === 1 ? '⚠ última clase del paquete' : `⚠ ${pi.remaining} clases restantes`)
-        : `${pi.remaining} de ${pi.total} clases`;
       pkgBarHtml = `
         <div class="inst-stud-pkg-wrap">
-          <span class="inst-stud-pkg-label ${low ? 'is-low' : ''}">${label}</span>
+          <span class="inst-stud-pkg-label is-low">⚠ ${lbl} del paquete</span>
         </div>
       `;
     }
