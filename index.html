@@ -17708,7 +17708,7 @@ function _instPeriodRange(year, month, kind) {
   return { start: new Date(year, month, 1), end: new Date(year, month + 1, 0) };
 }
 async function loadInstructorStatsFor(instructorId, startIso, endIso) {
-  const empty = { clases: 0, asistencias: 0, alumnas: 0, capacidad: 0, ocupacion: 0, frecuentes: 0, retenidas: 0, retencion: 0 };
+  const empty = { clases: 0, asistencias: 0, alumnas: 0, capacidad: 0, ocupacion: 0, frecuentes: 0, retenidas: 0, retencion: 0, pruebas: 0 };
   if (!isOnline || !instructorId) return empty;
   const { data: sessions } = await sb.from('class_sessions')
     .select('id, location_id, instructor_id, actual_instructor_id')
@@ -17721,7 +17721,7 @@ async function loadInstructorStatsFor(instructorId, startIso, endIso) {
   if (!mine.length) return empty;
   const ids = mine.map(s => s.id);
   const { data: atts } = await sb.from('attendance')
-    .select('session_id, student_id, status').in('session_id', ids).eq('status', 'attended');
+    .select('session_id, student_id, status, student_package_id').in('session_id', ids).eq('status', 'attended');
   const attBySession = new Map(), attByStudent = new Map(), uniq = new Set();
   (atts || []).forEach(a => {
     attBySession.set(a.session_id, (attBySession.get(a.session_id) || 0) + 1);
@@ -17735,6 +17735,27 @@ async function loadInstructorStatsFor(instructorId, startIso, endIso) {
     if (att >= 1) { clases++; capacidad += locCap(s.location_id); asistencias += att; }
   }
   const ocupacion = capacidad > 0 ? Math.round((asistencias / capacidad) * 100) : 0;
+
+  // Clases de prueba dictadas: asistencias cuyo paquete consumido es un paquete de prueba.
+  // Se mide por el paquete realmente usado (no por la modalidad actual de la alumna,
+  // que cambia si la prueba convierte a cliente).
+  let pruebas = 0;
+  let trialPkgIds = new Set((STATE.packages || []).filter(p => /prueba/i.test(p.name || '')).map(p => p.id));
+  if (!trialPkgIds.size) {
+    const { data: pk } = await sb.from('packages').select('id, name').ilike('name', '%prueba%');
+    (pk || []).forEach(p => trialPkgIds.add(p.id));
+  }
+  const spIds = [...new Set((atts || []).map(a => a.student_package_id).filter(Boolean))];
+  if (spIds.length && trialPkgIds.size) {
+    const trialSp = new Set();
+    for (let i = 0; i < spIds.length; i += 200) {
+      const chunk = spIds.slice(i, i + 200);
+      const { data: sps } = await sb.from('student_packages').select('id, package_id').in('id', chunk);
+      (sps || []).forEach(sp => { if (trialPkgIds.has(sp.package_id)) trialSp.add(sp.id); });
+    }
+    (atts || []).forEach(a => { if (a.student_package_id && trialSp.has(a.student_package_id)) pruebas++; });
+  }
+
   const frecuentesIds = [...attByStudent.entries()].filter(([, n]) => n >= 3).map(([id]) => id);
   let retenidas = 0;
   if (frecuentesIds.length) {
@@ -17751,7 +17772,7 @@ async function loadInstructorStatsFor(instructorId, startIso, endIso) {
     }
   }
   const retencion = frecuentesIds.length ? Math.round((retenidas / frecuentesIds.length) * 100) : 0;
-  return { clases, asistencias, alumnas: uniq.size, capacidad, ocupacion, frecuentes: frecuentesIds.length, retenidas, retencion };
+  return { clases, asistencias, alumnas: uniq.size, capacidad, ocupacion, frecuentes: frecuentesIds.length, retenidas, retencion, pruebas };
 }
 function instStatToggle(key) {
   const el = document.getElementById('stat-detail-' + key);
@@ -17837,6 +17858,15 @@ async function renderInstructorStatsSection() {
         <div class="mob-stat-info">i</div>
       </div>
       <div class="mob-stat-detail" id="stat-detail-atend">Total de asistencias (alumnas con estado \u201Casisti\u00f3\u201D) en tus clases. Las ${c.alumnas} \u00fanicas son personas distintas; no cuentan recuperables ni faltas. ${dWord(c.asistencias, p.asistencias)}.</div>
+    </div>
+
+    <div class="mob-stat-rowwrap">
+      <div class="mob-stat-row" onclick="instStatToggle('pruebas')">
+        <div><div class="mob-stat-k">Clases de prueba</div>
+          <div class="mob-stat-n">${c.pruebas} ${dl(c.pruebas, p.pruebas)}</div></div>
+        <div class="mob-stat-info">i</div>
+      </div>
+      <div class="mob-stat-detail" id="stat-detail-pruebas">Clases de prueba que dictaste en ${curLabel}: alumnas que asistieron usando un paquete \u201CClase de prueba\u201D. Se cuenta por el paquete que consumieron, as\u00ed que sigue contando aunque luego se vuelvan clientas. ${dWord(c.pruebas, p.pruebas)}.</div>
     </div>
 
     <div class="mob-stat-rings">
@@ -19181,16 +19211,28 @@ function openInstructorStudentSheet(studentId, dateIso, hour, locationId, curren
           <div class="inst-sa-label">No vino</div>
           <div class="inst-sa-sub">justificada / sin avisar</div>
         </button>`}
-        <button class="inst-sa-btn" onclick="closeInstructorStudentSheet(); instructorOpenMoveModal('${studentId}','${dateIso}',${hour},'${locationId}');">
+        ${_attWin.tooLate
+          ? `<button class="inst-sa-btn is-locked" onclick="showToast('Cerrado: ya pasaron 3 días hábiles desde la clase', 'info')">
+          <div class="inst-sa-icon">🔒</div>
+          <div class="inst-sa-label">Mover de horario</div>
+          <div class="inst-sa-sub">cerrado: 3 días hábiles</div>
+        </button>`
+          : `<button class="inst-sa-btn" onclick="closeInstructorStudentSheet(); instructorOpenMoveModal('${studentId}','${dateIso}',${hour},'${locationId}');">
           <div class="inst-sa-icon">⇄</div>
           <div class="inst-sa-label">Mover de horario</div>
           <div class="inst-sa-sub">a otro día u hora</div>
-        </button>
-        <button class="inst-sa-btn is-danger" onclick="closeInstructorStudentSheet(); instructorRemoveFromClass('${studentId}','${dateIso}',${hour},'${locationId}');">
+        </button>`}
+        ${_attWin.tooLate
+          ? `<button class="inst-sa-btn is-locked" onclick="showToast('Cerrado: ya pasaron 3 días hábiles desde la clase', 'info')">
+          <div class="inst-sa-icon">🔒</div>
+          <div class="inst-sa-label">Quitar de la clase</div>
+          <div class="inst-sa-sub">cerrado: 3 días hábiles</div>
+        </button>`
+          : `<button class="inst-sa-btn is-danger" onclick="closeInstructorStudentSheet(); instructorRemoveFromClass('${studentId}','${dateIso}',${hour},'${locationId}');">
           <div class="inst-sa-icon">⌫</div>
           <div class="inst-sa-label">Quitar de la clase</div>
           <div class="inst-sa-sub">liberar el cupo</div>
-        </button>
+        </button>`}
         ${status && status !== 'attended' ? (_locked
           ? `<button class="inst-sa-btn is-locked" style="grid-column: span 2;" ${_lockTap}>
             <div class="inst-sa-icon">🔒</div>
