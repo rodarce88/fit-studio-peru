@@ -162,7 +162,7 @@
     width: 36px;
     height: 36px;
     min-width: 36px;
-    background: linear-gradient(135deg, var(--fit-purple), var(--fit-purple-deep));
+    background: linear-gradient(145deg, #7A4AC0 0%, var(--fit-purple) 38%, var(--fit-purple-deep) 100%);
     border-radius: 50%;
     display: grid;
     place-items: center;
@@ -173,7 +173,10 @@
     font-size: 20px;
     letter-spacing: 0;
     line-height: 1;
-    box-shadow: 0 2px 8px rgba(64, 29, 107, 0.22);
+    padding-right: 2px; /* compensa la inclinación de la F itálica → centrado óptico */
+    text-shadow: 0 1px 1.5px rgba(20, 8, 40, 0.28);
+    box-shadow: 0 4px 12px rgba(64, 29, 107, 0.30), 0 1px 2px rgba(64, 29, 107, 0.22),
+                inset 0 1px 0 rgba(255, 255, 255, 0.28), inset 0 -2px 5px rgba(40, 16, 76, 0.28);
     flex-shrink: 0;
   }
   .logo-text { display: flex; flex-direction: column; line-height: 1; }
@@ -953,7 +956,7 @@
   .cc-head-title { font-family: var(--display); font-style: italic; font-size: 18px; color: var(--ink); line-height: 1.15; }
   .cc-head-title em { color: var(--fit-purple-deep); font-style: italic; }
   .cc-head-sub { font-size: 11.5px; color: var(--ink-mute); margin-top: 2px; }
-  .cc-badge-f { width: 36px; height: 36px; border-radius: 50%; background: linear-gradient(135deg, var(--fit-purple), var(--fit-purple-deep)); display: grid; place-items: center; color: white; font-family: var(--display); font-style: italic; font-size: 17px; flex-shrink: 0; }
+  .cc-badge-f { width: 36px; height: 36px; border-radius: 50%; background: linear-gradient(145deg, #7A4AC0, var(--fit-purple) 40%, var(--fit-purple-deep)); display: grid; place-items: center; color: white; font-family: var(--display); font-style: italic; font-size: 17px; flex-shrink: 0; box-sizing: border-box; padding-right: 2px; text-shadow: 0 1px 1.5px rgba(20, 8, 40, 0.28); box-shadow: 0 3px 9px rgba(64, 29, 107, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.25); }
 
   /* Daystrip horizontal */
   .cc-daystrip { display: flex; gap: 5px; overflow-x: auto; -webkit-overflow-scrolling: touch; padding: 4px 14px 14px; margin: 0 -14px 4px; scrollbar-width: none; scroll-behavior: smooth; }
@@ -1771,6 +1774,8 @@
     cursor: default;
   }
   .inst-sa-btn.is-locked .inst-sa-sub { color: var(--ink-mute); }
+  .inst-check-btn.is-locked .inst-lock { width: 17px; height: 17px; display: block; }
+  .inst-sa-icon .inst-lock { width: 22px; height: 22px; display: block; }
   .inst-check-btn:focus-visible { outline: 2px solid var(--fit-purple); outline-offset: 2px; }
   .inst-check-btn:hover { border-color: var(--good); color: var(--good); }
   .inst-check-btn:active { transform: scale(0.92); }
@@ -19617,6 +19622,7 @@ function renderSessionNoteBlock(c) {
   `;
 }
 
+const LOCK_SVG = '<svg class="inst-lock" viewBox="0 0 24 24" fill="none" stroke="#9aa0a6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="10.5" width="14" height="9.5" rx="2.2"/><path d="M8 10.5V7a4 4 0 0 1 8 0v3.5"/></svg>';
 function renderInstructorClassCard(c, ctx) {
   const todayIso = dateToIsoLocal(new Date());
   const isToday = c.dateIso === todayIso;
@@ -19837,7 +19843,7 @@ function renderInstructorStudentRow(item, classCtx) {
   // Ventana de marcado: 4h antes de la clase hasta 3 días hábiles después.
   const _attWin = instAttendanceWindow(classCtx.dateIso, classCtx.hour);
   const checkBtnHtml = !_attWin.canMark
-    ? `<button class="inst-check-btn ${isAttended ? 'is-attended' : ''} is-locked" onclick="event.stopPropagation(); showToast('${instAttendanceLockMsg(_attWin)}', 'info')" title="${instAttendanceLockMsg(_attWin)}">${isAttended ? '✓' : '🔒'}</button>`
+    ? `<button class="inst-check-btn ${isAttended ? 'is-attended' : ''} is-locked" onclick="event.stopPropagation(); showToast('${instAttendanceLockMsg(_attWin)}', 'info')" title="${instAttendanceLockMsg(_attWin)}">${isAttended ? '✓' : LOCK_SVG}</button>`
     : isAttended
     ? `<button class="inst-check-btn is-attended" onclick="event.stopPropagation(); instructorConfirmUndoAttendance('${s.id}', '${classCtx.dateIso}', ${classCtx.hour}, '${classCtx.location.id}')" title="Tap para deshacer asistencia"><span class="inst-confetti"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span>✓</button>`
     : `<button class="inst-check-btn" onclick="event.stopPropagation(); instructorMarkAttended('${s.id}', '${classCtx.dateIso}', ${classCtx.hour}, '${classCtx.location.id}')" title="Marcar asistencia"><span class="inst-confetti"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span>✓</button>`;
@@ -19899,7 +19905,7 @@ function openInstructorStudentSheet(studentId, dateIso, hour, locationId, curren
   if (_locked) {
     primaryBtn = `
       <button class="inst-sa-btn is-locked" ${_lockTap}>
-        <div class="inst-sa-icon">🔒</div>
+        <div class="inst-sa-icon">${LOCK_SVG}</div>
         <div class="inst-sa-label">${isAttended ? 'Asistencia marcada' : 'Marcar asistencia'}</div>
         <div class="inst-sa-sub">${_lockSub}</div>
       </button>
@@ -19944,7 +19950,7 @@ function openInstructorStudentSheet(studentId, dateIso, hour, locationId, curren
         ${primaryBtn}
         ${_locked
           ? `<button class="inst-sa-btn is-locked" ${_lockTap}>
-          <div class="inst-sa-icon">🔒</div>
+          <div class="inst-sa-icon">${LOCK_SVG}</div>
           <div class="inst-sa-label">No vino</div>
           <div class="inst-sa-sub">${_lockSub}</div>
         </button>`
@@ -19955,7 +19961,7 @@ function openInstructorStudentSheet(studentId, dateIso, hour, locationId, curren
         </button>`}
         ${_attWin.tooLate
           ? `<button class="inst-sa-btn is-locked" onclick="showToast('Cerrado: ya pasaron 3 días hábiles desde la clase', 'info')">
-          <div class="inst-sa-icon">🔒</div>
+          <div class="inst-sa-icon">${LOCK_SVG}</div>
           <div class="inst-sa-label">Mover de horario</div>
           <div class="inst-sa-sub">cerrado: 3 días hábiles</div>
         </button>`
@@ -19966,7 +19972,7 @@ function openInstructorStudentSheet(studentId, dateIso, hour, locationId, curren
         </button>`}
         ${_attWin.tooLate
           ? `<button class="inst-sa-btn is-locked" onclick="showToast('Cerrado: ya pasaron 3 días hábiles desde la clase', 'info')">
-          <div class="inst-sa-icon">🔒</div>
+          <div class="inst-sa-icon">${LOCK_SVG}</div>
           <div class="inst-sa-label">Quitar de la clase</div>
           <div class="inst-sa-sub">cerrado: 3 días hábiles</div>
         </button>`
@@ -19977,7 +19983,7 @@ function openInstructorStudentSheet(studentId, dateIso, hour, locationId, curren
         </button>`}
         ${status && status !== 'attended' ? (_locked
           ? `<button class="inst-sa-btn is-locked" style="grid-column: span 2;" ${_lockTap}>
-            <div class="inst-sa-icon">🔒</div>
+            <div class="inst-sa-icon">${LOCK_SVG}</div>
             <div class="inst-sa-label">Resetear marca</div>
             <div class="inst-sa-sub">${_lockSub}</div>
           </button>`
