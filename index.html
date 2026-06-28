@@ -1658,6 +1658,26 @@
     -webkit-tap-highlight-color: transparent;
   }
   .inst-check-btn:focus { outline: none; }
+  .inst-check-btn.is-locked {
+    border-color: var(--line);
+    background: var(--line-soft, #f1eff4);
+    color: var(--ink-mute);
+    opacity: 0.55;
+    font-size: 12px;
+    box-shadow: none;
+  }
+  .inst-check-btn.is-locked.is-attended {
+    background: var(--good-soft);
+    color: #27500A;
+    opacity: 0.7;
+  }
+  .inst-sa-btn.is-locked {
+    opacity: 0.5;
+    background: var(--line-soft, #f5f3f7);
+    border-style: dashed;
+    cursor: default;
+  }
+  .inst-sa-btn.is-locked .inst-sa-sub { color: var(--ink-mute); }
   .inst-check-btn:focus-visible { outline: 2px solid var(--fit-purple); outline-offset: 2px; }
   .inst-check-btn:hover { border-color: var(--good); color: var(--good); }
   .inst-check-btn:active { transform: scale(0.92); }
@@ -17533,7 +17553,6 @@ async function findInstructorNextRealClass(instructorId) {
     .gte('session_date', todayIso)
     .lte('session_date', cutoffIso)
     .eq('is_cancelled', false)
-    .neq('class_status', 'delivered')
     .order('session_date', { ascending: true })
     .order('hour', { ascending: true })
     .limit(300);
@@ -17544,7 +17563,15 @@ async function findInstructorNextRealClass(instructorId) {
   if (mine.length === 0) return null;
 
   // Hoy: descartar bloques de hora ya pasados (hour < currentHour). Días futuros: todos.
-  const candidates = mine.filter(s => s.session_date !== todayIso || s.hour >= currentHour);
+  // Una clase 'delivered' solo se salta si su hora NO es futura (ya pudo dictarse): es decir,
+  // hoy a la hora actual o pasada. Una clase FUTURA marcada 'delivered' es dato erróneo
+  // (no se puede dictar algo que no ha ocurrido) -> se incluye igual.
+  const candidates = mine.filter(s => {
+    if (s.session_date === todayIso && s.hour < currentHour) return false;
+    const isFuture = s.session_date > todayIso || (s.session_date === todayIso && s.hour > currentHour);
+    if (s.class_status === 'delivered' && !isFuture) return false;
+    return true;
+  });
   if (candidates.length === 0) return null;
 
   // Contar alumnos por sesión (bookings activos + fijos que matchean sede/dow/hora).
@@ -18841,7 +18868,10 @@ function renderInstructorClassCard(c, ctx) {
 
   const classStatus = c.session?.class_status || 'scheduled';
   const isCancelled = c.session?.is_cancelled === true;
-  const isDelivered = classStatus === 'delivered';
+  // Una clase futura (otro día, o hoy a una hora que aún no llega) no puede estar dictada,
+  // aunque la BD tenga class_status='delivered' (dato erróneo). No la mostramos como dictada.
+  const isFutureClass = c.dateIso > todayIso || (c.dateIso === todayIso && c.hour > currentHour);
+  const isDelivered = classStatus === 'delivered' && !isFutureClass;
   const isNotDelivered = classStatus === 'not_delivered' || isCancelled;
   const isPending = classStatus === 'pending_confirmation';
 
@@ -18905,7 +18935,7 @@ function renderInstructorClassCard(c, ctx) {
     : (occupyingHtml + addFlexBtn + releasedHtml);
 
   // Botón "Clase dictada sin asistentes" para clases ya empezadas y no marcadas
-  const canMarkEmpty = !isDelivered && !isCancelled && (isPast || (isToday && currentHour >= c.hour));
+  const canMarkEmpty = !isDelivered && !isCancelled && (isPast || (isToday && currentHour >= c.hour)) && instAttendanceWindow(c.dateIso, c.hour).canMark;
   const markDeliveredBtn = canMarkEmpty && studentsCount === 0
     ? `<div style="border-top: 1px solid var(--line); padding: 10px 14px;">
          <button onclick="instructorMarkClassDelivered('${c.dateIso}', ${c.hour}, '${c.location.id}')" style="width:100%; padding: 10px; font-size: 12px; border: 1px solid var(--good); background: var(--good-soft); border-radius: 10px; color: #27500A; cursor: pointer; font-family: var(--body);">✓ Marcar como dictada (sin asistentes)</button>
@@ -19044,7 +19074,11 @@ function renderInstructorStudentRow(item, classCtx) {
 
   // El check inline solo se muestra si NO está ya marcada como attended
   const isAttended = status === 'attended';
-  const checkBtnHtml = isAttended
+  // Ventana de marcado: 4h antes de la clase hasta 3 días hábiles después.
+  const _attWin = instAttendanceWindow(classCtx.dateIso, classCtx.hour);
+  const checkBtnHtml = !_attWin.canMark
+    ? `<button class="inst-check-btn ${isAttended ? 'is-attended' : ''} is-locked" onclick="event.stopPropagation(); showToast('${instAttendanceLockMsg(_attWin)}', 'info')" title="${instAttendanceLockMsg(_attWin)}">${isAttended ? '✓' : '🔒'}</button>`
+    : isAttended
     ? `<button class="inst-check-btn is-attended" onclick="event.stopPropagation(); instructorConfirmUndoAttendance('${s.id}', '${classCtx.dateIso}', ${classCtx.hour}, '${classCtx.location.id}')" title="Tap para deshacer asistencia"><span class="inst-confetti"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span>✓</button>`
     : `<button class="inst-check-btn" onclick="event.stopPropagation(); instructorMarkAttended('${s.id}', '${classCtx.dateIso}', ${classCtx.hour}, '${classCtx.location.id}')" title="Marcar asistencia"><span class="inst-confetti"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span>✓</button>`;
 
@@ -19076,6 +19110,14 @@ function openInstructorStudentSheet(studentId, dateIso, hour, locationId, curren
   const status = currentStatus || null;
   const isAttended = status === 'attended';
 
+  // Ventana de marcado (4h antes → 3 días hábiles después). Fuera de ella,
+  // los botones de asistencia se ven pero quedan inhabilitados.
+  const _attWin = instAttendanceWindow(dateIso, hour);
+  const _locked = !_attWin.canMark;
+  const _lockSub = _attWin.tooEarly ? 'se habilita 4 h antes' : 'cerrado: 3 días hábiles';
+  const _lockMsg = instAttendanceLockMsg(_attWin);
+  const _lockTap = `onclick="showToast('${_lockMsg}', 'info')"`;
+
   // Cerrar cualquier sheet previo
   closeInstructorStudentSheet();
 
@@ -19089,7 +19131,15 @@ function openInstructorStudentSheet(studentId, dateIso, hour, locationId, curren
 
   // Acciones disponibles según estado
   let primaryBtn = '';
-  if (isAttended) {
+  if (_locked) {
+    primaryBtn = `
+      <button class="inst-sa-btn is-locked" ${_lockTap}>
+        <div class="inst-sa-icon">🔒</div>
+        <div class="inst-sa-label">${isAttended ? 'Asistencia marcada' : 'Marcar asistencia'}</div>
+        <div class="inst-sa-sub">${_lockSub}</div>
+      </button>
+    `;
+  } else if (isAttended) {
     primaryBtn = `
       <button class="inst-sa-btn is-danger" onclick="instructorConfirmUndoAttendance('${studentId}','${dateIso}',${hour},'${locationId}'); closeInstructorStudentSheet();">
         <div class="inst-sa-icon">↺</div>
@@ -19120,11 +19170,17 @@ function openInstructorStudentSheet(studentId, dateIso, hour, locationId, curren
       </div>
       <div class="inst-sheet-actions">
         ${primaryBtn}
-        <button class="inst-sa-btn is-warn" onclick="closeInstructorStudentSheet(); instructorOpenAbsenceMenu('${studentId}', ${hour});">
+        ${_locked
+          ? `<button class="inst-sa-btn is-locked" ${_lockTap}>
+          <div class="inst-sa-icon">🔒</div>
+          <div class="inst-sa-label">No vino</div>
+          <div class="inst-sa-sub">${_lockSub}</div>
+        </button>`
+          : `<button class="inst-sa-btn is-warn" onclick="closeInstructorStudentSheet(); instructorOpenAbsenceMenu('${studentId}', ${hour});">
           <div class="inst-sa-icon">✕</div>
           <div class="inst-sa-label">No vino</div>
           <div class="inst-sa-sub">justificada / sin avisar</div>
-        </button>
+        </button>`}
         <button class="inst-sa-btn" onclick="closeInstructorStudentSheet(); instructorOpenMoveModal('${studentId}','${dateIso}',${hour},'${locationId}');">
           <div class="inst-sa-icon">⇄</div>
           <div class="inst-sa-label">Mover de horario</div>
@@ -19135,13 +19191,17 @@ function openInstructorStudentSheet(studentId, dateIso, hour, locationId, curren
           <div class="inst-sa-label">Quitar de la clase</div>
           <div class="inst-sa-sub">liberar el cupo</div>
         </button>
-        ${status && status !== 'attended' ? `
-          <button class="inst-sa-btn" onclick="closeInstructorStudentSheet(); instructorResetAttendance('${studentId}','${dateIso}',${hour},'${locationId}');" style="grid-column: span 2;">
+        ${status && status !== 'attended' ? (_locked
+          ? `<button class="inst-sa-btn is-locked" style="grid-column: span 2;" ${_lockTap}>
+            <div class="inst-sa-icon">🔒</div>
+            <div class="inst-sa-label">Resetear marca</div>
+            <div class="inst-sa-sub">${_lockSub}</div>
+          </button>`
+          : `<button class="inst-sa-btn" onclick="closeInstructorStudentSheet(); instructorResetAttendance('${studentId}','${dateIso}',${hour},'${locationId}');" style="grid-column: span 2;">
             <div class="inst-sa-icon">↺</div>
             <div class="inst-sa-label">Resetear marca</div>
             <div class="inst-sa-sub">volver a sin marcar</div>
-          </button>
-        ` : ''}
+          </button>`) : ''}
       </div>
       ${renderHealthNotesSection(stud)}
       <div id="inst-sheet-notes-history" data-student-id="${studentId}">
@@ -19746,8 +19806,42 @@ function instructorOpenMoveModal(studentId, dateIso, hour, locationId) {
   }
 }
 
+// Ventana en la que el profesor puede marcar/cambiar asistencia de una clase:
+//   - Se HABILITA 4 horas antes del inicio de la clase (antes de eso es futura).
+//   - Se CIERRA al terminar el 3er día hábil (lun-vie) después de la fecha de la clase.
+// Fuera de esa ventana, los botones se ven pero quedan inhabilitados.
+function instAttendanceWindow(dateIso, hour) {
+  if (!dateIso || hour == null) return { canMark: true, tooEarly: false, tooLate: false };
+  const now = new Date();
+  const parts = String(dateIso).split('-').map(Number);
+  const y = parts[0], m = parts[1], d = parts[2];
+  const classStart = new Date(y, m - 1, d, hour, 0, 0, 0);
+  const opensAt = new Date(classStart.getTime() - 4 * 60 * 60 * 1000); // 4h antes
+  // Cierre: fin (23:59:59) del 3er día hábil DESPUÉS del día de la clase.
+  const closesAt = new Date(y, m - 1, d, 23, 59, 59, 999);
+  let habiles = 0;
+  while (habiles < 3) {
+    closesAt.setDate(closesAt.getDate() + 1);
+    const dow = closesAt.getDay(); // 0=domingo, 6=sábado
+    if (dow !== 0 && dow !== 6) habiles++;
+  }
+  const tooEarly = now < opensAt;
+  const tooLate = now > closesAt;
+  return { canMark: !tooEarly && !tooLate, tooEarly, tooLate, opensAt, closesAt };
+}
+
+function instAttendanceLockMsg(win) {
+  if (win && win.tooEarly) return 'La asistencia se habilita 4 horas antes de la clase';
+  if (win && win.tooLate) return 'Cerrado: ya pasaron 3 días hábiles desde la clase';
+  return '';
+}
+
 async function instructorWriteAttendance(studentId, dateIso, hour, locationId, status) {
   if (!isOnline) { showToast('Necesitas conexión', 'error'); return; }
+
+  // Guard: respetar la ventana de marcado (4h antes → 3 días hábiles después).
+  const _win = instAttendanceWindow(dateIso, hour);
+  if (!_win.canMark) { showToast(instAttendanceLockMsg(_win), 'info'); return; }
 
   // 1. Buscar elementos del DOM y leer del cache
   const checkBtn = document.querySelector(
