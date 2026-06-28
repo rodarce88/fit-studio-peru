@@ -17708,7 +17708,7 @@ function _instPeriodRange(year, month, kind) {
   return { start: new Date(year, month, 1), end: new Date(year, month + 1, 0) };
 }
 async function loadInstructorStatsFor(instructorId, startIso, endIso) {
-  const empty = { clases: 0, asistencias: 0, alumnas: 0, capacidad: 0, ocupacion: 0, frecuentes: 0, retenidas: 0, retencion: 0, pruebas: 0 };
+  const empty = { clases: 0, asistencias: 0, alumnas: 0, capacidad: 0, ocupacion: 0, frecuentes: 0, retenidas: 0, retencion: 0, pruebas: 0, conversiones: 0 };
   if (!isOnline || !instructorId) return empty;
   const { data: sessions } = await sb.from('class_sessions')
     .select('id, location_id, instructor_id, actual_instructor_id')
@@ -17746,6 +17746,7 @@ async function loadInstructorStatsFor(instructorId, startIso, endIso) {
     (pk || []).forEach(p => trialPkgIds.add(p.id));
   }
   const spIds = [...new Set((atts || []).map(a => a.student_package_id).filter(Boolean))];
+  const pruebaStudentIds = new Set();
   if (spIds.length && trialPkgIds.size) {
     const trialSp = new Set();
     for (let i = 0; i < spIds.length; i += 200) {
@@ -17753,7 +17754,29 @@ async function loadInstructorStatsFor(instructorId, startIso, endIso) {
       const { data: sps } = await sb.from('student_packages').select('id, package_id').in('id', chunk);
       (sps || []).forEach(sp => { if (trialPkgIds.has(sp.package_id)) trialSp.add(sp.id); });
     }
-    (atts || []).forEach(a => { if (a.student_package_id && trialSp.has(a.student_package_id)) pruebas++; });
+    (atts || []).forEach(a => {
+      if (a.student_package_id && trialSp.has(a.student_package_id)) { pruebas++; pruebaStudentIds.add(a.student_id); }
+    });
+  }
+
+  // Conversión: de esas alumnas de prueba, cuántas compraron un paquete NO-prueba
+  // (se volvieron clientas activas) con purchase_date dentro del período.
+  let conversiones = 0;
+  if (pruebaStudentIds.size) {
+    const sids = [...pruebaStudentIds];
+    const converted = new Set();
+    for (let i = 0; i < sids.length; i += 200) {
+      const chunk = sids.slice(i, i + 200);
+      const { data: cp } = await sb.from('student_packages')
+        .select('student_id, package_id, purchase_date')
+        .in('student_id', chunk)
+        .gte('purchase_date', startIso);
+      (cp || []).forEach(p => {
+        const pd = (p.purchase_date || '').slice(0, 10);
+        if (pd >= startIso && pd <= endIso && !trialPkgIds.has(p.package_id)) converted.add(p.student_id);
+      });
+    }
+    conversiones = converted.size;
   }
 
   const frecuentesIds = [...attByStudent.entries()].filter(([, n]) => n >= 3).map(([id]) => id);
@@ -17772,7 +17795,7 @@ async function loadInstructorStatsFor(instructorId, startIso, endIso) {
     }
   }
   const retencion = frecuentesIds.length ? Math.round((retenidas / frecuentesIds.length) * 100) : 0;
-  return { clases, asistencias, alumnas: uniq.size, capacidad, ocupacion, frecuentes: frecuentesIds.length, retenidas, retencion, pruebas };
+  return { clases, asistencias, alumnas: uniq.size, capacidad, ocupacion, frecuentes: frecuentesIds.length, retenidas, retencion, pruebas, conversiones };
 }
 function instStatToggle(key) {
   const el = document.getElementById('stat-detail-' + key);
@@ -17863,10 +17886,10 @@ async function renderInstructorStatsSection() {
     <div class="mob-stat-rowwrap">
       <div class="mob-stat-row" onclick="instStatToggle('pruebas')">
         <div><div class="mob-stat-k">Clases de prueba</div>
-          <div class="mob-stat-n">${c.pruebas} ${dl(c.pruebas, p.pruebas)}</div></div>
+          <div class="mob-stat-n">${c.pruebas} ${dl(c.pruebas, p.pruebas)} <small>${c.conversiones} convirti\u00f3${c.conversiones === 1 ? '' : 'eron'}</small></div></div>
         <div class="mob-stat-info">i</div>
       </div>
-      <div class="mob-stat-detail" id="stat-detail-pruebas">Clases de prueba que dictaste en ${curLabel}: alumnas que asistieron usando un paquete \u201CClase de prueba\u201D. Se cuenta por el paquete que consumieron, as\u00ed que sigue contando aunque luego se vuelvan clientas. ${dWord(c.pruebas, p.pruebas)}.</div>
+      <div class="mob-stat-detail" id="stat-detail-pruebas">Clases de prueba que dictaste en ${curLabel}: alumnas que asistieron usando un paquete \u201CClase de prueba\u201D. Se cuenta por el paquete que consumieron, as\u00ed que sigue contando aunque luego se vuelvan clientas. <b>${c.conversiones} convirti\u00f3${c.conversiones === 1 ? '' : 'eron'}</b>: de esas alumnas de prueba, cu\u00e1ntas compraron un paquete (se volvieron clientas activas) dentro del per\u00edodo. ${dWord(c.pruebas, p.pruebas)}.</div>
     </div>
 
     <div class="mob-stat-rings">
