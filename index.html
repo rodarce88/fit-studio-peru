@@ -4183,6 +4183,14 @@ body:not(.doctor-mode) .doc-bottomnav{ display:none; }
           <input type="hidden" id="fi-photo-url" />
         </div>
 
+        <!-- Color de perfil -->
+        <div class="form-row full" style="margin-bottom: 6px;">
+          <label>Color del perfil</label>
+          <div id="fi-color-swatches" style="display:flex; gap:9px; flex-wrap:wrap; margin-top:6px;"></div>
+          <input type="hidden" id="fi-color" />
+          <div style="font-size: 11px; color: var(--ink-soft); margin-top: 6px;">Identifica al profesor en su avatar y en el feed de actividad. Si no eliges, se asigna uno automático.</div>
+        </div>
+
         <div class="form-grid">
           <div class="form-row">
             <label>Nombre <span class="req">*</span></label>
@@ -5510,6 +5518,27 @@ function resolveInstructor(locationId, date, dow, hour) {
   const sched = candidates[0];
   const inst = STATE.instructors.find(i => i.id === sched.instructor_id);
   return inst || { id: null, initials: '?', full_name: 'Profesor desconocido', certifications: '', _isUnassigned: true };
+}
+
+const PROFILE_COLOR_PALETTE = ['#7C3AED','#9333EA','#7E22CE','#DB2777','#BE185D','#E11D48','#DC2626','#EA580C','#D97706','#CA8A04','#B45309','#16A34A','#059669','#0D9488','#0891B2','#2563EB','#4F46E5','#475569'];
+
+function selectProfileColor(color) {
+  const inp = document.getElementById('fi-color');
+  if (inp) inp.value = color || '';
+  renderProfileColorSwatches(color);
+  // Preview en el círculo de foto (solo si no hay foto cargada)
+  const photoUrl = (document.getElementById('fi-photo-url') || {}).value;
+  const prev = document.getElementById('fi-photo-preview');
+  if (prev && !photoUrl) prev.style.background = color || 'var(--fit-purple)';
+}
+
+function renderProfileColorSwatches(selected) {
+  const wrap = document.getElementById('fi-color-swatches');
+  if (!wrap) return;
+  wrap.innerHTML = PROFILE_COLOR_PALETTE.map(c => {
+    const on = (selected || '').toLowerCase() === c.toLowerCase();
+    return `<button type="button" onclick="selectProfileColor('${c}')" title="${c}" style="width:30px;height:30px;border-radius:50%;background:${c};cursor:pointer;flex-shrink:0;border:2px solid #fff;box-shadow:0 0 0 ${on ? '2px ' + c : '1px var(--line)'};${on ? 'transform:scale(1.1);' : ''}transition:transform .12s;"></button>`;
+  }).join('');
 }
 
 function getInstructorColor(inst) {
@@ -10434,6 +10463,10 @@ function openInstructorModal(id) {
   f('fi-photo-status').textContent = '';
   f('fi-photo-clear').style.display = i?.photo_url ? 'inline-flex' : 'none';
 
+  // Color de perfil
+  f('fi-color').value = i?.color || '';
+  renderProfileColorSwatches(i?.color || '');
+
   // Estado de cuenta
   if (isEdit && i) {
     const block = document.getElementById('fi-status-block');
@@ -11006,6 +11039,7 @@ async function saveInstructor() {
     bio: f('fi-bio').value.trim() || null,
     certifications: f('fi-cert').value.trim() || null,
     specialty: f('fi-cert').value.trim() || null,
+    color: f('fi-color').value.trim() || null,
     is_active: true,
   };
 
