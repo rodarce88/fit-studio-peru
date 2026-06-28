@@ -3871,6 +3871,15 @@ body:not(.doctor-mode) .doc-bottomnav{ display:none; }
 #account-modal .am-role.is-active{ border:1.5px solid var(--fit-purple-soft); background:var(--fit-lavender-pale); }
 #account-modal .am-role.is-active i, #account-modal .am-role.is-active .am-role-t{ color:var(--fit-purple); }
 #account-modal .am-foot{ padding:12px 20px 18px; }
+#account-modal .am-color{ padding:6px 20px 2px; }
+#account-modal .am-colorbtn{ width:100%; display:flex; align-items:center; gap:11px; padding:10px 12px; border:1px solid var(--line); background:#fff; border-radius:11px; cursor:pointer; text-align:left; font-family:inherit; }
+#account-modal .am-colorbtn i{ font-size:18px; color:#8C857A; }
+#account-modal .am-colorbtn span{ flex:1; font-size:13.5px; font-weight:500; color:#1C1922; }
+#account-modal .am-colorchev{ transition:transform .18s ease; }
+#account-modal .am-colorchev.open{ transform:rotate(180deg); }
+#account-modal .am-swatches{ display:none; flex-wrap:wrap; gap:9px; padding:12px 4px 4px; }
+#account-modal .am-swatches.open{ display:flex; }
+#account-modal .am-sw{ width:28px; height:28px; border-radius:50%; border:2px solid #fff; cursor:pointer; flex-shrink:0; transition:transform .12s; }
 #account-modal .am-logout{ width:100%; display:flex; align-items:center; justify-content:center; gap:8px; padding:12px; border:1px solid #F0D2D2; background:#FBEAEA; border-radius:11px; cursor:pointer; font-family:inherit; }
 #account-modal .am-logout i{ font-size:17px; color:var(--danger); }
 #account-modal .am-logout span{ font-size:13.5px; font-weight:500; color:var(--danger); }
@@ -10465,7 +10474,7 @@ function openInstructorModal(id) {
 
   // Color de perfil
   f('fi-color').value = i?.color || '';
-  renderProfileColorSwatches(i?.color || '');
+  renderProfileColorSwatches(i?.color || (isEdit && i ? getInstructorColor(i) : ''));
 
   // Estado de cuenta
   if (isEdit && i) {
@@ -16978,7 +16987,7 @@ function renderTopbarUser() {
     const name = (fullName.trim().split(/\s+/)[0]) || 'Admin';
     const initials = deriveCoordInitials(fullName);
     const currentLoc = (typeof getCurrentLocation === 'function') ? getCurrentLocation() : null;
-    const color = (currentLoc && currentLoc.color) || '#5B2A8F';
+    const color = rec.color || (currentLoc && currentLoc.color) || '#5B2A8F';
     userPill.innerHTML = `
       <div class="user-avatar" style="background: ${color};">${escape(initials)}</div>
       <div class="user-info">
@@ -16988,7 +16997,7 @@ function renderTopbarUser() {
   } else if (role === 'instructor') {
     const i = CURRENT_USER.record;
     userPill.innerHTML = `
-      <div class="user-avatar">${escape(i.initials || (i.first_name || '?')[0])}</div>
+      <div class="user-avatar" style="background: ${getInstructorColor(i)};">${escape(i.initials || (i.first_name || '?')[0])}</div>
       <div class="user-info">
         <div class="user-name">${escape(i.handle || i.first_name || '')}</div>
         <div class="user-role" id="user-role-text">Profesor</div>
@@ -30074,7 +30083,7 @@ function accountModal(){
     fullName = rec.full_name || rec.handle || 'Admin';
     initials = deriveCoordInitials(fullName);
     const cl = (typeof getCurrentLocation === 'function') ? getCurrentLocation() : null;
-    avatarColor = (cl && cl.color) || 'var(--fit-purple)';
+    avatarColor = rec.color || (cl && cl.color) || 'var(--fit-purple)';
   } else if (role === 'doctor'){
     fullName = rec.full_name || 'Doctor';
     initials = deriveCoordInitials(fullName);
@@ -30082,7 +30091,7 @@ function accountModal(){
   } else if (role === 'instructor'){
     fullName = [rec.first_name, rec.last_name].filter(Boolean).join(' ').trim() || rec.full_name || rec.handle || 'Profesor';
     initials = rec.initials || deriveCoordInitials(fullName);
-    avatarColor = rec.color || 'var(--fit-purple)';
+    avatarColor = (typeof getInstructorColor === 'function') ? getInstructorColor(rec) : (rec.color || 'var(--fit-purple)');
   } else if (role === 'student'){
     fullName = [rec.first_name, rec.last_name].filter(Boolean).join(' ').trim() || 'Alumno';
     initials = deriveCoordInitials(fullName);
@@ -30124,11 +30133,55 @@ function accountModal(){
         </div>
       </div>
       ${rolesHtml}
+      ${(role === 'instructor' || role === 'coordinator') ? `
+      <div class="am-color">
+        <button class="am-colorbtn" onclick="accountToggleColor()"><i class="ti ti-palette"></i><span>Cambiar mi color</span><i class="ti ti-chevron-down am-colorchev"></i></button>
+        <div class="am-swatches" id="am-swatches">${accountColorSwatchesHtml(avatarColor)}</div>
+      </div>` : ''}
       <div class="am-foot">
         <button class="am-logout" onclick="logout()"><i class="ti ti-logout"></i><span>Cerrar sesión</span></button>
       </div>
     </div>`;
   m.classList.add('open');
+}
+function accountColorSwatchesHtml(cur){
+  const c0 = (cur || '').toLowerCase();
+  return (PROFILE_COLOR_PALETTE || []).map(c => {
+    const on = c0 === c.toLowerCase();
+    return `<button type="button" class="am-sw${on ? ' on' : ''}" onclick="accountSetColor('${c}')" title="${c}" style="background:${c};box-shadow:0 0 0 ${on ? '2px ' + c : '1px var(--line)'};${on ? 'transform:scale(1.12);' : ''}"></button>`;
+  }).join('');
+}
+function accountToggleColor(){
+  const sw = document.getElementById('am-swatches');
+  const ch = document.querySelector('#account-modal .am-colorchev');
+  if (sw) sw.classList.toggle('open');
+  if (ch) ch.classList.toggle('open');
+}
+async function accountSetColor(color){
+  if (!CURRENT_USER) return;
+  const role = CURRENT_USER.role;
+  const rec = CURRENT_USER.record || {};
+  rec.color = color;
+  if (role === 'instructor') {
+    const it = (STATE.instructors || []).find(x => x.id === rec.id);
+    if (it) it.color = color;
+  }
+  // Refrescar avatares al instante
+  const av = document.querySelector('#account-modal .am-avatar');
+  if (av) av.style.background = color;
+  const sw = document.getElementById('am-swatches');
+  if (sw) sw.innerHTML = accountColorSwatchesHtml(color);
+  if (typeof renderTopbarUser === 'function') renderTopbarUser();
+  // Persistir
+  try {
+    if (sb) {
+      if (role === 'instructor') await sb.from('instructors').update({ color }).eq('id', rec.id);
+      else if (role === 'coordinator') await sb.from('users').update({ color }).eq('id', rec.id);
+    }
+    showToast('Color actualizado', 'success');
+  } catch (e) {
+    showToast('No se pudo guardar el color', 'error');
+  }
 }
 function accountPickRole(r){
   closeAccountModal();
