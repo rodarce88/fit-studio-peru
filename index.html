@@ -1443,6 +1443,35 @@
   body.role-instructor .mobile-bottom-bar-prof .m-nav-item span { font-size: 9.5px; line-height: 1.1; }
   body.role-instructor .mobile-bottom-bar-prof .m-nav-next { color: var(--fit-purple); }
   body.role-instructor .mobile-bottom-bar-prof .m-nav-next svg { stroke-width: 2.1; }
+  .mobile-bottom-bar-prof .m-nav-item { position: relative; }
+  .m-nav-actcount {
+    position: absolute; top: -2px; left: 50%; margin-left: 6px;
+    min-width: 17px; height: 17px; padding: 0 5px; border-radius: 9px;
+    background: #EF3E54; color: #fff; font-size: 10.5px; font-weight: 700; line-height: 17px;
+    text-align: center; box-shadow: 0 0 0 2px var(--bg, #fff);
+    animation: m-nav-actpulse 1.8s ease-in-out infinite;
+  }
+  @keyframes m-nav-actpulse {
+    0%, 100% { box-shadow: 0 0 0 2px var(--bg,#fff), 0 0 0 0 rgba(239,62,84,.5); }
+    50% { box-shadow: 0 0 0 2px var(--bg,#fff), 0 0 0 5px rgba(239,62,84,0); }
+  }
+  .actf-wrap{ padding: 18px 16px 96px; }
+  .actf-eyebrow{ font-size:11px; letter-spacing:.16em; text-transform:uppercase; color:var(--ink-mute); margin-bottom:4px; }
+  .actf-h1{ font-family:var(--display); font-style:italic; font-size:24px; color:var(--fit-purple-deep); margin-bottom:14px; line-height:1.12; }
+  .actf-day{ font-size:10.5px; letter-spacing:.12em; text-transform:uppercase; color:var(--ink-mute); padding:16px 2px 8px; border-bottom:1px solid var(--line-soft); }
+  .actf-row{ display:flex; gap:12px; align-items:flex-start; padding:14px 2px; border-bottom:1px solid var(--line-soft); }
+  .actf-row.mine{ background:var(--fit-lavender-pale); margin:0 -16px; padding:14px 16px; border-bottom:1px solid #ECE3FB; }
+  .actf-avwrap{ position:relative; flex-shrink:0; }
+  .actf-av{ width:38px; height:38px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:700; color:#fff; }
+  .actf-av-extra{ position:absolute; right:-5px; bottom:-3px; background:#fff; color:var(--ink-mute); font-size:9px; font-weight:700; border-radius:10px; padding:1px 5px; box-shadow:0 0 0 1px var(--line); }
+  .actf-body{ flex:1; min-width:0; }
+  .actf-lead{ font-size:10px; letter-spacing:.1em; text-transform:uppercase; color:var(--ink-mute); font-weight:600; margin-bottom:3px; }
+  .actf-row.mine .actf-lead{ color:var(--fit-purple); }
+  .actf-text{ font-size:14px; line-height:1.42; color:var(--ink); }
+  .actf-text b{ font-weight:700; }
+  .actf-rel{ color:var(--ink-mute); }
+  .actf-time{ font-size:11px; color:var(--ink-mute); margin-top:5px; }
+  .actf-empty{ text-align:center; color:var(--ink-mute); font-size:13px; padding:46px 14px; line-height:1.5; }
   .m-nav-newdot { position: absolute; top: 0; right: 7px; width: 9px; height: 9px; border-radius: 50%; background: #E5484D; border: 2px solid var(--bg); }
   body.role-instructor .main { padding-bottom: calc(56px + env(safe-area-inset-bottom, 0px)); }
 
@@ -3477,6 +3506,11 @@
     <div id="instructor-schedule-container"></div>
   </section>
 
+  <!-- VISTA PROFESOR: ACTIVIDAD (feed de renovaciones / conversiones / altas) -->
+  <section class="view" id="view-instructor-activity">
+    <div id="instructor-activity-container"></div>
+  </section>
+
   <!-- VISTA COORDINADOR: LISTA DE PROFESORES Y SUS PAGOS -->
   <section class="view" id="view-coord-pay">
     <div id="coord-pay-container"></div>
@@ -4833,6 +4867,11 @@ body:not(.doctor-mode) .doc-bottomnav{ display:none; }
     <button class="m-nav-item m-nav-next" type="button" onclick="instructorGoToNextClass()" aria-label="Ir a tu próxima clase">
       <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg>
       <span>Próxima clase</span>
+    </button>
+    <button class="m-nav-item" type="button" data-prof-tab="activity" onclick="profNavGoto('activity', this)" aria-label="Actividad">
+      <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M13 2L3 14h7l-1 8 10-12h-7l1-8z"/></svg>
+      <span>Actividad</span>
+      <span class="m-nav-actcount" id="prof-activity-badge" style="display: none;">0</span>
     </button>
     <button class="m-nav-item" type="button" data-prof-tab="menu" onclick="profToggleMenu(this)" aria-label="Menú">
       <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
@@ -13383,11 +13422,169 @@ function profNavGoto(tab, btnEl) {
     showView('instructor-schedule', null);
     STATE.instTab = 'schedule';
     if (typeof renderInstructorScheduleView === 'function') renderInstructorScheduleView();
+  } else if (tab === 'activity') {
+    showView('instructor-activity', null);
+    STATE.instTab = 'activity';
+    if (typeof renderActivityFeedView === 'function') renderActivityFeedView();
+    if (typeof markActivitySeen === 'function') markActivitySeen();
   }
   // Actualizar activo en bottom bar
   document.querySelectorAll('.mobile-bottom-bar-prof .m-nav-item').forEach(b => b.classList.remove('is-active'));
   const targetBtn = btnEl || document.querySelector('.mobile-bottom-bar-prof [data-prof-tab="' + tab + '"]');
   if (targetBtn) targetBtn.classList.add('is-active');
+}
+
+// ============================================================
+// FEED DE ACTIVIDAD — vista, carga y badge
+// ============================================================
+function _actInstInfo(id) {
+  if (!id) return null;
+  const i = (STATE.instructors || []).find(x => x.id === id);
+  if (!i) return null;
+  const name = i.handle || i.first_name || i.full_name || '?';
+  return { id, name, color: getInstructorColor(i), initials: i.initials || (name[0] || '?').toUpperCase() };
+}
+function _actNamesColored(profs) {
+  return (profs || []).map(p => `<span style="color:${p.color};font-weight:600">${escape(p.name)}</span>`).join(' y ');
+}
+function _actAvatars(list) {
+  if (!list || !list.length) return `<div class="actf-avwrap"><div class="actf-av" style="background:#6B7280">FIT</div></div>`;
+  const a = list[0];
+  const extra = list.length > 1 ? `<span class="actf-av-extra">+${list.length - 1}</span>` : '';
+  return `<div class="actf-avwrap"><div class="actf-av" style="background:${a.color}">${escape(a.initials)}</div>${extra}</div>`;
+}
+function _actDayLabel(iso) {
+  const d = new Date(iso), today = new Date(), y = new Date(); y.setDate(y.getDate() - 1);
+  const dl = dateToIsoLocal(d);
+  if (dl === dateToIsoLocal(today)) return 'Hoy';
+  if (dl === dateToIsoLocal(y)) return 'Ayer';
+  return d.toLocaleDateString('es-PE', { weekday: 'long', day: 'numeric', month: 'long' });
+}
+function _actTimeLabel(iso) {
+  const d = new Date(iso), diff = (Date.now() - d.getTime()) / 3600000;
+  if (diff < 1) return 'hace ' + Math.max(1, Math.round(diff * 60)) + ' min';
+  if (diff < 24) return 'hace ' + Math.round(diff) + ' h';
+  return d.toLocaleDateString('es-PE', { day: 'numeric', month: 'short' }) + ' · ' + d.toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit', hour12: true });
+}
+
+async function loadStudioActivityFeed(days) {
+  if (!sb) return [];
+  const since = new Date(); since.setDate(since.getDate() - (days || 7));
+  const { data: acts } = await sb.from('studio_activity')
+    .select('*').gte('created_at', since.toISOString())
+    .order('created_at', { ascending: false }).limit(100);
+  if (!acts || !acts.length) return [];
+  // Nombres de alumnas
+  const sIds = [...new Set(acts.map(a => a.student_id).filter(Boolean))];
+  const sMap = new Map();
+  if (sIds.length) { const { data: ss } = await sb.from('students').select('id, first_name').in('id', sIds); (ss || []).forEach(s => sMap.set(s.id, s.first_name)); }
+  // Instructores referenciados que falten en STATE
+  const instIds = new Set();
+  acts.forEach(a => { (a.frequent_instructor_ids || []).forEach(id => instIds.add(id)); if (a.trial_instructor_id) instIds.add(a.trial_instructor_id); });
+  const have = new Set((STATE.instructors || []).map(i => i.id));
+  const missing = [...instIds].filter(id => id && !have.has(id));
+  if (missing.length) {
+    const { data: mi } = await sb.from('instructors').select('id, first_name, handle, full_name, initials, color').in('id', missing);
+    if (mi && mi.length) STATE.instructors = (STATE.instructors || []).concat(mi);
+  }
+  return acts.map(a => ({
+    ...a,
+    _studentName: sMap.get(a.student_id) || 'Una alumna',
+    _profs: (a.frequent_instructor_ids || []).map(_actInstInfo).filter(Boolean),
+    _trialProf: a.trial_instructor_id ? _actInstInfo(a.trial_instructor_id) : null,
+  }));
+}
+
+function renderActivityRow(ev, viewerId) {
+  const name = `<b>${escape(ev._studentName)}</b>`;
+  const n = ev.classes_total;
+  const pkgN = n ? ` de ${n} clases` : '';
+  let lead = '', avatarsHtml = '', text = '', rel = '', mine = false;
+
+  if (ev.type === 'renovacion') {
+    const profs = ev._profs || [];
+    mine = !!(viewerId && profs.some(p => p.id === viewerId));
+    avatarsHtml = _actAvatars(profs);
+    lead = 'Renovación' + (mine ? ' · tú' : '');
+    if (mine) {
+      const others = profs.filter(p => p.id !== viewerId);
+      text = `Tu alumna ${name} renovó su paquete${pkgN}.`;
+      rel = others.length ? `También entrena con ${_actNamesColored(others)}.` : 'Entrena seguido contigo.';
+    } else if (profs.length) {
+      text = `La alumna de ${_actNamesColored(profs)}, ${name}, renovó su paquete${pkgN}.`;
+    } else {
+      text = `${name} renovó su paquete${pkgN}.`;
+    }
+  } else if (ev.type === 'conversion') {
+    const tp = ev._trialProf;
+    mine = !!(viewerId && tp && tp.id === viewerId);
+    avatarsHtml = _actAvatars(tp ? [tp] : []);
+    lead = 'Alta nueva' + (mine ? ' · tú' : '');
+    if (mine) {
+      text = `Tu alumna ${name} pasó de prueba a clienta — primer paquete${pkgN}.`;
+      rel = 'Su clase de prueba fue contigo.';
+    } else if (tp) {
+      text = `La alumna de prueba de ${_actNamesColored([tp])}, ${name}, pasó a clienta — primer paquete${pkgN}.`;
+    } else {
+      text = `${name} pasó de prueba a clienta — primer paquete${pkgN}.`;
+    }
+  } else { // alta_nueva
+    avatarsHtml = _actAvatars([]);
+    lead = 'Alta nueva';
+    text = `${name} se dio de alta — primer paquete${pkgN}.`;
+    rel = 'Registrada por coordinación.';
+  }
+
+  return `<div class="actf-row${mine ? ' mine' : ''}">
+    ${avatarsHtml}
+    <div class="actf-body">
+      <div class="actf-lead">${lead}</div>
+      <div class="actf-text">${text}${rel ? ` <span class="actf-rel">${rel}</span>` : ''}</div>
+      <div class="actf-time">${_actTimeLabel(ev.created_at)}</div>
+    </div>
+  </div>`;
+}
+
+async function renderActivityFeedView() {
+  const cont = document.getElementById('instructor-activity-container');
+  if (!cont) return;
+  cont.innerHTML = `<div class="actf-wrap">
+    <div class="actf-eyebrow">Actividad</div>
+    <div class="actf-h1">Lo que se mueve en FIT</div>
+    <div id="actf-list"><div class="actf-empty">Cargando…</div></div>
+  </div>`;
+  const events = await loadStudioActivityFeed(7);
+  const list = document.getElementById('actf-list');
+  if (!list) return;
+  if (!events.length) { list.innerHTML = `<div class="actf-empty">Aún no hay movimientos esta semana.<br>Las renovaciones y altas aparecerán aquí.</div>`; return; }
+  const viewerId = (CURRENT_USER && CURRENT_USER.role === 'instructor') ? CURRENT_USER.record.id : null;
+  let html = '', lastDay = '';
+  events.forEach(ev => {
+    const day = _actDayLabel(ev.created_at);
+    if (day !== lastDay) { html += `<div class="actf-day">${day}</div>`; lastDay = day; }
+    html += renderActivityRow(ev, viewerId);
+  });
+  list.innerHTML = html;
+}
+
+function markActivitySeen() {
+  try { localStorage.setItem('fit_activity_seen_' + (CURRENT_USER?.record?.id || 'x'), new Date().toISOString()); } catch (e) {}
+  const badge = document.getElementById('prof-activity-badge');
+  if (badge) badge.style.display = 'none';
+  STATE._activityUnseen = 0;
+}
+
+async function refreshActivityBadge() {
+  if (!sb || !CURRENT_USER || CURRENT_USER.role !== 'instructor') return;
+  try {
+    const key = 'fit_activity_seen_' + (CURRENT_USER.record?.id || 'x');
+    const seen = localStorage.getItem(key) || new Date(Date.now() - 7 * 86400000).toISOString();
+    const { count } = await sb.from('studio_activity').select('id', { count: 'exact', head: true }).gt('created_at', seen);
+    const badge = document.getElementById('prof-activity-badge');
+    if (!badge) return;
+    if (count && count > 0) { badge.textContent = count > 9 ? '9+' : String(count); badge.style.display = 'block'; }
+    else badge.style.display = 'none';
+  } catch (e) {}
 }
 
 function profToggleMenu(btnEl) {
@@ -17117,6 +17314,8 @@ function deriveCoordInitials(fullName) {
 async function renderInstructorDay() {
   if (!CURRENT_USER || CURRENT_USER.role !== 'instructor') return;
   const inst = CURRENT_USER.record;
+
+  if (!STATE._actBadgeInit) { STATE._actBadgeInit = true; setTimeout(() => { if (typeof refreshActivityBadge === 'function') refreshActivityBadge(); }, 1200); }
 
   // Estado por defecto
   if (!STATE.instDayDate) STATE.instDayDate = dateToIsoLocal(new Date());
