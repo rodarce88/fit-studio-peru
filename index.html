@@ -1460,7 +1460,7 @@
   .actf-h1{ font-family:var(--display); font-style:italic; font-size:24px; color:var(--fit-purple-deep); margin-bottom:14px; line-height:1.12; }
   .actf-day{ font-size:10.5px; letter-spacing:.12em; text-transform:uppercase; color:var(--ink-mute); padding:16px 2px 8px; border-bottom:1px solid var(--line-soft); }
   .actf-row{ display:flex; gap:12px; align-items:flex-start; padding:14px 2px; border-bottom:1px solid var(--line-soft); }
-  .actf-row.mine{ background:var(--fit-lavender-pale); margin:0 -16px; padding:14px 16px; border-bottom:1px solid #ECE3FB; }
+  .actf-row.unseen{ background:#F6F2FE; margin:0 -16px; padding:14px 16px; border-bottom:1px solid #ECE3FB; }
   .actf-avwrap{ position:relative; flex-shrink:0; }
   .actf-av{ width:38px; height:38px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:700; color:#fff; }
   .actf-av-extra{ position:absolute; right:-5px; bottom:-3px; background:#fff; color:var(--ink-mute); font-size:9px; font-weight:700; border-radius:10px; padding:1px 5px; box-shadow:0 0 0 1px var(--line); }
@@ -1472,6 +1472,16 @@
   .actf-rel{ color:var(--ink-mute); }
   .actf-time{ font-size:11px; color:var(--ink-mute); margin-top:5px; }
   .actf-empty{ text-align:center; color:var(--ink-mute); font-size:13px; padding:46px 14px; line-height:1.5; }
+  .actf-reacts{ display:flex; gap:13px; align-items:center; margin-top:10px; flex-wrap:wrap; }
+  .actf-rx{ display:inline-flex; align-items:center; gap:4px; background:none; border:none; padding:0; cursor:pointer; line-height:1; }
+  .actf-rx .rxe{ font-size:17px; }
+  .actf-rx .rxc{ font-size:12px; font-weight:600; color:var(--ink-mute); }
+  .actf-rx.on .rxc{ color:var(--fit-purple-deep); }
+  .actf-rxadd{ font-size:16px; color:var(--ink-mute); background:none; border:none; cursor:pointer; opacity:.55; padding:0 2px; }
+  .actf-who{ font-size:11px; color:var(--ink-mute); margin-top:6px; line-height:1.4; }
+  .act-rxpicker{ position:fixed; z-index:10050; background:#fff; border:1px solid var(--line); border-radius:14px; box-shadow:0 12px 40px rgba(0,0,0,.18); padding:8px; display:flex; flex-wrap:wrap; gap:4px; }
+  .act-rxpicker button{ width:38px; height:38px; border:none; background:none; font-size:21px; border-radius:10px; cursor:pointer; }
+  .act-rxpicker button:hover{ background:var(--fit-lavender-pale); }
   .m-nav-newdot { position: absolute; top: 0; right: 7px; width: 9px; height: 9px; border-radius: 50%; background: #E5484D; border: 2px solid var(--bg); }
   body.role-instructor .main { padding-bottom: calc(56px + env(safe-area-inset-bottom, 0px)); }
 
@@ -13426,7 +13436,6 @@ function profNavGoto(tab, btnEl) {
     showView('instructor-activity', null);
     STATE.instTab = 'activity';
     if (typeof renderActivityFeedView === 'function') renderActivityFeedView();
-    if (typeof markActivitySeen === 'function') markActivitySeen();
   }
   // Actualizar activo en bottom bar
   document.querySelectorAll('.mobile-bottom-bar-prof .m-nav-item').forEach(b => b.classList.remove('is-active'));
@@ -13435,8 +13444,10 @@ function profNavGoto(tab, btnEl) {
 }
 
 // ============================================================
-// FEED DE ACTIVIDAD — vista, carga y badge
+// FEED DE ACTIVIDAD — vista, carga, reacciones y badge
 // ============================================================
+const ACT_EMOJIS = ['🎉','👏','💪','🔥','🙌','✨','🧘','🤸','💜','🏆','🥳','🤩','😮','🤯','😂','🙏','🥹','😭'];
+
 function _actInstInfo(id) {
   if (!id) return null;
   const i = (STATE.instructors || []).find(x => x.id === id);
@@ -13444,9 +13455,9 @@ function _actInstInfo(id) {
   const name = i.handle || i.first_name || i.full_name || '?';
   return { id, name, color: getInstructorColor(i), initials: i.initials || (name[0] || '?').toUpperCase() };
 }
-function _actNamesColored(profs) {
-  return (profs || []).map(p => `<span style="color:${p.color};font-weight:600">${escape(p.name)}</span>`).join(' y ');
-}
+function _actInitials(name){ if(!name) return 'FIT'; const p=String(name).trim().split(/\s+/); const a=((p[0]||'')[0]||'').toUpperCase(); const b=((p[1]||'')[0]||'').toUpperCase(); return (a+b) || (p[0]||'?').slice(0,2).toUpperCase(); }
+function _actCoordInfo(ev){ if(!ev.registered_by_name) return null; const name=ev.registered_by_name; return { name: name.split(/\s+/)[0], full: name, color: ev.registered_by_color || '#6B7280', initials: _actInitials(name) }; }
+function _actNamesColored(profs) { return (profs || []).map(p => `<span style="color:${p.color};font-weight:600">${escape(p.name)}</span>`).join(' y '); }
 function _actAvatars(list) {
   if (!list || !list.length) return `<div class="actf-avwrap"><div class="actf-av" style="background:#6B7280">FIT</div></div>`;
   const a = list[0];
@@ -13466,6 +13477,9 @@ function _actTimeLabel(iso) {
   if (diff < 24) return 'hace ' + Math.round(diff) + ' h';
   return d.toLocaleDateString('es-PE', { day: 'numeric', month: 'short' }) + ' · ' + d.toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit', hour12: true });
 }
+function _actMyName(){ const r=CURRENT_USER?.record||{}; if(CURRENT_USER?.role==='instructor') return r.handle||r.first_name||'Profe'; return (r.full_name||r.handle||'Coordinación').split(/\s+/)[0]; }
+function _actMyColor(){ const r=CURRENT_USER?.record||{}; if(CURRENT_USER?.role==='instructor') return getInstructorColor(r); if(r.color) return r.color; const cl=(typeof getCurrentLocation==='function')?getCurrentLocation():null; return (cl&&cl.color)||'#6B7280'; }
+function _actLastSeen(){ try{ return localStorage.getItem('fit_activity_seen_'+(CURRENT_USER?.record?.id||'x')); }catch(e){ return null; } }
 
 async function loadStudioActivityFeed(days) {
   if (!sb) return [];
@@ -13474,29 +13488,35 @@ async function loadStudioActivityFeed(days) {
     .select('*').gte('created_at', since.toISOString())
     .order('created_at', { ascending: false }).limit(100);
   if (!acts || !acts.length) return [];
-  // Nombres de alumnas
-  const sIds = [...new Set(acts.map(a => a.student_id).filter(Boolean))];
+  const needName = acts.filter(a => !a.student_name && a.student_id).map(a => a.student_id);
   const sMap = new Map();
-  if (sIds.length) { const { data: ss } = await sb.from('students').select('id, first_name').in('id', sIds); (ss || []).forEach(s => sMap.set(s.id, s.first_name)); }
-  // Instructores referenciados que falten en STATE
+  if (needName.length) { try { const { data: ss } = await sb.from('students').select('id, first_name').in('id', [...new Set(needName)]); (ss || []).forEach(s => sMap.set(s.id, s.first_name)); } catch(e){} }
   const instIds = new Set();
   acts.forEach(a => { (a.frequent_instructor_ids || []).forEach(id => instIds.add(id)); if (a.trial_instructor_id) instIds.add(a.trial_instructor_id); });
   const have = new Set((STATE.instructors || []).map(i => i.id));
   const missing = [...instIds].filter(id => id && !have.has(id));
   if (missing.length) {
-    const { data: mi } = await sb.from('instructors').select('id, first_name, handle, full_name, initials, color').in('id', missing);
-    if (mi && mi.length) STATE.instructors = (STATE.instructors || []).concat(mi);
+    try { const { data: mi } = await sb.from('instructors').select('id, first_name, handle, full_name, initials, color').in('id', missing); if (mi && mi.length) STATE.instructors = (STATE.instructors || []).concat(mi); } catch(e){}
   }
-  return acts.map(a => ({
-    ...a,
-    _studentName: sMap.get(a.student_id) || 'Una alumna',
-    _profs: (a.frequent_instructor_ids || []).map(_actInstInfo).filter(Boolean),
-    _trialProf: a.trial_instructor_id ? _actInstInfo(a.trial_instructor_id) : null,
-  }));
+  const actIds = acts.map(a => a.id);
+  let rByAct = new Map();
+  try {
+    const { data: reacts } = await sb.from('studio_activity_reactions').select('activity_id, emoji, user_id, user_name').in('activity_id', actIds);
+    (reacts || []).forEach(r => { const arr = rByAct.get(r.activity_id) || []; arr.push(r); rByAct.set(r.activity_id, arr); });
+  } catch(e){}
+  const myUid = CURRENT_USER?.authUser?.id;
+  return acts.map(a => {
+    const profs = (a.frequent_instructor_ids || []).map(_actInstInfo).filter(Boolean);
+    const trialProf = a.trial_instructor_id ? _actInstInfo(a.trial_instructor_id) : null;
+    const raw = rByAct.get(a.id) || [];
+    const byEmoji = new Map();
+    raw.forEach(r => { const g = byEmoji.get(r.emoji) || { emoji: r.emoji, count: 0, mine: false, names: [] }; g.count++; if (r.user_id === myUid) g.mine = true; if (r.user_name) g.names.push(r.user_name); byEmoji.set(r.emoji, g); });
+    return { ...a, _name: a.student_name || sMap.get(a.student_id) || 'una alumna', _profs: profs, _trialProf: trialProf, _coord: _actCoordInfo(a), _reactions: [...byEmoji.values()] };
+  });
 }
 
-function renderActivityRow(ev, viewerId) {
-  const name = `<b>${escape(ev._studentName)}</b>`;
+function renderActivityRow(ev, viewerId, lastSeen) {
+  const name = `<b>${escape(ev._name)}</b>`;
   const n = ev.classes_total;
   const pkgN = n ? ` de ${n} clases` : '';
   let lead = '', avatarsHtml = '', text = '', rel = '', mine = false;
@@ -13508,64 +13528,129 @@ function renderActivityRow(ev, viewerId) {
     lead = 'Renovación' + (mine ? ' · tú' : '');
     if (mine) {
       const others = profs.filter(p => p.id !== viewerId);
-      text = `Tu alumna ${name} renovó su paquete${pkgN}.`;
-      rel = others.length ? `También entrena con ${_actNamesColored(others)}.` : 'Entrena seguido contigo.';
+      text = `Tu alumna ${name} renovó su paquete${pkgN}!`;
+      rel = others.length ? `Entrena contigo y con ${_actNamesColored(others)}.` : 'Entrena seguido contigo.';
     } else if (profs.length) {
-      text = `La alumna de ${_actNamesColored(profs)}, ${name}, renovó su paquete${pkgN}.`;
+      text = `La alumna de ${_actNamesColored(profs)}, ${name}, renovó su paquete${pkgN}!`;
     } else {
-      text = `${name} renovó su paquete${pkgN}.`;
+      text = `${name} renovó su paquete${pkgN}!`;
     }
   } else if (ev.type === 'conversion') {
     const tp = ev._trialProf;
-    mine = !!(viewerId && tp && tp.id === viewerId);
-    avatarsHtml = _actAvatars(tp ? [tp] : []);
+    const freq = (ev._profs || []).filter(p => !tp || p.id !== tp.id);
+    const protag = (tp ? [tp] : []).concat(freq);
+    mine = !!(viewerId && ((tp && tp.id === viewerId) || freq.some(p => p.id === viewerId)));
+    avatarsHtml = _actAvatars(protag);
     lead = 'Alta nueva' + (mine ? ' · tú' : '');
+    const coordTxt = ev._coord ? ` La registró <span style="color:${ev._coord.color};font-weight:600">${escape(ev._coord.name)}</span>.` : '';
     if (mine) {
-      text = `Tu alumna ${name} pasó de prueba a clienta — primer paquete${pkgN}.`;
-      rel = 'Su clase de prueba fue contigo.';
+      const tpMine = tp && tp.id === viewerId;
+      const otherFreq = freq.filter(p => p.id !== viewerId);
+      text = `Tu alumna ${name} pasó de prueba a alumna activa — ¡primer paquete${pkgN}!`;
+      rel = (tpMine ? 'Su clase de prueba fue contigo.' : '') + coordTxt + (otherFreq.length ? ` También entrena con ${_actNamesColored(otherFreq)}.` : '');
     } else if (tp) {
-      text = `La alumna de prueba de ${_actNamesColored([tp])}, ${name}, pasó a clienta — primer paquete${pkgN}.`;
+      text = `La alumna de prueba de ${_actNamesColored([tp])}, ${name}, pasó a alumna activa — ¡primer paquete${pkgN}!`;
+      rel = coordTxt;
     } else {
-      text = `${name} pasó de prueba a clienta — primer paquete${pkgN}.`;
+      text = `${name} pasó de prueba a alumna activa — ¡primer paquete${pkgN}!`;
+      rel = coordTxt;
     }
-  } else { // alta_nueva
-    avatarsHtml = _actAvatars([]);
+  } else {
+    avatarsHtml = _actAvatars(ev._coord ? [{ color: ev._coord.color, initials: ev._coord.initials }] : []);
     lead = 'Alta nueva';
-    text = `${name} se dio de alta — primer paquete${pkgN}.`;
-    rel = 'Registrada por coordinación.';
+    text = `${name} se dio de alta — ¡primer paquete${pkgN}!`;
+    rel = ev._coord ? `La registró <span style="color:${ev._coord.color};font-weight:600">${escape(ev._coord.name)}</span>.` : 'Registrada por coordinación.';
   }
 
-  return `<div class="actf-row${mine ? ' mine' : ''}">
+  const unseen = lastSeen ? (ev.created_at > lastSeen) : true;
+  const rx = (ev._reactions || []).map(r =>
+    `<button class="actf-rx${r.mine ? ' on' : ''}" title="${escape(r.names.join(', '))}" onclick="toggleReaction('${ev.id}','${r.emoji}')"><span class="rxe">${r.emoji}</span><span class="rxc">${r.count}</span></button>`
+  ).join('');
+  const whoLine = (ev._reactions && ev._reactions.length)
+    ? `<div class="actf-who">${ev._reactions.map(r => `${r.emoji} ${escape(r.names.join(', '))}`).join('  ·  ')}</div>` : '';
+
+  return `<div class="actf-row${mine ? ' mine' : ''}${unseen ? ' unseen' : ''}">
     ${avatarsHtml}
     <div class="actf-body">
       <div class="actf-lead">${lead}</div>
       <div class="actf-text">${text}${rel ? ` <span class="actf-rel">${rel}</span>` : ''}</div>
       <div class="actf-time">${_actTimeLabel(ev.created_at)}</div>
+      <div class="actf-reacts">${rx}<button class="actf-rxadd" onclick="openReactionPicker('${ev.id}', this)">+</button></div>
+      ${whoLine}
     </div>
   </div>`;
+}
+
+function paintActivityList() {
+  const list = document.getElementById('actf-list');
+  if (!list) return;
+  const events = STATE._actFeed || [];
+  if (!events.length) { list.innerHTML = `<div class="actf-empty">Aún no hay movimientos esta semana.<br>Las renovaciones y altas aparecerán aquí.</div>`; return; }
+  const viewerId = (CURRENT_USER && CURRENT_USER.role === 'instructor') ? CURRENT_USER.record.id : null;
+  const lastSeen = STATE._actLastSeen;
+  let html = '', lastDay = '';
+  events.forEach(ev => {
+    const day = _actDayLabel(ev.created_at);
+    if (day !== lastDay) { html += `<div class="actf-day">${day}</div>`; lastDay = day; }
+    html += renderActivityRow(ev, viewerId, lastSeen);
+  });
+  list.innerHTML = html;
 }
 
 async function renderActivityFeedView() {
   const cont = document.getElementById('instructor-activity-container');
   if (!cont) return;
-  cont.innerHTML = `<div class="actf-wrap">
-    <div class="actf-eyebrow">Actividad</div>
-    <div class="actf-h1">Lo que se mueve en FIT</div>
-    <div id="actf-list"><div class="actf-empty">Cargando…</div></div>
-  </div>`;
-  const events = await loadStudioActivityFeed(7);
-  const list = document.getElementById('actf-list');
-  if (!list) return;
-  if (!events.length) { list.innerHTML = `<div class="actf-empty">Aún no hay movimientos esta semana.<br>Las renovaciones y altas aparecerán aquí.</div>`; return; }
-  const viewerId = (CURRENT_USER && CURRENT_USER.role === 'instructor') ? CURRENT_USER.record.id : null;
-  let html = '', lastDay = '';
-  events.forEach(ev => {
-    const day = _actDayLabel(ev.created_at);
-    if (day !== lastDay) { html += `<div class="actf-day">${day}</div>`; lastDay = day; }
-    html += renderActivityRow(ev, viewerId);
-  });
-  list.innerHTML = html;
+  cont.innerHTML = `<div class="actf-wrap"><div class="actf-eyebrow">Actividad</div><div class="actf-h1">Lo que se mueve en FIT</div><div id="actf-list"><div class="actf-empty">Cargando…</div></div></div>`;
+  STATE._actLastSeen = _actLastSeen();
+  STATE._actFeed = await loadStudioActivityFeed(7);
+  paintActivityList();
+  markActivitySeen();
 }
+
+async function reloadActivityReactions(activityId) {
+  try {
+    const { data: reacts } = await sb.from('studio_activity_reactions').select('activity_id, emoji, user_id, user_name').eq('activity_id', activityId);
+    const myUid = CURRENT_USER?.authUser?.id;
+    const byEmoji = new Map();
+    (reacts || []).forEach(r => { const g = byEmoji.get(r.emoji) || { emoji: r.emoji, count: 0, mine: false, names: [] }; g.count++; if (r.user_id === myUid) g.mine = true; if (r.user_name) g.names.push(r.user_name); byEmoji.set(r.emoji, g); });
+    const ev = (STATE._actFeed || []).find(e => e.id === activityId);
+    if (ev) ev._reactions = [...byEmoji.values()];
+    paintActivityList();
+  } catch (e) {}
+}
+async function toggleReaction(activityId, emoji) {
+  if (!sb || !CURRENT_USER) return;
+  const uid = CURRENT_USER.authUser?.id; if (!uid) return;
+  closeReactionPicker();
+  const ev = (STATE._actFeed || []).find(e => e.id === activityId);
+  const grp = ev && (ev._reactions || []).find(r => r.emoji === emoji);
+  const mine = grp && grp.mine;
+  try {
+    if (mine) {
+      await sb.from('studio_activity_reactions').delete().eq('activity_id', activityId).eq('user_id', uid).eq('emoji', emoji);
+    } else {
+      await sb.from('studio_activity_reactions').insert({ activity_id: activityId, user_id: uid, emoji, user_name: _actMyName(), user_color: _actMyColor() });
+    }
+    await reloadActivityReactions(activityId);
+  } catch (e) { console.warn('reaction', e); }
+}
+function openReactionPicker(activityId, btn) {
+  closeReactionPicker();
+  const p = document.createElement('div');
+  p.id = 'act-reaction-picker'; p.className = 'act-rxpicker';
+  p.innerHTML = ACT_EMOJIS.map(e => `<button onclick="toggleReaction('${activityId}','${e}')">${e}</button>`).join('');
+  document.body.appendChild(p);
+  const r = btn.getBoundingClientRect();
+  const w = Math.min(300, window.innerWidth - 24);
+  let left = r.left; if (left + w > window.innerWidth - 12) left = window.innerWidth - 12 - w;
+  p.style.left = Math.max(12, left) + 'px';
+  p.style.top = (r.top - 8) + 'px';
+  p.style.transform = 'translateY(-100%)';
+  p.style.width = w + 'px';
+  setTimeout(() => document.addEventListener('click', _rxPickerOutside, { once: true }), 0);
+}
+function _rxPickerOutside(e){ const p=document.getElementById('act-reaction-picker'); if(p && !p.contains(e.target)) closeReactionPicker(); }
+function closeReactionPicker() { const p = document.getElementById('act-reaction-picker'); if (p) p.remove(); }
 
 function markActivitySeen() {
   try { localStorage.setItem('fit_activity_seen_' + (CURRENT_USER?.record?.id || 'x'), new Date().toISOString()); } catch (e) {}
@@ -15475,9 +15560,13 @@ async function recordStudioActivity(studentId, newPkg) {
     }
 
     const stud = (STATE.students || []).find(s => s.id === studentId);
+    const regName = CURRENT_USER?.record?.full_name || CURRENT_USER?.record?.handle || null;
+    let regColor = CURRENT_USER?.record?.color || null;
+    if (!regColor) { const cl = (typeof getCurrentLocation === 'function') ? getCurrentLocation() : null; regColor = (cl && cl.color) || '#6B7280'; }
     await sb.from('studio_activity').insert({
       type,
       student_id: studentId,
+      student_name: stud ? (stud.first_name || null) : null,
       package_id: newPkg.package_id || null,
       student_package_id: newPkg.id,
       classes_total: newPkg.classes_total || newPkg.sessions_total || null,
@@ -15486,6 +15575,8 @@ async function recordStudioActivity(studentId, newPkg) {
       frequent_instructor_ids: frequentIds,
       trial_instructor_id: trialInstructorId,
       registered_by: CURRENT_USER?.authUser?.id || null,
+      registered_by_name: regName,
+      registered_by_color: regColor,
     });
   } catch (e) { console.warn('recordStudioActivity', e); }
 }
