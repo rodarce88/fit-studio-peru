@@ -1416,7 +1416,7 @@
   .inst-month-chev:hover:not(:disabled) { background: var(--fit-lavender-pale); border-color: var(--fit-purple-soft); }
   .inst-month-chev:disabled { opacity: 0.3; cursor: not-allowed; }
   .inst-month-track-wrap { position: relative; margin: 0 -4px; }
-  .inst-month-track { display: flex; gap: calc(8px - 3px * var(--t)); overflow-x: auto; scroll-snap-type: x mandatory; padding: 6px 4px calc(14px - 6px * var(--t)); scrollbar-width: none; -webkit-overflow-scrolling: touch; scroll-behavior: smooth; }
+  .inst-month-track { display: flex; gap: calc(8px - 3px * var(--t)); overflow-x: auto; scroll-snap-type: none; padding: 6px 4px calc(14px - 6px * var(--t)); scrollbar-width: none; -webkit-overflow-scrolling: touch; }
   .inst-month-track::-webkit-scrollbar { display: none; }
   .inst-month-track-wrap::before, .inst-month-track-wrap::after { content: ''; position: absolute; top: 0; bottom: 14px; width: 24px; pointer-events: none; z-index: 2; }
   .inst-month-track-wrap::before { left: 0; background: linear-gradient(to right, var(--bg), transparent); }
