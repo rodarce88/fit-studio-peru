@@ -15210,6 +15210,89 @@ function closeAddOptionsModal() {
   ADD_OPTIONS_CTX = { studentId: null, hour: null, reason: null };
 }
 
+// ============================================================
+// FEED DE ACTIVIDAD — registro de evento al vender/asignar un paquete real
+// ============================================================
+let _trialPkgIdCache = null;
+async function getTrialPackageIds() {
+  if (_trialPkgIdCache) return _trialPkgIdCache;
+  let ids = new Set((STATE.packages || []).filter(p => /prueba/i.test(p.name || '')).map(p => p.id));
+  if (!ids.size && sb) {
+    try { const { data } = await sb.from('packages').select('id, name').ilike('name', '%prueba%'); (data || []).forEach(p => ids.add(p.id)); } catch (e) {}
+  }
+  _trialPkgIdCache = ids;
+  return ids;
+}
+
+// Crea una fila en studio_activity. newPkg = fila student_packages recién creada.
+// No rompe el flujo de venta si algo falla (try/catch silencioso).
+async function recordStudioActivity(studentId, newPkg) {
+  try {
+    if (!sb || !studentId || !newPkg) return;
+    const trialPkgIds = await getTrialPackageIds();
+    // Saltar paquetes de prueba o cortesía: no son ventas que celebrar.
+    if (trialPkgIds.has(newPkg.package_id) || newPkg.is_courtesy) return;
+
+    // Tipo de evento según historial de paquetes del alumno (excluyendo el nuevo).
+    const { data: hist } = await sb.from('student_packages')
+      .select('id, package_id').eq('student_id', studentId).neq('id', newPkg.id);
+    let hadReal = false, hadTrial = false;
+    (hist || []).forEach(p => { if (trialPkgIds.has(p.package_id)) hadTrial = true; else hadReal = true; });
+    let type = 'alta_nueva';
+    if (hadReal) type = 'renovacion';
+    else if (hadTrial) type = 'conversion';
+
+    // Profesores frecuentes: ≥3 asistencias en las últimas 4 semanas (por quien dictó).
+    const since = new Date(); since.setDate(since.getDate() - 28);
+    const sinceIso = dateToIsoLocal(since);
+    let frequentIds = [];
+    const { data: atts } = await sb.from('attendance')
+      .select('session_id').eq('student_id', studentId).eq('status', 'attended').gte('marked_at', sinceIso);
+    const attSessIds = [...new Set((atts || []).map(a => a.session_id).filter(Boolean))];
+    if (attSessIds.length) {
+      const { data: sess } = await sb.from('class_sessions')
+        .select('id, instructor_id, actual_instructor_id').in('id', attSessIds);
+      const byId = new Map((sess || []).map(s => [s.id, s]));
+      const count = new Map();
+      (atts || []).forEach(a => {
+        const s = byId.get(a.session_id); if (!s) return;
+        const inst = s.actual_instructor_id || s.instructor_id;
+        if (inst) count.set(inst, (count.get(inst) || 0) + 1);
+      });
+      frequentIds = [...count.entries()].filter(([, n]) => n >= 3).map(([id]) => id);
+    }
+
+    // Conversión: profe que dio la clase de prueba.
+    let trialInstructorId = null;
+    if (type === 'conversion') {
+      const trialSpIds = (hist || []).filter(p => trialPkgIds.has(p.package_id)).map(p => p.id);
+      if (trialSpIds.length) {
+        const { data: tatt } = await sb.from('attendance')
+          .select('session_id').in('student_package_id', trialSpIds).eq('status', 'attended').limit(1);
+        if (tatt && tatt.length) {
+          const { data: ts } = await sb.from('class_sessions')
+            .select('instructor_id, actual_instructor_id').eq('id', tatt[0].session_id).maybeSingle();
+          if (ts) trialInstructorId = ts.actual_instructor_id || ts.instructor_id;
+        }
+      }
+    }
+
+    const stud = (STATE.students || []).find(s => s.id === studentId);
+    await sb.from('studio_activity').insert({
+      type,
+      student_id: studentId,
+      package_id: newPkg.package_id || null,
+      student_package_id: newPkg.id,
+      classes_total: newPkg.classes_total || newPkg.sessions_total || null,
+      amount_pen: (newPkg.price_paid != null ? newPkg.price_paid : null),
+      location_id: newPkg.location_id || (stud && stud.location_id) || null,
+      frequent_instructor_ids: frequentIds,
+      trial_instructor_id: trialInstructorId,
+      registered_by: CURRENT_USER?.authUser?.id || null,
+    });
+  } catch (e) { console.warn('recordStudioActivity', e); }
+}
+
 // Acción 1: crear paquete prueba (1 clase, no cortesía) + booking
 async function actionAddTrialAndBook() {
   if (!isOnline) { showToast('Necesita conexión', 'error'); return; }
@@ -15292,6 +15375,8 @@ async function actionAssignPackageAndBook(packageId) {
   }).select().single();
   if (pkgInsert.error) { showToast('Error: ' + pkgInsert.error.message, 'error'); return; }
   if (STATE.studentPackages) STATE.studentPackages.push(pkgInsert.data);
+
+  recordStudioActivity(studentId, pkgInsert.data);
 
   await _createBookingForCurrentSlot(studentId, hour, 'flexible');
 
@@ -21362,6 +21447,8 @@ async function saveAssignPackage() {
   }).select().single();
 
   if (error) { _releaseSaveLock(); showToast('Error: '+error.message, 'error'); return; }
+
+  recordStudioActivity(studentId, data);
 
   // ============ IMPUTAR PENDIENTES — RUTEO FIFO POR FECHA (con tope de cupo) ============
   // Cada clase pendiente va al paquete VIVO más antiguo que (a) ya exista para esa fecha
