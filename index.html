@@ -1494,6 +1494,12 @@
   .act-rxem{ width:46px; height:46px; border-radius:13px; border:1.5px solid transparent; background:var(--line-soft,#f4f1f8); font-size:24px; cursor:pointer; display:flex; align-items:center; justify-content:center; transition:transform .1s; }
   .act-rxem:active{ transform:scale(.92); }
   .act-rxem.on{ background:var(--fit-lavender-pale); border-color:var(--fit-purple,#7C3AED); }
+  .inst-stud-avatar.has-mov{ box-shadow:0 0 0 2px #fff, 0 0 0 3.5px #E0A82E; }
+  .inst-stud-mov{ color:#D99A1C; font-size:12px; margin-left:1px; }
+  .inst-sheet-mov{ display:flex; align-items:center; gap:9px; padding:12px 2px; margin-top:4px; border-top:1px solid var(--line); border-bottom:1px solid var(--line); }
+  .inst-sheet-mov-star{ color:#E0A82E; font-size:15px; flex-shrink:0; }
+  .inst-sheet-mov-txt{ font-size:12.5px; color:var(--ink); line-height:1.4; }
+  .inst-sheet-mov-ago{ color:var(--ink-mute); }
   .m-nav-newdot { position: absolute; top: 0; right: 7px; width: 9px; height: 9px; border-radius: 50%; background: #E5484D; border: 2px solid var(--bg); }
   body.role-instructor .main { padding-bottom: calc(56px + env(safe-area-inset-bottom, 0px)); }
 
@@ -13708,6 +13714,34 @@ async function refreshActivityBadge() {
   } catch (e) {}
 }
 
+// Mapa de movimiento reciente por alumna (renovó/alta) — para la ✦ en el día y el recuadro del modal
+async function loadRecentActivityStudents() {
+  if (!sb) return new Map();
+  try {
+    const since = new Date(); since.setDate(since.getDate() - 7);
+    const { data } = await sb.from('studio_activity')
+      .select('student_id, type, classes_total, created_at')
+      .gte('created_at', since.toISOString())
+      .order('created_at', { ascending: false });
+    const m = new Map();
+    (data || []).forEach(a => { if (a.student_id && !m.has(a.student_id)) m.set(a.student_id, a); });
+    return m;
+  } catch (e) { return new Map(); }
+}
+function _actMovText(mov) {
+  const n = mov.classes_total;
+  const pkgN = n ? ` de ${n} clases` : '';
+  if (mov.type === 'renovacion') return `Renovó su paquete${pkgN}`;
+  if (mov.type === 'conversion') return `Pasó de prueba a alumna activa${pkgN ? ' —' + pkgN : ''}`;
+  return `Se dio de alta${pkgN ? ' —' + pkgN : ''}`;
+}
+function _actMovAgo(iso) {
+  const days = Math.floor((Date.now() - new Date(iso).getTime()) / 86400000);
+  if (days <= 0) return 'hoy';
+  if (days === 1) return 'ayer';
+  return `hace ${days} días`;
+}
+
 function profToggleMenu(btnEl) {
   const screen = document.getElementById('mobile-menu-prof');
   if (!screen) return;
@@ -17480,6 +17514,9 @@ async function renderInstructorDay() {
     needStats ? loadInstructorMonthStats(inst.id) : Promise.resolve(STATE.instMonthStats),
     loadInstructorPendingClasses(inst.id),
     loadInstructorClassesForDate(inst, STATE.instDayDate),
+    (typeof loadRecentActivityStudents === 'function'
+      ? loadRecentActivityStudents().then(m => { STATE._actStudentMap = m; })
+      : Promise.resolve()),
   ]);
 
   if (needStats) {
@@ -19589,13 +19626,18 @@ function renderInstructorStudentRow(item, classCtx) {
     ? `<button class="inst-check-btn is-attended" onclick="event.stopPropagation(); instructorConfirmUndoAttendance('${s.id}', '${classCtx.dateIso}', ${classCtx.hour}, '${classCtx.location.id}')" title="Tap para deshacer asistencia"><span class="inst-confetti"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span>✓</button>`
     : `<button class="inst-check-btn" onclick="event.stopPropagation(); instructorMarkAttended('${s.id}', '${classCtx.dateIso}', ${classCtx.hour}, '${classCtx.location.id}')" title="Marcar asistencia"><span class="inst-confetti"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span>✓</button>`;
 
+  // ¿Movimiento reciente (renovó/alta) en los últimos 7 días? → anillo dorado + ✦
+  const _mov = (STATE._actStudentMap || new Map()).get(s.id);
+  const movStar = _mov ? '<span class="inst-stud-mov">✦</span>' : '';
+
   return `
     <div class="inst-stud-row ${rowKlass}">
       <div class="inst-stud-tap" onclick="openInstructorStudentSheet('${s.id}', '${classCtx.dateIso}', ${classCtx.hour}, '${classCtx.location.id}', '${status || ''}')">
-        <div class="inst-stud-avatar" style="${studentSedeAvatarStyle(s)}">${initials(s)}</div>
+        <div class="inst-stud-avatar${_mov ? ' has-mov' : ''}" style="${studentSedeAvatarStyle(s)}">${initials(s)}</div>
         <div class="inst-stud-info">
           <div class="inst-stud-name">
             ${escape(s.first_name)} ${escape(s.last_name || '')}
+            ${movStar}
             ${trialTag}
             ${statusChip}
             ${alertIcons}
@@ -19664,6 +19706,12 @@ function openInstructorStudentSheet(studentId, dateIso, hour, locationId, curren
     `;
   }
 
+  // Recuadro de movimiento reciente (renovó/alta esta semana) — línea elegante con ✦
+  const _mov = (STATE._actStudentMap || new Map()).get(studentId);
+  const movHtml = _mov
+    ? `<div class="inst-sheet-mov"><span class="inst-sheet-mov-star">✦</span><span class="inst-sheet-mov-txt">${escape(_actMovText(_mov))} · <span class="inst-sheet-mov-ago">${_actMovAgo(_mov.created_at)}</span></span></div>`
+    : '';
+
   backdrop.innerHTML = `
     <div class="inst-sheet">
       <div class="inst-sheet-handle"></div>
@@ -19675,6 +19723,7 @@ function openInstructorStudentSheet(studentId, dateIso, hour, locationId, curren
         </div>
         <div class="inst-sheet-close" onclick="closeInstructorStudentSheet()">✕</div>
       </div>
+      ${movHtml}
       <div class="inst-sheet-actions">
         ${primaryBtn}
         ${_locked
