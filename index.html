@@ -1519,6 +1519,7 @@
   .cr-nm{ font-weight:500; }
   .cr-faltan{ color:var(--ink-mute); font-size:11px; }
   .cr-proj{ color:var(--fit-purple-deep); font-weight:600; }
+  .cr-done{ color:#27500A; font-weight:600; }
   .cr-muted{ color:var(--ink-mute); }
   .cr-count{ padding:12px 4px 2px; font-size:11px; color:var(--ink-mute); }
   .cr-empty{ text-align:center; color:var(--ink-mute); font-size:13px; padding:50px 14px; line-height:1.5; }
@@ -13008,11 +13009,9 @@ function filterStudents() { renderStudents(); }
 // ============================================================
 // REPORTE: Clases por alumna (+ proyección de hitos)
 // ============================================================
-const CLASS_MILESTONES_BASE = [10, 25, 50, 100];
-function _nextClassMilestone(total) {
-  for (const m of CLASS_MILESTONES_BASE) { if (total < m) return m; }
-  let m = 150; while (m <= total) m += 50; return m;
-}
+// Umbral único por ahora: 50 clases.
+const CLASS_MILESTONE = 50;
+function _nextClassMilestone(total) { return total < CLASS_MILESTONE ? CLASS_MILESTONE : null; }
 async function openClassReport() {
   let ov = document.getElementById('class-report-ov');
   if (ov) ov.remove();
@@ -13027,11 +13026,8 @@ async function openClassReport() {
       <input id="cr-search" class="cr-search" placeholder="Buscar alumna..." oninput="renderClassReport()" />
       <div class="cr-chips" id="cr-chips">
         <button class="cr-chip is-active" data-f="all" onclick="crSetFilter(this)">Todas</button>
-        <button class="cr-chip" data-f="10" onclick="crSetFilter(this)">≥10</button>
-        <button class="cr-chip" data-f="25" onclick="crSetFilter(this)">≥25</button>
-        <button class="cr-chip" data-f="50" onclick="crSetFilter(this)">≥50</button>
-        <button class="cr-chip" data-f="100" onclick="crSetFilter(this)">≥100</button>
-        <button class="cr-chip" data-f="near" onclick="crSetFilter(this)">✦ Cerca del hito</button>
+        <button class="cr-chip" data-f="near" onclick="crSetFilter(this)">✦ Cerca de 50</button>
+        <button class="cr-chip" data-f="done" onclick="crSetFilter(this)">Ya llegó a 50</button>
       </div>
     </div>
     <div class="cr-body" id="cr-body"><div class="cr-empty">Cargando…</div></div>
@@ -13062,12 +13058,12 @@ function renderClassReport() {
   let rows = (STATE._crData || []).slice();
   rows.forEach(r => {
     r._next = _nextClassMilestone(r.total);
-    r._faltan = r._next - r.total;
-    r._proj = (r.dates.length >= r._faltan && r._faltan > 0) ? r.dates[r._faltan - 1] : null;
+    r._faltan = r._next ? r._next - r.total : 0;
+    r._proj = (r._next && r._faltan > 0 && r.dates.length >= r._faltan) ? r.dates[r._faltan - 1] : null;
   });
   if (q) rows = rows.filter(r => (`${r.first_name} ${r.last_name || ''}`).toLowerCase().includes(q));
-  if (f === 'near') rows = rows.filter(r => r._faltan <= 3);
-  else if (f !== 'all') rows = rows.filter(r => r.total >= Number(f));
+  if (f === 'near') rows = rows.filter(r => r._next && r._faltan <= 5);
+  else if (f === 'done') rows = rows.filter(r => r.total >= CLASS_MILESTONE);
   rows.sort((a, b) => b.total - a.total);
   if (!rows.length) { body.innerHTML = '<div class="cr-empty">Sin resultados.</div>'; return; }
   const fmt = (d) => d ? new Date(d + 'T00:00:00').toLocaleDateString('es-PE', { day: 'numeric', month: 'short' }) : '—';
@@ -13077,9 +13073,9 @@ function renderClassReport() {
       <td class="cr-nm">${escape(r.first_name)} ${escape(r.last_name || '')}</td>
       <td>${escape(locName(r.location_id))}</td>
       <td class="num"><b>${r.total}</b></td>
-      <td>${r._next}<span class="cr-faltan"> · faltan ${r._faltan}</span></td>
+      <td>${r._next ? `${r._next}<span class="cr-faltan"> · faltan ${r._faltan}</span>` : `<span class="cr-done">✓ 50 alcanzado</span>`}</td>
       <td class="num">${r.dates.length}</td>
-      <td>${r._proj ? `<span class="cr-proj">${fmt(r._proj)}</span>` : (r.dates.length ? '<span class="cr-muted">faltan agendar</span>' : '<span class="cr-muted">—</span>')}</td>
+      <td>${r._proj ? `<span class="cr-proj">${fmt(r._proj)}</span>` : (r._next ? (r.dates.length ? '<span class="cr-muted">faltan agendar</span>' : '<span class="cr-muted">—</span>') : '<span class="cr-muted">—</span>')}</td>
     </tr>`).join('')}</tbody></table>
     <div class="cr-count">${rows.length} alumnas</div>`;
 }
