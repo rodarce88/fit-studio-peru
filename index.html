@@ -1422,6 +1422,7 @@
   .inst-month-track-wrap::before { left: 0; background: linear-gradient(to right, var(--bg), transparent); }
   .inst-month-track-wrap::after { right: 0; background: linear-gradient(to left, var(--bg), transparent); }
   body.role-instructor.inst-scrolled .topbar { border-bottom-color: transparent; }
+  body.role-instructor [data-inst-daystrip] { display: contents; }
 
   .inst-month-day { flex: 0 0 auto; min-width: calc(54px - 12px * var(--t)); scroll-snap-align: center; background: none; border: none; border-radius: 0; padding: 4px 4px calc(10px - 3px * var(--t)); text-align: center; cursor: pointer; position: relative; user-select: none; -webkit-tap-highlight-color: transparent; font-family: inherit; }
   .inst-month-day.is-past { opacity: 0.45; }
@@ -17299,6 +17300,13 @@ function instApplyHeaderCollapse() {
   car.style.setProperty('--t', t.toFixed(3));
   document.body.classList.toggle('inst-scrolled', t > 0.02);
   car.style.boxShadow = t > 0.6 ? '0 6px 16px -12px rgba(0,0,0,0.22)' : 'none';
+  // Mantener la fecha elegida centrada mientras las fechas se encogen (el centro es el ancla)
+  const track = car.querySelector('.inst-month-track');
+  const sel = track ? track.querySelector('.inst-month-day.is-selected') : null;
+  if (track && sel) {
+    const target = sel.offsetLeft + sel.offsetWidth / 2 - track.clientWidth / 2;
+    track.scrollLeft = Math.max(0, target);
+  }
 }
 let _instCollapseBound = false;
 function instBindHeaderCollapse() {
