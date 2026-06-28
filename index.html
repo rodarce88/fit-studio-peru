@@ -4189,6 +4189,13 @@ body:not(.doctor-mode) .doc-bottomnav{ display:none; }
             <input type="date" id="f-birth-date" />
           </div>
           <div class="form-row">
+            <label>Género</label>
+            <select id="f-gender">
+              <option value="F">Femenino</option>
+              <option value="M">Masculino</option>
+            </select>
+          </div>
+          <div class="form-row">
             <label>Modalidad <span class="req">*</span></label>
             <select id="f-modality" required onchange="toggleModalityFields()">
               <option value="flexible">Flexible (avisa por WhatsApp)</option>
@@ -10497,6 +10504,7 @@ function openStudentModal(id) {
   f('f-doc-type').value = s?.document_type || '';
   f('f-doc-num').value = s?.document_number || '';
   f('f-birth-date').value = s?.birth_date || '';
+  f('f-gender').value = (s?.gender === 'M') ? 'M' : 'F';
   f('f-modality').value = s?.modality || 'flexible';
   // Guardamos la modalidad original para detectar cambios al editar
   // (clave para mostrar el campo de monkeyfit-classes solo cuando hay cambio real)
@@ -10928,6 +10936,7 @@ async function saveStudent() {
     document_type: f('f-doc-type').value || null,
     document_number: f('f-doc-num').value.trim() || null,
     birth_date: f('f-birth-date').value || null,
+    gender: f('f-gender').value || 'F',
     modality: modality,
     emergency_contact_name: f('f-emergency-name').value.trim() || null,
     emergency_contact_phone: f('f-emergency-phone').value.trim() || null,
@@ -13596,6 +13605,18 @@ function _actInstInfo(id) {
 function _actInitials(name){ if(!name) return 'FIT'; const p=String(name).trim().split(/\s+/); const a=((p[0]||'')[0]||'').toUpperCase(); const b=((p[1]||'')[0]||'').toUpperCase(); return (a+b) || (p[0]||'?').slice(0,2).toUpperCase(); }
 function _actCoordInfo(ev){ if(!ev.registered_by_name) return null; const name=ev.registered_by_name; return { name: name.split(/\s+/)[0], full: name, color: ev.registered_by_color || '#6B7280', initials: _actInitials(name) }; }
 function _actNamesColored(profs) { return (profs || []).map(p => `<span style="color:${p.color};font-weight:600">${escape(p.name)}</span>`).join(' y '); }
+function _actWords(ev) {
+  const m = (ev && ev.student_gender === 'M');
+  return {
+    al:     m ? 'alumno' : 'alumna',
+    activ:  m ? 'activo' : 'activa',
+    tuAl:   m ? 'Tu alumno' : 'Tu alumna',
+    laAl:   m ? 'El alumno' : 'La alumna',
+    loLa:   m ? 'Lo' : 'La',
+    regd:   m ? 'Registrado' : 'Registrada',
+    formad: m ? 'Formado' : 'Formada',
+  };
+}
 function _actAvatars(list) {
   if (!list || !list.length) return `<div class="actf-avwrap"><div class="actf-av" style="background:#6B7280">FIT</div></div>`;
   const a = list[0];
@@ -13667,15 +13688,16 @@ function renderActivityRow(ev, viewerId, lastSeen) {
 
   // ── HITO: tarjeta especial, festiva ──────────────────────────────
   if (ev.type === 'hito') {
+    const W = _actWords(ev);
     const profs = ev._profs || [];
     const hMine = !!(viewerId && profs.some(p => p.id === viewerId));
     const num = n || CLASS_MILESTONE || 50;
     let profLine;
     if (hMine) {
       const others = profs.filter(p => p.id !== viewerId);
-      profLine = others.length ? `La formaste tú y ${_actNamesColored(others)}.` : 'La formaste tú. 👏';
+      profLine = others.length ? `${W.loLa} formaste tú y ${_actNamesColored(others)}.` : `${W.loLa} formaste tú. 👏`;
     } else if (profs.length) {
-      profLine = `Formada por ${_actNamesColored(profs)}.`;
+      profLine = `${W.formad} por ${_actNamesColored(profs)}.`;
     } else { profLine = 'Todo un logro del equipo FIT.'; }
     return `<div class="actf-hito${hMine ? ' mine' : ''}${unseen ? ' unseen' : ''}">
       <div class="actf-hito-glow"></div>
@@ -13691,6 +13713,7 @@ function renderActivityRow(ev, viewerId, lastSeen) {
   }
 
   let lead = '', avatarsHtml = '', text = '', rel = '', mine = false;
+  const W = _actWords(ev);
 
   if (ev.type === 'renovacion') {
     const profs = ev._profs || [];
@@ -13699,10 +13722,10 @@ function renderActivityRow(ev, viewerId, lastSeen) {
     lead = 'Renovación' + (mine ? ' · tú' : '');
     if (mine) {
       const others = profs.filter(p => p.id !== viewerId);
-      text = `Tu alumna ${name} renovó su paquete${pkgN}!`;
+      text = `${W.tuAl} ${name} renovó su paquete${pkgN}!`;
       rel = others.length ? `Entrena contigo y con ${_actNamesColored(others)}.` : 'Entrena seguido contigo.';
     } else if (profs.length) {
-      text = `La alumna de ${_actNamesColored(profs)}, ${name}, renovó su paquete${pkgN}!`;
+      text = `${W.laAl} de ${_actNamesColored(profs)}, ${name}, renovó su paquete${pkgN}!`;
     } else {
       text = `${name} renovó su paquete${pkgN}!`;
     }
@@ -13713,24 +13736,24 @@ function renderActivityRow(ev, viewerId, lastSeen) {
     mine = !!(viewerId && ((tp && tp.id === viewerId) || freq.some(p => p.id === viewerId)));
     avatarsHtml = _actAvatars(protag);
     lead = 'Alta nueva' + (mine ? ' · tú' : '');
-    const coordTxt = ev._coord ? ` La registró <span style="color:${ev._coord.color};font-weight:600">${escape(ev._coord.name)}</span>.` : '';
+    const coordTxt = ev._coord ? ` ${W.loLa} registró <span style="color:${ev._coord.color};font-weight:600">${escape(ev._coord.name)}</span>.` : '';
     if (mine) {
       const tpMine = tp && tp.id === viewerId;
       const otherFreq = freq.filter(p => p.id !== viewerId);
-      text = `Tu alumna ${name} pasó de prueba a alumna activa — ¡primer paquete${pkgN}!`;
+      text = `${W.tuAl} ${name} pasó de prueba a ${W.al} ${W.activ} — ¡primer paquete${pkgN}!`;
       rel = (tpMine ? 'Su clase de prueba fue contigo.' : '') + coordTxt + (otherFreq.length ? ` También entrena con ${_actNamesColored(otherFreq)}.` : '');
     } else if (tp) {
-      text = `La alumna de prueba de ${_actNamesColored([tp])}, ${name}, pasó a alumna activa — ¡primer paquete${pkgN}!`;
+      text = `${W.laAl} de prueba de ${_actNamesColored([tp])}, ${name}, pasó a ${W.al} ${W.activ} — ¡primer paquete${pkgN}!`;
       rel = coordTxt;
     } else {
-      text = `${name} pasó de prueba a alumna activa — ¡primer paquete${pkgN}!`;
+      text = `${name} pasó de prueba a ${W.al} ${W.activ} — ¡primer paquete${pkgN}!`;
       rel = coordTxt;
     }
   } else {
     avatarsHtml = _actAvatars(ev._coord ? [{ color: ev._coord.color, initials: ev._coord.initials }] : []);
     lead = 'Alta nueva';
     text = `${name} se dio de alta — ¡primer paquete${pkgN}!`;
-    rel = ev._coord ? `La registró <span style="color:${ev._coord.color};font-weight:600">${escape(ev._coord.name)}</span>.` : 'Registrada por coordinación.';
+    rel = ev._coord ? `${W.loLa} registró <span style="color:${ev._coord.color};font-weight:600">${escape(ev._coord.name)}</span>.` : `${W.regd} por coordinación.`;
   }
 
   return `<div class="actf-row${mine ? ' mine' : ''}${unseen ? ' unseen' : ''}">
@@ -13856,7 +13879,7 @@ async function loadRecentActivityStudents() {
   try {
     const since = new Date(); since.setDate(since.getDate() - 7);
     const { data } = await sb.from('studio_activity')
-      .select('student_id, type, classes_total, created_at')
+      .select('student_id, type, classes_total, student_gender, created_at')
       .gte('created_at', since.toISOString())
       .order('created_at', { ascending: false });
     const m = new Map();
@@ -13867,9 +13890,10 @@ async function loadRecentActivityStudents() {
 function _actMovText(mov) {
   const n = mov.classes_total;
   const pkgN = n ? ` de ${n} clases` : '';
+  const m = mov.student_gender === 'M';
   if (mov.type === 'hito') return `🏆 Llegó a ${n || 50} clases en FIT`;
   if (mov.type === 'renovacion') return `Renovó su paquete${pkgN}`;
-  if (mov.type === 'conversion') return `Pasó de prueba a alumna activa${pkgN ? ' —' + pkgN : ''}`;
+  if (mov.type === 'conversion') return `Pasó de prueba a ${m ? 'alumno activo' : 'alumna activa'}${pkgN ? ' —' + pkgN : ''}`;
   return `Se dio de alta${pkgN ? ' —' + pkgN : ''}`;
 }
 function _actMovAgo(iso) {
@@ -13914,6 +13938,7 @@ async function maybeRecordClassMilestone(studentId) {
       type: 'hito',
       student_id: studentId,
       student_name: stud ? (stud.first_name || null) : null,
+      student_gender: stud ? (stud.gender || 'F') : 'F',
       classes_total: CLASS_MILESTONE,
       location_id: (stud && stud.location_id) || null,
       frequent_instructor_ids: profIds,
@@ -15827,6 +15852,7 @@ async function recordStudioActivity(studentId, newPkg) {
       type,
       student_id: studentId,
       student_name: stud ? (stud.first_name || null) : null,
+      student_gender: stud ? (stud.gender || 'F') : 'F',
       package_id: newPkg.package_id || null,
       student_package_id: newPkg.id,
       classes_total: newPkg.classes_total || newPkg.sessions_total || null,
