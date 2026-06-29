@@ -488,18 +488,25 @@
   .mw-collapse-all { border:1px solid var(--line); background:#fff; border-radius:10px; padding:8px 13px; font-weight:600; font-size:12.5px; color:var(--ink-mute); cursor:pointer; white-space:nowrap; font-family:var(--body); }
   .mw-collapse-all:hover { border-color:var(--fit-purple-soft); }
   /* Sistema de widgets colapsables (Fase 4 · 2b) */
-  .mw-head { display:flex; align-items:center; gap:10px; cursor:pointer; user-select:none; }
+  .mw-head { display:flex; align-items:center; gap:10px; }
   .mw-card .mw-head { padding:16px 20px; }
   .mw-head .mw-t { font-size:11px; text-transform:uppercase; letter-spacing:.12em; color:var(--ink-mute); font-weight:600; flex:1; display:inline-flex; align-items:center; gap:8px; }
   .mw-i { width:16px; height:16px; border-radius:999px; border:1px solid var(--line); background:transparent; color:var(--ink-mute); font:600 10px/1 var(--body,system-ui); cursor:pointer; display:inline-flex; align-items:center; justify-content:center; flex:none; }
   .mw-i:hover { border-color:var(--fit-purple-soft); color:var(--fit-purple); }
-  .mw-chev { color:var(--ink-faint); transition:transform .2s; font-size:13px; line-height:1; }
-  .mw-card.collapsed .mw-chev, .cobranza-widget.collapsed .mw-chev { transform:rotate(-90deg); }
-  .mw-card.collapsed .mw-body { display:none; }
   .mw-card .mw-body { padding:0 20px 20px; }
   .mw-infobox { background:var(--fit-lavender-pale,#FAF7FD); border:1px solid var(--line); border-radius:12px; padding:11px 13px; font-size:11.5px; line-height:1.5; color:var(--ink-mute); }
   .mw-card .mw-infobox { margin:0 20px 14px; }
-  .cobranza-widget.collapsed > .cob-gauge, .cobranza-widget.collapsed > .cob-main, .cobranza-widget.collapsed > .cob-stats, .cobranza-widget.collapsed > .cob-chevron { display:none; }
+  /* Card resumen (estado minimizado): una sola tarjeta con 3 líneas */
+  .midia-resumen { background:#fff; border:1px solid var(--line); border-radius:var(--radius-lg,22px); margin-bottom:16px; cursor:pointer; overflow:hidden; transition:border-color .12s, box-shadow .12s; }
+  .midia-resumen:hover { border-color:var(--fit-purple-soft); box-shadow:0 4px 16px rgba(0,0,0,0.05); }
+  .midia-resumen .mr-head { display:flex; align-items:center; gap:10px; padding:13px 18px; border-bottom:1px solid var(--line); }
+  .midia-resumen .mr-head .mr-t { font-size:11px; text-transform:uppercase; letter-spacing:.12em; color:var(--ink-mute); font-weight:600; flex:1; }
+  .midia-resumen .mr-head .mr-expand { font-size:12px; font-weight:600; color:var(--fit-purple); }
+  .midia-resumen-row { display:flex; align-items:center; gap:11px; padding:12px 18px; border-bottom:1px solid var(--line-soft); }
+  .midia-resumen-row:last-child { border-bottom:none; }
+  .midia-resumen .mr-dot { width:9px; height:9px; border-radius:50%; flex:none; }
+  .midia-resumen .mr-label { font-size:11px; text-transform:uppercase; letter-spacing:.1em; color:var(--ink-mute); font-weight:600; }
+  .midia-resumen .mr-val { font-size:13.5px; color:var(--ink); font-weight:600; margin-left:auto; text-align:right; }
   .actrail { position:sticky; top: calc(var(--topbar-h) + 16px); background:#fff; border:1px solid var(--line); border-radius:var(--radius-lg); box-shadow:var(--shadow-sm); display:flex; flex-direction:column; max-height: calc(100vh - var(--topbar-h) - 40px); overflow:hidden; }
   .actrail-head { padding:16px 18px 12px; border-bottom:1px solid var(--line-soft); }
   .actrail-titlerow { display:flex; align-items:center; justify-content:space-between; gap:10px; }
@@ -3418,11 +3425,17 @@
       <div id="midia-sede-chips" class="midia-sede-chips"></div>
       <button type="button" id="mw-collapse-all" class="mw-collapse-all" data-mode="collapse" onclick="toggleCollapseAllMw()">Minimizar todo</button>
     </div>
+    <!-- Card resumen: aparece al "Minimizar todo" en lugar de 3 tarjetas colapsadas -->
+    <div id="midia-resumen" class="midia-resumen" style="display:none;" onclick="toggleCollapseAllMw()" role="button" tabindex="0" aria-label="Expandir widgets">
+      <div class="mr-head"><span class="mr-t">Resumen del mes</span><span class="mr-expand">Expandir ▾</span></div>
+      <div class="midia-resumen-row"><span class="mr-dot" style="background:var(--fit-purple);"></span><span class="mr-label">Cobranza del mes</span><span class="mr-val" id="mr-cob">—</span></div>
+      <div class="midia-resumen-row"><span class="mr-dot" style="background:var(--danger-bright);"></span><span class="mr-label">Deuda acumulada</span><span class="mr-val" id="mr-debt">—</span></div>
+      <div class="midia-resumen-row"><span class="mr-dot" style="background:var(--good-medium,#1D9E75);"></span><span class="mr-label">Alumnos activos</span><span class="mr-val" id="mr-active">—</span></div>
+    </div>
     <!-- Widget de cobranza del mes (reemplaza los 4 KPI cards) -->
     <div class="cobranza-widget" id="cobranza-widget" onclick="openCobranzaPanel()" tabindex="0" role="button" aria-label="Cobranza del mes — ver alumnos pendientes">
-      <div class="mw-head" style="grid-column:1/-1; padding:0;" onclick="event.stopPropagation(); toggleMw('cobranza-widget')">
+      <div class="mw-head" style="grid-column:1/-1; padding:0;" onclick="event.stopPropagation();">
         <span class="mw-t">Cobranza del mes <button type="button" class="mw-i" onclick="mwInfo(event,'cobranza')" aria-label="Qué significa">i</button></span>
-        <span class="mw-chev">&#9662;</span>
       </div>
       <div class="mw-infobox" id="mw-info-cobranza" style="grid-column:1/-1; display:none; margin:0;">Compara lo cobrado este mes contra lo esperado a la fecha (ritmo del mes). <b>Por cobrar</b> es el saldo de los paquetes comprados este mes; <b>Ya cobrado</b> es lo pagado este mes. El % del medidor es cobrado ÷ esperado a hoy.</div>
       <div class="cob-gauge">
@@ -3466,9 +3479,8 @@
 
     <!-- Deuda acumulada — total real (todos los paquetes, no solo del mes) + tendencia 4 semanas -->
     <div id="debt-widget" class="mw-card" style="background:var(--surface,#fff); border:1px solid var(--line); border-radius:var(--radius-lg,18px); overflow:hidden;">
-      <div class="mw-head" onclick="toggleMw('debt-widget')">
+      <div class="mw-head">
         <span class="mw-t">Deuda acumulada <button type="button" class="mw-i" onclick="mwInfo(event,'debt')" aria-label="Qué significa">i</button></span>
-        <span class="mw-chev">&#9662;</span>
       </div>
       <div class="mw-infobox" id="mw-info-debt" style="display:none;">Saldo pendiente de <b>todos</b> los paquetes vivos (no solo los del mes): precio del paquete menos lo pagado. El gráfico muestra cuántas alumnas tienen saldo en las últimas 4 semanas.</div>
       <div class="mw-body">
@@ -3487,9 +3499,8 @@
 
     <!-- Alumnos activos — vivos hoy (paquete vivo + clase agendada) + tendencia de asistentes por semana -->
     <div id="active-widget" class="mw-card" style="background:var(--surface,#fff); border:1px solid var(--line); border-radius:var(--radius-lg,18px); overflow:hidden;">
-      <div class="mw-head" onclick="toggleMw('active-widget')">
+      <div class="mw-head">
         <span class="mw-t">Alumnos activos <button type="button" class="mw-i" onclick="mwInfo(event,'active')" aria-label="Qué significa">i</button></span>
-        <span class="mw-chev">&#9662;</span>
       </div>
       <div class="mw-infobox" id="mw-info-active" style="display:none;">Alumnas con <b>paquete vivo</b> (clases disponibles, no congelado) y al menos una <b>clase agendada</b>. "Asistieron este mes" cuenta alumnas distintas con clase marcada como asistió en el mes en curso.</div>
       <div class="mw-body">
@@ -3521,6 +3532,14 @@
         </div>
       </div>
     </div>
+    <!-- FASE 5: Clases sin marcar — columna central, dentro de dash-top-left -->
+    <div id="midia-unmarked" style="background:#fff; border:1.5px solid var(--fit-purple-soft); border-radius:var(--radius-lg); padding:20px 24px;">
+      <div style="display:flex; align-items:center; gap:8px; margin-bottom:12px;">
+        <span class="kpi-label" style="color:var(--fit-purple); flex:1;">Clases sin marcar</span>
+        <span id="midia-unmarked-count" style="font-size:12px; font-weight:700; color:var(--ink-mute);"></span>
+      </div>
+      <div id="midia-unmarked-body"><div style="padding:14px 0; font-size:13px; color:var(--ink-mute);">Cargando…</div></div>
+    </div>
     </div><!-- /dash-top-left -->
 
     <aside class="actrail" id="activity-rail">
@@ -3537,15 +3556,6 @@
       <div class="actrail-foot"><a href="#" onclick="showView('instructor-activity', null); if(typeof renderActivityFeedView==='function') renderActivityFeedView(); return false;">Ver todo el registro →</a></div>
     </aside>
     </div><!-- /dash-top-grid -->
-
-    <!-- FASE 5: Clases sin marcar — mismo reporte de la sección Reportes, embebido y permanente -->
-    <div id="midia-unmarked" style="background:#fff; border:1.5px solid var(--fit-purple-soft); border-radius:var(--radius-lg); padding:20px 24px; margin-bottom:18px;">
-      <div style="display:flex; align-items:center; gap:8px; margin-bottom:12px;">
-        <span class="kpi-label" style="color:var(--fit-purple); flex:1;">Clases sin marcar</span>
-        <span id="midia-unmarked-count" style="font-size:12px; font-weight:700; color:var(--ink-mute);"></span>
-      </div>
-      <div id="midia-unmarked-body"><div style="padding:14px 0; font-size:13px; color:var(--ink-mute);">Cargando…</div></div>
-    </div>
 
     <div class="layout-grid">
       <div class="timeline-card">
@@ -6338,7 +6348,7 @@ function renderDashboard() {
 
   // Filtro de sede global (Fase 4)
   renderMiDiaSedeChips();
-  applyMwCollapsedState();
+  applyMiDiaMinimized();
   // Widget de cobranza del mes (async, no bloquea el render)
   renderCobranzaWidget();
   // Deuda acumulada total + tendencia 4 semanas (async, no bloquea)
@@ -6429,6 +6439,7 @@ function setMiDiaWidgetsLoading() {
   // Sin marcar
   const um = document.getElementById('midia-unmarked-body'); if (um) um.innerHTML = skel(58, 8) + skel(58);
   reset('midia-unmarked-count', '—');
+  if (typeof renderMiDiaResumen === 'function') renderMiDiaResumen();
 }
 window.setMiDiaSede = function(v) {
   MIDIA_SEDE = v;
@@ -6442,39 +6453,35 @@ window.setMiDiaSede = function(v) {
   if (document.getElementById('midia-unmarked-body')) { UNMARKED_STATE.embed = true; UNMARKED_STATE.sedeFilter = (v === 'all') ? 'all' : v; renderUnmarkedReport(); }
 };
 
-// --- Widgets colapsables de Mi día (Fase 4 · 2b) ---
+// --- Minimizar/expandir widgets de Mi día (Fase 4 · 2b) ---
 const MW_IDS = ['cobranza-widget', 'debt-widget', 'active-widget'];
-function _mwState() { try { return JSON.parse(localStorage.getItem('fit_mw_collapsed') || '{}'); } catch (e) { return {}; } }
-function _mwSave(s) { try { localStorage.setItem('fit_mw_collapsed', JSON.stringify(s)); } catch (e) {} }
-window.toggleMw = function(id) {
-  const el = document.getElementById(id); if (!el) return;
-  el.classList.toggle('collapsed');
-  const s = _mwState(); s[id] = el.classList.contains('collapsed'); _mwSave(s);
-  syncCollapseAllBtn();
-};
 window.mwInfo = function(ev, key) {
   if (ev) { ev.stopPropagation(); ev.preventDefault(); }
   const b = document.getElementById('mw-info-' + key);
   if (b) b.style.display = (b.style.display === 'none' || !b.style.display) ? '' : 'none';
 };
-function syncCollapseAllBtn() {
-  const btn = document.getElementById('mw-collapse-all'); if (!btn) return;
-  const allCollapsed = MW_IDS.every(id => { const el = document.getElementById(id); return el && el.classList.contains('collapsed'); });
-  btn.textContent = allCollapsed ? 'Expandir todo' : 'Minimizar todo';
-  btn.dataset.mode = allCollapsed ? 'expand' : 'collapse';
+function _mwMin() { try { return localStorage.getItem('fit_mw_min') === '1'; } catch (e) { return false; } }
+function renderMiDiaResumen() {
+  const card = document.getElementById('midia-resumen');
+  if (!card || card.style.display === 'none') return;
+  const txt = (id) => { const e = document.getElementById(id); return e ? e.textContent.trim() : '—'; };
+  const set = (id, v) => { const e = document.getElementById(id); if (e) e.textContent = v; };
+  set('mr-cob', `${txt('cob-pct')} cobrado · ${txt('cob-amount')} por cobrar`);
+  set('mr-debt', `${txt('debt-amount')} · ${txt('debt-count')}`);
+  set('mr-active', `${txt('active-today')} hoy · ${txt('active-this-month')} este mes`);
 }
-function applyMwCollapsedState() {
-  const s = _mwState();
-  MW_IDS.forEach(id => { const el = document.getElementById(id); if (el) el.classList.toggle('collapsed', !!s[id]); });
-  syncCollapseAllBtn();
+function setMiDiaMinimized(min) {
+  MW_IDS.forEach(id => { const el = document.getElementById(id); if (el) el.style.display = min ? 'none' : ''; });
+  const res = document.getElementById('midia-resumen'); if (res) res.style.display = min ? '' : 'none';
+  const btn = document.getElementById('mw-collapse-all'); if (btn) { btn.textContent = min ? 'Expandir todo' : 'Minimizar todo'; btn.dataset.mode = min ? 'expand' : 'collapse'; }
+  try { localStorage.setItem('fit_mw_min', min ? '1' : '0'); } catch (e) {}
+  if (min) renderMiDiaResumen();
 }
 window.toggleCollapseAllMw = function() {
   const btn = document.getElementById('mw-collapse-all');
-  const collapse = !(btn && btn.dataset.mode === 'expand');
-  const s = _mwState();
-  MW_IDS.forEach(id => { const el = document.getElementById(id); if (el) { el.classList.toggle('collapsed', collapse); s[id] = collapse; } });
-  _mwSave(s); syncCollapseAllBtn();
+  setMiDiaMinimized(!(btn && btn.dataset.mode === 'expand'));
 };
+function applyMiDiaMinimized() { setMiDiaMinimized(_mwMin()); }
 
 let DEBT_SCOPE = 'all'; // 'sede' | 'all'
 
@@ -6578,6 +6585,7 @@ function paintDebtSummary(data) {
 
   if (amountEl) amountEl.textContent = fmt(data.current.total);
   if (countEl)  countEl.textContent  = `${data.current.count} alumna${data.current.count === 1 ? '' : 's'} con saldo`;
+  if (typeof renderMiDiaResumen === 'function') renderMiDiaResumen();
 
   const pts = data.trend || [];
   if (deltaEl && pts.length >= 2) {
@@ -6748,6 +6756,7 @@ function paintActiveStudents(data) {
 
   if (todayEl) todayEl.textContent = data.activeToday;
   if (monthEl) monthEl.textContent = data.thisMonth;
+  if (typeof renderMiDiaResumen === 'function') renderMiDiaResumen();
   if (monthDeltaEl) {
     const diff = data.thisMonth - data.lastMonth;
     const sign = diff > 0 ? `+${diff}` : `${diff}`;
@@ -6958,6 +6967,7 @@ function paintCobranzaWidget(d) {
     widget.style.opacity = '';
     widget.style.pointerEvents = '';
   }
+  if (typeof renderMiDiaResumen === 'function') renderMiDiaResumen();
 }
 
 function openCobranzaPanel() {
