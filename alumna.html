@@ -61,9 +61,9 @@
   .next-rows .lab{ color:var(--ink-mute); font-weight:600; } .next-rows .val{ font-weight:700; }
   .micro{ font-size:calc(13.5px*var(--scale)); color:var(--ink-mute); margin-top:12px; line-height:1.45; }
   .divider{ height:1px; background:var(--line-strong); margin:26px 0 20px; }
-  .group-h{ font-family:var(--display); font-weight:600; font-size:calc(20px*var(--scale)); margin-bottom:4px; }
+  .group-h{ font-family:var(--display); font-weight:600; font-size:calc(20px*var(--scale)); margin-bottom:4px; color:var(--ink); }
   .group-sub{ font-size:calc(13px*var(--scale)); color:var(--ink-mute); margin-bottom:14px; }
-  .pkg-head{ width:100%; border:0; background:transparent; display:flex; align-items:center; justify-content:space-between; gap:12px; padding:4px 0; cursor:pointer; text-align:left; font-family:var(--body); }
+  .pkg-head{ width:100%; border:0; background:transparent; display:flex; align-items:center; justify-content:space-between; gap:12px; padding:4px 0; cursor:pointer; text-align:left; font-family:var(--body); color:var(--ink); -webkit-appearance:none; appearance:none; }
   .pkg-head-txt{ min-width:0; }
   .pkg-chev{ width:22px; height:22px; flex:none; color:var(--ink-mute); transition:transform .2s ease; }
   .pkg-head.open .pkg-chev{ transform:rotate(180deg); }
@@ -387,9 +387,10 @@
     DATA.attendance.forEach(a=>{ const s=DATA.sessById[a.session_id]; if(!s) return; const pid=a.student_package_id||activeId; if(!pid) return; (rowsByPkg[pid]=rowsByPkg[pid]||[]).push({ s, att:a }); });
     if(activeId) upcoming.forEach(s=>{ (rowsByPkg[activeId]=rowsByPkg[activeId]||[]).push({ s, prox:true }); });
 
+    const lastDate = (pid)=>{ let m=''; (rowsByPkg[pid]||[]).forEach(r=>{ if(r.s.session_date>m) m=r.s.session_date; }); return m; };
     const others = valid.filter(p=> p.id!==activeId);
     const proximos = others.filter(p=> !isDone(p)).sort((a,b)=>(a.purchase_date||'').localeCompare(b.purchase_date||''));
-    const anteriores = others.filter(p=> isDone(p)).sort((a,b)=>(b.purchase_date||'').localeCompare(a.purchase_date||''));
+    const anteriores = others.filter(p=> isDone(p)).sort((a,b)=>{ const da=lastDate(a.id)||a.purchase_date||'', db=lastDate(b.id)||b.purchase_date||''; return db.localeCompare(da); });
     const order = [activeId, ...proximos.map(p=>p.id), ...anteriores.map(p=>p.id)].filter(Boolean);
 
     order.forEach(pid=>{
