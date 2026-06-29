@@ -191,9 +191,24 @@
   let DATA = { me:null, inst:{}, locs:{}, pkgNames:{}, bookings:[], attendance:[], packages:[], sessById:{} };
   let lastFetch = 0, fetching = false, appReady = false;
 
+  // Auto-actualización: si Vercel sirve una versión nueva del archivo, recarga sola.
+  let BUILT_TAG = null;
+  async function fetchTag(){
+    try{ const r = await fetch(location.pathname + '?_v=' + Date.now(), { method:'HEAD', cache:'no-store' });
+      return r.headers.get('etag') || r.headers.get('last-modified'); }catch(e){ return null; }
+  }
+  async function checkUpdate(){
+    const t = await fetchTag();
+    if(!t) return false;
+    if(BUILT_TAG && t !== BUILT_TAG){ location.reload(); return true; }
+    if(!BUILT_TAG) BUILT_TAG = t;
+    return false;
+  }
+
   function showError(title, msg){ view('v-error'); $('err-title').textContent=title; $('err-msg').textContent=msg||''; }
 
   async function boot(){
+    checkUpdate();
     const token = new URLSearchParams(location.search).get('t');
     const { data:{ session } } = await sb.auth.getSession();
     if (session) return afterAuth();
@@ -289,6 +304,7 @@
 
   async function refresh(silent){
     const btn = $('refresh-btn'); if(btn) btn.classList.add('spin');
+    if(await checkUpdate()) return;
     if(!silent){ $('tab-clases').innerHTML = skeletonHTML(); $('tab-pkg').innerHTML = skeletonHTML(); }
     const tasks = [fetchAll()];
     if(!silent) tasks.push(new Promise(r=>setTimeout(r,450)));
@@ -436,7 +452,7 @@
   window.confirmar=()=>{ toast('Muy pronto podrás confirmar desde aquí'); };
 
   // al volver a la app (cambiar de WhatsApp a Chrome, desbloquear, etc.) refresca si está viejo
-  document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='visible' && appReady && Date.now()-lastFetch > 8000) refresh(true); });
+  document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='visible' && appReady){ checkUpdate().then(up=>{ if(!up && Date.now()-lastFetch > 8000) refresh(true); }); } });
 
   boot();
 </script>
