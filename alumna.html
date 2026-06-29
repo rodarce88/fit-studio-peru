@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>FIT Studio · Mi cuenta</title>
+<meta name="app-build" content="b8-2026-06-29">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400..700;1,400..600&family=Mulish:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -83,9 +84,9 @@
   .wcell .ncirc{ width:40px; height:40px; } .wcell .cnum{ font-size:calc(20px*var(--scale)); }
   .wk-hr{ font-size:calc(14px*var(--scale)); font-weight:700; min-height:18px; line-height:1; white-space:nowrap; }
   .grid{ display:grid; grid-template-columns:repeat(7,1fr); gap:3px; }
-  .cell{ aspect-ratio:1; background:transparent; border:0; cursor:pointer; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px; font-family:var(--body); -webkit-appearance:none; }
+  .cell{ height:var(--cellH,48px); background:transparent; border:0; cursor:pointer; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px; font-family:var(--body); -webkit-appearance:none; }
   .cell.empty{ visibility:hidden; }
-  .cell .ncirc{ width:38px; height:38px; } .cell .cnum{ font-size:calc(17px*var(--scale)); }
+  .cell .ncirc{ width:var(--circ,38px); height:var(--circ,38px); } .cell .cnum{ font-size:calc(17px*var(--scale)); }
   .dots{ height:7px; display:flex; gap:3px; }
   .dots i{ width:6px; height:6px; border-radius:50%; }
   .cal-detail{ margin-top:24px; padding-top:18px; border-top:1px solid var(--line-strong); }
@@ -104,7 +105,7 @@
   #app-body.cal #cl-top{ display:none; }
   #app-body.cal .seg{ flex:none; margin:2px 0 16px; }
   #app-body.cal #clases-view{ flex:1; min-height:0; display:flex; flex-direction:column; }
-  #app-body.cal .cal-detail{ flex:1; min-height:0; overflow-y:auto; -webkit-overflow-scrolling:touch; }
+  #app-body.cal .cal-detail{ flex:1; min-height:0; overflow-y:auto; -webkit-overflow-scrolling:touch; margin-top:12px; padding-top:12px; }
   .group-h{ font-family:var(--display); font-weight:600; font-size:calc(20px*var(--scale)); margin-bottom:4px; color:var(--ink); }
   .group-sub{ font-size:calc(13px*var(--scale)); color:var(--ink-mute); margin-bottom:14px; }
   .pkg-head{ width:100%; border:0; background:transparent; display:flex; align-items:center; justify-content:space-between; gap:12px; padding:4px 0; cursor:pointer; text-align:left; font-family:var(--body); color:var(--ink); -webkit-appearance:none; appearance:none; }
@@ -238,9 +239,21 @@
 
   // Auto-actualización: si Vercel sirve una versión nueva del archivo, recarga sola.
   let BUILT_TAG = null;
+  const MY_BUILD = document.querySelector('meta[name="app-build"]')?.content || '';
   async function fetchTag(){
-    try{ const r = await fetch(location.pathname + '?_v=' + Date.now(), { method:'HEAD', cache:'no-store' });
-      return r.headers.get('etag') || r.headers.get('last-modified'); }catch(e){ return null; }
+    const u = location.pathname + '?_v=' + Date.now();
+    try{
+      const r = await fetch(u, { method:'HEAD', cache:'no-store' });
+      const tag = r.headers.get('etag') || r.headers.get('last-modified');
+      if(tag) return 'h:'+tag;
+    }catch(e){}
+    try{
+      const r = await fetch(u, { cache:'no-store' });
+      const t = await r.text();
+      const m = t.match(/name="app-build"\s+content="([^"]+)"/);
+      if(m) return 'b:'+m[1];
+    }catch(e){}
+    return null;
   }
   async function checkUpdate(){
     const t = await fetchTag();
@@ -434,6 +447,24 @@
     applyClasesMode();
     box.classList.remove('fade'); void box.offsetWidth; box.classList.add('fade');
     box.innerHTML = CL.view==='lista' ? clLista() : (CL.view==='semana' ? clSemana() : clMes());
+    if(CL.view==='mes') requestAnimationFrame(fitMonth);
+  }
+
+  function fitMonth(){
+    if(CL.view!=='mes') return;
+    const body=$('app-body'), view=$('clases-view'); if(!body||!view) return;
+    const grid=view.querySelector('.grid'); if(!grid) return;
+    const seg=document.querySelector('#tab-clases .seg');
+    const calnav=view.querySelector('.cal-nav');
+    const dow=view.querySelector('.dow');
+    const avail=body.clientHeight;
+    const overhead=(seg?seg.offsetHeight+18:0)+(calnav?calnav.offsetHeight+16:0)+(dow?dow.offsetHeight+8:0)+24;
+    const r=Math.ceil(grid.children.length/7) || 6;
+    let cellH=Math.floor((avail-overhead-150)/r);
+    cellH=Math.max(34, Math.min(cellH, 62));
+    const circ=Math.max(26, Math.min(cellH-12, 40));
+    grid.style.setProperty('--cellH', cellH+'px');
+    grid.style.setProperty('--circ', circ+'px');
   }
 
   function clLista(){
@@ -581,12 +612,15 @@
     // si los datos están viejos (>15s), refresca en silencio al cambiar de pestaña
     if(appReady && Date.now()-lastFetch > 15000) refresh(true);
   };
-  window.setSize=(mode,el)=>{ document.documentElement.setAttribute('data-size', mode==='lg'?'lg':'normal'); el.parentElement.querySelectorAll('button').forEach(b=>b.classList.remove('on')); el.classList.add('on'); };
+  window.setSize=(mode,el)=>{ document.documentElement.setAttribute('data-size', mode==='lg'?'lg':'normal'); el.parentElement.querySelectorAll('button').forEach(b=>b.classList.remove('on')); el.classList.add('on'); if(CL.view==='mes') requestAnimationFrame(fitMonth); };
   window.togglePkg=(pid, btn)=>{ const b=$('body-'+pid); if(!b) return; b.classList.toggle('collapsed'); btn.classList.toggle('open'); };
   window.confirmar=()=>{ toast('Muy pronto podrás confirmar desde aquí'); };
 
   // al volver a la app (cambiar de WhatsApp a Chrome, desbloquear, etc.) refresca si está viejo
   document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='visible' && appReady){ checkUpdate().then(up=>{ if(!up && Date.now()-lastFetch > 8000) refresh(true); }); } });
+
+  window.addEventListener('resize', ()=>{ if(CL.view==='mes') fitMonth(); });
+  setInterval(()=>{ if(document.visibilityState==='visible' && appReady) checkUpdate(); }, 25000);
 
   boot();
 </script>
