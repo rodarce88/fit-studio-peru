@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>FIT Studio · Mi cuenta</title>
-<meta name="app-build" content="b12-2026-06-29">
+<meta name="app-build" content="b13-2026-06-29">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400..700;1,400..600&family=Mulish:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -40,7 +40,47 @@
   .sbox.rec{ background:#FFF3E3; color:#A85B08; }
   .sbox.repro{ background:#EAF0FB; color:#2B59B0; }
   .sbox.neutral{ background:#F0EDF6; color:#5B2A8F; }
+  .sbox.aviso{ background:#FBF2DE; color:#A85B08; }
   .btn:active{ transform:scale(.985); }
+  .btn.ghost{ background:#fff; color:var(--purple); box-shadow:none; border:1.5px solid var(--purple-soft); }
+  .btn.danger{ background:#C0392B; box-shadow:0 8px 20px rgba(192,57,43,.22); }
+  .linkbtn{ width:100%; border:0; background:transparent; color:var(--ink-mute); font-family:var(--body); font-weight:700; font-size:calc(15px*var(--scale)); padding:14px 0 2px; cursor:pointer; text-decoration:underline; }
+  /* botón de todo el paquete (distinto al sólido morado) */
+  .packbtn{ width:100%; border:1.5px solid var(--purple-soft); background:#fff; border-radius:16px; padding:15px 16px; margin-top:14px; cursor:pointer; display:flex; align-items:center; gap:13px; text-align:left; font-family:var(--body); }
+  .packbtn:active{ transform:scale(.99); }
+  .packbtn .pic{ width:42px; height:42px; border-radius:12px; flex:none; background:var(--purple-pale); display:flex; align-items:center; justify-content:center; }
+  .packbtn .pic svg{ width:22px; height:22px; stroke:var(--purple); }
+  .packbtn .ptx{ flex:1; min-width:0; }
+  .packbtn .pt{ display:block; font-weight:700; font-size:calc(16px*var(--scale)); color:var(--purple-deep); }
+  .packbtn .ps{ display:block; font-size:calc(13px*var(--scale)); color:var(--ink-mute); margin-top:1px; }
+  .packbtn .parr{ color:var(--ink-faint); font-size:calc(22px*var(--scale)); }
+  .packbtn.some{ border-color:#BFE6D5; background:#E8F5EF; }
+  .packbtn.some .pic{ background:#fff; } .packbtn.some .pic svg{ stroke:#0E7A4F; }
+  .packbtn.some .pt{ color:#0E7A4F; } .packbtn.some .ps{ color:#3E8C70; } .packbtn.some .parr{ color:#0E7A4F; }
+  /* pill de estado en filas */
+  .pill{ border:0; border-radius:999px; padding:10px 15px; font-weight:700; font-size:calc(13.5px*var(--scale)); white-space:nowrap; cursor:pointer; font-family:var(--body); flex:none; }
+  .pill.todo{ background:var(--purple-soft); color:var(--purple-deep); }
+  .pill.done{ background:#E8F5EF; color:#0E7A4F; }
+  .pill.aviso{ background:#FBF2DE; color:#A85B08; }
+  .pill.rec{ background:#FFF3E3; color:#A85B08; } .pill.repro{ background:#EAF0FB; color:#2B59B0; } .pill.lost{ background:#FBEAEA; color:#B42318; }
+  /* hoja (sheet) */
+  .sheet-ov{ position:fixed; inset:0; background:rgba(34,26,43,.45); display:flex; align-items:flex-end; justify-content:center; opacity:0; pointer-events:none; transition:opacity .2s; z-index:60; }
+  .sheet-ov.show{ opacity:1; pointer-events:auto; }
+  .sheet-panel{ width:100%; max-width:460px; background:var(--cream); border-radius:26px 26px 0 0; padding:26px 22px calc(26px + env(safe-area-inset-bottom)); box-shadow:0 -10px 40px rgba(0,0,0,.2); transform:translateY(18px); transition:transform .22s; max-height:88vh; overflow-y:auto; }
+  .sheet-ov.show .sheet-panel{ transform:translateY(0); }
+  .sh-h{ font-family:var(--display); font-weight:600; font-size:calc(24px*var(--scale)); line-height:1.15; }
+  .sh-sub{ color:var(--ink-soft); font-size:calc(15px*var(--scale)); margin:6px 0 4px; }
+  .sh-note{ border-radius:14px; padding:14px 16px; margin:16px 0; font-size:calc(14.5px*var(--scale)); line-height:1.5; }
+  .sh-note.amber{ background:#FBF2DE; color:#7a5a16; } .sh-note.red{ background:#FBEAEA; color:#9B2C20; } .sh-note.ok{ background:#E8F5EF; color:#0E7A4F; }
+  .sheet-panel .btn, .sheet-panel .linkbtn{ margin-top:10px; }
+  .cklist{ display:flex; flex-direction:column; gap:10px; margin:16px 0 4px; }
+  .ckrow{ width:100%; background:#fff; border:1px solid var(--line); border-radius:16px; padding:14px 15px; display:flex; align-items:center; gap:14px; cursor:pointer; text-align:left; font-family:var(--body); }
+  .ckrow.off{ opacity:.5; }
+  .ck{ width:30px; height:30px; border-radius:9px; flex:none; display:flex; align-items:center; justify-content:center; font-size:18px; font-weight:800; }
+  .ck.on{ background:var(--purple); color:#fff; } .ck.no{ background:#fff; border:2px solid var(--line); }
+  .ckd{ flex:1; min-width:0; } .ckdd{ display:block; font-family:var(--display); font-weight:600; font-size:calc(16px*var(--scale)); } .ckdm{ display:block; color:var(--ink-mute); font-size:calc(13.5px*var(--scale)); margin-top:2px; }
+  .ck-tag{ display:inline-block; border-radius:7px; padding:1px 7px; font-size:11px; font-weight:700; margin-left:4px; }
+  .ck-tag.done{ background:#E8F5EF; color:#0E7A4F; } .ck-tag.aviso{ background:#FBF2DE; color:#A85B08; }
 
   #v-app{ flex:1; min-height:0; display:flex; flex-direction:column; }
   .topbar{ flex:none; background:rgba(251,248,242,.96); backdrop-filter:blur(8px); padding:16px 18px 13px; display:flex; align-items:center; justify-content:space-between; gap:10px; border-bottom:1px solid var(--line); }
@@ -326,7 +366,7 @@
         sb.from('instructors').select('id, first_name'),
         sb.from('locations').select('id, name, color'),
         sb.from('packages').select('id, name'),
-        sb.from('session_bookings').select('id, session_id, cancelled_at, confirmed_at'),
+        sb.from('session_bookings').select('id, session_id, cancelled_at, confirmed_at, cancel_requested_at'),
         sb.from('attendance').select('id, session_id, status, student_package_id'),
         sb.from('student_packages').select('id, classes_total, classes_used, status, is_active, is_frozen, purchase_date, expiration_date, closed_at, replaces_id, package_id'),
       ]);
@@ -436,7 +476,7 @@
       const start=classStartMs(s);
       if(now - start >= CLASS_ACTIVE_MS) return;   // ya pasó (más de 2h tras terminar) → al historial vía asistencia
       const att=attBySession[b.session_id];
-      events.push({ date:s.session_date, hour:s.hour, loc:s.location_id, inst:s.instructor_id, sid:s.id, kind:'up', bid:b.id, conf:b.confirmed_at, status: att?att.status:null, start });
+      events.push({ date:s.session_date, hour:s.hour, loc:s.location_id, inst:s.instructor_id, sid:s.id, kind:'up', bid:b.id, conf:b.confirmed_at, cancel:b.cancel_requested_at, status: att?att.status:null, start });
     });
     DATA.attendance.forEach(a=>{
       const s=DATA.sessById[a.session_id]; if(!s) return;
@@ -470,11 +510,17 @@
         const sbx = cardStatusBox(next.status);
         html += `<div class="sbox ${sbx.cls}">${sbx.label}</div>${sbx.note?`<div class="micro">${sbx.note}</div>`:''}`;
       } else if(!started){
-        html += (next.conf
-          ? `<button class="btn confirmed" id="confbtn" onclick="confirmar('${next.bid}', true)">Asistencia confirmada</button>
-             <div class="micro">¿No vas a poder venir? Toca el botón para quitar tu confirmación.</div>`
-          : `<button class="btn" id="confbtn" onclick="confirmar('${next.bid}', false)">Confirmar mi asistencia</button>
-             <div class="micro">Puedes confirmar tu asistencia hasta que empiece la clase.</div>`);
+        if(next.cancel){
+          html += `<div class="sbox aviso">Avisaste que no vendrás</div>
+            <div class="micro">La coordinadora se pondrá en contacto contigo.</div>
+            <button class="btn ghost" style="margin-top:12px" onclick="confirmar('${next.bid}', false)">Sí voy a venir</button>`;
+        } else if(next.conf){
+          html += `<button class="btn confirmed" id="confbtn" onclick="confirmar('${next.bid}', true)">Asistencia confirmada</button>
+            <button class="linkbtn" onclick="openClassSheet('${next.bid}')">No podré ir a esta clase</button>`;
+        } else {
+          html += `<button class="btn" id="confbtn" onclick="confirmar('${next.bid}', false)">Confirmar mi asistencia</button>
+            <button class="linkbtn" onclick="openClassSheet('${next.bid}')">No podré ir a esta clase</button>`;
+        }
       } else if(!ended){
         html += (next.conf
           ? `<div class="sbox ok">Asistencia confirmada</div><div class="micro">Tu clase está en curso. El estudio registrará tu asistencia al terminar.</div>`
@@ -485,7 +531,26 @@
     } else {
       html += `<div class="empty">No tienes una próxima clase agendada por ahora.</div>`;
     }
-    html += `</div>
+    let bulkBtn = '';
+    {
+      const future = upcoming.filter(e => e.bid && !e.status && e.start > now);
+      const total = future.length;
+      if(total >= 2){
+        const confCount = future.filter(e => e.conf).length;
+        if(confCount === 0){
+          bulkBtn = `<button class="packbtn" onclick="openPackSheet()">
+            <span class="pic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 9h18M8 3v4M16 3v4"/></svg></span>
+            <span class="ptx"><span class="pt">Confirmar mis ${total} clases</span><span class="ps">Revisa y confirma todas de una vez</span></span>
+            <span class="parr">&rsaquo;</span></button>`;
+        } else {
+          bulkBtn = `<button class="packbtn some" onclick="openPackSheet()">
+            <span class="pic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6 9 17l-5-5"/></svg></span>
+            <span class="ptx"><span class="pt">${confCount} de ${total} clases confirmadas</span><span class="ps">Toca para gestionar o avisar ausencias</span></span>
+            <span class="parr">&rsaquo;</span></button>`;
+        }
+      }
+    }
+    html += `</div>${bulkBtn}
       <div class="seg">
         <button class="${CL.view==='lista'?'on':''}" onclick="clView('lista',this)">Lista</button>
         <button class="${CL.view==='semana'?'on':''}" onclick="clView('semana',this)">Semana</button>
@@ -535,7 +600,18 @@
     const rest = CLE.next ? CLE.upcoming.slice(1) : CLE.upcoming;
     let h=`<div class="group-h">Más adelante</div>`;
     if(rest.length===0) return h+`<div class="empty">No tienes más clases programadas por ahora.</div>`;
-    rest.forEach((e,i)=>{ h+=`<div class="row${i===0?' first':''}"><div class="when"><div class="d">${dayFull(e.date)}</div><div class="s">${fmtHour(e.hour)} · ${esc(DATA.locs[e.loc]||'—')} · con ${esc(DATA.inst[e.inst]||'—')}</div></div></div>`; });
+    const now=Date.now();
+    rest.forEach((e,i)=>{
+      let pill='';
+      if(e.bid && !e.status && e.start>now){
+        if(e.cancel) pill=`<button class="pill aviso" onclick="openClassSheet('${e.bid}')">Avisaste que no irás</button>`;
+        else if(e.conf) pill=`<button class="pill done" onclick="openClassSheet('${e.bid}')">Confirmada ✓</button>`;
+        else pill=`<button class="pill todo" onclick="openClassSheet('${e.bid}')">Por confirmar</button>`;
+      } else if(e.status){
+        const sc=stateChip(e.status); pill=`<span class="pill ${sc[0]}">${sc[1]}</span>`;
+      }
+      h+=`<div class="row${i===0?' first':''}"><div class="when"><div class="d">${dayFull(e.date)}</div><div class="s">${fmtHour(e.hour)} · ${esc(DATA.locs[e.loc]||'—')} · con ${esc(DATA.inst[e.inst]||'—')}</div></div>${pill}</div>`;
+    });
     return h;
   }
 
@@ -689,8 +765,9 @@
       if(error) throw error;
       const row = Array.isArray(data) ? data[0] : data;
       const conf = row ? row.confirmed_at : (isConfirmed ? null : new Date().toISOString());
-      const b = DATA.bookings.find(x=>x.id===bid); if(b) b.confirmed_at = conf;
+      const b = DATA.bookings.find(x=>x.id===bid); if(b){ b.confirmed_at = conf; if(conf) b.cancel_requested_at = null; }
       renderClases();
+      closeSheet();
       toast(conf ? 'Asistencia confirmada' : 'Confirmación quitada');
     }catch(e){
       const msg = (e && e.message) || '';
@@ -701,7 +778,113 @@
     }
   };
 
-  // al volver a la app (cambiar de WhatsApp a Chrome, desbloquear, etc.) refresca si está viejo
+  // ======= Hoja (sheet) + flujos de ausencia y confirmación múltiple =======
+  let PACK_SEL = {};
+  function _bk(bid){ return DATA.bookings.find(x=>x.id===bid) || null; }
+  function _bkInfo(bid){
+    const b=_bk(bid); if(!b) return null;
+    const s=DATA.sessById[b.session_id]; if(!s) return null;
+    const start=classStartMs(s);
+    return { b, s, start, hrs:(start-Date.now())/3600000, line:`${dayFull(s.session_date)} · ${fmtHour(s.hour)}`, sede:esc(DATA.locs[s.location_id]||'—') };
+  }
+  function openSheet(inner){
+    let ov=$('sheet');
+    if(!ov){ ov=document.createElement('div'); ov.id='sheet'; ov.className='sheet-ov'; document.body.appendChild(ov); ov.addEventListener('click',e=>{ if(e.target===ov) closeSheet(); }); }
+    ov.innerHTML=`<div class="sheet-panel">${inner}</div>`;
+    requestAnimationFrame(()=>ov.classList.add('show'));
+  }
+  window.closeSheet=()=>{ const ov=$('sheet'); if(ov) ov.classList.remove('show'); };
+
+  window.openClassSheet=(bid)=>{
+    const info=_bkInfo(bid); if(!info){ toast('No encontramos tu reserva'); return; }
+    const b=info.b; let body;
+    if(b.cancel_requested_at){
+      body=`<div class="sh-h">¿Vas a venir?</div><div class="sh-sub">${info.line} · ${info.sede}</div>
+        <div class="sh-note amber"><b>Avisaste que no vendrás.</b> La coordinadora se pondrá en contacto contigo.</div>
+        <button class="btn" onclick="confirmar('${bid}', false)">Sí, voy a venir</button>
+        <button class="linkbtn" onclick="closeSheet()">Cerrar</button>`;
+    } else if(b.confirmed_at){
+      body=`<div class="sh-h">Tu clase</div><div class="sh-sub">${info.line} · ${info.sede}</div>
+        <div class="sh-note ok">Confirmaste tu asistencia.</div>
+        <button class="btn ghost" onclick="confirmar('${bid}', true)">Quitar confirmación</button>
+        <button class="btn danger" onclick="askAbsence('${bid}')">No podré ir</button>
+        <button class="linkbtn" onclick="closeSheet()">Cerrar</button>`;
+    } else {
+      body=`<div class="sh-h">Tu clase</div><div class="sh-sub">${info.line} · ${info.sede}</div>
+        <button class="btn" onclick="confirmar('${bid}', false)">Confirmar mi asistencia</button>
+        <button class="btn danger" onclick="askAbsence('${bid}')">No podré ir</button>
+        <button class="linkbtn" onclick="closeSheet()">Cerrar</button>`;
+    }
+    openSheet(body);
+  };
+
+  window.askAbsence=(bid)=>{
+    const info=_bkInfo(bid); if(!info){ toast('No encontramos tu reserva'); return; }
+    const note = info.hrs < 4
+      ? `<div class="sh-note red"><b>Faltan menos de 4 horas.</b> Si avisas ahora, esta clase se descuenta de tu paquete. La coordinadora se pondrá en contacto contigo.</div>`
+      : `<div class="sh-note amber">Avísale al estudio si cambias de planes. Aún estás a tiempo: no se te descuenta la clase.</div>`;
+    openSheet(`<div class="sh-h">¿Ya no podrás venir?</div><div class="sh-sub">${info.line} · ${info.sede}</div>
+      ${note}
+      <button class="btn danger" id="absbtn" onclick="doAbsence('${bid}')">Avisar que no podré ir</button>
+      <button class="btn ghost" onclick="openClassSheet('${bid}')">Mejor no</button>`);
+  };
+
+  window.doAbsence=async (bid)=>{
+    const btn=$('absbtn'); if(btn){ btn.disabled=true; btn.textContent='Avisando…'; }
+    try{
+      const { error } = await sb.rpc('student_request_absence', { p_booking_id: bid, p_request: true });
+      if(error) throw error;
+      const b=_bk(bid); if(b){ b.cancel_requested_at=new Date().toISOString(); b.confirmed_at=null; }
+      closeSheet(); renderClases(); toast('Listo, le avisamos al estudio');
+    }catch(e){
+      const msg=(e&&e.message)||'';
+      if(/empez/i.test(msg)) toast('La clase ya empezó. Escríbele a tu coordinadora.');
+      else toast('No se pudo avisar. Intenta de nuevo.');
+      if(btn){ btn.disabled=false; btn.textContent='Avisar que no podré ir'; }
+    }
+  };
+
+  function _packFuture(){ const now=Date.now(); return CLE.upcoming.filter(e=> e.bid && !e.status && e.start>now); }
+  window.openPackSheet=()=>{
+    const future=_packFuture();
+    if(!future.length){ toast('No tienes clases por confirmar'); return; }
+    PACK_SEL={}; future.forEach(e=>{ PACK_SEL[e.bid] = !e.conf; });  // pre-marca las que faltan confirmar
+    _renderPackSheet(future);
+  };
+  function _renderPackSheet(future){
+    let rows='';
+    future.forEach(e=>{
+      const on=!!PACK_SEL[e.bid];
+      const sub=`${fmtHour(e.hour)} · ${esc(DATA.locs[e.loc]||'—')} · con ${esc(DATA.inst[e.inst]||'—')}`;
+      const tag = e.conf ? `<span class="ck-tag done">Ya confirmada</span>` : (e.cancel ? `<span class="ck-tag aviso">Avisaste que no irás</span>` : '');
+      rows+=`<button class="ckrow ${on?'':'off'}" onclick="togglePack('${e.bid}')"><span class="ck ${on?'on':'no'}">${on?'✓':''}</span><span class="ckd"><span class="ckdd">${dayFull(e.date)}</span><span class="ckdm">${sub} ${tag}</span></span></button>`;
+    });
+    const n=Object.values(PACK_SEL).filter(Boolean).length;
+    openSheet(`<div class="sh-h">Confirma tus clases</div><div class="sh-sub">Deja marcadas a las que vendrás y destilda las que no.</div>
+      <div class="cklist">${rows}</div>
+      <div class="sh-note amber">Si no vas a poder venir a alguna, avísale al estudio con al menos 4 horas de anticipación. Con menos de 4 horas esa clase se descuenta de tu paquete, pero la coordinadora se pondrá en contacto contigo.</div>
+      <button class="btn" id="packbtn" onclick="submitPack()" ${n?'':'disabled'}>Confirmar ${n} ${n===1?'clase':'clases'}</button>
+      <button class="btn ghost" onclick="closeSheet()">Cancelar</button>`);
+  }
+  window.togglePack=(bid)=>{ PACK_SEL[bid]=!PACK_SEL[bid]; _renderPackSheet(_packFuture()); };
+  window.submitPack=async ()=>{
+    const toConfirm=_packFuture().filter(e=> PACK_SEL[e.bid] && !e.conf);
+    if(!toConfirm.length){ closeSheet(); return; }
+    const btn=$('packbtn'); if(btn){ btn.disabled=true; btn.textContent='Confirmando…'; }
+    let okN=0;
+    await Promise.all(toConfirm.map(async e=>{
+      try{
+        const { data, error } = await sb.rpc('student_confirm_booking', { p_booking_id: e.bid, p_confirm: true });
+        if(error) throw error;
+        const row=Array.isArray(data)?data[0]:data;
+        const b=_bk(e.bid); if(b){ b.confirmed_at = row?row.confirmed_at:new Date().toISOString(); b.cancel_requested_at=null; }
+        okN++;
+      }catch(_){}
+    }));
+    closeSheet(); renderClases();
+    toast(okN ? `Confirmaste ${okN} ${okN===1?'clase':'clases'}` : 'No se pudo confirmar. Intenta de nuevo.');
+  };
+
   document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='visible' && appReady){ checkUpdate().then(up=>{ if(!up && Date.now()-lastFetch > 8000) refresh(true); }); } });
 
   window.addEventListener('resize', ()=>{ if(CL.view==='mes') fitMonth(); });

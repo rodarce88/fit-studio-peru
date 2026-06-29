@@ -513,6 +513,9 @@
   .actrail-foot a { font-size:12px; color:var(--fit-purple); font-weight:600; text-decoration:none; }
   .actrail-empty { padding:26px 18px; text-align:center; font-size:12.5px; color:var(--ink-mute); line-height:1.5; }
   .actrail .actf-reacts { margin-top:8px; }
+  .actrail-body .actf-day { padding-left:18px; padding-right:18px; }
+  .actrail-body .actf-row { padding-left:18px; padding-right:18px; }
+  .actrail-body .actf-row.unseen { margin:0; padding-left:18px; padding-right:18px; background:#F6F2FE; }
   .actf-sede { display:inline-flex; align-items:center; gap:5px; font-weight:600; color:var(--ink-mute); text-transform:none; letter-spacing:0; margin-left:6px; }
   .actf-sede-dot { width:7px; height:7px; border-radius:50%; display:inline-block; flex:none; }
   @media (max-width: 1100px) { .dash-top-grid { grid-template-columns:1fr; } .actrail { position:static; max-height:none; } }
@@ -8511,9 +8514,9 @@ function getCellStudents(locationId, date, hour) {
     const student = STATE.students.find(s => s.id === b.student_id);
     if (student) {
       if (isTrialStudent(student)) {
-        studentMap.set(b.student_id, { student, type: 'trial', label: 'Prueba', bookingId: null, confirmedAt: null });
+        studentMap.set(b.student_id, { student, type: 'trial', label: 'Prueba', bookingId: null, confirmedAt: null, cancelReqAt: null });
       } else {
-        studentMap.set(b.student_id, { student, type: 'fixed', label: 'Fija', bookingId: null, confirmedAt: null });
+        studentMap.set(b.student_id, { student, type: 'fixed', label: 'Fija', bookingId: null, confirmedAt: null, cancelReqAt: null });
       }
     }
   });
@@ -8534,11 +8537,12 @@ function getCellStudents(locationId, date, hour) {
       // Si ya estaba como fija y el booking concreto la confirma, mantener "Fija" como label
       // (excepto si es trial, en cuyo caso ya la pusimos como 'trial' arriba y no la pisamos).
       if (!existing || (b.source && b.source !== 'fixed') || studentIsTrial) {
-        studentMap.set(b.student_id, { student, type, label, bookingId: b.id, confirmedAt: b.confirmed_at || null });
+        studentMap.set(b.student_id, { student, type, label, bookingId: b.id, confirmedAt: b.confirmed_at || null, cancelReqAt: b.cancel_requested_at || null });
       } else {
         // Existe como 'fixed' y este booking también es fixed → preservar bookingId y confirmedAt
         existing.bookingId = b.id;
         existing.confirmedAt = b.confirmed_at || null;
+        existing.cancelReqAt = b.cancel_requested_at || null;
       }
     });
   }
@@ -8780,7 +8784,7 @@ function renderScheduleCellDrawer(locationId, dateIso, hour) {
 
   body += `<div style="padding: 6px 20px 14px;">`;
 
-  students.forEach(({ student, label, bookingId, confirmedAt, type }) => {
+  students.forEach(({ student, label, bookingId, confirmedAt, cancelReqAt, type }) => {
     const initialsStr = initials(student);
     const labelBg = type === 'trial' ? 'background: #F0E6FF; color: #6B21A8;'
       : type === 'flexible' ? 'background: #fef3c7; color: #92400e;'
@@ -8789,12 +8793,16 @@ function renderScheduleCellDrawer(locationId, dateIso, hour) {
       : 'background: var(--line); color: var(--ink-soft);';
     const phone = student.phone || '';
     const isConfirmed = !!confirmedAt;
+    const noticeAbsent = !!cancelReqAt && !isConfirmed;
+    const _startMs = new Date(dateIso + 'T' + String(hour).padStart(2, '0') + ':00:00').getTime();
+    const noticeLate = noticeAbsent && new Date(cancelReqAt).getTime() > _startMs - 4 * 3600 * 1000;
     const phoneClean = phone.replace(/[^0-9+]/g, '');
     const hasPhone = phoneClean.length > 5;
 
     const metaParts = [];
     if (phone) metaParts.push(escape(phone));
     if (isConfirmed) metaParts.push(`confirmada ${_fmtAgoEs(confirmedAt)}`);
+    else if (noticeAbsent) metaParts.push(`avisó que no vendrá ${_fmtAgoEs(cancelReqAt)}`);
     else if (hasPhone) metaParts.push('sin confirmar');
     else metaParts.push('sin teléfono');
 
@@ -8805,6 +8813,7 @@ function renderScheduleCellDrawer(locationId, dateIso, hour) {
           <div style="font-weight: 500; font-size: 14px; display: flex; align-items: center; gap: 8px;">
             ${escape(student.first_name)} ${escape(student.last_name || '')}
             <span style="font-size: 10px; padding: 2px 8px; border-radius: 999px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.4px; ${labelBg}">${label}</span>
+            ${noticeAbsent ? `<span style="font-size: 10px; padding: 2px 8px; border-radius: 999px; font-weight: 700; background: #FBF2DE; color: #A85B08;">Avisó que no vendrá</span>${noticeLate ? `<span style="font-size: 10px; padding: 2px 7px; border-radius: 999px; font-weight: 700; background: #FBEAEA; color: #C0392B;">tarde · &lt;4h</span>` : ''}` : ''}
           </div>
           <div style="font-size: 11px; color: var(--ink-mute); margin-top: 2px;">${metaParts.join(' · ')}</div>
         </div>
@@ -19507,6 +19516,7 @@ async function loadInstructorClassesForDate(inst, dateIso) {
           bookingId: b.id,
           bookingCancelledAt: b.cancelled_at || null,
           bookingConfirmedAt: b.confirmed_at || null,
+          bookingCancelRequestedAt: b.cancel_requested_at || null,
         });
       }
     }
@@ -20143,6 +20153,13 @@ function renderInstructorStudentRow(item, classCtx) {
     statusChip = `<span class="inst-stud-statchip" style="background:${bg}; color:${fg};">${pre}${escape(st.label)}</span>`;
   } else if (isConfirmedByCoord) {
     statusChip = `<span class="inst-stud-statchip" style="background:#EAF3DE; color:#27500A;">✓ Confirmada</span>`;
+  } else if (item.bookingCancelRequestedAt) {
+    let lateBadge = '';
+    const _sm = classCtx ? new Date(classCtx.dateIso + 'T' + String(classCtx.hour).padStart(2, '0') + ':00:00').getTime() : 0;
+    if (_sm && new Date(item.bookingCancelRequestedAt).getTime() > _sm - 4 * 3600 * 1000) {
+      lateBadge = `<span class="inst-stud-statchip" style="background:#FCEBEB; color:#791F1F;">tarde · &lt;4h</span>`;
+    }
+    statusChip = `<span class="inst-stud-statchip" style="background:#FAEEDA; color:#633806;">Avisó que no vendrá</span>${lateBadge}`;
   }
 
   // ¿Tiene notas de salud guardadas? (health_tags con al menos 1 tag, o medical_notes con texto)
@@ -30151,8 +30168,11 @@ function ccRenderShell() {
     } else {
       cardBody = `<div class="cc-students">`;
       for (const sd of students) {
-        const { student, label, type, confirmedAt } = sd;
+        const { student, label, type, confirmedAt, cancelReqAt } = sd;
         const isConfirmed = !!confirmedAt;
+        const noticeAbsent = !!cancelReqAt && !isConfirmed;
+        const _smAbs = new Date(dateIso + 'T' + String(hour).padStart(2, '0') + ':00:00').getTime();
+        const noticeLate = noticeAbsent && new Date(cancelReqAt).getTime() > _smAbs - 4 * 3600 * 1000;
         const initialsStr = initials(student);
         const phone = student.phone || '';
         const phoneClean = phone.replace(/[^0-9+]/g, '');
@@ -30169,6 +30189,7 @@ function ccRenderShell() {
               <div class="cc-s-name">${escape(student.first_name || '')} ${escape(student.last_name || '')}</div>
               <div class="cc-s-meta">
                 <span class="cc-pill ${pillClass}">${label}</span>
+                ${noticeAbsent ? `<span class="cc-pill" style="background:#FBF2DE; color:#A85B08;">Avisó que no vendrá</span>${noticeLate ? `<span class="cc-pill" style="background:#FBEAEA; color:#C0392B;">tarde &lt;4h</span>` : ''}` : ''}
                 <span style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${metaText}</span>
               </div>
             </div>
