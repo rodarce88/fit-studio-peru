@@ -14558,7 +14558,8 @@ document.addEventListener('visibilitychange', () => {
 // TIEMPO REAL (coordinadora): confirmaciones, asistencias y reservas
 // se reflejan solas, en silencio, sin recargar la página.
 // ============================================================
-let _coordRtChannel = null, _coordRtTimer = null;
+let _coordRtChannel = null, _coordRtTimer = null, _lastUserScrollTs = 0;
+window.addEventListener('scroll', () => { _lastUserScrollTs = Date.now(); }, { passive: true });
 function subscribeCoordRealtime() {
   if (_coordRtChannel || !sb || !CURRENT_USER) return;
   const role = CURRENT_USER.role;
@@ -14570,19 +14571,37 @@ function subscribeCoordRealtime() {
       .subscribe();
   } catch (e) { console.warn('realtime coord', e); }
 }
-function _coordLiveRefresh() {
+function _coordLiveRefresh(payload) {
+  // Relevancia: ignora cambios de sesiones que no estás viendo (salvo INSERT, que puede ser una clase nueva de hoy)
+  try {
+    const ev = payload && payload.eventType;
+    const row = (payload && (payload.new || payload.old)) || {};
+    const sid = row.session_id;
+    if (ev !== 'INSERT' && sid) {
+      const inDay = (STATE.classSessions || []).some(s => s.id === sid);
+      const inWeek = (STATE.scheduleWeekSessions || []).some(s => s.id === sid);
+      if (!inDay && !inWeek) return;
+    }
+  } catch (e) {}
   clearTimeout(_coordRtTimer);
   _coordRtTimer = setTimeout(async () => {
-    if (!isOnline) return;
-    if (_hasOpenModal()) return;  // no interrumpir mientras edita; se verá al cerrar o al enfocar
-    const scrollY = window.scrollY;
+    if (!isOnline || _hasOpenModal()) return;
+    // si está haciendo scroll en este momento, espera (no dar el salto molesto)
+    if (Date.now() - _lastUserScrollTs < 1200) { _coordLiveRefresh(); return; }
+    const se = document.scrollingElement || document.documentElement;
+    const sy = se.scrollTop;
     try {
-      if (typeof loadDayData === 'function') await loadDayData();
-      if (STATE.scheduleWeekStart && typeof loadScheduleWeekData === 'function') await loadScheduleWeekData();
-      await _rerenderActiveView();
+      const v = STATE.currentView;
+      if (v === 'dashboard' || v === 'schedule') {
+        if (typeof loadDayData === 'function') await loadDayData();
+        if (typeof renderTimeline === 'function') renderTimeline();  // liviano: solo la grilla del día, sin recargar widgets
+      } else {
+        if (STATE.scheduleWeekStart && typeof loadScheduleWeekData === 'function') await loadScheduleWeekData();
+        await _rerenderActiveView();
+      }
     } catch (e) { console.warn('[coordLive] refresh', e); }
-    window.scrollTo(0, scrollY);
-  }, 700);
+    se.scrollTop = sy;  // conservar la posición de scroll
+  }, 1500);
 }
 
 // Marcar timestamp después de loadAll exitoso (lo capturamos en el wrapper original)
