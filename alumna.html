@@ -98,6 +98,13 @@
   .tl-time{ font-family:var(--display); font-weight:600; font-size:calc(24px*var(--scale)); line-height:1; }
   .tl-meta{ color:var(--ink-soft); font-size:calc(15px*var(--scale)); margin-top:7px; }
   .tl-meta b{ color:var(--ink); font-weight:700; }
+  /* modo calendario (semana/mes): llena el alto entre las barras fijas */
+  #app-body.cal{ overflow:hidden; display:flex; flex-direction:column; padding-bottom:14px; }
+  #app-body.cal .tab.active{ flex:1; min-height:0; display:flex; flex-direction:column; }
+  #app-body.cal #cl-top{ display:none; }
+  #app-body.cal .seg{ flex:none; margin:2px 0 16px; }
+  #app-body.cal #clases-view{ flex:1; min-height:0; display:flex; flex-direction:column; }
+  #app-body.cal .cal-detail{ flex:1; min-height:0; overflow-y:auto; -webkit-overflow-scrolling:touch; }
   .group-h{ font-family:var(--display); font-weight:600; font-size:calc(20px*var(--scale)); margin-bottom:4px; color:var(--ink); }
   .group-sub{ font-size:calc(13px*var(--scale)); color:var(--ink-mute); margin-bottom:14px; }
   .pkg-head{ width:100%; border:0; background:transparent; display:flex; align-items:center; justify-content:space-between; gap:12px; padding:4px 0; cursor:pointer; text-align:left; font-family:var(--body); color:var(--ink); -webkit-appearance:none; appearance:none; }
@@ -381,12 +388,13 @@
 
     const el=$('tab-clases');
     if(events.length===0){
+      $('app-body')?.classList.remove('cal');
       el.innerHTML = `<div class="eyebrow">Mis clases</div><div class="accent"></div>
         <div class="empty">No tienes clases agendadas. Cuando el estudio te agende una, aparecerá aquí.</div>`;
       return;
     }
     const next = CLE.next;
-    let html = `<div class="eyebrow">Mis clases</div><div class="accent"></div>`;
+    let html = `<div id="cl-top"><div class="eyebrow">Mis clases</div><div class="accent"></div>`;
     if(next){
       html += `<div class="px-lab">Tu próxima clase</div>
         <div class="next-day">${dayFull(next.date)}</div>
@@ -400,7 +408,8 @@
     } else {
       html += `<div class="empty">No tienes una próxima clase agendada por ahora.</div>`;
     }
-    html += `<div class="seg">
+    html += `</div>
+      <div class="seg">
         <button class="${CL.view==='lista'?'on':''}" onclick="clView('lista',this)">Lista</button>
         <button class="${CL.view==='semana'?'on':''}" onclick="clView('semana',this)">Semana</button>
         <button class="${CL.view==='mes'?'on':''}" onclick="clView('mes',this)">Mes</button>
@@ -410,6 +419,11 @@
     renderClasesView();
   }
 
+  function applyClasesMode(){
+    const cal = (CL.view==='semana' || CL.view==='mes');
+    const b=$('app-body'); if(b) b.classList.toggle('cal', cal);
+  }
+
   window.clView=(v,btn)=>{ CL.view=v; document.querySelectorAll('#tab-clases .seg button').forEach(b=>b.classList.remove('on')); btn.classList.add('on'); renderClasesView(); };
   window.clPick=(di)=>{ CL.sel=di; renderClasesView(); };
   window.clShiftWeek=(n)=>{ CL.weekStart=new Date(CL.weekStart); CL.weekStart.setDate(CL.weekStart.getDate()+n*7); renderClasesView(); };
@@ -417,6 +431,7 @@
 
   function renderClasesView(){
     const box=$('clases-view'); if(!box) return;
+    applyClasesMode();
     box.classList.remove('fade'); void box.offsetWidth; box.classList.add('fade');
     box.innerHTML = CL.view==='lista' ? clLista() : (CL.view==='semana' ? clSemana() : clMes());
   }
@@ -561,6 +576,7 @@
     $('tab-'+name).classList.add('active');
     document.querySelectorAll('.nav button').forEach(b=>b.classList.remove('on'));
     btn.classList.add('on');
+    if(name==='clases'){ applyClasesMode(); } else { $('app-body').classList.remove('cal'); }
     $('app-body').scrollTop = 0;
     // si los datos están viejos (>15s), refresca en silencio al cambiar de pestaña
     if(appReady && Date.now()-lastFetch > 15000) refresh(true);
