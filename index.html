@@ -25675,7 +25675,7 @@ function renderDetailClasses(stud) {
   const findPkgByDate = (sessionDate) => {
     if (!sessionDate) return null;
     let candidate = null;
-    sortedAsc.forEach(p => { const s = p.purchase_date || p.start_date || '1900-01-01'; if (sessionDate >= s) candidate = p; });
+    sortedAsc.forEach(p => { if (isChangedPkg(p)) return; const s = p.purchase_date || p.start_date || '1900-01-01'; if (sessionDate >= s) candidate = p; });
     return candidate;
   };
 
@@ -25699,7 +25699,7 @@ function renderDetailClasses(stud) {
       let pkgId = att?.student_package_id;
       if (!pkgId) {
         const sd = b.class_sessions.session_date;
-        const elig = sortedAsc.find(p => { const s = p.purchase_date || p.start_date || '1900-01-01'; if (s > sd) return false; const libre = (p.classes_total || 0) - (p.classes_used || 0); return (futureUsage.get(p.id) || 0) < libre; });
+        const elig = sortedAsc.find(p => { if (isChangedPkg(p) || p.is_frozen) return false; const s = p.purchase_date || p.start_date || '1900-01-01'; if (s > sd) return false; const libre = (p.classes_total || 0) - (p.classes_used || 0); return (futureUsage.get(p.id) || 0) < libre; });
         if (elig) { pkgId = elig.id; futureUsage.set(elig.id, (futureUsage.get(elig.id) || 0) + 1); }
       }
       if (pkgId) pushPkg(pkgId, { b, att }); else sinPkg.push({ b, att });
