@@ -134,7 +134,7 @@
     <div class="topbar">
       <div class="who">
         <div class="avatar" id="t-avatar">··</div>
-        <div style="min-width:0;"><div class="hi">Bienvenida</div><div class="nm" id="t-name">—</div></div>
+        <div style="min-width:0;"><div class="hi" id="t-greet">Bienvenida</div><div class="nm" id="t-name">—</div></div>
       </div>
       <div class="tb-right">
         <button class="refresh-btn" id="refresh-btn" title="Actualizar" onclick="refresh(false)">
@@ -212,7 +212,7 @@
   async function afterAuth(){
     view('v-loading'); $('loading-msg').textContent='Cargando tu cuenta…';
     const { data: me, error } = await sb.from('students')
-      .select('id, first_name, last_name, phone, email, app_welcomed_at').limit(1).maybeSingle();
+      .select('id, first_name, last_name, phone, email, gender, app_welcomed_at').limit(1).maybeSingle();
     if(error||!me) return showError('No pudimos cargar tu cuenta', error?.message||'Intenta de nuevo.');
     DATA.me = me;
     if(!me.app_welcomed_at) return showWelcome(me);
@@ -268,6 +268,7 @@
     view('v-loading'); $('loading-msg').textContent='Cargando tus clases…';
     const me = DATA.me;
     $('t-name').textContent = me.first_name;
+    $('t-greet').textContent = me.gender==='M' ? 'Bienvenido' : (me.gender==='F' ? 'Bienvenida' : 'Hola');
     $('t-avatar').textContent = ((me.first_name?.[0]||'')+(me.last_name?.[0]||'')).toUpperCase()||'··';
     await fetchAll();
     renderAll();

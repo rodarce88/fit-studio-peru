@@ -4249,8 +4249,9 @@ body:not(.doctor-mode) .doc-bottomnav{ display:none; }
             <input type="date" id="f-birth-date" />
           </div>
           <div class="form-row">
-            <label>Género</label>
-            <select id="f-gender">
+            <label>Género <span class="req">*</span></label>
+            <select id="f-gender" required>
+              <option value="">Selecciona…</option>
               <option value="F">Femenino</option>
               <option value="M">Masculino</option>
             </select>
@@ -10564,7 +10565,7 @@ function openStudentModal(id) {
   f('f-doc-type').value = s?.document_type || '';
   f('f-doc-num').value = s?.document_number || '';
   f('f-birth-date').value = s?.birth_date || '';
-  f('f-gender').value = (s?.gender === 'M') ? 'M' : 'F';
+  f('f-gender').value = s?.gender || '';
   f('f-modality').value = s?.modality || 'flexible';
   // Guardamos la modalidad original para detectar cambios al editar
   // (clave para mostrar el campo de monkeyfit-classes solo cuando hay cambio real)
@@ -10987,6 +10988,8 @@ async function saveStudent() {
     }
   }
 
+  if (!f('f-gender').value) { showToast('Selecciona el género de la alumna o alumno', 'error'); return; }
+
   const data = {
     location_id: STATE.currentLocationId,
     first_name: toTitleCase(f('f-first-name').value.trim()),
@@ -10996,7 +10999,7 @@ async function saveStudent() {
     document_type: f('f-doc-type').value || null,
     document_number: f('f-doc-num').value.trim() || null,
     birth_date: f('f-birth-date').value || null,
-    gender: f('f-gender').value || 'F',
+    gender: f('f-gender').value,
     modality: modality,
     emergency_contact_name: f('f-emergency-name').value.trim() || null,
     emergency_contact_phone: f('f-emergency-phone').value.trim() || null,
@@ -24503,6 +24506,23 @@ async function copyActivationLink(type, recordId) {
   }
 }
 
+async function copyAppLink(studentId, btn) {
+  if (!isOnline) { showToast('Conexión requerida', 'error'); return; }
+  const s = STATE.students.find(x => x.id === studentId);
+  const firstName = s ? (s.first_name || '') : '';
+  let token = s && s.app_token;
+  if (!token) {
+    token = generateToken();
+    const { error } = await sb.from('students').update({ app_token: token }).eq('id', studentId);
+    if (error) { showToast('Error generando link: ' + error.message, 'error'); return; }
+    if (s) s.app_token = token;
+  }
+  const link = `${window.location.origin}/alumna?t=${token}`;
+  const msg = `Hola ${firstName}, te creamos tu cuenta de FIT Studio para que veas tus clases y tu paquete desde el celular. Toca este enlace para entrar: ${link}\n\nQuedará guardado en tu teléfono; cuando quieras volver a entrar, toca el mismo enlace.`;
+  await copyToClipboard(msg);
+  showToast('✓ Mensaje con link copiado. Pégalo en el WhatsApp de la alumna.', 'success');
+}
+
 async function copyToClipboard(text) {
   try {
     await navigator.clipboard.writeText(text);
@@ -24784,6 +24804,7 @@ function renderStudentDetail() {
           <button class="btn btn-ghost" onclick="openConfirmClassesModal('${stud.id}')" style="padding: 8px 14px; font-size: 12px;">Confirmar clases</button>
           <button class="btn btn-ghost" onclick="${_agendarDisabled ? '' : `openStudentScheduleEditor('${stud.id}')`}" ${_agendarDisabled ? 'disabled' : ''} title="${escape(_agendarTooltip)}" style="padding: 8px 14px; font-size: 12px; ${_agendarDisabled ? 'opacity: 0.45; cursor: not-allowed;' : ''}">Agendar clases</button>
           <button class="btn btn-ghost" onclick="reconOpenModal('${stud.id}')" style="padding: 8px 14px; font-size: 12px;">Reconciliar</button>
+          <button class="btn btn-ghost" onclick="copyAppLink('${stud.id}', this)" style="padding: 8px 14px; font-size: 12px;">Copiar link app</button>
           <button class="btn btn-primary" onclick="openAssignPackageFromDetail('${stud.id}')" style="padding: 8px 14px; font-size: 12px;">${_hasCompletedPkgs && _hasNoActivePkg ? 'Renovar paquete' : 'Asignar paquete'}</button>
         </div>
       </div>
