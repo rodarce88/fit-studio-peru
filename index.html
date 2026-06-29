@@ -13232,6 +13232,8 @@ function _renderDashStudentSearchRow(s) {
     : `<span title="${escape(loc.name)}" style="border: 1px solid ${sedeColor}55; color: ${sedeColor}; font-size: 9.5px; font-weight: 600; padding: 1.5px 6px; border-radius: 999px; letter-spacing: 0.06em; flex-shrink: 0; line-height: 1.3;">${sedeInitials}</span>`
   ) : '';
   const modalityBadge = `<span class="modality-pill modality-${s.modality}" style="font-size:10px; padding:2px 7px; flex-shrink:0;">${getModalityIcon(s.modality)} ${getModalityShortLabel(s.modality)}</span>`;
+  // Chip "App": la alumna ya inició sesión en la app (auth_user_id seteado al vincularse)
+  const appBadge = s.auth_user_id ? `<span title="Ya usa la app de alumna" style="background: #5B2A8F; color: white; font-size: 9.5px; font-weight: 700; padding: 2px 7px; border-radius: 999px; letter-spacing: 0.04em; flex-shrink: 0; line-height: 1.3;">App</span>` : '';
   const contact = s.email || s.phone || s.document_number || '';
   return `<div onclick="addRecentStudentSearch('${s.id}'); openStudentDetail('${s.id}'); document.getElementById('dash-student-search').value=''; document.getElementById('dash-student-search-results').style.display='none';" style="display: flex; align-items: center; gap: 10px; padding: 10px 14px; cursor: pointer; border-bottom: 1px solid var(--line-soft); transition: background 0.1s;" onmouseover="this.style.background='var(--fit-cream)'" onmouseout="this.style.background='white'">
     <div class="student-avatar" style="width: 32px; height: 32px; font-size: 11px; flex-shrink: 0; background: ${sedeColor}; color: white;">${initials(s)}</div>
@@ -13239,6 +13241,7 @@ function _renderDashStudentSearchRow(s) {
       <div style="display: flex; align-items: center; gap: 7px; min-width: 0;">
         <span style="font-size: 13px; font-weight: 500; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0;">${escape(s.first_name)} ${escape(s.last_name || '')}</span>
         ${sedeBadge}
+        ${appBadge}
       </div>
       <div style="font-size: 11px; color: var(--ink-mute); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 1px;">${escape(contact || '—')}</div>
     </div>

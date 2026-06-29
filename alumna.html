@@ -2,7 +2,7 @@
 <html lang="es" data-size="normal">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>FIT Studio · Mi cuenta</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400..700;1,400..600&family=Mulish:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -13,15 +13,17 @@
     --display:'Playfair Display',Georgia,serif; --body:'Mulish',system-ui,sans-serif; --scale:1; }
   html[data-size="lg"]{ --scale:1.16; }
   *{ box-sizing:border-box; margin:0; padding:0; -webkit-tap-highlight-color:transparent; }
-  body{ font-family:var(--body); background:var(--cream); color:var(--ink); min-height:100vh; display:flex; justify-content:center; font-size:calc(17px*var(--scale)); line-height:1.5; }
-  .phone{ width:100%; max-width:430px; min-height:100vh; position:relative; display:flex; flex-direction:column; background:var(--cream); }
+  html,body{ height:100%; }
+  body{ font-family:var(--body); background:var(--cream); color:var(--ink); display:flex; justify-content:center; font-size:calc(17px*var(--scale)); line-height:1.5; }
+  .phone{ width:100%; max-width:430px; height:100vh; height:100dvh; overflow:hidden; position:relative; display:flex; flex-direction:column; background:var(--cream); }
   .hidden{ display:none !important; }
   .logo-f{ width:72px; height:72px; border-radius:22px; background:linear-gradient(145deg,#6E37A6,#3C1D6E); display:flex; align-items:center; justify-content:center; font-family:var(--display); font-weight:600; color:#fff; font-size:38px; box-shadow:0 10px 24px rgba(60,29,110,.32); }
   .spinner{ width:34px; height:34px; border:3px solid #E7E0F0; border-top-color:var(--purple); border-radius:50%; animation:spin .8s linear infinite; }
   @keyframes spin{ to{ transform:rotate(360deg); } }
 
-  /* centro (loading, welcome, error) */
-  .center{ flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; padding:0 26px; gap:0; }
+  /* vistas centradas (loading, welcome, error): scrollean dentro si no caben */
+  .center{ flex:1; min-height:0; overflow-y:auto; display:flex; flex-direction:column; -webkit-overflow-scrolling:touch; }
+  .center-inner{ margin:auto; width:100%; padding:42px 26px; display:flex; flex-direction:column; align-items:center; text-align:center; }
   .center h1{ font-family:var(--display); font-weight:600; font-size:calc(27px*var(--scale)); margin:22px 0 8px; }
   .center p{ color:var(--ink-soft); font-size:calc(17px*var(--scale)); max-width:330px; }
   .center .err{ color:var(--red); }
@@ -33,7 +35,8 @@
   .btn:active{ transform:scale(.985); }
 
   /* app */
-  .topbar{ position:sticky; top:0; z-index:5; background:rgba(251,248,242,.94); backdrop-filter:blur(8px); padding:16px 20px 13px; display:flex; align-items:center; justify-content:space-between; border-bottom:1px solid var(--line); }
+  #v-app{ flex:1; min-height:0; display:flex; flex-direction:column; }
+  .topbar{ flex:none; background:rgba(251,248,242,.96); backdrop-filter:blur(8px); padding:16px 20px 13px; display:flex; align-items:center; justify-content:space-between; border-bottom:1px solid var(--line); }
   .who{ display:flex; align-items:center; gap:11px; }
   .avatar{ width:42px; height:42px; border-radius:50%; background:var(--purple-soft); color:var(--purple-deep); display:flex; align-items:center; justify-content:center; font-weight:700; font-size:calc(15px*var(--scale)); }
   .who .hi{ font-size:calc(13px*var(--scale)); color:var(--ink-mute); line-height:1.1; }
@@ -43,7 +46,7 @@
   .size-toggle button.on{ background:var(--purple); color:#fff; }
   .size-toggle .a1{ font-size:15px; } .size-toggle .a2{ font-size:21px; }
 
-  .body{ flex:1; overflow-y:auto; padding:22px 22px 118px; }
+  .body{ flex:1; min-height:0; overflow-y:auto; -webkit-overflow-scrolling:touch; padding:22px 22px 30px; }
   .tab{ display:none; } .tab.active{ display:block; }
   .eyebrow{ font-size:calc(13px*var(--scale)); font-weight:700; letter-spacing:1.5px; text-transform:uppercase; color:var(--purple); }
   .accent{ width:38px; height:4px; border-radius:3px; background:var(--gold); margin:9px 0 18px; }
@@ -70,7 +73,7 @@
   .chk.repro{ background:#E6EEF9; color:#2C5A9E; }
   .chk.lost{ background:#FBE7E6; color:#B23B39; }
 
-  .pkg-num{ font-family:var(--display); font-weight:600; font-size:calc(78px*var(--scale)); color:var(--purple); line-height:.9; }
+  .pkg-num{ font-family:var(--display); font-weight:600; font-size:calc(78px*var(--scale)); color:var(--purple); line-height:.95; }
   .pkg-word{ font-size:calc(20px*var(--scale)); font-weight:600; margin-top:4px; }
   .pkg-bar{ display:flex; gap:7px; margin:22px 0 10px; }
   .pkg-bar .seg{ flex:1; height:15px; border-radius:5px; background:#E7E0F0; }
@@ -82,12 +85,12 @@
   .legend i{ width:11px; height:11px; border-radius:50%; }
   .legend .g{ background:#2E7D45; } .legend .gd{ background:var(--gold); } .legend .b{ background:#2C5A9E; } .legend .r{ background:var(--red); }
 
-  .nav{ position:absolute; bottom:0; left:0; right:0; background:#fff; border-top:1px solid var(--line); display:flex; padding:8px 6px calc(10px + env(safe-area-inset-bottom)); }
+  .nav{ flex:none; background:#fff; border-top:1px solid var(--line); display:flex; padding:8px 6px calc(10px + env(safe-area-inset-bottom)); }
   .nav button{ flex:1; border:0; background:transparent; cursor:pointer; display:flex; flex-direction:column; align-items:center; gap:5px; padding:8px 4px; color:var(--ink-mute); }
   .nav button.on{ color:var(--purple); }
   .nav button svg{ width:28px; height:28px; }
   .nav button span{ font-size:calc(13px*var(--scale)); font-weight:600; }
-  .toast{ position:fixed; left:50%; bottom:96px; transform:translateX(-50%); background:#211C29; color:#fff; padding:12px 18px; border-radius:999px; font-size:14px; font-weight:600; opacity:0; transition:opacity .25s; z-index:30; }
+  .toast{ position:fixed; left:50%; bottom:110px; transform:translateX(-50%); background:#211C29; color:#fff; padding:12px 18px; border-radius:999px; font-size:14px; font-weight:600; opacity:0; transition:opacity .25s; z-index:30; pointer-events:none; }
   .toast.show{ opacity:.95; }
 </style>
 </head>
@@ -96,30 +99,36 @@
 
   <!-- LOADING -->
   <div class="center" id="v-loading">
-    <div class="logo-f">F</div>
-    <div class="spinner" style="margin-top:24px;"></div>
-    <p id="loading-msg" style="margin-top:18px;">Validando tu acceso…</p>
+    <div class="center-inner">
+      <div class="logo-f">F</div>
+      <div class="spinner" style="margin-top:24px;"></div>
+      <p id="loading-msg" style="margin-top:18px;">Validando tu acceso…</p>
+    </div>
   </div>
 
   <!-- ERROR -->
   <div class="center hidden" id="v-error">
-    <div class="logo-f">F</div>
-    <h1 id="err-title" class="err"></h1>
-    <p id="err-msg"></p>
+    <div class="center-inner">
+      <div class="logo-f">F</div>
+      <h1 id="err-title" class="err"></h1>
+      <p id="err-msg"></p>
+    </div>
   </div>
 
   <!-- WELCOME -->
   <div class="center hidden" id="v-welcome">
-    <div class="logo-f">F</div>
-    <h1 id="w-hi"></h1>
-    <p>Estos son tus datos. Si algo está mal, avísale al estudio.</p>
-    <div class="data-list" id="w-data"></div>
-    <div class="session-note">Tu sesión quedó activa en este teléfono. La próxima vez entrarás directo.</div>
-    <button class="btn" id="w-enter">Ingresar</button>
+    <div class="center-inner">
+      <div class="logo-f">F</div>
+      <h1 id="w-hi"></h1>
+      <p>Estos son tus datos. Si algo está mal, avísale al estudio.</p>
+      <div class="data-list" id="w-data"></div>
+      <div class="session-note">Tu sesión quedó activa en este teléfono. La próxima vez entrarás directo.</div>
+      <button class="btn" id="w-enter">Ingresar</button>
+    </div>
   </div>
 
   <!-- APP -->
-  <div class="hidden" id="v-app" style="display:flex; flex-direction:column; flex:1;">
+  <div class="hidden" id="v-app">
     <div class="topbar">
       <div class="who">
         <div class="avatar" id="t-avatar">··</div>
@@ -130,7 +139,7 @@
         <button class="a2" onclick="setSize('lg',this)">A</button>
       </div>
     </div>
-    <div class="body">
+    <div class="body" id="app-body">
       <div class="tab active" id="tab-clases"></div>
       <div class="tab" id="tab-pkg"></div>
     </div>
@@ -149,11 +158,12 @@
   <div class="toast" id="toast"></div>
 </div>
 
-<script type="module">
-  import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script>
+  const { createClient } = supabase;
   const SUPABASE_URL = 'https://jcvizioahuqvmhwfnbop.supabase.co';
   const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Impjdml6aW9haHVxdm1od2ZuYm9wIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc1MjIzODIsImV4cCI6MjA5MzA5ODM4Mn0.0EYHVITqA85IhtBUbGddHEWcVKIU_MeSzSxrdzNyvhI';
-  const sb = createClient(SUPABASE_URL, SUPABASE_ANON);
+  const sb = createClient(SUPABASE_URL, SUPABASE_ANON, { auth:{ detectSessionInUrl:false, persistSession:true, autoRefreshToken:true } });
 
   const DIAS=['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
   const MESES=['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
@@ -161,6 +171,7 @@
   const view = (id)=>{ ['v-loading','v-error','v-welcome','v-app'].forEach(v=>$(v).classList.add('hidden')); $(id).classList.remove('hidden'); };
   const dObj = (iso)=> new Date(iso+'T12:00:00');
   const dayFull = (iso)=>{ const d=dObj(iso); return `${DIAS[d.getDay()]} ${d.getDate()} de ${MESES[d.getMonth()]}`; };
+  const dayShort = (iso)=>{ const d=dObj(iso); return `${d.getDate()} de ${MESES[d.getMonth()]}`; };
   const fmtHour = (h)=>{ const ap=h<12?'am':'pm'; let hh=h%12; if(hh===0)hh=12; return `${hh}:00 ${ap}`; };
   const esc = (s)=> (s==null?'':String(s)).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
   function toast(msg){ const t=$('toast'); t.textContent=msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),2200); }
@@ -233,6 +244,7 @@
     renderClases(bkR.data||[], atR.data||[]);
     renderPaquete(pkR.data||[], atR.data||[], bkR.data||[]);
     view('v-app');
+    goTab('clases', $('n-clases'));
   }
 
   function isUpcoming(sess, att){
@@ -294,19 +306,17 @@
       return;
     }
 
-    // gráfica del paquete activo
     let html = `<div class="eyebrow">Tu paquete actual</div><div class="accent"></div>`;
     if(active){
       const total=active.classes_total||0, used=active.classes_used||0, remain=Math.max(0,total-used);
       let segs=''; for(let i=0;i<total;i++) segs+=`<div class="seg${i<used?' used':''}"></div>`;
       html += `<div class="pkg-num">${remain}</div><div class="pkg-word">clases te quedan</div>
         <div class="pkg-bar">${segs}</div>
-        <div class="pkg-info"><b>${esc(active.packages?.name||'Paquete')}</b>${active.expiration_date?` · vence el <b>${dayFull(active.expiration_date).replace(/^[A-Za-zÁÉÍÓÚáéíóú]+ /,'')}</b>`:''}</div>`;
+        <div class="pkg-info"><b>${esc(active.packages?.name||'Paquete')}</b>${active.expiration_date?` · vence el <b>${dayShort(active.expiration_date)}</b>`:''}</div>`;
     } else {
       html += `<div class="empty">No tienes un paquete con clases disponibles ahora mismo.</div>`;
     }
 
-    // clases agrupadas por paquete
     const attBySession={}; attendance.forEach(a=>{ if(a.session_id) attBySession[a.session_id]=a; });
     const upcoming = bookings.filter(b=>b.class_sessions && !b.cancelled_at && isUpcoming(b.class_sessions, attBySession[b.session_id]))
       .map(b=>b.class_sessions);
@@ -338,9 +348,15 @@
     el.innerHTML = html;
   }
 
-  window.goTab=(name,btn)=>{ document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active')); $('tab-'+name).classList.add('active'); document.querySelectorAll('.nav button').forEach(b=>b.classList.remove('on')); btn.classList.add('on'); $('v-app').querySelector('.body').scrollTo(0,0); };
+  window.goTab=(name,btn)=>{
+    document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+    $('tab-'+name).classList.add('active');
+    document.querySelectorAll('.nav button').forEach(b=>b.classList.remove('on'));
+    btn.classList.add('on');
+    $('app-body').scrollTop = 0;
+  };
   window.setSize=(mode,el)=>{ document.documentElement.setAttribute('data-size', mode==='lg'?'lg':'normal'); el.parentElement.querySelectorAll('button').forEach(b=>b.classList.remove('on')); el.classList.add('on'); };
-  window.confirmar=()=>{ toast('Muy pronto podrás confirmar desde aquí 💜'); };
+  window.confirmar=()=>{ toast('Muy pronto podrás confirmar desde aquí'); };
 
   boot();
 </script>
