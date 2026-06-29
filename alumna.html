@@ -283,10 +283,11 @@
   function isUpcoming(sess, att){
     if(!sess || sess.is_cancelled) return false;
     if(att && ['attended','lost','no_show','recoverable','rescheduled'].includes(att.status)) return false;
-    const today = new Date(); const todayIso=today.toISOString().slice(0,10);
+    const now = new Date();
+    const todayIso = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
     if(sess.session_date>todayIso) return true;
     if(sess.session_date<todayIso) return false;
-    return sess.hour >= today.getHours();
+    return sess.hour >= now.getHours();
   }
 
   function renderClases(){
