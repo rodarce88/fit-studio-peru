@@ -513,6 +513,8 @@
   .actrail-foot a { font-size:12px; color:var(--fit-purple); font-weight:600; text-decoration:none; }
   .actrail-empty { padding:26px 18px; text-align:center; font-size:12.5px; color:var(--ink-mute); line-height:1.5; }
   .actrail .actf-reacts { margin-top:8px; }
+  .actf-sede { display:inline-flex; align-items:center; gap:5px; font-weight:600; color:var(--ink-mute); text-transform:none; letter-spacing:0; margin-left:6px; }
+  .actf-sede-dot { width:7px; height:7px; border-radius:50%; display:inline-block; flex:none; }
   @media (max-width: 1100px) { .dash-top-grid { grid-template-columns:1fr; } .actrail { position:static; max-height:none; } }
   .timeline-card, .panel, .table-card { background: white; border-radius: var(--radius-lg); border: 1px solid var(--line); overflow: hidden; box-shadow: var(--shadow-sm); }
   /* Cuando contiene el layout de Mi día: overflow visible (para que sticky funcione) + header y sidebar sticky */
@@ -13839,6 +13841,8 @@ function renderActivityRow(ev, viewerId, lastSeen) {
   const name = `<b>${escape(ev._name)}</b>`;
   const n = ev.classes_total;
   const pkgN = n ? ` de ${n} clases` : '';
+  const _sede = (STATE.locations || []).find(l => l.id === ev.location_id);
+  const sedeTag = _sede ? ` <span class="actf-sede"><span class="actf-sede-dot" style="background:${_sede.color || 'var(--fit-purple)'}"></span>${escape(_sede.name)}</span>` : '';
   const unseen = lastSeen ? (ev.created_at > lastSeen) : true;
   const rx = (ev._reactions || []).map(r =>
     `<button class="actf-rx${r.mine ? ' on' : ''}" title="${escape(r.names.join(', '))}" onclick="toggleReaction('${ev.id}','${r.emoji}')"><span class="rxe">${r.emoji}</span><span class="rxc">${r.count}</span></button>`
@@ -13864,7 +13868,7 @@ function renderActivityRow(ev, viewerId, lastSeen) {
       <div class="actf-hito-glow"></div>
       <div class="actf-hito-top">
         <div class="actf-hito-trophy">🏆</div>
-        <div class="actf-hito-lead">Hito${hMine ? ' · tú' : ''}</div>
+        <div class="actf-hito-lead">Hito${hMine ? ' · tú' : ''}${sedeTag}</div>
       </div>
       <div class="actf-hito-title">${name} llegó a <span class="actf-hito-num">${num}</span> clases en FIT</div>
       <div class="actf-hito-sub">${profLine} <span class="actf-hito-cheer">¡A celebrarlo! 🎉</span></div>
@@ -13920,7 +13924,7 @@ function renderActivityRow(ev, viewerId, lastSeen) {
   return `<div class="actf-row${mine ? ' mine' : ''}${unseen ? ' unseen' : ''}">
     ${avatarsHtml}
     <div class="actf-body">
-      <div class="actf-lead">${lead}</div>
+      <div class="actf-lead">${lead}${sedeTag}</div>
       <div class="actf-text">${text}${rel ? ` <span class="actf-rel">${rel}</span>` : ''}</div>
       <div class="actf-time">${_actTimeLabel(ev.created_at)}</div>
       ${reactsBlock}
@@ -14000,7 +14004,7 @@ function paintActivityRail() {
   events.forEach(ev => {
     const day = _actDayLabel(ev.created_at);
     if (day !== lastDay) { html += `<div class="actrail-day">${day}</div>`; lastDay = day; }
-    html += renderRailRow(ev, viewerId, lastSeen);
+    html += renderActivityRow(ev, viewerId, lastSeen);
   });
   body.innerHTML = html;
 }
@@ -14563,25 +14567,29 @@ window.addEventListener('scroll', () => { _lastUserScrollTs = Date.now(); }, { p
 function subscribeCoordRealtime() {
   if (_coordRtChannel || !sb || !CURRENT_USER) return;
   const role = CURRENT_USER.role;
-  if (role !== 'coordinator' && role !== 'admin') return;
+  if (role !== 'coordinator' && role !== 'admin' && role !== 'instructor') return;
   try {
-    _coordRtChannel = sb.channel('rt-coord-day')
+    _coordRtChannel = sb.channel('rt-live-day')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'session_bookings' }, _coordLiveRefresh)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'attendance' }, _coordLiveRefresh)
       .subscribe();
-  } catch (e) { console.warn('realtime coord', e); }
+  } catch (e) { console.warn('realtime live', e); }
+}
+function _visibleSessionIds() {
+  const ids = new Set();
+  (STATE.classSessions || []).forEach(s => ids.add(s.id));
+  (STATE.scheduleWeekSessions || []).forEach(s => ids.add(s.id));
+  const c = STATE.instClassesCache && STATE.instClassesCache[STATE.instDayDate];
+  if (Array.isArray(c)) c.forEach(x => { if (x && x.session && x.session.id) ids.add(x.session.id); });
+  return ids;
 }
 function _coordLiveRefresh(payload) {
-  // Relevancia: ignora cambios de sesiones que no estás viendo (salvo INSERT, que puede ser una clase nueva de hoy)
+  // Relevancia: ignora cambios de sesiones que no estás viendo (salvo INSERT, que puede ser una clase nueva)
   try {
     const ev = payload && payload.eventType;
     const row = (payload && (payload.new || payload.old)) || {};
     const sid = row.session_id;
-    if (ev !== 'INSERT' && sid) {
-      const inDay = (STATE.classSessions || []).some(s => s.id === sid);
-      const inWeek = (STATE.scheduleWeekSessions || []).some(s => s.id === sid);
-      if (!inDay && !inWeek) return;
-    }
+    if (ev !== 'INSERT' && sid && !_visibleSessionIds().has(sid)) return;
   } catch (e) {}
   clearTimeout(_coordRtTimer);
   _coordRtTimer = setTimeout(async () => {
@@ -14592,14 +14600,16 @@ function _coordLiveRefresh(payload) {
     const sy = se.scrollTop;
     try {
       const v = STATE.currentView;
-      if (v === 'dashboard' || v === 'schedule') {
+      if (v === 'instructor-day') {
+        if (typeof renderInstructorDay === 'function') await renderInstructorDay();   // profesor: refresca su día (asistencias, movimientos, confirmaciones)
+      } else if (v === 'dashboard' || v === 'schedule') {
         if (typeof loadDayData === 'function') await loadDayData();
         if (typeof renderTimeline === 'function') renderTimeline();  // liviano: solo la grilla del día, sin recargar widgets
       } else {
         if (STATE.scheduleWeekStart && typeof loadScheduleWeekData === 'function') await loadScheduleWeekData();
         await _rerenderActiveView();
       }
-    } catch (e) { console.warn('[coordLive] refresh', e); }
+    } catch (e) { console.warn('[live] refresh', e); }
     se.scrollTop = sy;  // conservar la posición de scroll
   }, 1500);
 }
@@ -18042,6 +18052,7 @@ function deriveCoordInitials(fullName) {
 async function renderInstructorDay() {
   if (!CURRENT_USER || CURRENT_USER.role !== 'instructor') return;
   const inst = CURRENT_USER.record;
+  subscribeCoordRealtime();  // tiempo real: asistencias, movimientos y confirmaciones de sus clases
 
   if (!STATE._actBadgeInit) { STATE._actBadgeInit = true; setTimeout(() => { if (typeof refreshActivityBadge === 'function') refreshActivityBadge(); }, 1200); }
 
