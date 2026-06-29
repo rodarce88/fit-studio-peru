@@ -1,127 +1,346 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="es" data-size="normal">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>FIT Studio · App de Alumnas</title>
+<title>FIT Studio · Mi cuenta</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400..700;1,400..600&family=Mulish:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
-  :root{ --purple:#5B2A8F; --purple-deep:#3C1D6E; --cream:#FBF8F2; --ink:#211C29; --ink-soft:#574F60; --ink-mute:#928D9B; --line:#ECE6DE; --green-deep:#149A4A; --red:#E24B4A;
-    --display:'Playfair Display',Georgia,serif; --body:'Mulish',system-ui,sans-serif; }
-  *{ box-sizing:border-box; margin:0; padding:0; }
-  body{ font-family:var(--body); background:var(--cream); color:var(--ink); min-height:100vh; display:flex; justify-content:center; }
-  .wrap{ width:100%; max-width:430px; min-height:100vh; padding:0 24px; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; }
-  .logo-f{ width:72px; height:72px; border-radius:22px; background:linear-gradient(145deg,#6E37A6,#3C1D6E); display:flex; align-items:center; justify-content:center; font-family:var(--display); font-weight:600; color:#fff; font-size:38px; box-shadow:0 10px 24px rgba(60,29,110,.32); margin-bottom:22px; }
-  h1{ font-family:var(--display); font-weight:600; font-size:26px; margin-bottom:8px; }
-  p{ color:var(--ink-soft); font-size:17px; line-height:1.5; max-width:320px; }
-  .spinner{ width:34px; height:34px; border:3px solid #E7E0F0; border-top-color:var(--purple); border-radius:50%; animation:spin .8s linear infinite; margin:8px 0 18px; }
+  :root{ --purple:#5B2A8F; --purple-deep:#3C1D6E; --purple-soft:#EDE6F7; --purple-pale:#F6F1FC;
+    --cream:#FBF8F2; --ink:#211C29; --ink-soft:#574F60; --ink-mute:#928D9B; --line:#ECE6DE; --line-strong:#DCD5CB;
+    --gold:#C89B4F; --green-deep:#149A4A; --red:#E24B4A; --chip-green:#EAF6EC; --chip-green-ink:#2E7D45;
+    --display:'Playfair Display',Georgia,serif; --body:'Mulish',system-ui,sans-serif; --scale:1; }
+  html[data-size="lg"]{ --scale:1.16; }
+  *{ box-sizing:border-box; margin:0; padding:0; -webkit-tap-highlight-color:transparent; }
+  body{ font-family:var(--body); background:var(--cream); color:var(--ink); min-height:100vh; display:flex; justify-content:center; font-size:calc(17px*var(--scale)); line-height:1.5; }
+  .phone{ width:100%; max-width:430px; min-height:100vh; position:relative; display:flex; flex-direction:column; background:var(--cream); }
+  .hidden{ display:none !important; }
+  .logo-f{ width:72px; height:72px; border-radius:22px; background:linear-gradient(145deg,#6E37A6,#3C1D6E); display:flex; align-items:center; justify-content:center; font-family:var(--display); font-weight:600; color:#fff; font-size:38px; box-shadow:0 10px 24px rgba(60,29,110,.32); }
+  .spinner{ width:34px; height:34px; border:3px solid #E7E0F0; border-top-color:var(--purple); border-radius:50%; animation:spin .8s linear infinite; }
   @keyframes spin{ to{ transform:rotate(360deg); } }
-  .box{ width:100%; text-align:left; background:#fff; border:1px solid var(--line); border-radius:18px; padding:18px 20px; margin-top:18px; }
-  .box .r{ display:flex; justify-content:space-between; padding:9px 0; border-top:1px solid var(--line); font-size:15px; }
-  .box .r:first-child{ border-top:0; }
-  .box .r .lab{ color:var(--ink-mute); } .box .r .val{ font-weight:700; }
-  .ok{ color:var(--green-deep); font-weight:700; }
-  .err{ color:var(--red); }
-  .hidden{ display:none; }
+
+  /* centro (loading, welcome, error) */
+  .center{ flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; padding:0 26px; gap:0; }
+  .center h1{ font-family:var(--display); font-weight:600; font-size:calc(27px*var(--scale)); margin:22px 0 8px; }
+  .center p{ color:var(--ink-soft); font-size:calc(17px*var(--scale)); max-width:330px; }
+  .center .err{ color:var(--red); }
+  .data-list{ width:100%; text-align:left; margin:24px 0 8px; border-top:1px solid var(--line); }
+  .data-list .r{ display:flex; justify-content:space-between; gap:14px; padding:14px 0; border-bottom:1px solid var(--line); font-size:calc(16px*var(--scale)); }
+  .data-list .r .lab{ color:var(--ink-mute); } .data-list .r .val{ font-weight:700; text-align:right; }
+  .session-note{ font-size:calc(14px*var(--scale)); color:var(--ink-mute); margin:14px 0 22px; }
+  .btn{ width:100%; border:0; border-radius:16px; font-family:var(--body); font-size:calc(19px*var(--scale)); font-weight:700; padding:19px 20px; cursor:pointer; background:var(--purple); color:#fff; box-shadow:0 8px 20px rgba(91,42,143,.28); }
+  .btn:active{ transform:scale(.985); }
+
+  /* app */
+  .topbar{ position:sticky; top:0; z-index:5; background:rgba(251,248,242,.94); backdrop-filter:blur(8px); padding:16px 20px 13px; display:flex; align-items:center; justify-content:space-between; border-bottom:1px solid var(--line); }
+  .who{ display:flex; align-items:center; gap:11px; }
+  .avatar{ width:42px; height:42px; border-radius:50%; background:var(--purple-soft); color:var(--purple-deep); display:flex; align-items:center; justify-content:center; font-weight:700; font-size:calc(15px*var(--scale)); }
+  .who .hi{ font-size:calc(13px*var(--scale)); color:var(--ink-mute); line-height:1.1; }
+  .who .nm{ font-family:var(--display); font-weight:600; font-size:calc(18px*var(--scale)); }
+  .size-toggle{ display:flex; border:2px solid var(--line-strong); border-radius:12px; overflow:hidden; background:#fff; }
+  .size-toggle button{ border:0; background:transparent; padding:8px 13px; font-family:var(--display); cursor:pointer; color:var(--ink-soft); font-weight:600; line-height:1; }
+  .size-toggle button.on{ background:var(--purple); color:#fff; }
+  .size-toggle .a1{ font-size:15px; } .size-toggle .a2{ font-size:21px; }
+
+  .body{ flex:1; overflow-y:auto; padding:22px 22px 118px; }
+  .tab{ display:none; } .tab.active{ display:block; }
+  .eyebrow{ font-size:calc(13px*var(--scale)); font-weight:700; letter-spacing:1.5px; text-transform:uppercase; color:var(--purple); }
+  .accent{ width:38px; height:4px; border-radius:3px; background:var(--gold); margin:9px 0 18px; }
+  .empty{ color:var(--ink-mute); font-size:calc(16px*var(--scale)); padding:18px 0; }
+
+  .next-day{ font-family:var(--display); font-weight:600; font-size:calc(30px*var(--scale)); line-height:1.1; }
+  .next-time{ font-family:var(--display); font-weight:600; font-size:calc(46px*var(--scale)); color:var(--purple); line-height:1; margin:4px 0 14px; }
+  .next-rows{ display:flex; flex-direction:column; margin-bottom:22px; border-top:1px solid var(--line); }
+  .next-rows .r{ display:flex; align-items:center; justify-content:space-between; gap:12px; padding:13px 0; border-bottom:1px solid var(--line); font-size:calc(17px*var(--scale)); }
+  .next-rows .lab{ color:var(--ink-mute); font-weight:600; } .next-rows .val{ font-weight:700; }
+  .micro{ font-size:calc(13.5px*var(--scale)); color:var(--ink-mute); margin-top:12px; line-height:1.45; }
+  .divider{ height:1px; background:var(--line-strong); margin:26px 0 20px; }
+  .group-h{ font-family:var(--display); font-weight:600; font-size:calc(20px*var(--scale)); margin-bottom:4px; }
+  .group-sub{ font-size:calc(13px*var(--scale)); color:var(--ink-mute); margin-bottom:14px; }
+  .row{ display:flex; align-items:center; gap:14px; padding:15px 0; border-top:1px solid var(--line); }
+  .row.first{ border-top:0; }
+  .row .when{ flex:1; min-width:0; }
+  .row .when .d{ font-weight:700; font-size:calc(17px*var(--scale)); }
+  .row .when .s{ color:var(--ink-soft); font-size:calc(15px*var(--scale)); margin-top:3px; }
+  .chk{ flex:none; font-weight:700; font-size:calc(13px*var(--scale)); padding:7px 13px; border-radius:999px; white-space:nowrap; }
+  .chk.done{ background:var(--chip-green); color:var(--chip-green-ink); }
+  .chk.prox{ background:var(--purple-soft); color:var(--purple-deep); }
+  .chk.rec{ background:#FBF1DC; color:#8A6D1A; }
+  .chk.repro{ background:#E6EEF9; color:#2C5A9E; }
+  .chk.lost{ background:#FBE7E6; color:#B23B39; }
+
+  .pkg-num{ font-family:var(--display); font-weight:600; font-size:calc(78px*var(--scale)); color:var(--purple); line-height:.9; }
+  .pkg-word{ font-size:calc(20px*var(--scale)); font-weight:600; margin-top:4px; }
+  .pkg-bar{ display:flex; gap:7px; margin:22px 0 10px; }
+  .pkg-bar .seg{ flex:1; height:15px; border-radius:5px; background:#E7E0F0; }
+  .pkg-bar .seg.used{ background:#97C459; }
+  .pkg-info{ color:var(--ink-soft); font-size:calc(15px*var(--scale)); }
+  .pkg-info b{ color:var(--ink); }
+  .legend{ display:flex; flex-wrap:wrap; gap:14px 18px; margin-top:24px; padding-top:16px; border-top:1px solid var(--line); }
+  .legend span{ display:inline-flex; align-items:center; gap:7px; font-size:calc(13.5px*var(--scale)); color:var(--ink-soft); }
+  .legend i{ width:11px; height:11px; border-radius:50%; }
+  .legend .g{ background:#2E7D45; } .legend .gd{ background:var(--gold); } .legend .b{ background:#2C5A9E; } .legend .r{ background:var(--red); }
+
+  .nav{ position:absolute; bottom:0; left:0; right:0; background:#fff; border-top:1px solid var(--line); display:flex; padding:8px 6px calc(10px + env(safe-area-inset-bottom)); }
+  .nav button{ flex:1; border:0; background:transparent; cursor:pointer; display:flex; flex-direction:column; align-items:center; gap:5px; padding:8px 4px; color:var(--ink-mute); }
+  .nav button.on{ color:var(--purple); }
+  .nav button svg{ width:28px; height:28px; }
+  .nav button span{ font-size:calc(13px*var(--scale)); font-weight:600; }
+  .toast{ position:fixed; left:50%; bottom:96px; transform:translateX(-50%); background:#211C29; color:#fff; padding:12px 18px; border-radius:999px; font-size:14px; font-weight:600; opacity:0; transition:opacity .25s; z-index:30; }
+  .toast.show{ opacity:.95; }
 </style>
 </head>
 <body>
-<div class="wrap">
-  <div class="logo-f">F</div>
+<div class="phone">
 
-  <div id="loading">
-    <div class="spinner" style="margin-inline:auto;"></div>
-    <h1>Un momento…</h1>
-    <p id="loading-msg">Validando tu acceso</p>
+  <!-- LOADING -->
+  <div class="center" id="v-loading">
+    <div class="logo-f">F</div>
+    <div class="spinner" style="margin-top:24px;"></div>
+    <p id="loading-msg" style="margin-top:18px;">Validando tu acceso…</p>
   </div>
 
-  <div id="result" class="hidden" style="width:100%;">
-    <h1 id="title"></h1>
-    <p id="subtitle"></p>
-    <div id="data" class="box hidden"></div>
+  <!-- ERROR -->
+  <div class="center hidden" id="v-error">
+    <div class="logo-f">F</div>
+    <h1 id="err-title" class="err"></h1>
+    <p id="err-msg"></p>
   </div>
+
+  <!-- WELCOME -->
+  <div class="center hidden" id="v-welcome">
+    <div class="logo-f">F</div>
+    <h1 id="w-hi"></h1>
+    <p>Estos son tus datos. Si algo está mal, avísale al estudio.</p>
+    <div class="data-list" id="w-data"></div>
+    <div class="session-note">Tu sesión quedó activa en este teléfono. La próxima vez entrarás directo.</div>
+    <button class="btn" id="w-enter">Ingresar</button>
+  </div>
+
+  <!-- APP -->
+  <div class="hidden" id="v-app" style="display:flex; flex-direction:column; flex:1;">
+    <div class="topbar">
+      <div class="who">
+        <div class="avatar" id="t-avatar">··</div>
+        <div><div class="hi">Bienvenida</div><div class="nm" id="t-name">—</div></div>
+      </div>
+      <div class="size-toggle">
+        <button class="a1 on" onclick="setSize('normal',this)">A</button>
+        <button class="a2" onclick="setSize('lg',this)">A</button>
+      </div>
+    </div>
+    <div class="body">
+      <div class="tab active" id="tab-clases"></div>
+      <div class="tab" id="tab-pkg"></div>
+    </div>
+    <nav class="nav">
+      <button class="on" id="n-clases" onclick="goTab('clases',this)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="17" rx="3"/><path d="M8 2v4M16 2v4M3 10h18"/></svg>
+        <span>Mis clases</span>
+      </button>
+      <button id="n-pkg" onclick="goTab('pkg',this)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.7l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.7l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><path d="m3.3 7 8.7 5 8.7-5M12 22V12"/></svg>
+        <span>Mi paquete</span>
+      </button>
+    </nav>
+  </div>
+
+  <div class="toast" id="toast"></div>
 </div>
 
 <script type="module">
   import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-
   const SUPABASE_URL = 'https://jcvizioahuqvmhwfnbop.supabase.co';
   const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Impjdml6aW9haHVxdm1od2ZuYm9wIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc1MjIzODIsImV4cCI6MjA5MzA5ODM4Mn0.0EYHVITqA85IhtBUbGddHEWcVKIU_MeSzSxrdzNyvhI';
   const sb = createClient(SUPABASE_URL, SUPABASE_ANON);
 
-  const $ = (id) => document.getElementById(id);
-  function show(title, subtitle, isError){
-    $('loading').classList.add('hidden');
-    $('result').classList.remove('hidden');
-    $('title').textContent = title;
-    $('title').className = isError ? 'err' : '';
-    $('subtitle').textContent = subtitle || '';
-  }
+  const DIAS=['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
+  const MESES=['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+  const $ = (id)=>document.getElementById(id);
+  const view = (id)=>{ ['v-loading','v-error','v-welcome','v-app'].forEach(v=>$(v).classList.add('hidden')); $(id).classList.remove('hidden'); };
+  const dObj = (iso)=> new Date(iso+'T12:00:00');
+  const dayFull = (iso)=>{ const d=dObj(iso); return `${DIAS[d.getDay()]} ${d.getDate()} de ${MESES[d.getMonth()]}`; };
+  const fmtHour = (h)=>{ const ap=h<12?'am':'pm'; let hh=h%12; if(hh===0)hh=12; return `${hh}:00 ${ap}`; };
+  const esc = (s)=> (s==null?'':String(s)).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+  function toast(msg){ const t=$('toast'); t.textContent=msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),2200); }
+
+  let INST={}, LOCS={};
+
+  function showError(title, msg){ view('v-error'); $('err-title').textContent=title; $('err-msg').textContent=msg||''; }
 
   async function boot(){
-    const params = new URLSearchParams(location.search);
-    const token = params.get('t');
-
-    // 1) ¿Sesión ya activa en este teléfono?
-    const { data: { session } } = await sb.auth.getSession();
-    if (session) return loadApp();
-
-    // 2) ¿Viene token en el link?
+    const token = new URLSearchParams(location.search).get('t');
+    const { data:{ session } } = await sb.auth.getSession();
+    if (session) return afterAuth();
     if (token){
-      $('loading-msg').textContent = 'Validando tu acceso';
+      $('loading-msg').textContent='Validando tu acceso…';
       let j;
       try{
-        const r = await fetch('/api/alumna-auth', {
-          method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ token })
-        });
+        const r = await fetch('/api/alumna-auth',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token})});
         j = await r.json();
-      }catch(e){ return show('No pudimos conectar', 'Revisa tu internet e intenta de nuevo.', true); }
-
-      if (!j || !j.ok){
-        return show('Acceso no válido', 'Pídele al estudio que te reenvíe tu link por WhatsApp.', true);
-      }
-      // Abrir sesión con el token_hash
-      let vr = await sb.auth.verifyOtp({ token_hash: j.token_hash, type: 'email' });
-      if (vr.error){ // fallback con email + OTP
-        vr = await sb.auth.verifyOtp({ email: j.email, token: j.email_otp, type: 'magiclink' });
-      }
-      if (vr.error){ return show('No pudimos iniciar tu sesión', vr.error.message, true); }
-
-      history.replaceState({}, '', location.pathname); // limpiar el token de la URL
-      return loadApp();
+      }catch(e){ return showError('No pudimos conectar','Revisa tu internet e intenta de nuevo.'); }
+      if(!j||!j.ok) return showError('Acceso no válido','Pídele al estudio que te reenvíe tu link por WhatsApp.');
+      let vr = await sb.auth.verifyOtp({ token_hash:j.token_hash, type:'email' });
+      if(vr.error) vr = await sb.auth.verifyOtp({ email:j.email, token:j.email_otp, type:'magiclink' });
+      if(vr.error) return showError('No pudimos iniciar tu sesión', vr.error.message);
+      history.replaceState({},'',location.pathname);
+      return afterAuth();
     }
+    showError('Bienvenida','Abre el link que te enviamos por WhatsApp para entrar a tu cuenta.');
+  }
 
-    // 3) Sin token ni sesión
-    show('Bienvenida 👋', 'Abre el link que te enviamos por WhatsApp para entrar a tu cuenta.');
+  async function afterAuth(){
+    view('v-loading'); $('loading-msg').textContent='Cargando tu cuenta…';
+    const { data: me, error } = await sb.from('students')
+      .select('id, first_name, last_name, phone, email, app_welcomed_at').limit(1).maybeSingle();
+    if(error||!me) return showError('No pudimos cargar tu cuenta', error?.message||'Intenta de nuevo.');
+    window.ME = me;
+    if(!me.app_welcomed_at) return showWelcome(me);
+    return loadApp();
+  }
+
+  function showWelcome(me){
+    view('v-welcome');
+    $('w-hi').textContent = `¡Hola, ${me.first_name}!`;
+    $('w-data').innerHTML = `
+      <div class="r"><span class="lab">Nombre</span><span class="val">${esc(me.first_name)} ${esc(me.last_name||'')}</span></div>
+      <div class="r"><span class="lab">Número</span><span class="val">${esc(me.phone||'—')}</span></div>
+      <div class="r"><span class="lab">Correo</span><span class="val">${esc(me.email||'Sin correo')}</span></div>`;
+    $('w-enter').onclick = async ()=>{
+      $('w-enter').textContent='Entrando…'; $('w-enter').disabled=true;
+      try{ await sb.rpc('student_mark_welcomed'); }catch(e){}
+      loadApp();
+    };
   }
 
   async function loadApp(){
-    // Lectura por RLS: cada alumna solo ve lo suyo
-    const { data: me, error: meErr } = await sb.from('students')
-      .select('id, first_name, last_name').limit(1).maybeSingle();
-    if (meErr || !me){
-      return show('Sesión iniciada', 'Pero no pudimos leer tu ficha (RLS). Detalle: ' + (meErr?.message || 'sin datos'), true);
-    }
-    const { data: pkgs } = await sb.from('student_packages')
-      .select('id, classes_total, classes_used, status, is_active')
-      .order('purchase_date', { ascending: false });
-    const { data: att } = await sb.from('attendance').select('id').limit(50);
+    view('v-loading'); $('loading-msg').textContent='Cargando tus clases…';
+    const me = window.ME;
+    $('t-name').textContent = me.first_name;
+    $('t-avatar').textContent = ((me.first_name?.[0]||'')+(me.last_name?.[0]||'')).toUpperCase()||'··';
 
-    const activo = (pkgs || []).find(p => p.is_active && (p.classes_used||0) < (p.classes_total||0));
-    const restan = activo ? (activo.classes_total - activo.classes_used) : 0;
+    const [insR, locR, bkR, atR, pkR] = await Promise.all([
+      sb.from('instructors').select('id, first_name'),
+      sb.from('locations').select('id, name'),
+      sb.from('session_bookings').select('id, session_id, cancelled_at, confirmed_at, class_sessions(session_date,hour,instructor_id,location_id,is_cancelled)'),
+      sb.from('attendance').select('id, session_id, status, student_package_id, class_sessions(session_date,hour,instructor_id,location_id)'),
+      sb.from('student_packages').select('id, classes_total, classes_used, status, is_active, is_frozen, purchase_date, expiration_date, closed_at, replaces_id, packages(name)'),
+    ]);
+    (insR.data||[]).forEach(i=>INST[i.id]=i.first_name);
+    (locR.data||[]).forEach(l=>LOCS[l.id]=l.name);
 
-    show(`¡Hola, ${me.first_name}!`, 'Tu sesión quedó activa en este teléfono.');
-    const box = $('data');
-    box.classList.remove('hidden');
-    box.innerHTML = `
-      <div class="r"><span class="lab">Acceso</span><span class="val ok">✓ verificado por RLS</span></div>
-      <div class="r"><span class="lab">Tu nombre</span><span class="val">${me.first_name} ${me.last_name || ''}</span></div>
-      <div class="r"><span class="lab">Tus paquetes</span><span class="val">${(pkgs||[]).length}</span></div>
-      <div class="r"><span class="lab">Clases que te quedan</span><span class="val">${restan}</span></div>
-      <div class="r"><span class="lab">Clases en tu historial</span><span class="val">${(att||[]).length}</span></div>
-    `;
+    renderClases(bkR.data||[], atR.data||[]);
+    renderPaquete(pkR.data||[], atR.data||[], bkR.data||[]);
+    view('v-app');
   }
+
+  function isUpcoming(sess, att){
+    if(!sess || sess.is_cancelled) return false;
+    if(att && ['attended','lost','no_show','recoverable','rescheduled'].includes(att.status)) return false;
+    const today = new Date(); const todayIso=today.toISOString().slice(0,10);
+    if(sess.session_date>todayIso) return true;
+    if(sess.session_date<todayIso) return false;
+    return sess.hour >= today.getHours();
+  }
+
+  function renderClases(bookings, attendance){
+    const attBySession={}; attendance.forEach(a=>{ attBySession[a.session_id]=a; });
+    const up = bookings
+      .filter(b=>b.class_sessions && !b.cancelled_at && isUpcoming(b.class_sessions, attBySession[b.session_id]))
+      .map(b=>({ s:b.class_sessions }))
+      .sort((a,b)=> a.s.session_date.localeCompare(b.s.session_date) || a.s.hour-b.s.hour);
+
+    const el=$('tab-clases');
+    if(up.length===0){
+      el.innerHTML = `<div class="eyebrow">Mis clases</div><div class="accent"></div>
+        <div class="empty">No tienes clases próximas agendadas. Cuando el estudio te agende una, aparecerá aquí.</div>`;
+      return;
+    }
+    const next = up[0].s, rest = up.slice(1);
+    let html = `<div class="eyebrow">Tu próxima clase</div><div class="accent"></div>
+      <div class="next-day">${dayFull(next.session_date)}</div>
+      <div class="next-time">${fmtHour(next.hour)}</div>
+      <div class="next-rows">
+        <div class="r"><span class="lab">Profesor</span><span class="val">${esc(INST[next.instructor_id]||'—')}</span></div>
+        <div class="r"><span class="lab">Sede</span><span class="val">${esc(LOCS[next.location_id]||'—')}</span></div>
+      </div>
+      <button class="btn" onclick="confirmar()">Confirmar mi asistencia</button>
+      <div class="micro">Podrás confirmar cada clase hasta 4 horas antes. Si ya pasó ese tiempo, escríbele a la coordinadora.</div>`;
+    if(rest.length){
+      html += `<div class="divider"></div><div class="group-h">Más adelante</div><div class="group-sub">Tus próximas clases programadas</div>`;
+      rest.forEach((r,i)=>{ html += `<div class="row${i===0?' first':''}"><div class="when"><div class="d">${dayFull(r.s.session_date)}</div><div class="s">${fmtHour(r.s.hour)} · con ${esc(INST[r.s.instructor_id]||'—')}</div></div></div>`; });
+    }
+    el.innerHTML = html;
+  }
+
+  function stateChip(status){
+    if(status==='attended') return ['done','Asististe ✓'];
+    if(status==='recoverable') return ['rec','Recuperable'];
+    if(status==='rescheduled') return ['repro','Reprogramada'];
+    if(status==='lost'||status==='no_show') return ['lost','Perdida'];
+    return ['done','Asististe ✓'];
+  }
+
+  function renderPaquete(packages, attendance, bookings){
+    const el=$('tab-pkg');
+    const valid = packages.filter(p=> p.status!=='changed' && !p.closed_at);
+    const asc = [...valid].sort((a,b)=>(a.purchase_date||'').localeCompare(b.purchase_date||''));
+    const active = asc.find(p=> !p.is_frozen && (p.classes_used||0)<(p.classes_total||0));
+
+    if(valid.length===0){
+      el.innerHTML = `<div class="eyebrow">Mi paquete</div><div class="accent"></div>
+        <div class="empty">Aún no tienes un paquete activo. Cuando compres uno, aquí verás cuántas clases te quedan.</div>`;
+      return;
+    }
+
+    // gráfica del paquete activo
+    let html = `<div class="eyebrow">Tu paquete actual</div><div class="accent"></div>`;
+    if(active){
+      const total=active.classes_total||0, used=active.classes_used||0, remain=Math.max(0,total-used);
+      let segs=''; for(let i=0;i<total;i++) segs+=`<div class="seg${i<used?' used':''}"></div>`;
+      html += `<div class="pkg-num">${remain}</div><div class="pkg-word">clases te quedan</div>
+        <div class="pkg-bar">${segs}</div>
+        <div class="pkg-info"><b>${esc(active.packages?.name||'Paquete')}</b>${active.expiration_date?` · vence el <b>${dayFull(active.expiration_date).replace(/^[A-Za-zÁÉÍÓÚáéíóú]+ /,'')}</b>`:''}</div>`;
+    } else {
+      html += `<div class="empty">No tienes un paquete con clases disponibles ahora mismo.</div>`;
+    }
+
+    // clases agrupadas por paquete
+    const attBySession={}; attendance.forEach(a=>{ if(a.session_id) attBySession[a.session_id]=a; });
+    const upcoming = bookings.filter(b=>b.class_sessions && !b.cancelled_at && isUpcoming(b.class_sessions, attBySession[b.session_id]))
+      .map(b=>b.class_sessions);
+
+    const rowsByPkg={};
+    const activeId = active?.id;
+    attendance.forEach(a=>{ if(!a.class_sessions) return; const pid=a.student_package_id||activeId; if(!pid) return; (rowsByPkg[pid]=rowsByPkg[pid]||[]).push({ s:a.class_sessions, att:a }); });
+    if(activeId) upcoming.forEach(s=>{ (rowsByPkg[activeId]=rowsByPkg[activeId]||[]).push({ s, prox:true }); });
+
+    const order=[]; if(activeId) order.push(activeId);
+    [...valid].sort((a,b)=>(b.purchase_date||'').localeCompare(a.purchase_date||'')).forEach(p=>{ if(!order.includes(p.id)) order.push(p.id); });
+
+    order.forEach(pid=>{
+      const p = valid.find(x=>x.id===pid); if(!p) return;
+      const rows = (rowsByPkg[pid]||[]).sort((a,b)=> b.s.session_date.localeCompare(a.s.session_date) || b.s.hour-a.s.hour);
+      if(rows.length===0 && pid!==activeId) return;
+      const total=p.classes_total||0, used=p.classes_used||0, remain=Math.max(0,total-used);
+      const sub = pid===activeId ? `${total} clases · ${used} tomadas · ${remain} te quedan` : (remain>0?`${total} clases · ${remain} te quedan`:`${total} clases · completado`);
+      html += `<div class="divider"></div><div class="group-h">${pid===activeId?'Paquete actual':'Paquete anterior'}</div><div class="group-sub">${sub}</div>`;
+      if(rows.length===0){ html+=`<div class="empty">Sin clases registradas todavía.</div>`; }
+      rows.forEach((r,i)=>{
+        let cls,label;
+        if(r.prox){ cls='prox'; label='Próxima'; } else { [cls,label]=stateChip(r.att.status); }
+        html += `<div class="row${i===0?' first':''}"><div class="when"><div class="d">${dayFull(r.s.session_date)}</div><div class="s">${fmtHour(r.s.hour)} · con ${esc(INST[r.s.instructor_id]||'—')}</div></div><span class="chk ${cls}">${label}</span></div>`;
+      });
+    });
+
+    html += `<div class="legend"><span><i class="g"></i> Asististe</span><span><i class="gd"></i> Recuperable</span><span><i class="b"></i> Reprogramada</span><span><i class="r"></i> Perdida</span></div>`;
+    el.innerHTML = html;
+  }
+
+  window.goTab=(name,btn)=>{ document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active')); $('tab-'+name).classList.add('active'); document.querySelectorAll('.nav button').forEach(b=>b.classList.remove('on')); btn.classList.add('on'); $('v-app').querySelector('.body').scrollTo(0,0); };
+  window.setSize=(mode,el)=>{ document.documentElement.setAttribute('data-size', mode==='lg'?'lg':'normal'); el.parentElement.querySelectorAll('button').forEach(b=>b.classList.remove('on')); el.classList.add('on'); };
+  window.confirmar=()=>{ toast('Muy pronto podrás confirmar desde aquí 💜'); };
 
   boot();
 </script>
