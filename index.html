@@ -474,6 +474,46 @@
 
   /* TIMELINE */
   .layout-grid { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 24px; }
+
+  /* DASH TOP — widgets (izquierda) + feed de actividad permanente (derecha) */
+  .dash-top-grid { display:grid; grid-template-columns: minmax(0,1fr) 344px; gap:24px; align-items:start; margin-bottom:18px; }
+  .dash-top-left { min-width:0; }
+  .dash-top-left > [id$="-widget"], .dash-top-left > .cobranza-widget { margin-bottom:16px; }
+  .actrail { position:sticky; top: calc(var(--topbar-h) + 16px); background:#fff; border:1px solid var(--line); border-radius:var(--radius-lg); box-shadow:var(--shadow-sm); display:flex; flex-direction:column; max-height: calc(100vh - var(--topbar-h) - 40px); overflow:hidden; }
+  .actrail-head { padding:16px 18px 12px; border-bottom:1px solid var(--line-soft); }
+  .actrail-titlerow { display:flex; align-items:center; justify-content:space-between; gap:10px; }
+  .actrail-title { font-family:var(--display); font-size:17px; font-weight:400; }
+  .actrail-title em { font-style:italic; color:var(--fit-purple); }
+  .actrail-live { display:inline-flex; align-items:center; gap:6px; font-size:11px; font-weight:600; color:var(--good-medium); }
+  .actrail-live .dot { width:7px; height:7px; border-radius:50%; background:var(--good-medium); animation:actpulse 1.8s infinite; }
+  @keyframes actpulse { 0%{box-shadow:0 0 0 0 rgba(29,158,117,.45);} 70%{box-shadow:0 0 0 7px rgba(29,158,117,0);} 100%{box-shadow:0 0 0 0 rgba(29,158,117,0);} }
+  .actrail-chips { display:flex; gap:6px; margin-top:11px; flex-wrap:wrap; }
+  .actrail-chip { font-size:11px; font-weight:600; padding:4px 10px; border-radius:999px; border:1px solid var(--line); color:var(--ink-mute); background:#fff; cursor:pointer; display:inline-flex; align-items:center; gap:6px; }
+  .actrail-chip.on { background:var(--ink); color:#fff; border-color:var(--ink); }
+  .actrail-chip .sd { width:7px; height:7px; border-radius:50%; }
+  .actrail-body { overflow-y:auto; padding:4px 0 8px; }
+  .actrail-day { font-size:10px; letter-spacing:.12em; text-transform:uppercase; color:var(--ink-faint); font-weight:600; padding:12px 18px 6px; }
+  .actrail-row { display:flex; gap:11px; padding:11px 18px 12px 15px; border-left:3px solid transparent; position:relative; }
+  .actrail-row + .actrail-row { border-top:1px solid var(--line-soft); }
+  .actrail-row.unseen { background:#FBF9FE; }
+  .actrail-av { width:30px; height:30px; border-radius:50%; flex:none; display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:700; color:#fff; }
+  .actrail-bd { min-width:0; flex:1; }
+  .actrail-lead { display:flex; align-items:center; gap:7px; font-size:10.5px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; color:var(--ink-mute); margin-bottom:2px; }
+  .actrail-lead .sede { display:inline-flex; align-items:center; gap:5px; font-weight:600; letter-spacing:.02em; text-transform:none; }
+  .actrail-lead .sede .sd { width:7px; height:7px; border-radius:50%; }
+  .actrail-txt { font-size:13.5px; line-height:1.4; color:var(--ink); }
+  .actrail-txt b { font-weight:600; }
+  .actrail-meta { font-size:11.5px; color:var(--ink-mute); margin-top:3px; }
+  .actrail-time { position:absolute; top:11px; right:16px; font-size:10.5px; color:var(--ink-faint); white-space:nowrap; display:flex; align-items:center; gap:5px; }
+  .actrail-new { font-size:9px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; color:var(--fit-purple); background:#F0E7FA; padding:1px 6px; border-radius:999px; }
+  .actrail-row.hito { background:linear-gradient(180deg,var(--gold-soft),#fff); border-left-color:var(--gold); }
+  .actrail-row.hito .actrail-av { background:var(--gold-soft); color:var(--gold-deep); font-size:15px; }
+  .actrail-row.hito .actrail-lead { color:var(--gold-deep); }
+  .actrail-foot { padding:10px 16px; border-top:1px solid var(--line-soft); text-align:center; }
+  .actrail-foot a { font-size:12px; color:var(--fit-purple); font-weight:600; text-decoration:none; }
+  .actrail-empty { padding:26px 18px; text-align:center; font-size:12.5px; color:var(--ink-mute); line-height:1.5; }
+  .actrail .actf-reacts { margin-top:8px; }
+  @media (max-width: 1100px) { .dash-top-grid { grid-template-columns:1fr; } .actrail { position:static; max-height:none; } }
   .timeline-card, .panel, .table-card { background: white; border-radius: var(--radius-lg); border: 1px solid var(--line); overflow: hidden; box-shadow: var(--shadow-sm); }
   /* Cuando contiene el layout de Mi día: overflow visible (para que sticky funcione) + header y sidebar sticky */
   .timeline-card:has(.mi-dia-layout) { overflow: visible; }
@@ -3346,6 +3386,8 @@
       <div id="dash-student-search-results" style="display: none; position: absolute; top: calc(100% + 4px); left: 0; right: 0; background: white; border: 1px solid var(--line); border-radius: var(--radius-md); box-shadow: 0 8px 24px rgba(0,0,0,0.08); max-height: 380px; overflow-y: auto; z-index: 50;"></div>
     </div>
 
+    <div class="dash-top-grid" id="dash-top-grid">
+    <div class="dash-top-left">
     <!-- Widget de cobranza del mes (reemplaza los 4 KPI cards) -->
     <div class="cobranza-widget" id="cobranza-widget" onclick="openCobranzaPanel()" tabindex="0" role="button" aria-label="Cobranza del mes — ver alumnos pendientes">
       <div class="cob-gauge">
@@ -3444,6 +3486,22 @@
         <div id="active-chart"><div style="padding:18px 0; font-size:12px; color:var(--ink-mute);">Cargando…</div></div>
       </div>
     </div>
+    </div><!-- /dash-top-left -->
+
+    <aside class="actrail" id="activity-rail">
+      <div class="actrail-head">
+        <div class="actrail-titlerow">
+          <div class="actrail-title"><em>Actividad</em></div>
+          <span class="actrail-live"><span class="dot"></span> En vivo</span>
+        </div>
+        <div class="actrail-chips" id="actrail-chips"></div>
+      </div>
+      <div class="actrail-body" id="actrail-body">
+        <div class="actrail-empty">Cargando…</div>
+      </div>
+      <div class="actrail-foot"><a href="#" onclick="showView('instructor-activity', null); if(typeof renderActivityFeedView==='function') renderActivityFeedView(); return false;">Ver todo el registro →</a></div>
+    </aside>
+    </div><!-- /dash-top-grid -->
 
     <div class="layout-grid">
       <div class="timeline-card">
@@ -6240,6 +6298,8 @@ function renderDashboard() {
   renderDebtSummary();
   // Alumnos activos + tendencia de asistentes por semana (async, no bloquea)
   renderActiveStudents();
+  // Feed de actividad permanente (3 sedes, en vivo)
+  renderActivityRail();
 
   // Incomplete list
   const incompleteEl = document.getElementById('incomplete-list');
@@ -13892,6 +13952,145 @@ async function renderActivityFeedView() {
   markActivitySeen();
 }
 
+// ===== FEED DE ACTIVIDAD — RAIL PERMANENTE (Mi día) =====
+let ACTRAIL_SEDE = 'all';   // 'all' | location_id
+let _actRtChannel = null;
+let _actRailLoading = false;
+let _actRtTimer = null;
+
+async function renderActivityRail() {
+  const body = document.getElementById('actrail-body');
+  if (!body) return;
+  renderActRailChips();
+  if (!STATE._actFeed || !STATE._actFeed.length) {
+    if (_actRailLoading) return;
+    _actRailLoading = true;
+    STATE._actLastSeen = STATE._actLastSeen || _actLastSeen();
+    try { STATE._actFeed = await loadStudioActivityFeed(21); } catch (e) {}
+    _actRailLoading = false;
+  }
+  paintActivityRail();
+  subscribeActivityRealtime();
+  setTimeout(() => { try { localStorage.setItem('fit_activity_seen_' + (CURRENT_USER?.record?.id || 'x'), new Date().toISOString()); } catch (e) {} }, 1500);
+}
+
+function renderActRailChips() {
+  const box = document.getElementById('actrail-chips');
+  if (!box) return;
+  const locs = STATE.locations || [];
+  let html = `<span class="actrail-chip${ACTRAIL_SEDE === 'all' ? ' on' : ''}" onclick="setActRailSede('all')">Todas</span>`;
+  locs.forEach(l => {
+    html += `<span class="actrail-chip${ACTRAIL_SEDE === l.id ? ' on' : ''}" onclick="setActRailSede('${l.id}')"><span class="sd" style="background:${l.color || 'var(--fit-purple)'}"></span>${escape(l.name || '')}</span>`;
+  });
+  box.innerHTML = html;
+}
+function setActRailSede(id) { ACTRAIL_SEDE = id; renderActRailChips(); paintActivityRail(); }
+
+function paintActivityRail() {
+  const body = document.getElementById('actrail-body');
+  if (!body) return;
+  let events = STATE._actFeed || [];
+  if (ACTRAIL_SEDE !== 'all') events = events.filter(e => e.location_id === ACTRAIL_SEDE);
+  if (!events.length) { body.innerHTML = `<div class="actrail-empty">Sin movimientos por ahora.<br>Altas, renovaciones e hitos aparecerán aquí.</div>`; return; }
+  const viewerId = (CURRENT_USER && CURRENT_USER.role === 'instructor') ? CURRENT_USER.record?.id : null;
+  const lastSeen = STATE._actLastSeen;
+  let html = '', lastDay = '';
+  events.forEach(ev => {
+    const day = _actDayLabel(ev.created_at);
+    if (day !== lastDay) { html += `<div class="actrail-day">${day}</div>`; lastDay = day; }
+    html += renderRailRow(ev, viewerId, lastSeen);
+  });
+  body.innerHTML = html;
+}
+
+function _railReacts(ev) {
+  const rx = (ev._reactions || []).map(r =>
+    `<button class="actf-rx${r.mine ? ' on' : ''}" title="${escape(r.names.join(', '))}" onclick="toggleReaction('${ev.id}','${r.emoji}')"><span class="rxe">${r.emoji}</span><span class="rxc">${r.count}</span></button>`
+  ).join('');
+  return `<div class="actf-reacts">${rx}<button class="actf-rxadd" onclick="openReactionSheet('${ev.id}')">+ reaccionar</button></div>`;
+}
+function _railInitials(name) {
+  const p = (name || '').trim().split(/\s+/);
+  return (((p[0] || '')[0] || '') + ((p[1] || '')[0] || '')).toUpperCase() || '·';
+}
+
+function renderRailRow(ev, viewerId, lastSeen) {
+  const sede = (STATE.locations || []).find(l => l.id === ev.location_id);
+  const col = sede?.color || 'var(--fit-purple)';
+  const sedeName = sede?.name || '';
+  const name = `<b>${escape(ev._name)}</b>`;
+  const n = ev.classes_total;
+  const pkgN = n ? ` de ${n} clases` : '';
+  const unseen = lastSeen ? (ev.created_at > lastSeen) : false;
+  const timeNew = unseen ? ` · <span class="actrail-new">nuevo</span>` : '';
+  const sedeTag = sedeName ? `<span class="sede"><span class="sd" style="background:${col}"></span>${escape(sedeName)}</span>` : '';
+
+  if (ev.type === 'hito') {
+    const profs = ev._profs || [];
+    const num = n || 50;
+    const profLine = profs.length ? `Formada por ${_actNamesColored(profs)}.` : 'Todo un logro del equipo FIT.';
+    return `<div class="actrail-row hito${unseen ? ' unseen' : ''}">
+      <div class="actrail-time">${_actTimeLabel(ev.created_at)}${timeNew}</div>
+      <div class="actrail-av">🏆</div>
+      <div class="actrail-bd">
+        <div class="actrail-lead">Hito ${sedeTag}</div>
+        <div class="actrail-txt">${name} llegó a ${num} clases en FIT.</div>
+        <div class="actrail-meta">${profLine}</div>
+        ${_railReacts(ev)}
+      </div>
+    </div>`;
+  }
+
+  let lead = 'Alta nueva', txt = '', meta = '';
+  if (ev.type === 'renovacion') {
+    lead = 'Renovación';
+    txt = `${name} renovó su paquete${pkgN}.`;
+    const parts = [];
+    if (ev._profs && ev._profs.length) parts.push(`con ${_actNamesColored(ev._profs)}`);
+    if (ev._coord) parts.push(`registró <span style="color:${ev._coord.color};font-weight:600">${escape(ev._coord.name)}</span>`);
+    meta = parts.join(' · ');
+  } else if (ev.type === 'conversion') {
+    txt = `${name} pasó de prueba a alumna activa — ¡primer paquete${pkgN}!`;
+    const parts = [];
+    if (ev._trialProf) parts.push(`prueba con ${_actNamesColored([ev._trialProf])}`);
+    if (ev._coord) parts.push(`registró <span style="color:${ev._coord.color};font-weight:600">${escape(ev._coord.name)}</span>`);
+    meta = parts.join(' · ');
+  } else {
+    txt = `${name} se dio de alta — ¡primer paquete${pkgN}!`;
+    meta = ev._coord ? `Registró <span style="color:${ev._coord.color};font-weight:600">${escape(ev._coord.name)}</span>` : '';
+  }
+
+  return `<div class="actrail-row${unseen ? ' unseen' : ''}" style="border-left-color:${col}">
+    <div class="actrail-time">${_actTimeLabel(ev.created_at)}${timeNew}</div>
+    <div class="actrail-av" style="background:${col}">${_railInitials(ev._name)}</div>
+    <div class="actrail-bd">
+      <div class="actrail-lead">${lead} ${sedeTag}</div>
+      <div class="actrail-txt">${txt}</div>
+      ${meta ? `<div class="actrail-meta">${meta}</div>` : ''}
+      ${_railReacts(ev)}
+    </div>
+  </div>`;
+}
+
+// Tiempo real: nuevas actividades y reacciones aparecen solas
+function subscribeActivityRealtime() {
+  if (_actRtChannel || !sb) return;
+  try {
+    _actRtChannel = sb.channel('rt-studio-activity')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'studio_activity' }, () => _actRtReload())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'studio_activity_reactions' }, () => _actRtReload())
+      .subscribe();
+  } catch (e) { console.warn('realtime actividad', e); }
+}
+function _actRtReload() {
+  clearTimeout(_actRtTimer);
+  _actRtTimer = setTimeout(async () => {
+    try { STATE._actFeed = await loadStudioActivityFeed(21); } catch (e) {}
+    if (document.getElementById('actrail-body')) paintActivityRail();
+    if (document.getElementById('actf-list')) paintActivityList();
+  }, 600);
+}
+
 async function reloadActivityReactions(activityId) {
   try {
     const { data: reacts } = await sb.from('studio_activity_reactions').select('activity_id, emoji, user_id, user_name').eq('activity_id', activityId);
@@ -13901,6 +14100,7 @@ async function reloadActivityReactions(activityId) {
     const ev = (STATE._actFeed || []).find(e => e.id === activityId);
     if (ev) ev._reactions = [...byEmoji.values()];
     paintActivityList();
+    if (document.getElementById('actrail-body')) paintActivityRail();
   } catch (e) {}
 }
 async function toggleReaction(activityId, emoji) {
