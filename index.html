@@ -479,11 +479,27 @@
   .dash-top-grid { display:grid; grid-template-columns: minmax(0,1fr) 344px; gap:24px; align-items:start; margin-bottom:18px; }
   .dash-top-left { min-width:0; }
   .dash-top-left > [id$="-widget"], .dash-top-left > .cobranza-widget { margin-bottom:16px; }
-  .midia-sede-chips { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:16px; }
+  .midia-sede-chips { display:flex; gap:8px; flex-wrap:wrap; }
   .midia-sede-chips .msc { border:1px solid var(--line); background:#fff; border-radius:999px; padding:8px 14px; font-weight:600; font-size:13px; color:var(--ink-mute); cursor:pointer; display:inline-flex; align-items:center; gap:7px; font-family:var(--body); transition:background .12s,color .12s,border-color .12s; }
   .midia-sede-chips .msc:hover { border-color:var(--fit-purple-soft); }
   .midia-sede-chips .msc.on { background:var(--ink); color:#fff; border-color:var(--ink); }
   .midia-sede-chips .msc .d { width:8px; height:8px; border-radius:50%; display:inline-block; }
+  .midia-toolbar { display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:16px; }
+  .mw-collapse-all { border:1px solid var(--line); background:#fff; border-radius:10px; padding:8px 13px; font-weight:600; font-size:12.5px; color:var(--ink-mute); cursor:pointer; white-space:nowrap; font-family:var(--body); }
+  .mw-collapse-all:hover { border-color:var(--fit-purple-soft); }
+  /* Sistema de widgets colapsables (Fase 4 · 2b) */
+  .mw-head { display:flex; align-items:center; gap:10px; cursor:pointer; user-select:none; }
+  .mw-card .mw-head { padding:16px 20px; }
+  .mw-head .mw-t { font-size:11px; text-transform:uppercase; letter-spacing:.12em; color:var(--ink-mute); font-weight:600; flex:1; display:inline-flex; align-items:center; gap:8px; }
+  .mw-i { width:16px; height:16px; border-radius:999px; border:1px solid var(--line); background:transparent; color:var(--ink-mute); font:600 10px/1 var(--body,system-ui); cursor:pointer; display:inline-flex; align-items:center; justify-content:center; flex:none; }
+  .mw-i:hover { border-color:var(--fit-purple-soft); color:var(--fit-purple); }
+  .mw-chev { color:var(--ink-faint); transition:transform .2s; font-size:13px; line-height:1; }
+  .mw-card.collapsed .mw-chev, .cobranza-widget.collapsed .mw-chev { transform:rotate(-90deg); }
+  .mw-card.collapsed .mw-body { display:none; }
+  .mw-card .mw-body { padding:0 20px 20px; }
+  .mw-infobox { background:var(--fit-lavender-pale,#FAF7FD); border:1px solid var(--line); border-radius:12px; padding:11px 13px; font-size:11.5px; line-height:1.5; color:var(--ink-mute); }
+  .mw-card .mw-infobox { margin:0 20px 14px; }
+  .cobranza-widget.collapsed > .cob-gauge, .cobranza-widget.collapsed > .cob-main, .cobranza-widget.collapsed > .cob-stats, .cobranza-widget.collapsed > .cob-chevron { display:none; }
   .actrail { position:sticky; top: calc(var(--topbar-h) + 16px); background:#fff; border:1px solid var(--line); border-radius:var(--radius-lg); box-shadow:var(--shadow-sm); display:flex; flex-direction:column; max-height: calc(100vh - var(--topbar-h) - 40px); overflow:hidden; }
   .actrail-head { padding:16px 18px 12px; border-bottom:1px solid var(--line-soft); }
   .actrail-titlerow { display:flex; align-items:center; justify-content:space-between; gap:10px; }
@@ -3398,9 +3414,17 @@
 
     <div class="dash-top-grid" id="dash-top-grid">
     <div class="dash-top-left">
-    <div id="midia-sede-chips" class="midia-sede-chips"></div>
+    <div class="midia-toolbar">
+      <div id="midia-sede-chips" class="midia-sede-chips"></div>
+      <button type="button" id="mw-collapse-all" class="mw-collapse-all" data-mode="collapse" onclick="toggleCollapseAllMw()">Minimizar todo</button>
+    </div>
     <!-- Widget de cobranza del mes (reemplaza los 4 KPI cards) -->
     <div class="cobranza-widget" id="cobranza-widget" onclick="openCobranzaPanel()" tabindex="0" role="button" aria-label="Cobranza del mes — ver alumnos pendientes">
+      <div class="mw-head" style="grid-column:1/-1; padding:0;" onclick="event.stopPropagation(); toggleMw('cobranza-widget')">
+        <span class="mw-t">Cobranza del mes <button type="button" class="mw-i" onclick="mwInfo(event,'cobranza')" aria-label="Qué significa">i</button></span>
+        <span class="mw-chev">&#9662;</span>
+      </div>
+      <div class="mw-infobox" id="mw-info-cobranza" style="grid-column:1/-1; display:none; margin:0;">Compara lo cobrado este mes contra lo esperado a la fecha (ritmo del mes). <b>Por cobrar</b> es el saldo de los paquetes comprados este mes; <b>Ya cobrado</b> es lo pagado este mes. El % del medidor es cobrado ÷ esperado a hoy.</div>
       <div class="cob-gauge">
         <svg viewBox="0 0 220 165" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
           <path d="M 20 130 A 90 90 0 0 1 200 130" fill="none" stroke="var(--line)" stroke-width="16" stroke-linecap="round"/>
@@ -3441,52 +3465,60 @@
     </div>
 
     <!-- Deuda acumulada — total real (todos los paquetes, no solo del mes) + tendencia 4 semanas -->
-    <div id="debt-widget" style="background:var(--surface,#fff); border:1px solid var(--line); border-radius:var(--radius-lg,18px); padding:20px 24px; margin-bottom:18px; display:flex; flex-direction:column; gap:14px;">
-      <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:16px; flex-wrap:wrap;">
-        <div>
-          <span class="kpi-label">Deuda acumulada · <span id="debt-scope-name">—</span></span>
-          <div id="debt-amount" style="font-family:var(--display); font-size:32px; font-weight:500; letter-spacing:-0.5px; color:var(--ink); line-height:1.1; margin-top:4px;">S/ —</div>
-          <div id="debt-count" style="font-size:13px; color:var(--ink-mute); margin-top:4px;">— alumnas con saldo</div>
-        </div>
+    <div id="debt-widget" class="mw-card" style="background:var(--surface,#fff); border:1px solid var(--line); border-radius:var(--radius-lg,18px); overflow:hidden;">
+      <div class="mw-head" onclick="toggleMw('debt-widget')">
+        <span class="mw-t">Deuda acumulada <button type="button" class="mw-i" onclick="mwInfo(event,'debt')" aria-label="Qué significa">i</button></span>
+        <span class="mw-chev">&#9662;</span>
       </div>
-      <div>
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
-          <span class="kpi-label" style="font-size:10px;">Alumnas con deuda · últimas 4 semanas</span>
-          <span id="debt-trend-delta" style="font-size:12px; font-weight:600; color:var(--ink-mute);">—</span>
+      <div class="mw-infobox" id="mw-info-debt" style="display:none;">Saldo pendiente de <b>todos</b> los paquetes vivos (no solo los del mes): precio del paquete menos lo pagado. El gráfico muestra cuántas alumnas tienen saldo en las últimas 4 semanas.</div>
+      <div class="mw-body">
+        <div id="debt-amount" style="font-family:var(--display); font-size:32px; font-weight:500; letter-spacing:-0.5px; color:var(--ink); line-height:1.1; padding-top:2px;">S/ —</div>
+        <div id="debt-count" style="font-size:13px; color:var(--ink-mute); margin-top:4px;">— alumnas con saldo</div>
+        <div id="debt-scope-name" style="display:none;"></div>
+        <div style="margin-top:16px;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+            <span class="kpi-label" style="font-size:10px;">Alumnas con deuda · últimas 4 semanas</span>
+            <span id="debt-trend-delta" style="font-size:12px; font-weight:600; color:var(--ink-mute);">—</span>
+          </div>
+          <div id="debt-chart"><div style="padding:18px 0; font-size:12px; color:var(--ink-mute);">Cargando…</div></div>
         </div>
-        <div id="debt-chart"><div style="padding:18px 0; font-size:12px; color:var(--ink-mute);">Cargando…</div></div>
       </div>
     </div>
 
     <!-- Alumnos activos — vivos hoy (paquete vivo + clase agendada) + tendencia de asistentes por semana -->
-    <div id="active-widget" style="background:var(--surface,#fff); border:1px solid var(--line); border-radius:var(--radius-lg,18px); padding:20px 24px; margin-bottom:18px; display:flex; flex-direction:column; gap:14px;">
-      <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:16px; flex-wrap:wrap;">
-        <div>
-          <span class="kpi-label">Alumnos activos · <span id="active-scope-name">—</span></span>
-          <div id="active-today" style="font-family:var(--display); font-size:32px; font-weight:500; letter-spacing:-0.5px; color:var(--ink); line-height:1.1; margin-top:4px;">—</div>
-          <div style="font-size:13px; color:var(--ink-mute); margin-top:4px;">con paquete vivo y clase agendada</div>
-        </div>
-        <div style="display:flex; align-items:flex-start; gap:18px; flex-wrap:wrap;">
+    <div id="active-widget" class="mw-card" style="background:var(--surface,#fff); border:1px solid var(--line); border-radius:var(--radius-lg,18px); overflow:hidden;">
+      <div class="mw-head" onclick="toggleMw('active-widget')">
+        <span class="mw-t">Alumnos activos <button type="button" class="mw-i" onclick="mwInfo(event,'active')" aria-label="Qué significa">i</button></span>
+        <span class="mw-chev">&#9662;</span>
+      </div>
+      <div class="mw-infobox" id="mw-info-active" style="display:none;">Alumnas con <b>paquete vivo</b> (clases disponibles, no congelado) y al menos una <b>clase agendada</b>. "Asistieron este mes" cuenta alumnas distintas con clase marcada como asistió en el mes en curso.</div>
+      <div class="mw-body">
+        <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:16px; flex-wrap:wrap;">
+          <div>
+            <div id="active-today" style="font-family:var(--display); font-size:32px; font-weight:500; letter-spacing:-0.5px; color:var(--ink); line-height:1.1; padding-top:2px;">—</div>
+            <div style="font-size:13px; color:var(--ink-mute); margin-top:4px;">con paquete vivo y clase agendada</div>
+            <div id="active-scope-name" style="display:none;"></div>
+          </div>
           <div style="text-align:right;">
             <div class="kpi-label" style="font-size:10px;">Asistieron este mes</div>
             <div id="active-this-month" style="font-family:var(--display); font-size:22px; color:var(--ink);">—</div>
             <div id="active-month-delta" style="font-size:11px; color:var(--ink-mute);">vs mes pasado: —</div>
           </div>
         </div>
-      </div>
-      <div>
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; gap:10px;">
-          <span style="display:inline-flex; align-items:center; gap:7px; min-width:0;">
-            <span class="kpi-label" style="font-size:10px;">Alumnas que asistieron · por semana (últimas 8)</span>
-            <button type="button" onclick="toggleActiveInfo()" aria-label="Qué significa este gráfico" title="Qué significa" style="flex:none; width:16px; height:16px; border-radius:999px; border:1px solid var(--line); background:transparent; color:var(--ink-mute); font:600 10px/1 var(--body,system-ui); cursor:pointer; display:inline-flex; align-items:center; justify-content:center;">i</button>
-          </span>
-          <span id="active-trend-delta" style="font-size:12px; font-weight:600; color:var(--ink-mute); white-space:nowrap;">—</span>
+        <div style="margin-top:16px;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; gap:10px;">
+            <span style="display:inline-flex; align-items:center; gap:7px; min-width:0;">
+              <span class="kpi-label" style="font-size:10px;">Alumnas que asistieron · por semana (últimas 8)</span>
+              <button type="button" onclick="toggleActiveInfo()" aria-label="Qué significa este gráfico" title="Qué significa" style="flex:none; width:16px; height:16px; border-radius:999px; border:1px solid var(--line); background:transparent; color:var(--ink-mute); font:600 10px/1 var(--body,system-ui); cursor:pointer; display:inline-flex; align-items:center; justify-content:center;">i</button>
+            </span>
+            <span id="active-trend-delta" style="font-size:12px; font-weight:600; color:var(--ink-mute); white-space:nowrap;">—</span>
+          </div>
+          <div id="active-trend-info" style="display:none; background:var(--bg-soft,#f5f2fb); border:1px solid var(--line); border-radius:12px; padding:11px 13px; margin-bottom:10px; font-size:11.5px; line-height:1.5; color:var(--ink-mute);">
+            Cada punto es cuántas <b>alumnas distintas</b> asistieron esa semana (clases marcadas como “asistió”), de lunes a domingo, en la sede seleccionada. Una misma alumna que vino 3 veces cuenta como 1.<br>
+            La <b>última semana</b> aparece como <b>“en curso”</b> (punto hueco y línea punteada): todavía no termina, por eso su número es bajo y no debe leerse como una caída. La comparación de la derecha usa la <b>última semana completa</b>, no la que está en curso.
+          </div>
+          <div id="active-chart"><div style="padding:18px 0; font-size:12px; color:var(--ink-mute);">Cargando…</div></div>
         </div>
-        <div id="active-trend-info" style="display:none; background:var(--bg-soft,#f5f2fb); border:1px solid var(--line); border-radius:12px; padding:11px 13px; margin-bottom:10px; font-size:11.5px; line-height:1.5; color:var(--ink-mute);">
-          Cada punto es cuántas <b>alumnas distintas</b> asistieron esa semana (clases marcadas como “asistió”), de lunes a domingo, en la sede seleccionada. Una misma alumna que vino 3 veces cuenta como 1.<br>
-          La <b>última semana</b> aparece como <b>“en curso”</b> (punto hueco y línea punteada): todavía no termina, por eso su número es bajo y no debe leerse como una caída. La comparación de la derecha usa la <b>última semana completa</b>, no la que está en curso.
-        </div>
-        <div id="active-chart"><div style="padding:18px 0; font-size:12px; color:var(--ink-mute);">Cargando…</div></div>
       </div>
     </div>
     </div><!-- /dash-top-left -->
@@ -6306,6 +6338,7 @@ function renderDashboard() {
 
   // Filtro de sede global (Fase 4)
   renderMiDiaSedeChips();
+  applyMwCollapsedState();
   // Widget de cobranza del mes (async, no bloquea el render)
   renderCobranzaWidget();
   // Deuda acumulada total + tendencia 4 semanas (async, no bloquea)
@@ -6372,20 +6405,75 @@ let MIDIA_SEDE = 'all'; // 'all' | locationId
 function midiaSedeName() { if (MIDIA_SEDE === 'all') return 'todas las sedes'; const l = (STATE.locations || []).find(x => x.id === MIDIA_SEDE); return l ? l.name : '—'; }
 function renderMiDiaSedeChips() {
   const box = document.getElementById('midia-sede-chips'); if (!box) return;
-  const chip = (v, label, color) => `<button class="msc ${MIDIA_SEDE === v ? 'on' : ''}" onclick="setMiDiaSede('${v}')">${color ? `<span class="d" style="background:${color}"></span>` : ''}${escape(label)}</button>`;
+  const chip = (v, label, color) => `<button class="msc ${MIDIA_SEDE === v ? 'on' : ''}" onclick="setMiDiaSede('${v}')">${color ? `<span class="d" style="background:${color}"></span>` : ''}${label}</button>`;
   let html = chip('all', 'Todas las sedes', null);
   (STATE.locations || []).forEach(l => { html += chip(l.id, l.name, l.color || 'var(--fit-purple)'); });
   box.innerHTML = html;
+}
+function setMiDiaWidgetsLoading() {
+  // Skeleton DIRIGIDO solo a los widgets del filtro de sede global.
+  // No toca la agenda del día ni las listas del sidebar (esas no dependen del filtro).
+  const reset = (id, v) => { const e = document.getElementById(id); if (e) e.textContent = v; };
+  const skel = (h, mb) => `<div class="skel" style="height:${h}px;border-radius:8px;${mb ? 'margin-bottom:' + mb + 'px;' : ''}"></div>`;
+  // Cobranza: atenuar (paintCobranzaWidget restaura opacidad/eventos al terminar)
+  const cob = document.getElementById('cobranza-widget');
+  if (cob) { cob.style.transition = 'opacity .18s'; cob.style.opacity = '0.4'; cob.style.pointerEvents = 'none'; }
+  ['cob-loc-name', 'cob-meta', 'cob-paid-sub', 'cob-rate', 'cob-pct', 'cob-chip'].forEach(id => reset(id, '—'));
+  ['cob-amount', 'cob-paid', 'cob-total-label'].forEach(id => reset(id, 'S/ —'));
+  // Deuda
+  reset('debt-amount', 'S/ —'); reset('debt-count', '— alumnas con saldo');
+  const dch = document.getElementById('debt-chart'); if (dch) dch.innerHTML = skel(96);
+  // Activos
+  reset('active-today', '—'); reset('active-this-month', '—'); reset('active-month-delta', 'vs mes pasado: —');
+  const ach = document.getElementById('active-chart'); if (ach) ach.innerHTML = skel(96);
+  // Sin marcar
+  const um = document.getElementById('midia-unmarked-body'); if (um) um.innerHTML = skel(58, 8) + skel(58);
+  reset('midia-unmarked-count', '—');
 }
 window.setMiDiaSede = function(v) {
   MIDIA_SEDE = v;
   DEBT_SCOPE = (v === 'all') ? 'all' : 'sede';
   ACTIVE_SCOPE = (v === 'all') ? 'all' : 'sede';
   renderMiDiaSedeChips();
+  setMiDiaWidgetsLoading();
   if (typeof renderCobranzaWidget === 'function') renderCobranzaWidget();
   if (typeof renderDebtSummary === 'function') renderDebtSummary();
   if (typeof renderActiveStudents === 'function') renderActiveStudents();
   if (document.getElementById('midia-unmarked-body')) { UNMARKED_STATE.embed = true; UNMARKED_STATE.sedeFilter = (v === 'all') ? 'all' : v; renderUnmarkedReport(); }
+};
+
+// --- Widgets colapsables de Mi día (Fase 4 · 2b) ---
+const MW_IDS = ['cobranza-widget', 'debt-widget', 'active-widget'];
+function _mwState() { try { return JSON.parse(localStorage.getItem('fit_mw_collapsed') || '{}'); } catch (e) { return {}; } }
+function _mwSave(s) { try { localStorage.setItem('fit_mw_collapsed', JSON.stringify(s)); } catch (e) {} }
+window.toggleMw = function(id) {
+  const el = document.getElementById(id); if (!el) return;
+  el.classList.toggle('collapsed');
+  const s = _mwState(); s[id] = el.classList.contains('collapsed'); _mwSave(s);
+  syncCollapseAllBtn();
+};
+window.mwInfo = function(ev, key) {
+  if (ev) { ev.stopPropagation(); ev.preventDefault(); }
+  const b = document.getElementById('mw-info-' + key);
+  if (b) b.style.display = (b.style.display === 'none' || !b.style.display) ? '' : 'none';
+};
+function syncCollapseAllBtn() {
+  const btn = document.getElementById('mw-collapse-all'); if (!btn) return;
+  const allCollapsed = MW_IDS.every(id => { const el = document.getElementById(id); return el && el.classList.contains('collapsed'); });
+  btn.textContent = allCollapsed ? 'Expandir todo' : 'Minimizar todo';
+  btn.dataset.mode = allCollapsed ? 'expand' : 'collapse';
+}
+function applyMwCollapsedState() {
+  const s = _mwState();
+  MW_IDS.forEach(id => { const el = document.getElementById(id); if (el) el.classList.toggle('collapsed', !!s[id]); });
+  syncCollapseAllBtn();
+}
+window.toggleCollapseAllMw = function() {
+  const btn = document.getElementById('mw-collapse-all');
+  const collapse = !(btn && btn.dataset.mode === 'expand');
+  const s = _mwState();
+  MW_IDS.forEach(id => { const el = document.getElementById(id); if (el) { el.classList.toggle('collapsed', collapse); s[id] = collapse; } });
+  _mwSave(s); syncCollapseAllBtn();
 };
 
 let DEBT_SCOPE = 'all'; // 'sede' | 'all'
