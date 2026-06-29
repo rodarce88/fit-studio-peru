@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>FIT Studio · App de Alumnas</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400..700;1,400..600&family=Mulish:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{ --purple:#5B2A8F; --purple-deep:#3C1D6E; --cream:#FBF8F2; --ink:#211C29; --ink-soft:#574F60; --ink-mute:#928D9B; --line:#ECE6DE; --green-deep:#149A4A; --red:#E24B4A;
+    --display:'Playfair Display',Georgia,serif; --body:'Mulish',system-ui,sans-serif; }
+  *{ box-sizing:border-box; margin:0; padding:0; }
+  body{ font-family:var(--body); background:var(--cream); color:var(--ink); min-height:100vh; display:flex; justify-content:center; }
+  .wrap{ width:100%; max-width:430px; min-height:100vh; padding:0 24px; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; }
+  .logo-f{ width:72px; height:72px; border-radius:22px; background:linear-gradient(145deg,#6E37A6,#3C1D6E); display:flex; align-items:center; justify-content:center; font-family:var(--display); font-weight:600; color:#fff; font-size:38px; box-shadow:0 10px 24px rgba(60,29,110,.32); margin-bottom:22px; }
+  h1{ font-family:var(--display); font-weight:600; font-size:26px; margin-bottom:8px; }
+  p{ color:var(--ink-soft); font-size:17px; line-height:1.5; max-width:320px; }
+  .spinner{ width:34px; height:34px; border:3px solid #E7E0F0; border-top-color:var(--purple); border-radius:50%; animation:spin .8s linear infinite; margin:8px 0 18px; }
+  @keyframes spin{ to{ transform:rotate(360deg); } }
+  .box{ width:100%; text-align:left; background:#fff; border:1px solid var(--line); border-radius:18px; padding:18px 20px; margin-top:18px; }
+  .box .r{ display:flex; justify-content:space-between; padding:9px 0; border-top:1px solid var(--line); font-size:15px; }
+  .box .r:first-child{ border-top:0; }
+  .box .r .lab{ color:var(--ink-mute); } .box .r .val{ font-weight:700; }
+  .ok{ color:var(--green-deep); font-weight:700; }
+  .err{ color:var(--red); }
+  .hidden{ display:none; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="logo-f">F</div>
+
+  <div id="loading">
+    <div class="spinner" style="margin-inline:auto;"></div>
+    <h1>Un momento…</h1>
+    <p id="loading-msg">Validando tu acceso</p>
+  </div>
+
+  <div id="result" class="hidden" style="width:100%;">
+    <h1 id="title"></h1>
+    <p id="subtitle"></p>
+    <div id="data" class="box hidden"></div>
+  </div>
+</div>
+
+<script type="module">
+  import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+
+  const SUPABASE_URL = 'https://jcvizioahuqvmhwfnbop.supabase.co';
+  const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Impjdml6aW9haHVxdm1od2ZuYm9wIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc1MjIzODIsImV4cCI6MjA5MzA5ODM4Mn0.0EYHVITqA85IhtBUbGddHEWcVKIU_MeSzSxrdzNyvhI';
+  const sb = createClient(SUPABASE_URL, SUPABASE_ANON);
+
+  const $ = (id) => document.getElementById(id);
+  function show(title, subtitle, isError){
+    $('loading').classList.add('hidden');
+    $('result').classList.remove('hidden');
+    $('title').textContent = title;
+    $('title').className = isError ? 'err' : '';
+    $('subtitle').textContent = subtitle || '';
+  }
+
+  async function boot(){
+    const params = new URLSearchParams(location.search);
+    const token = params.get('t');
+
+    // 1) ¿Sesión ya activa en este teléfono?
+    const { data: { session } } = await sb.auth.getSession();
+    if (session) return loadApp();
+
+    // 2) ¿Viene token en el link?
+    if (token){
+      $('loading-msg').textContent = 'Validando tu acceso';
+      let j;
+      try{
+        const r = await fetch('/api/alumna-auth', {
+          method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ token })
+        });
+        j = await r.json();
+      }catch(e){ return show('No pudimos conectar', 'Revisa tu internet e intenta de nuevo.', true); }
+
+      if (!j || !j.ok){
+        return show('Acceso no válido', 'Pídele al estudio que te reenvíe tu link por WhatsApp.', true);
+      }
+      // Abrir sesión con el token_hash
+      let vr = await sb.auth.verifyOtp({ token_hash: j.token_hash, type: 'email' });
+      if (vr.error){ // fallback con email + OTP
+        vr = await sb.auth.verifyOtp({ email: j.email, token: j.email_otp, type: 'magiclink' });
+      }
+      if (vr.error){ return show('No pudimos iniciar tu sesión', vr.error.message, true); }
+
+      history.replaceState({}, '', location.pathname); // limpiar el token de la URL
+      return loadApp();
+    }
+
+    // 3) Sin token ni sesión
+    show('Bienvenida 👋', 'Abre el link que te enviamos por WhatsApp para entrar a tu cuenta.');
+  }
+
+  async function loadApp(){
+    // Lectura por RLS: cada alumna solo ve lo suyo
+    const { data: me, error: meErr } = await sb.from('students')
+      .select('id, first_name, last_name').limit(1).maybeSingle();
+    if (meErr || !me){
+      return show('Sesión iniciada', 'Pero no pudimos leer tu ficha (RLS). Detalle: ' + (meErr?.message || 'sin datos'), true);
+    }
+    const { data: pkgs } = await sb.from('student_packages')
+      .select('id, classes_total, classes_used, status, is_active')
+      .order('purchase_date', { ascending: false });
+    const { data: att } = await sb.from('attendance').select('id').limit(50);
+
+    const activo = (pkgs || []).find(p => p.is_active && (p.classes_used||0) < (p.classes_total||0));
+    const restan = activo ? (activo.classes_total - activo.classes_used) : 0;
+
+    show(`¡Hola, ${me.first_name}!`, 'Tu sesión quedó activa en este teléfono.');
+    const box = $('data');
+    box.classList.remove('hidden');
+    box.innerHTML = `
+      <div class="r"><span class="lab">Acceso</span><span class="val ok">✓ verificado por RLS</span></div>
+      <div class="r"><span class="lab">Tu nombre</span><span class="val">${me.first_name} ${me.last_name || ''}</span></div>
+      <div class="r"><span class="lab">Tus paquetes</span><span class="val">${(pkgs||[]).length}</span></div>
+      <div class="r"><span class="lab">Clases que te quedan</span><span class="val">${restan}</span></div>
+      <div class="r"><span class="lab">Clases en tu historial</span><span class="val">${(att||[]).length}</span></div>
+    `;
+  }
+
+  boot();
+</script>
+</body>
+</html>
