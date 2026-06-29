@@ -3508,6 +3508,15 @@
     </aside>
     </div><!-- /dash-top-grid -->
 
+    <!-- FASE 5: Clases sin marcar — mismo reporte de la sección Reportes, embebido y permanente -->
+    <div id="midia-unmarked" style="background:#fff; border:1.5px solid var(--fit-purple-soft); border-radius:var(--radius-lg); padding:20px 24px; margin-bottom:18px;">
+      <div style="display:flex; align-items:center; gap:8px; margin-bottom:12px;">
+        <span class="kpi-label" style="color:var(--fit-purple); flex:1;">Clases sin marcar</span>
+        <span id="midia-unmarked-count" style="font-size:12px; font-weight:700; color:var(--ink-mute);"></span>
+      </div>
+      <div id="midia-unmarked-body"><div style="padding:14px 0; font-size:13px; color:var(--ink-mute);">Cargando…</div></div>
+    </div>
+
     <div class="layout-grid">
       <div class="timeline-card">
         <div id="frozen-reminders-banner"></div>
@@ -6305,6 +6314,8 @@ function renderDashboard() {
   renderActiveStudents();
   // Feed de actividad permanente (3 sedes, en vivo)
   renderActivityRail();
+  // Fase 5: widget permanente "Clases sin marcar" (mismo reporte, embebido)
+  if (document.getElementById('midia-unmarked-body')) { UNMARKED_STATE.embed = true; renderUnmarkedReport(); }
   // Tiempo real: confirmaciones/asistencias/reservas se reflejan solas
   subscribeCoordRealtime();
 
@@ -28454,7 +28465,7 @@ async function renderReconcileReport() {
 // y NO cancelada, y sin fila de attendance. El marcado consume el
 // paquete correcto por fecha vía getOrCreateActivePackageId.
 // ============================================================
-const UNMARKED_STATE = { all: null, loading: false, scope: 'day', date: null, sedeFilter: 'all', instrFilter: 'all' };
+const UNMARKED_STATE = { all: null, loading: false, scope: 'day', date: null, sedeFilter: 'all', instrFilter: 'all', embed: false };
 
 function unmarkedPrevBusinessDay() {
   const d = new Date(); d.setHours(0, 0, 0, 0);
@@ -28486,7 +28497,7 @@ async function unmarkedFetchAllRows() {
   const today = dateToIsoLocal(new Date());
   const [bookings, atts] = await Promise.all([
     reconFetchAll('session_bookings',
-      'id, student_id, session_id, cancelled_at, students(first_name, last_name, status), class_sessions!inner(session_date, hour, location_id, instructor_id, is_cancelled)',
+      'id, student_id, session_id, cancelled_at, confirmed_at, confirmed_via, cancel_requested_at, students(first_name, last_name, status), class_sessions!inner(session_date, hour, location_id, instructor_id, is_cancelled)',
       q => q.is('cancelled_at', null).eq('class_sessions.is_cancelled', false).lt('class_sessions.session_date', today)),
     reconFetchAll('attendance', 'booking_id')
   ]);
@@ -28505,6 +28516,7 @@ async function unmarkedFetchAllRows() {
       date: cs.session_date, hour: cs.hour || '',
       sedeId: cs.location_id, sede: locName[cs.location_id] || '—',
       instrId: cs.instructor_id, instr: instr[cs.instructor_id] || 'Sin asignar',
+      confirmedAt: b.confirmed_at || null, confirmedVia: b.confirmed_via || null, cancelReqAt: b.cancel_requested_at || null,
     });
   }
   rows.sort((a, b) => (b.date || '').localeCompare(a.date || '') || String(a.hour).localeCompare(String(b.hour)));
@@ -28559,18 +28571,19 @@ async function markUnmarkedClass(bookingId, sessionId, studentId, status, opts =
     if (UNMARKED_STATE.all) UNMARKED_STATE.all = UNMARKED_STATE.all.filter(r => r.bookingId !== bookingId);
     if (!opts.silent) {
       showToast({ attended: '✓ Asistió', recoverable: '⊙ Recuperable · cupo liberado', lost: '⚠ Perdida · consume clase', no_show: '✗ No vino' }[status] || '✓ Marcado', 'success');
-      if (typeof renderUnmarkedReport === 'function' && REPORTS_STATE.subView === 'unmarked') renderUnmarkedReport();
+      if (typeof renderUnmarkedReport === 'function' && (UNMARKED_STATE.embed || REPORTS_STATE.subView === 'unmarked')) renderUnmarkedReport();
     }
   } catch (e) { if (!opts.silent) showToast('Error: ' + (e.message || ''), 'error'); else console.warn('[autolost mark]', e); }
 }
 
 async function renderUnmarkedReport() {
-  const container = document.getElementById('reports-container');
+  const embed = !!UNMARKED_STATE.embed;
+  const container = document.getElementById(embed ? 'midia-unmarked-body' : 'reports-container');
   if (!container) return;
   if (UNMARKED_STATE.date === null) UNMARKED_STATE.date = unmarkedPrevBusinessDay();
   if (!UNMARKED_STATE.all) {
-    container.innerHTML = '<div style="padding:40px;text-align:center;color:var(--ink-mute);">Cargando clases sin marcar…</div>';
-    try { await unmarkedFetchAllRows(); } catch (e) { container.innerHTML = '<div style="padding:40px;text-align:center;color:var(--danger);">Error: ' + escape(e.message || '') + '</div>'; return; }
+    container.innerHTML = '<div style="padding:24px;text-align:center;color:var(--ink-mute);">Cargando clases sin marcar…</div>';
+    try { await unmarkedFetchAllRows(); } catch (e) { container.innerHTML = '<div style="padding:24px;text-align:center;color:var(--danger);">Error: ' + escape(e.message || '') + '</div>'; return; }
   }
   const all = UNMARKED_STATE.all || [];
 
@@ -28583,6 +28596,13 @@ async function renderUnmarkedReport() {
   const sedeOpts = '<option value="all">Todas las sedes</option>' + (STATE.locations || []).map(l => `<option value="${l.id}" ${UNMARKED_STATE.sedeFilter === l.id ? 'selected' : ''}>${escape(l.name)}</option>`).join('');
   const instrOpts = '<option value="all">Todos los profesores</option>' + (STATE.instructors || []).map(i => `<option value="${i.id}" ${UNMARKED_STATE.instrFilter === i.id ? 'selected' : ''}>${escape(i.full_name || i.initials || '—')}</option>`).join('');
 
+  // Chip: ¿la alumna había confirmado o avisado que no vendría?
+  const confChip = (r) => {
+    if (r.cancelReqAt) return `<span style="font-size:10.5px;font-weight:700;padding:2px 8px;border-radius:999px;background:#FBF2DE;color:#A85B08;white-space:nowrap;">Avisó que no vendría</span>`;
+    if (r.confirmedAt) return `<span style="font-size:10.5px;font-weight:700;padding:2px 8px;border-radius:999px;background:#ECFDF3;color:#15803D;white-space:nowrap;">Confirmó</span>`;
+    return `<span style="font-size:10.5px;font-weight:700;padding:2px 8px;border-radius:999px;background:var(--bg-soft,#F1EEF6);color:var(--ink-mute);white-space:nowrap;">No confirmó</span>`;
+  };
+
   // Agrupar por fecha
   const byDate = {};
   rows.forEach(r => { (byDate[r.date] = byDate[r.date] || []).push(r); });
@@ -28593,7 +28613,7 @@ async function renderUnmarkedReport() {
       <div style="display:flex;align-items:center;gap:10px;padding:11px 14px;border-top:1px solid var(--line);">
         <div style="flex:0 0 64px;font-weight:600;color:var(--ink);font-size:13px;">${escape(r.hour)}</div>
         <div style="flex:1;min-width:0;">
-          <div style="font-weight:600;color:var(--ink);font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escape(r.name)}</div>
+          <div style="font-weight:600;color:var(--ink);font-size:14px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;"><span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escape(r.name)}</span>${confChip(r)}</div>
           <div style="font-size:11.5px;color:var(--ink-mute);">${escape(r.sede)} · ${escape(r.instr)}</div>
         </div>
         <div style="display:flex;gap:6px;flex:0 0 auto;">
@@ -28606,14 +28626,9 @@ async function renderUnmarkedReport() {
       <div style="padding:10px 14px;background:var(--bg-soft,#FAF7F2);font-weight:600;color:var(--fit-purple);font-size:13px;">${unmarkedDateLabel(d)} · ${byDate[d].length} sin marcar</div>
       ${items}
     </div>`;
-  }).join('') : '<div style="padding:40px;text-align:center;color:var(--ink-mute);">🎉 No hay clases sin marcar con estos filtros.</div>';
+  }).join('') : '<div style="padding:30px;text-align:center;color:var(--ink-mute);">🎉 No hay clases sin marcar con estos filtros.</div>';
 
-  container.innerHTML = `
-    <div style="max-width:760px;margin:0 auto;padding:8px 4px 40px;">
-      <div onclick="reportsBackToHub()" style="color:var(--fit-purple);font-size:13px;cursor:pointer;margin-bottom:14px;">← Volver a Reportes</div>
-      <h2 style="font-family:var(--display);font-style:italic;font-size:26px;color:var(--fit-purple);margin:0 0 4px;font-weight:500;">Clases sin marcar</h2>
-      <div style="color:var(--ink-mute);font-size:13px;margin-bottom:16px;">Clases agendadas cuya fecha ya pasó y nadie marcó. Márcalas aquí: consumen el paquete correcto por fecha.</div>
-
+  const filtersHtml = `
       <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:16px;">
         <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--ink);">
           <input type="checkbox" ${UNMARKED_STATE.scope === 'all' ? 'checked' : ''} onchange="UNMARKED_STATE.scope=this.checked?'all':'day'; renderUnmarkedReport();">
@@ -28625,11 +28640,24 @@ async function renderUnmarkedReport() {
         <select onchange="UNMARKED_STATE.sedeFilter=this.value; renderUnmarkedReport();" style="padding:7px 10px;border:1px solid var(--line);border-radius:9px;font-size:13px;">${sedeOpts}</select>
         <select onchange="UNMARKED_STATE.instrFilter=this.value; renderUnmarkedReport();" style="padding:7px 10px;border:1px solid var(--line);border-radius:9px;font-size:13px;">${instrOpts}</select>
         <button onclick="UNMARKED_STATE.all=null; renderUnmarkedReport();" style="padding:7px 12px;border:1px solid var(--line);border-radius:9px;background:white;font-size:13px;cursor:pointer;">↻ Refrescar</button>
-      </div>
+      </div>`;
+  const countTxt = `${rows.length} clase(s) sin marcar ${UNMARKED_STATE.scope === 'day' ? 'el ' + unmarkedDateLabel(UNMARKED_STATE.date) : 'en total'}`;
 
-      <div style="font-size:13px;color:var(--ink-mute);margin-bottom:10px;">${rows.length} clase(s) sin marcar ${UNMARKED_STATE.scope === 'day' ? 'el ' + unmarkedDateLabel(UNMARKED_STATE.date) : 'en total'}</div>
+  if (embed) {
+    const badge = document.getElementById('midia-unmarked-count');
+    if (badge) badge.textContent = rows.length ? `${rows.length} pendiente${rows.length === 1 ? '' : 's'}` : 'al día';
+    container.innerHTML = `${filtersHtml}<div style="font-size:12.5px;color:var(--ink-mute);margin-bottom:10px;">${countTxt}</div>${groupsHtml}`;
+  } else {
+    container.innerHTML = `
+    <div style="max-width:760px;margin:0 auto;padding:8px 4px 40px;">
+      <div onclick="reportsBackToHub()" style="color:var(--fit-purple);font-size:13px;cursor:pointer;margin-bottom:14px;">← Volver a Reportes</div>
+      <h2 style="font-family:var(--display);font-style:italic;font-size:26px;color:var(--fit-purple);margin:0 0 4px;font-weight:500;">Clases sin marcar</h2>
+      <div style="color:var(--ink-mute);font-size:13px;margin-bottom:16px;">Clases agendadas cuya fecha ya pasó y nadie marcó. Márcalas aquí: consumen el paquete correcto por fecha.</div>
+      ${filtersHtml}
+      <div style="font-size:13px;color:var(--ink-mute);margin-bottom:10px;">${countTxt}</div>
       ${groupsHtml}
     </div>`;
+  }
 }
 
 // ============================================================
@@ -30542,6 +30570,7 @@ async function renderReportsView() {
     return;
   }
   if (REPORTS_STATE.subView === 'unmarked') {
+    UNMARKED_STATE.embed = false;
     await renderUnmarkedReport();
     return;
   }
