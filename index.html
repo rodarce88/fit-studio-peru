@@ -3430,9 +3430,16 @@
         </div>
       </div>
       <div>
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
-          <span class="kpi-label" style="font-size:10px;">Alumnas que asistieron · por semana (últimas 8)</span>
-          <span id="active-trend-delta" style="font-size:12px; font-weight:600; color:var(--ink-mute);">—</span>
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; gap:10px;">
+          <span style="display:inline-flex; align-items:center; gap:7px; min-width:0;">
+            <span class="kpi-label" style="font-size:10px;">Alumnas que asistieron · por semana (últimas 8)</span>
+            <button type="button" onclick="toggleActiveInfo()" aria-label="Qué significa este gráfico" title="Qué significa" style="flex:none; width:16px; height:16px; border-radius:999px; border:1px solid var(--line); background:transparent; color:var(--ink-mute); font:600 10px/1 var(--body,system-ui); cursor:pointer; display:inline-flex; align-items:center; justify-content:center;">i</button>
+          </span>
+          <span id="active-trend-delta" style="font-size:12px; font-weight:600; color:var(--ink-mute); white-space:nowrap;">—</span>
+        </div>
+        <div id="active-trend-info" style="display:none; background:var(--bg-soft,#f5f2fb); border:1px solid var(--line); border-radius:12px; padding:11px 13px; margin-bottom:10px; font-size:11.5px; line-height:1.5; color:var(--ink-mute);">
+          Cada punto es cuántas <b>alumnas distintas</b> asistieron esa semana (clases marcadas como “asistió”), de lunes a domingo, en la sede seleccionada. Una misma alumna que vino 3 veces cuenta como 1.<br>
+          La <b>última semana</b> aparece como <b>“en curso”</b> (punto hueco y línea punteada): todavía no termina, por eso su número es bajo y no debe leerse como una caída. La comparación de la derecha usa la <b>última semana completa</b>, no la que está en curso.
         </div>
         <div id="active-chart"><div style="padding:18px 0; font-size:12px; color:var(--ink-mute);">Cargando…</div></div>
       </div>
@@ -6540,6 +6547,11 @@ async function renderActiveStudents() {
   paintActiveStudents(data);
 }
 
+window.toggleActiveInfo = function() {
+  const b = document.getElementById('active-trend-info');
+  if (b) b.style.display = (b.style.display === 'none' || !b.style.display) ? 'block' : 'none';
+};
+
 function paintActiveStudents(data) {
   const todayEl = document.getElementById('active-today');
   const monthEl = document.getElementById('active-this-month');
@@ -6557,10 +6569,14 @@ function paintActiveStudents(data) {
   }
 
   const pts = data.weeks || [];
-  if (trendDeltaEl && pts.length >= 2) {
-    const diff = pts[pts.length - 1].count - pts[0].count;
-    if (diff > 0)      { trendDeltaEl.textContent = `▲ ${diff} más que hace 8 sem`; trendDeltaEl.style.color = 'var(--good,#1a8a4a)'; }
-    else if (diff < 0) { trendDeltaEl.textContent = `▼ ${Math.abs(diff)} menos que hace 8 sem`; trendDeltaEl.style.color = 'var(--danger,#c0392b)'; }
+  if (trendDeltaEl && pts.length >= 3) {
+    // La última semana está EN CURSO (parcial); la tendencia compara la última semana COMPLETA contra la primera.
+    const lastComplete = pts[pts.length - 2].count;
+    const first = pts[0].count;
+    const diff = lastComplete - first;
+    const span = pts.length - 2;
+    if (diff > 0)      { trendDeltaEl.textContent = `▲ ${diff} vs hace ${span} sem`; trendDeltaEl.style.color = 'var(--good,#1a8a4a)'; }
+    else if (diff < 0) { trendDeltaEl.textContent = `▼ ${Math.abs(diff)} vs hace ${span} sem`; trendDeltaEl.style.color = 'var(--danger,#c0392b)'; }
     else               { trendDeltaEl.textContent = 'sin cambio'; trendDeltaEl.style.color = 'var(--ink-mute)'; }
   } else if (trendDeltaEl) { trendDeltaEl.textContent = '—'; }
 
@@ -6572,18 +6588,32 @@ function paintActiveStudents(data) {
   const maxC = Math.max(1, ...counts);
   const x = (i) => padL + i * (W - padL - padR) / (pts.length - 1);
   const y = (c) => padT + (H - padT - padB) * (1 - c / maxC);
-  const linePath = counts.map((c, i) => `${i === 0 ? 'M' : 'L'} ${x(i).toFixed(1)} ${y(c).toFixed(1)}`).join(' ');
-  const areaPath = `${linePath} L ${x(pts.length - 1).toFixed(1)} ${(H - padB).toFixed(1)} L ${x(0).toFixed(1)} ${(H - padB).toFixed(1)} Z`;
   const wkLabel = (iso) => { const p = iso.split('-'); return `${p[2]}/${p[1]}`; };
+  const lastIdx = pts.length - 1;            // semana EN CURSO (parcial)
+  const cmpIdx = Math.max(0, lastIdx - 1);   // última semana COMPLETA
+
+  // Línea sólida + área solo hasta la última semana completa
+  const solidPath = counts.slice(0, lastIdx).map((c, i) => `${i === 0 ? 'M' : 'L'} ${x(i).toFixed(1)} ${y(c).toFixed(1)}`).join(' ');
+  const areaPath = `${solidPath} L ${x(cmpIdx).toFixed(1)} ${(H - padB).toFixed(1)} L ${x(0).toFixed(1)} ${(H - padB).toFixed(1)} Z`;
+  const dashPath = lastIdx > 0 ? `M ${x(cmpIdx).toFixed(1)} ${y(counts[cmpIdx]).toFixed(1)} L ${x(lastIdx).toFixed(1)} ${y(counts[lastIdx]).toFixed(1)}` : '';
 
   let svg = `<svg viewBox="0 0 ${W} ${H}" width="100%" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg" style="overflow:visible;">`;
   svg += `<path d="${areaPath}" fill="var(--accent-soft, rgba(91,42,143,0.08))" stroke="none"/>`;
-  svg += `<path d="${linePath}" fill="none" stroke="var(--accent, #5B2A8F)" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>`;
+  svg += `<path d="${solidPath}" fill="none" stroke="var(--accent, #5B2A8F)" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>`;
+  if (dashPath) svg += `<path d="${dashPath}" fill="none" stroke="var(--accent, #5B2A8F)" stroke-width="2" stroke-dasharray="3 3" opacity="0.55" stroke-linecap="round"/>`;
   pts.forEach((p, i) => {
-    const cx = x(i), cy = y(p.count), isLast = i === pts.length - 1;
-    svg += `<circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="${isLast ? 5 : 3}" fill="${isLast ? 'var(--accent, #5B2A8F)' : '#fff'}" stroke="var(--accent, #5B2A8F)" stroke-width="2"/>`;
-    svg += `<text x="${cx.toFixed(1)}" y="${(cy - 10).toFixed(1)}" text-anchor="middle" font-size="12" font-weight="700" fill="var(--ink)">${p.count}</text>`;
-    svg += `<text x="${cx.toFixed(1)}" y="${(H - 10).toFixed(1)}" text-anchor="middle" font-size="9" fill="var(--ink-faint)">${wkLabel(p.week)}</text>`;
+    const cx = x(i), cy = y(p.count);
+    const isCurrent = i === lastIdx, isCmp = i === cmpIdx;
+    if (isCurrent) {
+      svg += `<circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="4" fill="#fff" stroke="var(--accent, #5B2A8F)" stroke-width="2" stroke-dasharray="2 2"/>`;
+      svg += `<text x="${cx.toFixed(1)}" y="${(cy - 10).toFixed(1)}" text-anchor="middle" font-size="11" font-weight="700" fill="var(--ink-faint)">${p.count}</text>`;
+      svg += `<text x="${cx.toFixed(1)}" y="${(H - 19).toFixed(1)}" text-anchor="middle" font-size="9" fill="var(--ink-faint)">${wkLabel(p.week)}</text>`;
+      svg += `<text x="${cx.toFixed(1)}" y="${(H - 9).toFixed(1)}" text-anchor="middle" font-size="8" font-weight="600" fill="var(--ink-faint)">en curso</text>`;
+    } else {
+      svg += `<circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="${isCmp ? 5 : 3}" fill="${isCmp ? 'var(--accent, #5B2A8F)' : '#fff'}" stroke="var(--accent, #5B2A8F)" stroke-width="2"/>`;
+      svg += `<text x="${cx.toFixed(1)}" y="${(cy - 10).toFixed(1)}" text-anchor="middle" font-size="12" font-weight="700" fill="var(--ink)">${p.count}</text>`;
+      svg += `<text x="${cx.toFixed(1)}" y="${(H - 10).toFixed(1)}" text-anchor="middle" font-size="9" fill="var(--ink-faint)">${wkLabel(p.week)}</text>`;
+    }
   });
   svg += `</svg>`;
   chart.innerHTML = svg;
@@ -8773,6 +8803,7 @@ async function toggleConfirmedForCell(studentId, dateIso, hour, locationId) {
         student_id: studentId,
         source: 'fixed',
         confirmed_at: new Date().toISOString(),
+        confirmed_via: 'coordinator',
       }).select().single();
       if (bErr) throw bErr;
       booking = newBooking;
@@ -8789,16 +8820,18 @@ async function toggleConfirmedForCell(studentId, dateIso, hour, locationId) {
       } catch(e) {}
     } else if (booking.confirmed_at) {
       // Ya está confirmada → desmarcar
-      const { error } = await sb.from('session_bookings').update({ confirmed_at: null }).eq('id', booking.id);
+      const { error } = await sb.from('session_bookings').update({ confirmed_at: null, confirmed_via: null }).eq('id', booking.id);
       if (error) throw error;
       booking.confirmed_at = null;
+      booking.confirmed_via = null;
       showToast('Confirmación quitada');
     } else {
       // Existe pero no está confirmada → marcar
       const nowIso = new Date().toISOString();
-      const { error } = await sb.from('session_bookings').update({ confirmed_at: nowIso }).eq('id', booking.id);
+      const { error } = await sb.from('session_bookings').update({ confirmed_at: nowIso, confirmed_via: 'coordinator' }).eq('id', booking.id);
       if (error) throw error;
       booking.confirmed_at = nowIso;
+      booking.confirmed_via = 'coordinator';
       showToast('✓ Confirmada', 'success');
     }
 
@@ -30098,6 +30131,7 @@ async function ccToggleConfirm(studentId, dateIso, hour) {
         student_id: studentId,
         source: 'fixed',
         confirmed_at: new Date().toISOString(),
+        confirmed_via: 'coordinator',
       }).select().single();
       if (bErr) throw bErr;
       booking = newBooking;
@@ -30114,16 +30148,18 @@ async function ccToggleConfirm(studentId, dateIso, hour) {
       } catch(e) {}
     } else if (booking.confirmed_at) {
       // Ya está confirmada → desmarcar
-      const { error } = await sb.from('session_bookings').update({ confirmed_at: null }).eq('id', booking.id);
+      const { error } = await sb.from('session_bookings').update({ confirmed_at: null, confirmed_via: null }).eq('id', booking.id);
       if (error) throw error;
       booking.confirmed_at = null;
+      booking.confirmed_via = null;
       showToast('Confirmación quitada');
     } else {
       // Existe pero no está confirmada → marcar
       const nowIso = new Date().toISOString();
-      const { error } = await sb.from('session_bookings').update({ confirmed_at: nowIso }).eq('id', booking.id);
+      const { error } = await sb.from('session_bookings').update({ confirmed_at: nowIso, confirmed_via: 'coordinator' }).eq('id', booking.id);
       if (error) throw error;
       booking.confirmed_at = nowIso;
+      booking.confirmed_via = 'coordinator';
       showToast('✓ Confirmada', 'success');
     }
 

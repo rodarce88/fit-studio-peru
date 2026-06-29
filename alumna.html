@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>FIT Studio · Mi cuenta</title>
-<meta name="app-build" content="b9-2026-06-29">
+<meta name="app-build" content="b10-2026-06-29">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400..700;1,400..600&family=Mulish:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -32,6 +32,8 @@
   .data-list .r .lab{ color:var(--ink-mute); } .data-list .r .val{ font-weight:700; text-align:right; }
   .session-note{ font-size:calc(14px*var(--scale)); color:var(--ink-mute); margin:14px 0 22px; }
   .btn{ width:100%; border:0; border-radius:16px; font-family:var(--body); font-size:calc(19px*var(--scale)); font-weight:700; padding:19px 20px; cursor:pointer; background:var(--purple); color:#fff; box-shadow:0 8px 20px rgba(91,42,143,.28); }
+  .btn.confirmed{ background:#0E7A4F; box-shadow:0 8px 20px rgba(14,122,79,.26); }
+  .btn:disabled{ opacity:.65; cursor:default; }
   .btn:active{ transform:scale(.985); }
 
   #v-app{ flex:1; min-height:0; display:flex; flex-direction:column; }
@@ -394,7 +396,7 @@
   function renderClases(){
     const attBySession={}; DATA.attendance.forEach(a=>{ attBySession[a.session_id]=a; });
     const events=[];
-    DATA.bookings.forEach(b=>{ const s=DATA.sessById[b.session_id]; if(!s||b.cancelled_at) return; if(!isUpcoming(s, attBySession[b.session_id])) return; events.push({ date:s.session_date, hour:s.hour, loc:s.location_id, inst:s.instructor_id, sid:s.id, kind:'up' }); });
+    DATA.bookings.forEach(b=>{ const s=DATA.sessById[b.session_id]; if(!s||b.cancelled_at) return; if(!isUpcoming(s, attBySession[b.session_id])) return; events.push({ date:s.session_date, hour:s.hour, loc:s.location_id, inst:s.instructor_id, sid:s.id, kind:'up', bid:b.id, conf:b.confirmed_at }); });
     DATA.attendance.forEach(a=>{ const s=DATA.sessById[a.session_id]; if(!s) return; events.push({ date:s.session_date, hour:s.hour, loc:s.location_id, inst:s.instructor_id, sid:s.id, kind:'att', status:a.status }); });
     const upcoming = events.filter(e=>e.kind==='up').sort((a,b)=> a.date.localeCompare(b.date) || a.hour-b.hour);
     CLE = { upcoming, events, next: upcoming[0]||null };
@@ -417,8 +419,11 @@
           <div class="r"><span class="lab">Profesor</span><span class="val">${esc(DATA.inst[next.inst]||'—')}</span></div>
           <div class="r"><span class="lab">Sede</span><span class="val">${esc(DATA.locs[next.loc]||'—')}</span></div>
         </div>
-        <button class="btn" onclick="confirmar()">Confirmar mi asistencia</button>
-        <div class="micro">Podrás confirmar cada clase hasta 4 horas antes. Si ya pasó ese tiempo, escríbele a la coordinadora.</div>`;
+        ${ next.conf
+          ? `<button class="btn confirmed" id="confbtn" onclick="confirmar('${next.bid}', true)">Asistencia confirmada</button>
+             <div class="micro">¿No vas a poder venir? Toca el botón para quitar tu confirmación.</div>`
+          : `<button class="btn" id="confbtn" onclick="confirmar('${next.bid}', false)">Confirmar mi asistencia</button>
+             <div class="micro">Puedes confirmar tu asistencia hasta que empiece la clase.</div>` }`;
     } else {
       html += `<div class="empty">No tienes una próxima clase agendada por ahora.</div>`;
     }
@@ -615,7 +620,26 @@
   };
   window.setSize=(mode,el)=>{ document.documentElement.setAttribute('data-size', mode==='lg'?'lg':'normal'); el.parentElement.querySelectorAll('button').forEach(b=>b.classList.remove('on')); el.classList.add('on'); if(CL.view==='mes') requestAnimationFrame(fitMonth); };
   window.togglePkg=(pid, btn)=>{ const b=$('body-'+pid); if(!b) return; b.classList.toggle('collapsed'); btn.classList.toggle('open'); };
-  window.confirmar=()=>{ toast('Muy pronto podrás confirmar desde aquí'); };
+  window.confirmar = async (bid, isConfirmed)=>{
+    if(!bid){ toast('No encontramos tu reserva'); return; }
+    const btn = document.getElementById('confbtn');
+    if(btn){ btn.disabled = true; btn.textContent = isConfirmed ? 'Quitando…' : 'Confirmando…'; }
+    try{
+      const { data, error } = await sb.rpc('student_confirm_booking', { p_booking_id: bid, p_confirm: !isConfirmed });
+      if(error) throw error;
+      const row = Array.isArray(data) ? data[0] : data;
+      const conf = row ? row.confirmed_at : (isConfirmed ? null : new Date().toISOString());
+      const b = DATA.bookings.find(x=>x.id===bid); if(b) b.confirmed_at = conf;
+      renderClases();
+      toast(conf ? 'Asistencia confirmada' : 'Confirmación quitada');
+    }catch(e){
+      const msg = (e && e.message) || '';
+      if(/empez/i.test(msg)) toast('La clase ya empezó. Escríbele a tu coordinadora.');
+      else if(/cancel/i.test(msg)) toast('Esa clase está cancelada.');
+      else toast('No se pudo guardar. Intenta de nuevo.');
+      if(btn){ btn.disabled = false; btn.textContent = isConfirmed ? 'Asistencia confirmada' : 'Confirmar mi asistencia'; }
+    }
+  };
 
   // al volver a la app (cambiar de WhatsApp a Chrome, desbloquear, etc.) refresca si está viejo
   document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='visible' && appReady){ checkUpdate().then(up=>{ if(!up && Date.now()-lastFetch > 8000) refresh(true); }); } });
