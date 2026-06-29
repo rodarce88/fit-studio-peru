@@ -21679,25 +21679,89 @@ async function instructorPickStudent(studentId) {
   try { document.getElementById('inst-add-search')?.blur(); } catch (e) {}
   instructorRenderPickSkeleton(stud);
 
-  // Detectar caso: D (frozen), C (sin paquete), B (en límite), A (tiene cupo)
-  const { data: anyPkg } = await sb.from('student_packages')
-    .select('id, classes_total, classes_used, classes_recoverable, purchase_date, start_date, is_frozen')
-    .eq('student_id', studentId)
-    .order('purchase_date', { ascending: false })
-    .limit(1)
-    .maybeSingle();
+  // Detectar el caso (A/B/C/D) con llenado real por FIFO (gastar primero el paquete viejo):
+  // si el paquete activo está lleno SOLO por agendadas, se ofrece mover (no se salta al próximo).
+  const info = await instructorComputeAddCase(studentId);
+  instructorRenderCase(info, stud);
+}
 
-  let caseType;
-  if (anyPkg && anyPkg.is_frozen) {
-    caseType = 'D'; // frozen
-  } else {
-    const cap = await getStudentBookingCapacity(studentId);
-    if (!cap.hasPackage) caseType = 'C';
-    else if (cap.remaining > 0) caseType = 'A';
-    else caseType = 'B';
+// Decide qué pasa al intentar registrar una clase HOY para un alumno, respetando el orden FIFO
+// (gastar primero el paquete más antiguo). Reparte las agendadas a futuro en los paquetes vivos
+// por fecha de compra y mira el ACTIVO (el vivo más antiguo):
+//   - tiene un cupo vacío (asistidas+agendadas < total)            → caso A (agregar directo)
+//   - está lleno pero SOLO por agendadas (asistidas < total)       → caso B (mover una agendada)
+//   - no hay paquete vivo (todos consumidos o sin paquete)         → caso C
+//   - solo tiene paquete(s) congelado(s)                           → caso D
+async function instructorComputeAddCase(studentId) {
+  const todayIso = dateToIsoLocal(new Date());
+
+  const { data: pkgsRaw } = await sb.from('student_packages')
+    .select('id, classes_total, classes_used, purchase_date, start_date, is_frozen, status, packages(name)')
+    .eq('student_id', studentId);
+  const all = pkgsRaw || [];
+
+  const sortAsc = (a, b) => {
+    const da = a.purchase_date || a.start_date || '1900-01-01';
+    const db = b.purchase_date || b.start_date || '1900-01-01';
+    if (da !== db) return da.localeCompare(db);
+    return (a.created_at || '').localeCompare(b.created_at || '');
+  };
+  const livePkgs = all
+    .filter(p => !p.is_frozen && (!p.status || p.status === 'active') && (p.classes_used || 0) < (p.classes_total || 0))
+    .sort(sortAsc);
+
+  if (livePkgs.length === 0) {
+    const hasFrozen = all.some(p => p.is_frozen && (!p.status || p.status === 'active'));
+    return { caseType: hasFrozen ? 'D' : 'C', pkg: all[0] || null, movable: [], remaining: 0, totalUsed: 0, totalCapacity: 0 };
   }
 
-  instructorRenderCase(caseType, stud, anyPkg);
+  // Agendadas a futuro (reservas sin asistencia, no canceladas, fecha >= hoy).
+  const { data: bks } = await sb.from('session_bookings')
+    .select('id, session_id, class_sessions(id, session_date, hour, location_id, is_cancelled)')
+    .eq('student_id', studentId)
+    .is('cancelled_at', null);
+  const futureBks = (bks || []).filter(b => b.class_sessions && !b.class_sessions.is_cancelled && b.class_sessions.session_date >= todayIso);
+  const fbIds = futureBks.map(b => b.id);
+  const attSet = new Set();
+  for (let i = 0; i < fbIds.length; i += 150) {
+    const ch = fbIds.slice(i, i + 150);
+    if (!ch.length) break;
+    const { data: atts } = await sb.from('attendance').select('booking_id').in('booking_id', ch);
+    (atts || []).forEach(a => attSet.add(a.booking_id));
+  }
+  const agendadas = futureBks.filter(b => !attSet.has(b.id)).sort((a, b) => {
+    const c = a.class_sessions.session_date.localeCompare(b.class_sessions.session_date);
+    return c !== 0 ? c : a.class_sessions.hour - b.class_sessions.hour;
+  });
+
+  // Repartir las agendadas en los paquetes vivos por FIFO (fecha de compra <= fecha clase, con tope).
+  const assigned = {}; const freeCap = {};
+  livePkgs.forEach(p => { assigned[p.id] = []; freeCap[p.id] = Math.max(0, (p.classes_total || 0) - (p.classes_used || 0)); });
+  for (const b of agendadas) {
+    const sd = b.class_sessions.session_date;
+    const t = livePkgs.find(p => sd >= (p.purchase_date || p.start_date || '1900-01-01') && assigned[p.id].length < freeCap[p.id]);
+    if (t) assigned[t.id].push(b);
+  }
+
+  // Totales (para el aviso) entre paquetes vivos.
+  const totalCapacity = livePkgs.reduce((s, p) => s + (p.classes_total || 0), 0);
+  const totalUsed = livePkgs.reduce((s, p) => s + (p.classes_used || 0), 0);
+  const totalAgendadas = livePkgs.reduce((s, p) => s + assigned[p.id].length, 0);
+  const remaining = Math.max(0, totalCapacity - totalUsed - totalAgendadas);
+
+  // El ACTIVO = paquete vivo más antiguo.
+  const target = livePkgs[0];
+  const used = target.classes_used || 0;
+  const total = target.classes_total || 0;
+  const targetAgendadas = assigned[target.id] || [];
+  const committed = used + targetAgendadas.length;
+
+  if (committed < total) {
+    // Hay un cupo vacío en el activo → agregar directo.
+    return { caseType: 'A', pkg: target, movable: [], remaining, totalUsed, totalCapacity };
+  }
+  // Activo lleno solo por agendadas → ofrecer mover una de SUS agendadas (libera su cupo para hoy).
+  return { caseType: 'B', pkg: target, movable: targetAgendadas, committed, total, pkgName: target.packages?.name || `Paquete ${total}`, remaining, totalUsed, totalCapacity };
 }
 
 // Encabezado del modal cuando se ve el detalle de un alumno (caso A/B/C/D o skeleton):
@@ -21712,11 +21776,12 @@ function _instSetCaseHeader() {
   `;
 }
 
-async function instructorRenderCase(caseType, stud, pkg) {
+async function instructorRenderCase(info, stud) {
   const ctx = STATE.instAddCtx;
   const body = document.getElementById('inst-add-body');
   _instSetCaseHeader();
 
+  const caseType = info.caseType;
   const studHeader = `
     <div style="display: flex; align-items: center; gap: 10px; padding: 10px 12px; background: var(--bg); border-radius: var(--radius-sm); margin-bottom: 14px;">
       <div class="student-avatar" style="width: 36px; height: 36px; font-size: 12px; ${studentSedeAvatarStyle(stud)}">${initials(stud)}</div>
@@ -21728,47 +21793,26 @@ async function instructorRenderCase(caseType, stud, pkg) {
   `;
 
   if (caseType === 'A') {
-    const cap = await getStudentBookingCapacity(stud.id);
+    const rem = info.remaining || 0;
     body.innerHTML = `
       ${studHeader}
       <div style="padding: 14px; background: #EAF3DE; border-radius: var(--radius-sm); margin-bottom: 14px;">
         <div style="font-size: 12px; font-weight: 500; color: #27500A; margin-bottom: 4px;">✓ Tiene cupo en su paquete</div>
-        <div style="font-size: 11px; color: #3B6D11;">${cap.remaining} ${cap.remaining === 1 ? 'clase libre' : 'clases libres'} para registrar hoy (usadas ${cap.totalUsed}/${cap.totalCapacity})</div>
+        <div style="font-size: 11px; color: #3B6D11;">${rem} ${rem === 1 ? 'clase libre' : 'clases libres'} para registrar hoy (usadas ${info.totalUsed}/${info.totalCapacity})</div>
       </div>
       <button onclick="instructorConfirmAddCaseA('${stud.id}')" style="width: 100%; padding: 12px; font-size: 14px; background: var(--fit-purple); color: white; border: none; border-radius: var(--radius-sm); font-weight: 500; cursor: pointer;">Agregar y marcar asistida</button>
     `;
   } else if (caseType === 'B') {
-    const cap = await getStudentBookingCapacity(stud.id);
-    const todayIso = dateToIsoLocal(new Date());
-    const { data: futureBookings } = await sb.from('session_bookings')
-      .select('id, session_id, class_sessions(id, session_date, hour, location_id, is_cancelled)')
-      .eq('student_id', stud.id)
-      .is('cancelled_at', null);
-
-    let cand = (futureBookings || [])
-      .filter(b => b.class_sessions && !b.class_sessions.is_cancelled && b.class_sessions.session_date >= todayIso)
-      .filter(b => !(b.class_sessions.session_date === ctx.dateIso && b.class_sessions.hour === ctx.hour && b.class_sessions.location_id === ctx.locationId));
-
-    // Excluir reservas que ya tienen asistencia (no son agendadas movibles).
-    const cIds = cand.map(b => b.id);
-    const attSet = new Set();
-    for (let i = 0; i < cIds.length; i += 150) {
-      const ch = cIds.slice(i, i + 150);
-      if (!ch.length) break;
-      const { data: atts } = await sb.from('attendance').select('booking_id').in('booking_id', ch);
-      (atts || []).forEach(a => attSet.add(a.booking_id));
-    }
-    const candidates = cand.filter(b => !attSet.has(b.id)).sort((a, b) => {
-      const cmp = a.class_sessions.session_date.localeCompare(b.class_sessions.session_date);
-      return cmp !== 0 ? cmp : a.class_sessions.hour - b.class_sessions.hour;
-    });
-
-    const totalTxt = (cap && cap.totalCapacity) ? ` (${cap.committed}/${cap.totalCapacity})` : '';
+    // Las movibles ya vienen calculadas (agendadas del paquete activo). Excluimos la propia clase de hoy.
+    const candidates = (info.movable || []).filter(b =>
+      !(b.class_sessions.session_date === ctx.dateIso && b.class_sessions.hour === ctx.hour && b.class_sessions.location_id === ctx.locationId)
+    );
+    const totalTxt = (info.total) ? ` (${info.committed}/${info.total})` : '';
     body.innerHTML = `
       ${studHeader}
       <div style="padding: 14px; background: #FAEEDA; border-radius: var(--radius-sm); margin-bottom: 14px;">
-        <div style="font-size: 12px; font-weight: 500; color: #633806; margin-bottom: 4px;">⊙ Ya tiene todas sus clases reservadas${totalTxt}</div>
-        <div style="font-size: 11px; color: #854F0B;">No se puede agregar sin liberar otra. ¿Cuál movemos a esta clase?</div>
+        <div style="font-size: 12px; font-weight: 500; color: #633806; margin-bottom: 4px;">⊙ Su paquete activo ya está completo${totalTxt}</div>
+        <div style="font-size: 11px; color: #854F0B;">Está lleno entre asistidas y agendadas. Para registrar hoy, mueve una de sus clases agendadas a esta.</div>
       </div>
       <div style="display: flex; flex-direction: column; gap: 6px; max-height: 320px; overflow-y: auto;">
         ${candidates.length === 0 ? '<div style="padding: 12px; text-align: center; color: var(--ink-mute); font-size: 12px;">No hay clases agendadas a futuro para mover.</div>' : candidates.map(b => {
@@ -21788,7 +21832,7 @@ async function instructorRenderCase(caseType, stud, pkg) {
       ${studHeader}
       <div style="padding: 14px; background: #FAECE7; border-radius: var(--radius-sm); margin-bottom: 14px;">
         <div style="font-size: 12px; font-weight: 500; color: #712B13; margin-bottom: 4px;">⚠ Sin paquete activo</div>
-        <div style="font-size: 11px; color: #993C1D;">${pkg ? 'Sin clases disponibles' : 'No tiene ningún paquete asignado'}</div>
+        <div style="font-size: 11px; color: #993C1D;">${info.pkg ? 'Sin clases disponibles' : 'No tiene ningún paquete asignado'}</div>
       </div>
       <div style="padding: 12px 14px; background: var(--bg); border-radius: var(--radius-sm); margin-bottom: 14px; font-size: 11px; color: var(--ink-mute); line-height: 1.5;">
         Puedes registrarla igual. Aparecerá en el dashboard del coordinador como pendiente de cobro. Cuando le venda paquete, esta clase se imputa al nuevo.
