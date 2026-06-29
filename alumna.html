@@ -74,6 +74,10 @@
   .chk.rec{ background:#FBF1DC; color:#8A6D1A; }
   .chk.repro{ background:#E6EEF9; color:#2C5A9E; }
   .chk.lost{ background:#FBE7E6; color:#B23B39; }
+  .chk.sched{ background:#EEEAE2; color:#6F675B; }
+  .sk{ background:linear-gradient(90deg,#ECE6DC 25%,#F5F0E8 37%,#ECE6DC 63%); background-size:400% 100%; animation:shimmer 1.25s ease infinite; border-radius:10px; }
+  @keyframes shimmer{ 0%{ background-position:100% 0; } 100%{ background-position:0 0; } }
+  .sk-line{ height:16px; margin:12px 0; } .sk-lg{ height:60px; width:130px; margin:8px 0 16px; border-radius:12px; } .sk-row{ height:62px; margin:14px 0; border-radius:14px; }
 
   .pkg-num{ font-family:var(--display); font-weight:600; font-size:calc(78px*var(--scale)); color:var(--purple); line-height:.95; }
   .pkg-word{ font-size:calc(20px*var(--scale)); font-weight:600; margin-top:4px; }
@@ -85,7 +89,7 @@
   .legend{ display:flex; flex-wrap:wrap; gap:14px 18px; margin-top:24px; padding-top:16px; border-top:1px solid var(--line); }
   .legend span{ display:inline-flex; align-items:center; gap:7px; font-size:calc(13.5px*var(--scale)); color:var(--ink-soft); }
   .legend i{ width:11px; height:11px; border-radius:50%; }
-  .legend .g{ background:#2E7D45; } .legend .gd{ background:var(--gold); } .legend .b{ background:#2C5A9E; } .legend .r{ background:var(--red); }
+  .legend .g{ background:#2E7D45; } .legend .gd{ background:var(--gold); } .legend .b{ background:#2C5A9E; } .legend .r{ background:var(--red); } .legend .pp{ background:var(--purple); } .legend .ag{ background:#B7AFA2; }
 
   .nav{ flex:none; background:#fff; border-top:1px solid var(--line); display:flex; padding:8px 6px calc(10px + env(safe-area-inset-bottom)); }
   .nav button{ flex:1; border:0; background:transparent; cursor:pointer; display:flex; flex-direction:column; align-items:center; gap:5px; padding:8px 4px; color:var(--ink-mute); }
@@ -272,9 +276,17 @@
     goTab('clases', $('n-clases'));
   }
 
+  function skeletonHTML(){
+    return `<div class="sk sk-line" style="width:42%"></div><div class="sk sk-lg"></div>`
+      + `<div class="sk sk-row"></div><div class="sk sk-row"></div><div class="sk sk-row"></div>`;
+  }
+
   async function refresh(silent){
     const btn = $('refresh-btn'); if(btn) btn.classList.add('spin');
-    await fetchAll();
+    if(!silent){ $('tab-clases').innerHTML = skeletonHTML(); $('tab-pkg').innerHTML = skeletonHTML(); }
+    const tasks = [fetchAll()];
+    if(!silent) tasks.push(new Promise(r=>setTimeout(r,450)));
+    await Promise.all(tasks);
     renderAll();
     if(btn) btn.classList.remove('spin');
     if(!silent) toast('Actualizado');
@@ -315,7 +327,7 @@
       <div class="micro">Podrás confirmar cada clase hasta 4 horas antes. Si ya pasó ese tiempo, escríbele a la coordinadora.</div>`;
     if(rest.length){
       html += `<div class="divider"></div><div class="group-h">Más adelante</div><div class="group-sub">Tus próximas clases programadas</div>`;
-      rest.forEach((r,i)=>{ html += `<div class="row${i===0?' first':''}"><div class="when"><div class="d">${dayFull(r.s.session_date)}</div><div class="s">${fmtHour(r.s.hour)} · con ${esc(DATA.inst[r.s.instructor_id]||'—')}</div></div></div>`; });
+      rest.forEach((r,i)=>{ html += `<div class="row${i===0?' first':''}"><div class="when"><div class="d">${dayFull(r.s.session_date)}</div><div class="s">${fmtHour(r.s.hour)} · ${esc(DATA.locs[r.s.location_id]||'—')} · con ${esc(DATA.inst[r.s.instructor_id]||'—')}</div></div></div>`; });
     }
     el.innerHTML = html;
   }
@@ -358,6 +370,9 @@
       .filter(x=> x.s && !x.b.cancelled_at && isUpcoming(x.s, attBySession[x.b.session_id]))
       .map(x=>x.s);
 
+    // la clase realmente "próxima" es la más cercana en fecha+hora (solo esa lleva el tag Próxima)
+    const nextId = (upcoming.slice().sort((a,b)=> a.session_date.localeCompare(b.session_date) || a.hour-b.hour)[0]||{}).id;
+
     const rowsByPkg={};
     const activeId = active?.id;
     DATA.attendance.forEach(a=>{ const s=DATA.sessById[a.session_id]; if(!s) return; const pid=a.student_package_id||activeId; if(!pid) return; (rowsByPkg[pid]=rowsByPkg[pid]||[]).push({ s, att:a }); });
@@ -368,7 +383,10 @@
 
     order.forEach(pid=>{
       const p = valid.find(x=>x.id===pid); if(!p) return;
-      const rows = (rowsByPkg[pid]||[]).sort((a,b)=> b.s.session_date.localeCompare(a.s.session_date) || b.s.hour-a.s.hour);
+      const all = rowsByPkg[pid]||[];
+      const ups = all.filter(r=>r.prox).sort((a,b)=> a.s.session_date.localeCompare(b.s.session_date) || a.s.hour-b.s.hour);
+      const dones = all.filter(r=>!r.prox).sort((a,b)=> b.s.session_date.localeCompare(a.s.session_date) || b.s.hour-a.s.hour);
+      const rows = [...ups, ...dones];
       if(rows.length===0 && pid!==activeId) return;
       const total=p.classes_total||0, used=p.classes_used||0, remain=Math.max(0,total-used);
       const sub = pid===activeId ? `${total} clases · ${used} tomadas · ${remain} te quedan` : (remain>0?`${total} clases · ${remain} te quedan`:`${total} clases · completado`);
@@ -376,12 +394,13 @@
       if(rows.length===0){ html+=`<div class="empty">Sin clases registradas todavía.</div>`; }
       rows.forEach((r,i)=>{
         let cls,label;
-        if(r.prox){ cls='prox'; label='Próxima'; } else { [cls,label]=stateChip(r.att.status); }
-        html += `<div class="row${i===0?' first':''}"><div class="when"><div class="d">${dayFull(r.s.session_date)}</div><div class="s">${fmtHour(r.s.hour)} · con ${esc(DATA.inst[r.s.instructor_id]||'—')}</div></div><span class="chk ${cls}">${label}</span></div>`;
+        if(r.prox){ if(r.s.id===nextId){ cls='prox'; label='Próxima'; } else { cls='sched'; label='Agendada'; } }
+        else { [cls,label]=stateChip(r.att.status); }
+        html += `<div class="row${i===0?' first':''}"><div class="when"><div class="d">${dayFull(r.s.session_date)}</div><div class="s">${fmtHour(r.s.hour)} · ${esc(DATA.locs[r.s.location_id]||'—')} · con ${esc(DATA.inst[r.s.instructor_id]||'—')}</div></div><span class="chk ${cls}">${label}</span></div>`;
       });
     });
 
-    html += `<div class="legend"><span><i class="g"></i> Asististe</span><span><i class="gd"></i> Recuperable</span><span><i class="b"></i> Reprogramada</span><span><i class="r"></i> Perdida</span></div>`;
+    html += `<div class="legend"><span><i class="pp"></i> Próxima</span><span><i class="ag"></i> Agendada</span><span><i class="g"></i> Asististe</span><span><i class="gd"></i> Recuperable</span><span><i class="b"></i> Reprogramada</span><span><i class="r"></i> Perdida</span></div>`;
     el.innerHTML = html;
   }
 
