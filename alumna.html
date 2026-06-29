@@ -63,6 +63,11 @@
   .divider{ height:1px; background:var(--line-strong); margin:26px 0 20px; }
   .group-h{ font-family:var(--display); font-weight:600; font-size:calc(20px*var(--scale)); margin-bottom:4px; }
   .group-sub{ font-size:calc(13px*var(--scale)); color:var(--ink-mute); margin-bottom:14px; }
+  .pkg-head{ width:100%; border:0; background:transparent; display:flex; align-items:center; justify-content:space-between; gap:12px; padding:4px 0; cursor:pointer; text-align:left; font-family:var(--body); }
+  .pkg-head-txt{ min-width:0; }
+  .pkg-chev{ width:22px; height:22px; flex:none; color:var(--ink-mute); transition:transform .2s ease; }
+  .pkg-head.open .pkg-chev{ transform:rotate(180deg); }
+  .pkg-body.collapsed{ display:none; }
   .row{ display:flex; align-items:center; gap:14px; padding:15px 0; border-top:1px solid var(--line); }
   .row.first{ border-top:0; }
   .row .when{ flex:1; min-width:0; }
@@ -344,8 +349,11 @@
   function renderPaquete(){
     const el=$('tab-pkg');
     const valid = DATA.packages.filter(p=> p.status!=='changed' && !p.closed_at);
-    const asc = [...valid].sort((a,b)=>(a.purchase_date||'').localeCompare(b.purchase_date||''));
-    const active = asc.find(p=> !p.is_frozen && (p.classes_used||0)<(p.classes_total||0));
+    const isDone = (p)=> (p.classes_used||0) >= (p.classes_total||0);
+    const asc = [...valid].sort((a,b)=>(a.purchase_date||'').localeCompare(b.purchase_date||'') || (a.start_date||'').localeCompare(b.start_date||''));
+    // entre los no completados, el ACTIVO es el que ya empezó (tiene clases tomadas); si ninguno empezó, el más antiguo
+    const candidates = asc.filter(p=> !p.is_frozen && !isDone(p));
+    const active = candidates.find(p=> (p.classes_used||0) > 0) || candidates[0];
     const pname = (p)=> DATA.pkgNames[p.package_id] || 'Paquete';
 
     if(valid.length===0){
@@ -379,8 +387,10 @@
     DATA.attendance.forEach(a=>{ const s=DATA.sessById[a.session_id]; if(!s) return; const pid=a.student_package_id||activeId; if(!pid) return; (rowsByPkg[pid]=rowsByPkg[pid]||[]).push({ s, att:a }); });
     if(activeId) upcoming.forEach(s=>{ (rowsByPkg[activeId]=rowsByPkg[activeId]||[]).push({ s, prox:true }); });
 
-    const order=[]; if(activeId) order.push(activeId);
-    [...valid].sort((a,b)=>(b.purchase_date||'').localeCompare(a.purchase_date||'')).forEach(p=>{ if(!order.includes(p.id)) order.push(p.id); });
+    const others = valid.filter(p=> p.id!==activeId);
+    const proximos = others.filter(p=> !isDone(p)).sort((a,b)=>(a.purchase_date||'').localeCompare(b.purchase_date||''));
+    const anteriores = others.filter(p=> isDone(p)).sort((a,b)=>(b.purchase_date||'').localeCompare(a.purchase_date||''));
+    const order = [activeId, ...proximos.map(p=>p.id), ...anteriores.map(p=>p.id)].filter(Boolean);
 
     order.forEach(pid=>{
       const p = valid.find(x=>x.id===pid); if(!p) return;
@@ -388,17 +398,23 @@
       const ups = all.filter(r=>r.prox).sort((a,b)=> a.s.session_date.localeCompare(b.s.session_date) || a.s.hour-b.s.hour);
       const dones = all.filter(r=>!r.prox).sort((a,b)=> b.s.session_date.localeCompare(a.s.session_date) || b.s.hour-a.s.hour);
       const rows = [...ups, ...dones];
-      if(rows.length===0 && pid!==activeId) return;
       const total=p.classes_total||0, used=p.classes_used||0, remain=Math.max(0,total-used);
-      const sub = pid===activeId ? `${total} clases · ${used} tomadas · ${remain} te quedan` : (remain>0?`${total} clases · ${remain} te quedan`:`${total} clases · completado`);
-      html += `<div class="divider"></div><div class="group-h">${pid===activeId?'Paquete actual':'Paquete anterior'}</div><div class="group-sub">${sub}</div>`;
+      let label, sub;
+      if(pid===activeId){ label='Paquete actual'; sub=`${total} clases · ${used} tomadas · ${remain} te quedan`; }
+      else if(!isDone(p)){ label='Paquete próximo'; sub=`${total} clases · empieza cuando termines el actual`; }
+      else { label='Paquete anterior'; sub=`${total} clases · completado`; }
+      const open = (pid===activeId);
+      html += `<div class="divider"></div>`;
+      html += `<button class="pkg-head${open?' open':''}" onclick="togglePkg('${pid}', this)"><div class="pkg-head-txt"><div class="group-h">${label}</div><div class="group-sub" style="margin-bottom:0;">${sub}</div></div><svg class="pkg-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></button>`;
+      html += `<div class="pkg-body${open?'':' collapsed'}" id="body-${pid}">`;
       if(rows.length===0){ html+=`<div class="empty">Sin clases registradas todavía.</div>`; }
       rows.forEach((r,i)=>{
-        let cls,label;
-        if(r.prox){ if(r.s.id===nextId){ cls='prox'; label='Próxima'; } else { cls='sched'; label='Agendada'; } }
-        else { [cls,label]=stateChip(r.att.status); }
-        html += `<div class="row${i===0?' first':''}"><div class="when"><div class="d">${dayFull(r.s.session_date)}</div><div class="s">${fmtHour(r.s.hour)} · ${esc(DATA.locs[r.s.location_id]||'—')} · con ${esc(DATA.inst[r.s.instructor_id]||'—')}</div></div><span class="chk ${cls}">${label}</span></div>`;
+        let cls,label2;
+        if(r.prox){ if(r.s.id===nextId){ cls='prox'; label2='Próxima'; } else { cls='sched'; label2='Agendada'; } }
+        else { [cls,label2]=stateChip(r.att.status); }
+        html += `<div class="row${i===0?' first':''}"><div class="when"><div class="d">${dayFull(r.s.session_date)}</div><div class="s">${fmtHour(r.s.hour)} · ${esc(DATA.locs[r.s.location_id]||'—')} · con ${esc(DATA.inst[r.s.instructor_id]||'—')}</div></div><span class="chk ${cls}">${label2}</span></div>`;
       });
+      html += `</div>`;
     });
 
     html += `<div class="legend"><span><i class="pp"></i> Próxima</span><span><i class="ag"></i> Agendada</span><span><i class="g"></i> Asististe</span><span><i class="gd"></i> Recuperable</span><span><i class="b"></i> Reprogramada</span><span><i class="r"></i> Perdida</span></div>`;
@@ -415,6 +431,7 @@
     if(appReady && Date.now()-lastFetch > 15000) refresh(true);
   };
   window.setSize=(mode,el)=>{ document.documentElement.setAttribute('data-size', mode==='lg'?'lg':'normal'); el.parentElement.querySelectorAll('button').forEach(b=>b.classList.remove('on')); el.classList.add('on'); };
+  window.togglePkg=(pid, btn)=>{ const b=$('body-'+pid); if(!b) return; b.classList.toggle('collapsed'); btn.classList.toggle('open'); };
   window.confirmar=()=>{ toast('Muy pronto podrás confirmar desde aquí'); };
 
   // al volver a la app (cambiar de WhatsApp a Chrome, desbloquear, etc.) refresca si está viejo
