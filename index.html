@@ -15330,103 +15330,63 @@ async function getLiveUsedByPackage(studentId) {
   return m;
 }
 
-async function getOrCreateActivePackageId(studentId) {
-  // 1. Buscar paquete activo en BD (FIFO entre paquetes con status='active' o sin status).
-  //    La capacidad se evalúa con conteo EN VIVO (no con classes_used guardado, que
-  //    puede estar desfasado y provocaba sobre-capacidad / auto-creaciones erróneas).
-  const { data: pkgs } = await sb.from('student_packages')
-    .select('id, package_id, classes_total, classes_used, purchase_date, start_date, is_frozen, price_paid, status')
-    .eq('student_id', studentId)
-    .order('purchase_date', { ascending: true }).order('created_at', { ascending: true });
-
-  const liveUsed = await getLiveUsedByPackage(studentId);
-  const isAliveLive = (p) => {
-    if (p.is_frozen) return false;
-    if (p.status && p.status !== 'active') return false; // excluir 'changed' / 'cancelled'
-    return (liveUsed[p.id] || 0) < (p.classes_total || 0);
-  };
-
-  const active = (pkgs || []).find(isAliveLive);
-  if (active) return active.id;
-
-  // 2. No hay paquete activo → auto-crear uno del mismo tipo que el último que tuvo
-  // Tomar el último paquete por purchase_date para clonar package_id, classes_total, price_paid
-  const lastPkg = (pkgs || []).slice().sort((a, b) => {
-    const da = b.purchase_date || b.start_date || '1900-01-01';
-    const db = a.purchase_date || a.start_date || '1900-01-01';
-    return da.localeCompare(db);
-  })[0];
-
-  if (!lastPkg) {
-    // El alumno NUNCA tuvo paquete: usar el primero del catálogo como fallback
-    const fallback = STATE.packages?.[0];
-    if (!fallback) {
-      console.error('[getOrCreateActivePackageId] No hay catálogo de paquetes');
-      return null;
-    }
-    const { data: created, error } = await sb.from('student_packages').insert({
-      student_id: studentId,
-      package_id: fallback.id,
-      purchase_date: dateToIsoLocal(new Date()),
-      start_date: dateToIsoLocal(new Date()),
-      classes_total: fallback.sessions || fallback.total_classes || 1,
-      sessions_total: fallback.sessions || fallback.total_classes || 1,
-      classes_used: 0,
-      classes_recoverable: 0,
-      is_frozen: false,
-      price_paid: fallback.price_pen || 0,
-    }).select('id').single();
-    if (error) {
-      console.error('[getOrCreateActivePackageId] Error auto-creando paquete fallback:', error);
-      return null;
-    }
-    showToast('⚠ Auto-creé un paquete (sin pago) para registrar la clase. Edítalo desde el perfil.', 'warning');
-    return created.id;
-  }
-
-  // Guard anti-duplicado: re-verificar EN VIVO por si otra acción concurrente acaba
-  // de crear/liberar un paquete activo (evita los duplicados del mismo minuto).
-  const { data: pkgs2 } = await sb.from('student_packages')
-    .select('id, classes_total, is_frozen, status, purchase_date, created_at')
-    .eq('student_id', studentId)
-    .order('purchase_date', { ascending: true }).order('created_at', { ascending: true });
-  const live2 = await getLiveUsedByPackage(studentId);
-  const active2 = (pkgs2 || []).find(p =>
-    !p.is_frozen && (!p.status || p.status === 'active') &&
-    ((live2[p.id] || 0) < (p.classes_total || 0))
-  );
-  if (active2) return active2.id;
-
-  // Opción A: NO auto-crear cuando hay paquetes pero están llenos.
-  // Desbordar el paquete vivo más NUEVO (status active/null, no congelado) y dejar que
-  // aparezca en el reporte de reconciliación para que una persona decida (crear por cobrar).
-  const overflowTarget = (pkgs || [])
-    .filter(p => !p.is_frozen && (!p.status || p.status === 'active'))
-    .sort((a, b) => (b.purchase_date || b.start_date || '1900-01-01').localeCompare(a.purchase_date || a.start_date || '1900-01-01'))[0];
-  if (overflowTarget) return overflowTarget.id;
-
-  // Residual: el alumno solo tiene paquetes congelados/cambiados/cancelados y ninguno usable.
-  // Necesita registrar la clase → clonamos el último (queda "por cobrar"). Caso raro.
+// Devuelve el paquete al que debe ir una clase NUEVA del alumno en la fecha dada.
+// Usa el cupo GUARDADO (classes_used, que mantiene recalcPackageCounters tras cada marca):
+// elige el paquete vivo más antiguo que YA EXISTÍA en la fecha de la clase y que aún tiene cupo.
+// Esto es lo que evita el 9/8: un paquete lleno (classes_used >= total) jamás se elige, sin
+// importar si algún vínculo de asistencia quedó temporalmente desfasado durante un cambio de
+// paquete (esa fue la causa real del bug; el conteo "en vivo" se desfasaba, el guardado no).
+// Si NINGÚN paquete tiene cupo, AUTO-CREA un clon del último paquete (reglas 5/6), lo marca como
+// auto_created (aviso permanente en el perfil) y avisa a quien marca. Nunca rebalsa en silencio.
+async function getOrCreateActivePackageId(studentId, classDate) {
   const todayIso = dateToIsoLocal(new Date());
+  const sd = classDate || todayIso;
+
+  const { data: pkgs } = await sb.from('student_packages')
+    .select('id, package_id, classes_total, classes_used, purchase_date, start_date, is_frozen, price_paid, status, created_at')
+    .eq('student_id', studentId);
+
+  // Paquetes "vivos" con cupo: no congelados, status activo (o legacy sin status) y usado < total.
+  const alive = (pkgs || [])
+    .filter(p => !p.is_frozen && (!p.status || p.status === 'active') && ((p.classes_used || 0) < (p.classes_total || 0)))
+    .sort((a, b) => {
+      const da = a.purchase_date || a.start_date || '1900-01-01';
+      const db = b.purchase_date || b.start_date || '1900-01-01';
+      if (da !== db) return da.localeCompare(db);
+      return (a.created_at || '').localeCompare(b.created_at || '');
+    });
+
+  // Paquete vivo más antiguo que ya existía en la fecha de la clase.
+  let target = alive.find(p => sd >= (p.purchase_date || p.start_date || '1900-01-01'));
+  // Fallback: el vivo más antiguo con cupo (p. ej. clase muy retroactiva, anterior a todos).
+  if (!target) target = alive[0];
+  if (target) return target.id;
+
+  // Reglas 5/6: ningún paquete con cupo → auto-crear clon del último (o del catálogo) y avisar.
+  const lastPkg = (pkgs || []).slice().sort((a, b) =>
+    (b.purchase_date || b.start_date || '1900-01-01').localeCompare(a.purchase_date || a.start_date || '1900-01-01'))[0];
+  const fb = STATE.packages?.[0];
+  const tmpl = lastPkg
+    ? { package_id: lastPkg.package_id, classes_total: lastPkg.classes_total, price_paid: lastPkg.price_paid || 0 }
+    : (fb ? { package_id: fb.id, classes_total: fb.sessions || 1, price_paid: 0 } : null);
+  if (!tmpl) { console.error('[getOrCreateActivePackageId] No hay catálogo de paquetes'); return null; }
+
   const { data: created, error } = await sb.from('student_packages').insert({
     student_id: studentId,
-    package_id: lastPkg.package_id,
+    package_id: tmpl.package_id,
     purchase_date: todayIso,
     start_date: todayIso,
-    classes_total: lastPkg.classes_total,
-    sessions_total: lastPkg.classes_total,
+    classes_total: tmpl.classes_total,
+    sessions_total: tmpl.classes_total,
     classes_used: 0,
     classes_recoverable: 0,
     is_frozen: false,
-    price_paid: lastPkg.price_paid || 0,
+    price_paid: tmpl.price_paid || 0,
+    auto_created: true,
+    notes: 'Creado automáticamente por el sistema para registrar una clase (la alumna no tenía paquete con cupo). Revisar y cobrar si corresponde.',
   }).select('id').single();
-
-  if (error) {
-    console.error('[getOrCreateActivePackageId] Error creando paquete residual:', error);
-    return null;
-  }
-
-  showToast('⚠ El alumno no tenía paquete activo usable; creé uno por cobrar.', 'warning');
+  if (error) { console.error('[getOrCreateActivePackageId] Error auto-creando paquete:', error); return null; }
+  showToast('Se creó un paquete automáticamente (sin cobrar) para registrar la clase. Revísalo en el perfil de la alumna.', 'warning');
   return created.id;
 }
 
@@ -25628,7 +25588,9 @@ function renderDetailSummary(stud) {
             <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 4px;">
               <div style="font-family: var(--display); font-size: 17px; color: ${isActive ? 'var(--fit-purple)' : 'var(--ink)'}; font-style: italic;">${name}</div>
               <span style="font-size: 10px; padding: 3px 9px; background: ${status.bgSoft}; color: ${status.color}; border-radius: 999px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.4px;">${status.label}</span>
+              ${p.auto_created ? `<span title="Este paquete lo creó el sistema automáticamente para registrar una clase porque la alumna no tenía paquete con cupo. Revísalo y cóbralo si corresponde." style="font-size: 10px; padding: 3px 9px; background: #FEF7E6; color: #8B6F1A; border: 1px solid #F4D58A; border-radius: 999px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.4px;">⚙ Creado automático</span>` : ''}
             </div>
+            ${p.auto_created ? `<div style="font-size: 11px; color: #8B6F1A; background: #FEF7E6; border: 1px solid #F4D58A; border-radius: 8px; padding: 6px 10px; margin: 2px 0 8px;">Creado automáticamente por el sistema para poder registrar una clase (la alumna no tenía paquete con cupo). Revisa si corresponde cobrarlo.</div>` : ''}
             <div style="font-size: 12px; color: var(--ink-mute);">Compra ${formatDate(p.purchase_date)} · ${used}/${total} usadas${recoverable > 0 ? ` · ${recoverable} recuperable${recoverable === 1 ? '' : 's'}` : ''}</div>
           </div>
           <div style="text-align: right;">
