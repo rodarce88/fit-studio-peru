@@ -479,6 +479,11 @@
   .dash-top-grid { display:grid; grid-template-columns: minmax(0,1fr) 344px; gap:24px; align-items:start; margin-bottom:18px; }
   .dash-top-left { min-width:0; }
   .dash-top-left > [id$="-widget"], .dash-top-left > .cobranza-widget { margin-bottom:16px; }
+  .midia-sede-chips { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:16px; }
+  .midia-sede-chips .msc { border:1px solid var(--line); background:#fff; border-radius:999px; padding:8px 14px; font-weight:600; font-size:13px; color:var(--ink-mute); cursor:pointer; display:inline-flex; align-items:center; gap:7px; font-family:var(--body); transition:background .12s,color .12s,border-color .12s; }
+  .midia-sede-chips .msc:hover { border-color:var(--fit-purple-soft); }
+  .midia-sede-chips .msc.on { background:var(--ink); color:#fff; border-color:var(--ink); }
+  .midia-sede-chips .msc .d { width:8px; height:8px; border-radius:50%; display:inline-block; }
   .actrail { position:sticky; top: calc(var(--topbar-h) + 16px); background:#fff; border:1px solid var(--line); border-radius:var(--radius-lg); box-shadow:var(--shadow-sm); display:flex; flex-direction:column; max-height: calc(100vh - var(--topbar-h) - 40px); overflow:hidden; }
   .actrail-head { padding:16px 18px 12px; border-bottom:1px solid var(--line-soft); }
   .actrail-titlerow { display:flex; align-items:center; justify-content:space-between; gap:10px; }
@@ -3393,6 +3398,7 @@
 
     <div class="dash-top-grid" id="dash-top-grid">
     <div class="dash-top-left">
+    <div id="midia-sede-chips" class="midia-sede-chips"></div>
     <!-- Widget de cobranza del mes (reemplaza los 4 KPI cards) -->
     <div class="cobranza-widget" id="cobranza-widget" onclick="openCobranzaPanel()" tabindex="0" role="button" aria-label="Cobranza del mes — ver alumnos pendientes">
       <div class="cob-gauge">
@@ -3442,10 +3448,6 @@
           <div id="debt-amount" style="font-family:var(--display); font-size:32px; font-weight:500; letter-spacing:-0.5px; color:var(--ink); line-height:1.1; margin-top:4px;">S/ —</div>
           <div id="debt-count" style="font-size:13px; color:var(--ink-mute); margin-top:4px;">— alumnas con saldo</div>
         </div>
-        <div style="display:inline-flex; background:var(--bg-soft,#f1eef6); border-radius:999px; padding:3px;">
-          <button type="button" id="debt-tab-sede" onclick="setDebtScope('sede')" style="border:none; background:var(--ink,#2a1a3a); color:#fff; font:inherit; font-size:12px; font-weight:600; padding:6px 14px; border-radius:999px; cursor:pointer;">Esta sede</button>
-          <button type="button" id="debt-tab-all" onclick="setDebtScope('all')" style="border:none; background:transparent; color:var(--ink-mute); font:inherit; font-size:12px; font-weight:600; padding:6px 14px; border-radius:999px; cursor:pointer;">Todas</button>
-        </div>
       </div>
       <div>
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
@@ -3469,10 +3471,6 @@
             <div class="kpi-label" style="font-size:10px;">Asistieron este mes</div>
             <div id="active-this-month" style="font-family:var(--display); font-size:22px; color:var(--ink);">—</div>
             <div id="active-month-delta" style="font-size:11px; color:var(--ink-mute);">vs mes pasado: —</div>
-          </div>
-          <div style="display:inline-flex; background:var(--bg-soft,#f1eef6); border-radius:999px; padding:3px; align-self:center;">
-            <button type="button" id="active-tab-sede" onclick="setActiveScope('sede')" style="border:none; background:var(--ink,#2a1a3a); color:#fff; font:inherit; font-size:12px; font-weight:600; padding:6px 14px; border-radius:999px; cursor:pointer;">Esta sede</button>
-            <button type="button" id="active-tab-all" onclick="setActiveScope('all')" style="border:none; background:transparent; color:var(--ink-mute); font:inherit; font-size:12px; font-weight:600; padding:6px 14px; border-radius:999px; cursor:pointer;">Todas</button>
           </div>
         </div>
       </div>
@@ -6306,6 +6304,8 @@ function renderDashboard() {
   document.getElementById('dash-sub').textContent = `${locStudents.length} alumnos · ${loc.capacity} cupos por clase · capacidad semanal ~${loc.capacity * 12 * 5 + loc.capacity * 5 * 2}`;
   document.getElementById('badge-students').textContent = locStudents.length;
 
+  // Filtro de sede global (Fase 4)
+  renderMiDiaSedeChips();
   // Widget de cobranza del mes (async, no bloquea el render)
   renderCobranzaWidget();
   // Deuda acumulada total + tendencia 4 semanas (async, no bloquea)
@@ -6367,7 +6367,28 @@ function renderDashboard() {
 // El punto de "hoy" usa el set completo → coincide exacto con la lista "Por cobrar".
 // Cada semana se reconstruye filtrando paquetes/pagos por fecha de corte.
 // ============================================
-let DEBT_SCOPE = 'sede'; // 'sede' | 'all'
+// Filtro de sede GLOBAL de "Mi día" (Fase 4): controla cobranza, deuda, activos y sin marcar.
+let MIDIA_SEDE = 'all'; // 'all' | locationId
+function midiaSedeName() { if (MIDIA_SEDE === 'all') return 'todas las sedes'; const l = (STATE.locations || []).find(x => x.id === MIDIA_SEDE); return l ? l.name : '—'; }
+function renderMiDiaSedeChips() {
+  const box = document.getElementById('midia-sede-chips'); if (!box) return;
+  const chip = (v, label, color) => `<button class="msc ${MIDIA_SEDE === v ? 'on' : ''}" onclick="setMiDiaSede('${v}')">${color ? `<span class="d" style="background:${color}"></span>` : ''}${escape(label)}</button>`;
+  let html = chip('all', 'Todas las sedes', null);
+  (STATE.locations || []).forEach(l => { html += chip(l.id, l.name, l.color || 'var(--fit-purple)'); });
+  box.innerHTML = html;
+}
+window.setMiDiaSede = function(v) {
+  MIDIA_SEDE = v;
+  DEBT_SCOPE = (v === 'all') ? 'all' : 'sede';
+  ACTIVE_SCOPE = (v === 'all') ? 'all' : 'sede';
+  renderMiDiaSedeChips();
+  if (typeof renderCobranzaWidget === 'function') renderCobranzaWidget();
+  if (typeof renderDebtSummary === 'function') renderDebtSummary();
+  if (typeof renderActiveStudents === 'function') renderActiveStudents();
+  if (document.getElementById('midia-unmarked-body')) { UNMARKED_STATE.embed = true; UNMARKED_STATE.sedeFilter = (v === 'all') ? 'all' : v; renderUnmarkedReport(); }
+};
+
+let DEBT_SCOPE = 'all'; // 'sede' | 'all'
 
 function setDebtScope(scope) {
   DEBT_SCOPE = scope;
@@ -6443,12 +6464,12 @@ async function renderDebtSummary() {
   if (!card) return;
   const loc = getCurrentLocation();
   const scopeName = document.getElementById('debt-scope-name');
-  if (scopeName) scopeName.textContent = DEBT_SCOPE === 'all' ? 'todas las sedes' : (loc ? loc.name : '—');
+  if (scopeName) scopeName.textContent = midiaSedeName();
 
   const chart = document.getElementById('debt-chart');
   if (chart) chart.innerHTML = '<div style="padding:18px 0; font-size:12px; color:var(--ink-mute);">Cargando…</div>';
 
-  const locId = DEBT_SCOPE === 'all' ? null : (loc ? loc.id : null);
+  const locId = MIDIA_SEDE === 'all' ? null : MIDIA_SEDE;
   let data;
   try {
     data = await computeDebtSnapshot(locId);
@@ -6609,11 +6630,11 @@ async function renderActiveStudents() {
   if (!card) return;
   const loc = getCurrentLocation();
   const scopeName = document.getElementById('active-scope-name');
-  if (scopeName) scopeName.textContent = ACTIVE_SCOPE === 'all' ? 'todas las sedes' : (loc ? loc.name : '—');
+  if (scopeName) scopeName.textContent = midiaSedeName();
   const chart = document.getElementById('active-chart');
   if (chart) chart.innerHTML = '<div style="padding:18px 0; font-size:12px; color:var(--ink-mute);">Cargando…</div>';
 
-  const locId = ACTIVE_SCOPE === 'all' ? null : (loc ? loc.id : null);
+  const locId = MIDIA_SEDE === 'all' ? null : MIDIA_SEDE;
   let data;
   try {
     data = await computeActiveStudents(locId);
@@ -6712,7 +6733,7 @@ async function renderCobranzaWidget() {
   const daysLeft = Math.max(0, daysInMonth - dayOfMonth);
   const pctExpected = (dayOfMonth / daysInMonth) * 100;
 
-  const studentIds = STATE.students.filter(s => s.location_id === loc.id).map(s => s.id);
+  const studentIds = (MIDIA_SEDE === 'all' ? STATE.students : STATE.students.filter(s => s.location_id === MIDIA_SEDE)).map(s => s.id);
 
   let totalMes = 0, cobrado = 0, alumnosPagaron = 0, alumnosPendientes = 0;
 
@@ -6767,7 +6788,7 @@ async function renderCobranzaWidget() {
   const gap = pctCobrado - pctExpected;
   const ritmoRequerido = daysLeft > 0 ? pendiente / daysLeft : pendiente;
 
-  paintCobranzaWidget({ locName: loc.name, totalMes, cobrado, pendiente, alumnosPendientes, alumnosPagaron, daysLeft, pctCobrado, pctExpected, gap, ritmoRequerido });
+  paintCobranzaWidget({ locName: midiaSedeName(), totalMes, cobrado, pendiente, alumnosPendientes, alumnosPagaron, daysLeft, pctCobrado, pctExpected, gap, ritmoRequerido });
 }
 
 function paintCobranzaWidget(d) {
@@ -28465,7 +28486,7 @@ async function renderReconcileReport() {
 // y NO cancelada, y sin fila de attendance. El marcado consume el
 // paquete correcto por fecha vía getOrCreateActivePackageId.
 // ============================================================
-const UNMARKED_STATE = { all: null, loading: false, scope: 'day', date: null, sedeFilter: 'all', instrFilter: 'all', embed: false };
+const UNMARKED_STATE = { all: null, loading: false, scope: 'all', date: null, sedeFilter: 'all', instrFilter: 'all', embed: false };
 
 function unmarkedPrevBusinessDay() {
   const d = new Date(); d.setHours(0, 0, 0, 0);
