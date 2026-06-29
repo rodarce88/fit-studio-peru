@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>FIT Studio · Mi cuenta</title>
-<meta name="app-build" content="b14-2026-06-29">
+<meta name="app-build" content="b15-2026-06-29">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400..700;1,400..600&family=Mulish:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -650,13 +650,20 @@
     const cs=clOnDate(CL.sel);
     let h=`<div class="cal-detail"><div class="cal-dh">${dayFull(CL.sel)}</div>`;
     if(!cs.length) return h+`<div class="empty">No tienes clases este día.</div></div>`;
+    const now=Date.now();
     h+=`<div class="tl">`;
     cs.forEach(e=>{
       const col=DATA.locColor[e.loc]||'#5B2A8F';
-      const st = e.kind==='up'
-        ? (e.status ? stateChip(e.status)[1] : ((CLE.next && e.sid===CLE.next.sid) ? 'Próxima' : 'Agendada'))
-        : stateChip(e.status)[1];
-      h+=`<div class="tl-item"><span class="tl-node" style="background:${col}"></span><div class="tl-time">${fmtHour(e.hour)}</div><div class="tl-meta"><b>${esc(DATA.locs[e.loc]||'—')}</b> · con ${esc(DATA.inst[e.inst]||'—')} · ${st}</div></div>`;
+      let st, stColor='';
+      if(e.kind==='up'){
+        if(e.status){ st=stateChip(e.status)[1]; }
+        else if(e.cancel){ st='Avisaste que no vendrás'; stColor='color:#A85B08;font-weight:700'; }
+        else if(e.conf){ st='Confirmada'; stColor='color:#0E7A4F;font-weight:700'; }
+        else { st=(CLE.next && e.sid===CLE.next.sid) ? 'Próxima' : 'Agendada'; }
+      } else { st=stateChip(e.status)[1]; }
+      const clickable = e.kind==='up' && e.bid && !e.status && e.start>now;
+      const attrs = clickable ? `onclick="openClassSheet('${e.bid}')" style="cursor:pointer"` : '';
+      h+=`<div class="tl-item" ${attrs}><span class="tl-node" style="background:${col}"></span><div class="tl-time">${fmtHour(e.hour)}</div><div class="tl-meta"><b>${esc(DATA.locs[e.loc]||'—')}</b> · con ${esc(DATA.inst[e.inst]||'—')} · <span style="${stColor}">${st}</span></div></div>`;
     });
     return h+`</div></div>`;
   }
