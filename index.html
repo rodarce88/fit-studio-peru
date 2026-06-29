@@ -7768,7 +7768,13 @@ function renderTimeline() {
       else if (status === 'no_show') { statusBadge = makeBadge('✗', 'NO VINO', '#ef4444', 'white'); rowStyle = 'background: #fef2f2;'; }
       else if (status === 'pending') { statusBadge = makeBadge('?', 'PENDIENTE', '#a78bfa', 'white'); rowStyle = 'background: #f5f3ff;'; }
       else if (status === 'rescheduled') { statusBadge = makeBadge('↔', 'MOVIDA', '#8b5cf6', 'white'); rowStyle = 'background: #faf5ff;'; }
-      else if (isConfirmed) { statusBadge = makeBadge('✓', 'CONFIRMADA', '#dcfce7', 'var(--good)'); rowStyle = 'background: rgba(86, 161, 96, 0.05);'; }
+      else if (isConfirmed) {
+        const via = booking.confirmed_via;
+        if (via === 'student') { statusBadge = makeBadge('✓', 'CONFIRMÓ ELLA', '#dcfce7', 'var(--good)'); }
+        else if (via === 'coordinator') { statusBadge = makeBadge('✓', 'CONFIRMÓ COORD', '#EDE9FE', '#6D28D9'); }
+        else { statusBadge = makeBadge('✓', 'CONFIRMADA', '#dcfce7', 'var(--good)'); }
+        rowStyle = 'background: rgba(86, 161, 96, 0.05);';
+      }
       else if (noticeAbsent) { statusBadge = makeBadge('!', 'NO VENDRÁ', '#FBF2DE', '#A85B08') + (noticeLate ? makeBadge('◷', 'TARDE <4H', '#FBEAEA', '#C0392B') : ''); rowStyle = 'background: rgba(168,123,42,0.06);'; }
 
       const modalityIcon = getModalityIcon(s.modality);
@@ -8521,9 +8527,9 @@ function getCellStudents(locationId, date, hour) {
     const student = STATE.students.find(s => s.id === b.student_id);
     if (student) {
       if (isTrialStudent(student)) {
-        studentMap.set(b.student_id, { student, type: 'trial', label: 'Prueba', bookingId: null, confirmedAt: null, cancelReqAt: null });
+        studentMap.set(b.student_id, { student, type: 'trial', label: 'Prueba', bookingId: null, confirmedAt: null, cancelReqAt: null, confirmedVia: null });
       } else {
-        studentMap.set(b.student_id, { student, type: 'fixed', label: 'Fija', bookingId: null, confirmedAt: null, cancelReqAt: null });
+        studentMap.set(b.student_id, { student, type: 'fixed', label: 'Fija', bookingId: null, confirmedAt: null, cancelReqAt: null, confirmedVia: null });
       }
     }
   });
@@ -8544,12 +8550,13 @@ function getCellStudents(locationId, date, hour) {
       // Si ya estaba como fija y el booking concreto la confirma, mantener "Fija" como label
       // (excepto si es trial, en cuyo caso ya la pusimos como 'trial' arriba y no la pisamos).
       if (!existing || (b.source && b.source !== 'fixed') || studentIsTrial) {
-        studentMap.set(b.student_id, { student, type, label, bookingId: b.id, confirmedAt: b.confirmed_at || null, cancelReqAt: b.cancel_requested_at || null });
+        studentMap.set(b.student_id, { student, type, label, bookingId: b.id, confirmedAt: b.confirmed_at || null, cancelReqAt: b.cancel_requested_at || null, confirmedVia: b.confirmed_via || null });
       } else {
         // Existe como 'fixed' y este booking también es fixed → preservar bookingId y confirmedAt
         existing.bookingId = b.id;
         existing.confirmedAt = b.confirmed_at || null;
         existing.cancelReqAt = b.cancel_requested_at || null;
+        existing.confirmedVia = b.confirmed_via || null;
       }
     });
   }
@@ -8791,7 +8798,7 @@ function renderScheduleCellDrawer(locationId, dateIso, hour) {
 
   body += `<div style="padding: 6px 20px 14px;">`;
 
-  students.forEach(({ student, label, bookingId, confirmedAt, cancelReqAt, type }) => {
+  students.forEach(({ student, label, bookingId, confirmedAt, cancelReqAt, confirmedVia, type }) => {
     const initialsStr = initials(student);
     const labelBg = type === 'trial' ? 'background: #F0E6FF; color: #6B21A8;'
       : type === 'flexible' ? 'background: #fef3c7; color: #92400e;'
@@ -8805,10 +8812,11 @@ function renderScheduleCellDrawer(locationId, dateIso, hour) {
     const noticeLate = noticeAbsent && new Date(cancelReqAt).getTime() > _startMs - 4 * 3600 * 1000;
     const phoneClean = phone.replace(/[^0-9+]/g, '');
     const hasPhone = phoneClean.length > 5;
+    const confWho = confirmedVia === 'student' ? 'confirmó la alumna' : confirmedVia === 'coordinator' ? 'confirmó coordinación' : 'confirmada';
 
     const metaParts = [];
     if (phone) metaParts.push(escape(phone));
-    if (isConfirmed) metaParts.push(`confirmada ${_fmtAgoEs(confirmedAt)}`);
+    if (isConfirmed) metaParts.push(`${confWho} ${_fmtAgoEs(confirmedAt)}`);
     else if (noticeAbsent) metaParts.push(`avisó que no vendrá ${_fmtAgoEs(cancelReqAt)}`);
     else if (hasPhone) metaParts.push('sin confirmar');
     else metaParts.push('sin teléfono');
@@ -8821,6 +8829,7 @@ function renderScheduleCellDrawer(locationId, dateIso, hour) {
             ${escape(student.first_name)} ${escape(student.last_name || '')}
             <span style="font-size: 10px; padding: 2px 8px; border-radius: 999px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.4px; ${labelBg}">${label}</span>
             ${noticeAbsent ? `<span style="font-size: 10px; padding: 2px 8px; border-radius: 999px; font-weight: 700; background: #FBF2DE; color: #A85B08;">Avisó que no vendrá</span>${noticeLate ? `<span style="font-size: 10px; padding: 2px 7px; border-radius: 999px; font-weight: 700; background: #FBEAEA; color: #C0392B;">tarde · &lt;4h</span>` : ''}` : ''}
+            ${isConfirmed ? `<span style="font-size: 10px; padding: 2px 8px; border-radius: 999px; font-weight: 700; ${confirmedVia === 'student' ? 'background:#DCFCE7; color:#15803D;' : confirmedVia === 'coordinator' ? 'background:#EDE9FE; color:#6D28D9;' : 'background:#E5E7EB; color:#374151;'}">${confirmedVia === 'student' ? 'Confirmó ella' : confirmedVia === 'coordinator' ? 'Confirmó coord.' : 'Confirmada'}</span>` : ''}
           </div>
           <div style="font-size: 11px; color: var(--ink-mute); margin-top: 2px;">${metaParts.join(' · ')}</div>
         </div>
@@ -30175,7 +30184,7 @@ function ccRenderShell() {
     } else {
       cardBody = `<div class="cc-students">`;
       for (const sd of students) {
-        const { student, label, type, confirmedAt, cancelReqAt } = sd;
+        const { student, label, type, confirmedAt, cancelReqAt, confirmedVia } = sd;
         const isConfirmed = !!confirmedAt;
         const noticeAbsent = !!cancelReqAt && !isConfirmed;
         const _smAbs = new Date(dateIso + 'T' + String(hour).padStart(2, '0') + ':00:00').getTime();
@@ -30196,6 +30205,7 @@ function ccRenderShell() {
               <div class="cc-s-name">${escape(student.first_name || '')} ${escape(student.last_name || '')}</div>
               <div class="cc-s-meta">
                 <span class="cc-pill ${pillClass}">${label}</span>
+                ${isConfirmed ? `<span class="cc-pill" style="${confirmedVia === 'student' ? 'background:#DCFCE7;color:#15803D;' : confirmedVia === 'coordinator' ? 'background:#EDE9FE;color:#6D28D9;' : 'background:#E5E7EB;color:#374151;'}">${confirmedVia === 'student' ? 'Confirmó ella' : confirmedVia === 'coordinator' ? 'Confirmó coord.' : 'Confirmada'}</span>` : ''}
                 ${noticeAbsent ? `<span class="cc-pill" style="background:#FBF2DE; color:#A85B08;">Avisó que no vendrá</span>${noticeLate ? `<span class="cc-pill" style="background:#FBEAEA; color:#C0392B;">tarde &lt;4h</span>` : ''}` : ''}
                 <span style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${metaText}</span>
               </div>
