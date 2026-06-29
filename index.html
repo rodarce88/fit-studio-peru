@@ -476,8 +476,11 @@
   .layout-grid { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 24px; }
 
   /* DASH TOP — widgets (izquierda) + feed de actividad permanente (derecha) */
+  .dash-shell { display:flex; gap:24px; align-items:flex-start; margin-bottom:18px; }
+  .dash-col-right { width:360px; flex:none; display:flex; flex-direction:column; gap:18px; }
+  .dash-side-panels { min-width:0; }
   .dash-top-grid { display:grid; grid-template-columns: minmax(0,1fr) 344px; gap:24px; align-items:start; margin-bottom:18px; }
-  .dash-top-left { min-width:0; }
+  .dash-top-left { flex:1; min-width:0; }
   .dash-top-left > [id$="-widget"], .dash-top-left > .cobranza-widget { margin-bottom:16px; }
   .midia-sede-chips { display:flex; gap:8px; flex-wrap:wrap; }
   .midia-sede-chips .msc { border:1px solid var(--line); background:#fff; border-radius:999px; padding:8px 14px; font-weight:600; font-size:13px; color:var(--ink-mute); cursor:pointer; display:inline-flex; align-items:center; gap:7px; font-family:var(--body); transition:background .12s,color .12s,border-color .12s; }
@@ -546,7 +549,7 @@
   .actrail-body .actf-row.unseen { margin:0; padding-left:18px; padding-right:18px; background:#F6F2FE; }
   .actf-sede { display:inline-flex; align-items:center; gap:5px; font-weight:600; color:var(--ink-mute); text-transform:none; letter-spacing:0; margin-left:6px; }
   .actf-sede-dot { width:7px; height:7px; border-radius:50%; display:inline-block; flex:none; }
-  @media (max-width: 1100px) { .dash-top-grid { grid-template-columns:1fr; } .actrail { position:static; max-height:none; } }
+  @media (max-width: 1100px) { .dash-top-grid { grid-template-columns:1fr; } .dash-shell { flex-direction:column; } .dash-col-right { width:100%; } .actrail { position:static; max-height:none; } }
   .timeline-card, .panel, .table-card { background: white; border-radius: var(--radius-lg); border: 1px solid var(--line); overflow: hidden; box-shadow: var(--shadow-sm); }
   /* Cuando contiene el layout de Mi día: overflow visible (para que sticky funcione) + header y sidebar sticky */
   .timeline-card:has(.mi-dia-layout) { overflow: visible; }
@@ -868,7 +871,7 @@
     }
     body:not(.no-sidebar) .main { padding-bottom: 100px; }
     /* Ocultar paneles laterales del dashboard en mobile coord (Por re-agendar / Por cobrar / etc.) */
-    body:not(.no-sidebar) .layout-grid > div:nth-of-type(2) { display: none; }
+    body:not(.no-sidebar) .layout-grid > div:nth-of-type(2), body:not(.no-sidebar) .dash-side-panels { display: none; }
     /* Mi día sin sidebar de horas en mobile */
     body:not(.no-sidebar) .mi-dia-layout { grid-template-columns: 1fr; gap: 0; }
     body:not(.no-sidebar) .mi-dia-sidebar { display: none; }
@@ -3419,7 +3422,7 @@
       <div id="dash-student-search-results" style="display: none; position: absolute; top: calc(100% + 4px); left: 0; right: 0; background: white; border: 1px solid var(--line); border-radius: var(--radius-md); box-shadow: 0 8px 24px rgba(0,0,0,0.08); max-height: 380px; overflow-y: auto; z-index: 50;"></div>
     </div>
 
-    <div class="dash-top-grid" id="dash-top-grid">
+    <div class="dash-shell" id="dash-top-grid">
     <div class="dash-top-left">
     <div class="midia-toolbar">
       <div id="midia-sede-chips" class="midia-sede-chips"></div>
@@ -3533,31 +3536,14 @@
       </div>
     </div>
     <!-- FASE 5: Clases sin marcar — columna central, dentro de dash-top-left -->
-    <div id="midia-unmarked" style="background:#fff; border:1.5px solid var(--fit-purple-soft); border-radius:var(--radius-lg); padding:20px 24px;">
+    <div id="midia-unmarked" style="background:#fff; border:1.5px solid var(--fit-purple-soft); border-radius:var(--radius-lg); padding:20px 24px; margin-bottom:18px;">
       <div style="display:flex; align-items:center; gap:8px; margin-bottom:12px;">
         <span class="kpi-label" style="color:var(--fit-purple); flex:1;">Clases sin marcar</span>
         <span id="midia-unmarked-count" style="font-size:12px; font-weight:700; color:var(--ink-mute);"></span>
       </div>
       <div id="midia-unmarked-body"><div style="padding:14px 0; font-size:13px; color:var(--ink-mute);">Cargando…</div></div>
     </div>
-    </div><!-- /dash-top-left -->
-
-    <aside class="actrail" id="activity-rail">
-      <div class="actrail-head">
-        <div class="actrail-titlerow">
-          <div class="actrail-title"><em>Actividad</em></div>
-          <span class="actrail-live"><span class="dot"></span> En vivo</span>
-        </div>
-        <div class="actrail-chips" id="actrail-chips"></div>
-      </div>
-      <div class="actrail-body" id="actrail-body">
-        <div class="actrail-empty">Cargando…</div>
-      </div>
-      <div class="actrail-foot"><a href="#" onclick="showView('instructor-activity', null); if(typeof renderActivityFeedView==='function') renderActivityFeedView(); return false;">Ver todo el registro →</a></div>
-    </aside>
-    </div><!-- /dash-top-grid -->
-
-    <div class="layout-grid">
+    <!-- Clases de hoy: ahora en la columna izquierda, debajo de Sin marcar -->
       <div class="timeline-card">
         <div id="frozen-reminders-banner"></div>
         <div class="timeline-header">
@@ -3580,8 +3566,24 @@
           </div>
         </div>
       </div>
+    </div><!-- /dash-top-left (columna izquierda) -->
 
-      <div>
+    <div class="dash-col-right">
+      <aside class="actrail" id="activity-rail">
+        <div class="actrail-head">
+          <div class="actrail-titlerow">
+            <div class="actrail-title"><em>Actividad</em></div>
+            <span class="actrail-live"><span class="dot"></span> En vivo</span>
+          </div>
+          <div class="actrail-chips" id="actrail-chips"></div>
+        </div>
+        <div class="actrail-body" id="actrail-body">
+          <div class="actrail-empty">Cargando…</div>
+        </div>
+        <div class="actrail-foot"><a href="#" onclick="showView('instructor-activity', null); if(typeof renderActivityFeedView==='function') renderActivityFeedView(); return false;">Ver todo el registro →</a></div>
+      </aside>
+
+      <div class="dash-side-panels">
         <div class="panel">
           <div class="panel-header">
             <div class="panel-title"><em>Acciones</em> rápidas</div>
@@ -3644,8 +3646,9 @@
           </div>
           <div class="panel-body" id="incomplete-list"></div>
         </div>
-      </div>
-    </div>
+      </div><!-- /dash-side-panels -->
+    </div><!-- /dash-col-right -->
+    </div><!-- /dash-shell -->
   </section>
 
   <!-- STUDENTS -->
@@ -6835,34 +6838,42 @@ async function renderCobranzaWidget() {
   let totalMes = 0, cobrado = 0, alumnosPagaron = 0, alumnosPendientes = 0;
 
   if (studentIds.length > 0) {
-    const { data: packages = [], error: pErr } = await sb
-      .from('student_packages')
-      .select('id, student_id, price_paid, status, is_frozen, is_courtesy')
-      .in('student_id', studentIds)
-      .gte('purchase_date', monthStart.toISOString())
-      .lt('purchase_date', monthEnd.toISOString());
+    const chunk = (arr, n) => { const o = []; for (let i = 0; i < arr.length; i += n) o.push(arr.slice(i, i + n)); return o; };
+    const allPackages = [];
+    try {
+      for (const ids of chunk(studentIds, 150)) {
+        const { data, error } = await sb
+          .from('student_packages')
+          .select('id, student_id, price_paid, status, is_frozen, is_courtesy')
+          .in('student_id', ids)
+          .gte('purchase_date', monthStart.toISOString())
+          .lt('purchase_date', monthEnd.toISOString());
+        if (error) console.warn('renderCobranzaWidget packages:', error);
+        if (data) allPackages.push(...data);
+      }
+    } catch (e) { console.warn('renderCobranzaWidget packages ex:', e); }
 
-    if (pErr) console.warn('renderCobranzaWidget packages:', pErr);
-
-    // Excluir cortesías del cálculo: una clase regalada no es ingreso esperado,
-    // no aparece en "Por cobrar" ni cuenta para el ritmo del mes.
-    const pkgList = (packages || []).filter(p => !p.is_courtesy);
+    // Excluir cortesías del cálculo: una clase regalada no es ingreso esperado.
+    const pkgList = allPackages.filter(p => !p.is_courtesy);
     totalMes = pkgList.reduce((s, p) => s + (+p.price_paid || 0), 0);
     const pkgIds = pkgList.map(p => p.id);
 
     const paidByPkg = new Map();
     if (pkgIds.length > 0) {
-      const { data: payments = [], error: payErr } = await sb
-        .from('payments')
-        .select('amount_pen, discount_amount, student_package_id')
-        .in('student_package_id', pkgIds);
-      if (payErr) console.warn('renderCobranzaWidget payments:', payErr);
-
-      (payments || []).forEach(p => {
-        const amt = (+p.amount_pen || 0) + (+p.discount_amount || 0);
-        cobrado += amt;
-        paidByPkg.set(p.student_package_id, (paidByPkg.get(p.student_package_id) || 0) + amt);
-      });
+      try {
+        for (const ids of chunk(pkgIds, 150)) {
+          const { data: payments, error: payErr } = await sb
+            .from('payments')
+            .select('amount_pen, discount_amount, student_package_id')
+            .in('student_package_id', ids);
+          if (payErr) console.warn('renderCobranzaWidget payments:', payErr);
+          (payments || []).forEach(p => {
+            const amt = (+p.amount_pen || 0) + (+p.discount_amount || 0);
+            cobrado += amt;
+            paidByPkg.set(p.student_package_id, (paidByPkg.get(p.student_package_id) || 0) + amt);
+          });
+        }
+      } catch (e) { console.warn('renderCobranzaWidget payments ex:', e); }
     }
 
     // Alumnos pendientes: paquete ACTIVO (R6 wizard), no congelado, saldo > 0
