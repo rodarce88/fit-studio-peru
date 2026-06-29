@@ -17811,21 +17811,8 @@ async function renderInstructorDay() {
   renderInstructorDayStrip();
   renderInstructorPendingBanner(pending);
 
-  // Enriquecer cada alumno con info de su paquete activo (depende de classes, va después)
-  const studentIds = [...new Set(
-    classes.flatMap(c => c.students.map(s => s.student.id))
-  )];
-  if (studentIds.length > 0) {
-    const pkgMap = await loadActivePackagesForStudents(studentIds);
-    for (const c of classes) {
-      for (const s of c.students) {
-        s.packageInfo = pkgMap.get(s.student.id) || null;
-      }
-    }
-  }
-
-  // Tras el await de paquetes, revalidar que sigamos siendo la petición vigente.
-  if (reqSeq !== STATE.instReqSeq) return;
+  // packageInfo ya viene adjunto desde loadInstructorClassesForDate (enriquecido en
+  // la fuente), así la barra de "últimas clases" aparece en CUALQUIER camino de render.
 
   renderInstructorNextClassBlock(classes);
   renderInstructorClassesBlock(classes);
@@ -19361,6 +19348,23 @@ async function loadInstructorClassesForDate(inst, dateIso) {
 
   // Re-sort por hora
   result.sort((a, b) => a.hour - b.hour);
+
+  // Enriquecer cada alumno con su paquete activo (FIFO) EN LA FUENTE, para que la
+  // barra de "últimas clases" aparezca SIEMPRE, sin importar el camino de render
+  // (tap en día, filtros, ir a pendiente, toggle de pasadas, etc.).
+  try {
+    const _pkgIds = [...new Set(
+      result.flatMap(c => (c.students || []).map(s => s.student && s.student.id).filter(Boolean))
+    )];
+    if (_pkgIds.length > 0) {
+      const _pkgMap = await loadActivePackagesForStudents(_pkgIds);
+      for (const c of result) {
+        for (const s of (c.students || [])) {
+          if (s.student) s.packageInfo = _pkgMap.get(s.student.id) || null;
+        }
+      }
+    }
+  } catch (e) { console.warn('enrich packageInfo failed:', e); }
 
   return result;
 }
