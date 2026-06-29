@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>FIT Studio · Mi cuenta</title>
-<meta name="app-build" content="b10-2026-06-29">
+<meta name="app-build" content="b11-2026-06-29">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400..700;1,400..600&family=Mulish:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -34,6 +34,12 @@
   .btn{ width:100%; border:0; border-radius:16px; font-family:var(--body); font-size:calc(19px*var(--scale)); font-weight:700; padding:19px 20px; cursor:pointer; background:var(--purple); color:#fff; box-shadow:0 8px 20px rgba(91,42,143,.28); }
   .btn.confirmed{ background:#0E7A4F; box-shadow:0 8px 20px rgba(14,122,79,.26); }
   .btn:disabled{ opacity:.65; cursor:default; }
+  .sbox{ width:100%; border-radius:16px; padding:17px 18px; font-weight:700; font-size:calc(18px*var(--scale)); text-align:center; }
+  .sbox.ok{ background:#E8F5EF; color:#0E7A4F; }
+  .sbox.lost{ background:#FBEAEA; color:#B42318; }
+  .sbox.rec{ background:#FFF3E3; color:#A85B08; }
+  .sbox.repro{ background:#EAF0FB; color:#2B59B0; }
+  .sbox.neutral{ background:#F0EDF6; color:#5B2A8F; }
   .btn:active{ transform:scale(.985); }
 
   #v-app{ flex:1; min-height:0; display:flex; flex-direction:column; }
@@ -356,7 +362,22 @@
     view('v-app');
     goTab('clases', $('n-clases'));
     try{ if(sessionStorage.getItem('fit_updated')){ sessionStorage.removeItem('fit_updated'); toast('Actualizado a la última versión'); } }catch(e){}
+    subscribeStudentRealtime();
   }
+
+  // Tiempo real: si el estudio marca/cambia su asistencia o reserva, la app se actualiza sola
+  let _stuRtChannel = null, _stuRtTimer = null;
+  function subscribeStudentRealtime(){
+    if(_stuRtChannel || !sb || !DATA.me) return;
+    const sid = DATA.me.id;
+    try{
+      _stuRtChannel = sb.channel('rt-alumna-'+sid)
+        .on('postgres_changes', { event:'*', schema:'public', table:'attendance', filter:'student_id=eq.'+sid }, _stuRtRefresh)
+        .on('postgres_changes', { event:'*', schema:'public', table:'session_bookings', filter:'student_id=eq.'+sid }, _stuRtRefresh)
+        .subscribe();
+    }catch(e){}
+  }
+  function _stuRtRefresh(){ clearTimeout(_stuRtTimer); _stuRtTimer = setTimeout(()=>{ if(appReady) refresh(true); }, 700); }
 
   function skeletonHTML(){
     return `<div class="sk sk-line" style="width:42%"></div><div class="sk sk-lg"></div>`
@@ -385,6 +406,28 @@
     return sess.hour >= now.getHours();
   }
 
+  function classStartMs(s){ return new Date(`${s.session_date}T${String(s.hour).padStart(2,'0')}:00:00`).getTime(); }
+  const CL_BUFFER_MS = 2*60*60*1000;  // la clase sigue siendo "la actual" hasta 2h después de su hora
+  function currentCardEvent(attBySession){
+    const now = Date.now(); let best=null;
+    DATA.bookings.forEach(b=>{
+      if(b.cancelled_at) return;
+      const s = DATA.sessById[b.session_id]; if(!s || s.is_cancelled) return;
+      const start = classStartMs(s);
+      if(start + CL_BUFFER_MS <= now) return;   // ya pasó el buffer → deja de ser la actual
+      const att = attBySession[s.id] || null;
+      if(!best || start < best.start) best = { s, b, att, start };
+    });
+    return best;
+  }
+  function cardStatusBox(status){
+    if(status==='attended')    return {cls:'ok',    label:'Asististe',          note:'El estudio registró tu asistencia a esta clase.'};
+    if(status==='recoverable') return {cls:'rec',   label:'Falta recuperable',  note:'Esta clase quedó como recuperable. Coordina con tu coordinadora para recuperarla.'};
+    if(status==='rescheduled') return {cls:'repro', label:'Reprogramada',       note:'Esta clase se movió a otra fecha.'};
+    if(status==='lost'||status==='no_show') return {cls:'lost', label:'Falta registrada', note:'El estudio registró que no asististe a esta clase.'};
+    return {cls:'ok', label:'Registrada', note:''};
+  }
+
   const CL = { view:'lista', weekStart:null, mesY:null, mesM:null, sel:null };
   let CLE = { upcoming:[], events:[], next:null };
   function fmtHourClean(h){ const ap=h<12?'am':'pm'; let hh=h%12; if(hh===0)hh=12; return `${hh} ${ap}`; }
@@ -409,21 +452,31 @@
         <div class="empty">No tienes clases agendadas. Cuando el estudio te agende una, aparecerá aquí.</div>`;
       return;
     }
-    const next = CLE.next;
+    const cur = currentCardEvent(attBySession);
     let html = `<div id="cl-top"><div class="eyebrow">Mis clases</div><div class="accent"></div>`;
-    if(next){
-      html += `<div class="px-lab">Tu próxima clase</div>
-        <div class="next-day">${dayFull(next.date)}</div>
-        <div class="next-time">${fmtHour(next.hour)}</div>
+    if(cur){
+      const s=cur.s, started = cur.start <= Date.now();
+      html += `<div class="px-lab">${started ? 'Tu clase de hoy' : 'Tu próxima clase'}</div>
+        <div class="next-day">${dayFull(s.session_date)}</div>
+        <div class="next-time">${fmtHour(s.hour)}</div>
         <div class="next-rows">
-          <div class="r"><span class="lab">Profesor</span><span class="val">${esc(DATA.inst[next.inst]||'—')}</span></div>
-          <div class="r"><span class="lab">Sede</span><span class="val">${esc(DATA.locs[next.loc]||'—')}</span></div>
-        </div>
-        ${ next.conf
-          ? `<button class="btn confirmed" id="confbtn" onclick="confirmar('${next.bid}', true)">Asistencia confirmada</button>
+          <div class="r"><span class="lab">Profesor</span><span class="val">${esc(DATA.inst[s.instructor_id]||'—')}</span></div>
+          <div class="r"><span class="lab">Sede</span><span class="val">${esc(DATA.locs[s.location_id]||'—')}</span></div>
+        </div>`;
+      if(cur.att){
+        const sbx = cardStatusBox(cur.att.status);
+        html += `<div class="sbox ${sbx.cls}">${sbx.label}</div>${sbx.note?`<div class="micro">${sbx.note}</div>`:''}`;
+      } else if(!started){
+        html += (cur.b.confirmed_at
+          ? `<button class="btn confirmed" id="confbtn" onclick="confirmar('${cur.b.id}', true)">Asistencia confirmada</button>
              <div class="micro">¿No vas a poder venir? Toca el botón para quitar tu confirmación.</div>`
-          : `<button class="btn" id="confbtn" onclick="confirmar('${next.bid}', false)">Confirmar mi asistencia</button>
-             <div class="micro">Puedes confirmar tu asistencia hasta que empiece la clase.</div>` }`;
+          : `<button class="btn" id="confbtn" onclick="confirmar('${cur.b.id}', false)">Confirmar mi asistencia</button>
+             <div class="micro">Puedes confirmar tu asistencia hasta que empiece la clase.</div>`);
+      } else {
+        html += (cur.b.confirmed_at
+          ? `<div class="sbox ok">Asistencia confirmada</div><div class="micro">Tu clase está en curso. El estudio registrará tu asistencia al terminar.</div>`
+          : `<div class="sbox neutral">Clase en curso</div><div class="micro">Tu clase está en curso.</div>`);
+      }
     } else {
       html += `<div class="empty">No tienes una próxima clase agendada por ahora.</div>`;
     }

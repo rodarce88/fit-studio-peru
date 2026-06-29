@@ -6300,6 +6300,8 @@ function renderDashboard() {
   renderActiveStudents();
   // Feed de actividad permanente (3 sedes, en vivo)
   renderActivityRail();
+  // Tiempo real: confirmaciones/asistencias/reservas se reflejan solas
+  subscribeCoordRealtime();
 
   // Incomplete list
   const incompleteEl = document.getElementById('incomplete-list');
@@ -14551,6 +14553,37 @@ document.addEventListener('visibilitychange', () => {
     _smartRefreshOnFocus();
   }
 });
+
+// ============================================================
+// TIEMPO REAL (coordinadora): confirmaciones, asistencias y reservas
+// se reflejan solas, en silencio, sin recargar la página.
+// ============================================================
+let _coordRtChannel = null, _coordRtTimer = null;
+function subscribeCoordRealtime() {
+  if (_coordRtChannel || !sb || !CURRENT_USER) return;
+  const role = CURRENT_USER.role;
+  if (role !== 'coordinator' && role !== 'admin') return;
+  try {
+    _coordRtChannel = sb.channel('rt-coord-day')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'session_bookings' }, _coordLiveRefresh)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'attendance' }, _coordLiveRefresh)
+      .subscribe();
+  } catch (e) { console.warn('realtime coord', e); }
+}
+function _coordLiveRefresh() {
+  clearTimeout(_coordRtTimer);
+  _coordRtTimer = setTimeout(async () => {
+    if (!isOnline) return;
+    if (_hasOpenModal()) return;  // no interrumpir mientras edita; se verá al cerrar o al enfocar
+    const scrollY = window.scrollY;
+    try {
+      if (typeof loadDayData === 'function') await loadDayData();
+      if (STATE.scheduleWeekStart && typeof loadScheduleWeekData === 'function') await loadScheduleWeekData();
+      await _rerenderActiveView();
+    } catch (e) { console.warn('[coordLive] refresh', e); }
+    window.scrollTo(0, scrollY);
+  }, 700);
+}
 
 // Marcar timestamp después de loadAll exitoso (lo capturamos en el wrapper original)
 const _smartRefreshOrigLoadAll = typeof loadAll === 'function' ? loadAll : null;
