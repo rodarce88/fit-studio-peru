@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>FIT Studio · Mi cuenta</title>
-<meta name="app-build" content="b13-2026-06-29">
+<meta name="app-build" content="b14-2026-06-29">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400..700;1,400..600&family=Mulish:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -14,7 +14,7 @@
     --display:'Playfair Display',Georgia,serif; --body:'Mulish',system-ui,sans-serif; --scale:1; }
   html[data-size="lg"]{ --scale:1.16; }
   *{ box-sizing:border-box; margin:0; padding:0; -webkit-tap-highlight-color:transparent; }
-  html,body{ height:100%; }
+  html,body{ height:100%; overscroll-behavior:none; }
   body{ font-family:var(--body); background:var(--cream); color:var(--ink); display:flex; justify-content:center; font-size:calc(17px*var(--scale)); line-height:1.5; }
   .phone{ width:100%; max-width:430px; height:100vh; height:100dvh; overflow:hidden; position:relative; display:flex; flex-direction:column; background:var(--cream); }
   .hidden{ display:none !important; }
@@ -64,9 +64,9 @@
   .pill.aviso{ background:#FBF2DE; color:#A85B08; }
   .pill.rec{ background:#FFF3E3; color:#A85B08; } .pill.repro{ background:#EAF0FB; color:#2B59B0; } .pill.lost{ background:#FBEAEA; color:#B42318; }
   /* hoja (sheet) */
-  .sheet-ov{ position:fixed; inset:0; background:rgba(34,26,43,.45); display:flex; align-items:flex-end; justify-content:center; opacity:0; pointer-events:none; transition:opacity .2s; z-index:60; }
+  .sheet-ov{ position:fixed; inset:0; background:rgba(34,26,43,.45); display:flex; align-items:flex-end; justify-content:center; opacity:0; pointer-events:none; transition:opacity .2s; z-index:60; overscroll-behavior:contain; }
   .sheet-ov.show{ opacity:1; pointer-events:auto; }
-  .sheet-panel{ width:100%; max-width:460px; background:var(--cream); border-radius:26px 26px 0 0; padding:26px 22px calc(26px + env(safe-area-inset-bottom)); box-shadow:0 -10px 40px rgba(0,0,0,.2); transform:translateY(18px); transition:transform .22s; max-height:88vh; overflow-y:auto; }
+  .sheet-panel{ width:100%; max-width:460px; background:var(--cream); border-radius:26px 26px 0 0; padding:26px 22px calc(26px + env(safe-area-inset-bottom)); box-shadow:0 -10px 40px rgba(0,0,0,.2); transform:translateY(18px); transition:transform .22s; max-height:88vh; overflow-y:auto; overscroll-behavior:contain; -webkit-overflow-scrolling:touch; }
   .sheet-ov.show .sheet-panel{ transform:translateY(0); }
   .sh-h{ font-family:var(--display); font-weight:600; font-size:calc(24px*var(--scale)); line-height:1.15; }
   .sh-sub{ color:var(--ink-soft); font-size:calc(15px*var(--scale)); margin:6px 0 4px; }
@@ -97,7 +97,7 @@
   .size-toggle button.on{ background:var(--purple); color:#fff; }
   .size-toggle .a1{ font-size:15px; } .size-toggle .a2{ font-size:21px; }
 
-  .body{ flex:1; min-height:0; overflow-y:auto; -webkit-overflow-scrolling:touch; padding:22px 22px 30px; }
+  .body{ flex:1; min-height:0; overflow-y:auto; overscroll-behavior:contain; -webkit-overflow-scrolling:touch; padding:22px 22px 30px; }
   .tab{ display:none; } .tab.active{ display:block; }
   .eyebrow{ font-size:calc(13px*var(--scale)); font-weight:700; letter-spacing:1.5px; text-transform:uppercase; color:var(--purple); }
   .accent{ width:38px; height:4px; border-radius:3px; background:var(--gold); margin:9px 0 18px; }
@@ -151,6 +151,7 @@
   #app-body.cal{ overflow:hidden; display:flex; flex-direction:column; padding-bottom:14px; }
   #app-body.cal .tab.active{ flex:1; min-height:0; display:flex; flex-direction:column; }
   #app-body.cal #cl-top{ display:none; }
+  #app-body.cal .packbtn{ display:none; }
   #app-body.cal .seg{ flex:none; margin:2px 0 16px; }
   #app-body.cal #clases-view{ flex:1; min-height:0; display:flex; flex-direction:column; }
   #app-body.cal .cal-detail{ flex:1; min-height:0; overflow-y:auto; -webkit-overflow-scrolling:touch; margin-top:12px; padding-top:12px; }
@@ -791,9 +792,10 @@
     let ov=$('sheet');
     if(!ov){ ov=document.createElement('div'); ov.id='sheet'; ov.className='sheet-ov'; document.body.appendChild(ov); ov.addEventListener('click',e=>{ if(e.target===ov) closeSheet(); }); }
     ov.innerHTML=`<div class="sheet-panel">${inner}</div>`;
+    const ab=$('app-body'); if(ab) ab.style.overflow='hidden';
     requestAnimationFrame(()=>ov.classList.add('show'));
   }
-  window.closeSheet=()=>{ const ov=$('sheet'); if(ov) ov.classList.remove('show'); };
+  window.closeSheet=()=>{ const ov=$('sheet'); if(ov) ov.classList.remove('show'); const ab=$('app-body'); if(ab) ab.style.overflow=''; };
 
   window.openClassSheet=(bid)=>{
     const info=_bkInfo(bid); if(!info){ toast('No encontramos tu reserva'); return; }
