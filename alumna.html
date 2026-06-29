@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>FIT Studio · Mi cuenta</title>
-<meta name="app-build" content="b8-2026-06-29">
+<meta name="app-build" content="b9-2026-06-29">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400..700;1,400..600&family=Mulish:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -258,7 +258,7 @@
   async function checkUpdate(){
     const t = await fetchTag();
     if(!t) return false;
-    if(BUILT_TAG && t !== BUILT_TAG){ location.reload(); return true; }
+    if(BUILT_TAG && t !== BUILT_TAG){ try{ sessionStorage.setItem('fit_updated','1'); }catch(e){} location.reload(); return true; }
     if(!BUILT_TAG) BUILT_TAG = t;
     return false;
   }
@@ -353,6 +353,7 @@
     appReady = true;
     view('v-app');
     goTab('clases', $('n-clases'));
+    try{ if(sessionStorage.getItem('fit_updated')){ sessionStorage.removeItem('fit_updated'); toast('Actualizado a la última versión'); } }catch(e){}
   }
 
   function skeletonHTML(){
