@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>FIT Studio · Mi cuenta</title>
-<meta name="app-build" content="b16-2026-06-29">
+<meta name="app-build" content="b16-2026-06-30">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400..700;1,400..600&family=Mulish:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -195,60 +195,7 @@
   .nav button.on{ color:var(--purple); }
   .nav button svg{ width:28px; height:28px; }
   .nav button span{ font-size:calc(13px*var(--scale)); font-weight:600; }
-  /* ===== Pantalla de perfil ===== */
-  #v-profile{ position:absolute; inset:0; z-index:50; background:var(--cream); display:flex; flex-direction:column; }
-  #v-profile.hidden{ display:none !important; }
-  .pf-top{ flex:none; background:rgba(251,248,242,.96); backdrop-filter:blur(8px); padding:16px 18px 13px; display:flex; align-items:center; gap:12px; border-bottom:1px solid var(--line); }
-  .pf-back{ width:40px; height:40px; border:2px solid var(--line-strong); border-radius:12px; background:#fff; color:var(--ink-soft); display:flex; align-items:center; justify-content:center; cursor:pointer; -webkit-appearance:none; }
-  .pf-back svg{ width:22px; height:22px; }
-  .pf-ttl{ font-family:var(--display); font-weight:600; font-size:calc(20px*var(--scale)); }
-  .pf-body{ flex:1; min-height:0; overflow-y:auto; overscroll-behavior:contain; -webkit-overflow-scrolling:touch; padding:24px 22px 40px; }
-  .pf-hero{ display:flex; flex-direction:column; align-items:center; text-align:center; }
-  .pf-ava{ width:calc(90px*var(--scale)); height:calc(90px*var(--scale)); border-radius:50%; background:var(--purple-soft); color:var(--purple-deep); display:flex; align-items:center; justify-content:center; font-weight:700; font-size:calc(32px*var(--scale)); }
-  .pf-name{ font-family:var(--display); font-weight:600; font-size:calc(25px*var(--scale)); margin-top:14px; line-height:1.15; }
-  .pf-phone{ font-size:calc(17px*var(--scale)); color:var(--ink-soft); margin-top:4px; }
-  .pf-consent{ margin-top:26px; border-radius:16px; padding:17px 18px; }
-  .pf-consent.pend{ background:#FBF2DE; border:1px solid #ecd9a8; }
-  .pf-consent.done{ background:#E8F5EF; border:1px solid #BFE6D5; }
-  .pf-consent .cc-head{ display:flex; align-items:center; gap:11px; }
-  .pf-consent .cc-ico{ width:26px; height:26px; flex:none; }
-  .pf-consent.pend .cc-ico{ color:#A85B08; } .pf-consent.done .cc-ico{ color:#0E7A4F; }
-  .pf-consent .cc-t{ font-weight:700; font-size:calc(16px*var(--scale)); }
-  .pf-consent .cc-s{ font-size:calc(13.5px*var(--scale)); margin-top:1px; }
-  .pf-consent.pend .cc-t{ color:#7a5a16; } .pf-consent.pend .cc-s{ color:#A85B08; }
-  .pf-consent.done .cc-t{ color:#0E7A4F; } .pf-consent.done .cc-s{ color:#3E8C70; }
-  .pf-sec-h{ font-family:var(--display); font-weight:600; font-size:calc(20px*var(--scale)); }
-  .pf-sec-s{ font-size:calc(13px*var(--scale)); color:var(--ink-mute); margin:4px 0 14px; }
-  .pf-more-head{ width:100%; margin-top:26px; border:0; background:transparent; display:flex; align-items:center; justify-content:space-between; padding:6px 0; cursor:pointer; font-family:var(--body); -webkit-appearance:none; }
-  .pf-more-head .chev{ width:24px; height:24px; color:var(--ink-mute); transition:transform .2s; }
-  .pf-more-head.open .chev{ transform:rotate(180deg); }
-  .pf-more-body.collapsed{ display:none; }
-  .pf-field{ margin-top:14px; }
-  .pf-field:first-child{ margin-top:0; }
-  .pf-lab{ font-size:calc(13px*var(--scale)); font-weight:700; color:var(--ink-mute); margin-bottom:5px; }
-  .pf-in, .pf-sel{ width:100%; box-sizing:border-box; border:1.5px solid var(--line-strong); border-radius:12px; padding:13px 14px; font-size:calc(16px*var(--scale)); font-family:var(--body); background:#fff; color:var(--ink); -webkit-appearance:none; }
-  .pf-in:focus, .pf-sel:focus{ outline:none; border-color:var(--purple); }
-  .pf-row2{ display:flex; gap:10px; }
-  .pf-phone-wrap{ display:flex; gap:8px; }
-  .pf-cc{ flex:none; width:42%; max-width:170px; }
-  .pf-chips{ display:flex; flex-wrap:wrap; gap:8px; }
-  .pf-chip{ background:#FBF2DE; color:#7a5a16; border-radius:10px; padding:7px 12px; font-size:calc(14px*var(--scale)); font-weight:600; }
-  .pf-chip.info{ background:#EAF0FB; color:#2B59B0; }
-  .pf-free{ margin-top:12px; font-size:calc(14.5px*var(--scale)); color:var(--ink-soft); font-style:italic; line-height:1.5; }
-  /* consentimiento dentro de la hoja */
-  .consent-doc{ font-size:calc(15px*var(--scale)); line-height:1.62; color:var(--ink-soft); }
-  .consent-doc h2{ font-family:var(--display); font-weight:600; font-size:calc(18px*var(--scale)); color:var(--ink); margin:18px 0 6px; }
-  .consent-doc h3{ font-size:calc(15px*var(--scale)); font-weight:700; color:var(--ink); margin:12px 0 4px; }
-  .consent-doc p{ margin:0 0 10px; }
-  .consent-doc ul{ margin:0 0 10px; padding-left:20px; }
-  .consent-doc li{ margin:0 0 6px; }
-  .consent-doc strong{ color:var(--ink); font-weight:700; }
-  .ck-accept{ display:flex; align-items:flex-start; gap:12px; margin-top:14px; padding:14px 15px; background:#fff; border:1.5px solid var(--line-strong); border-radius:14px; cursor:pointer; }
-  .ck-accept.on{ border-color:var(--purple); background:var(--purple-pale); }
-  .ck-accept .box{ width:28px; height:28px; flex:none; border-radius:8px; border:2px solid var(--line-strong); display:flex; align-items:center; justify-content:center; font-weight:800; font-size:18px; color:#fff; }
-  .ck-accept.on .box{ background:var(--purple); border-color:var(--purple); }
-  .ck-accept .tx{ flex:1; font-size:calc(14.5px*var(--scale)); line-height:1.45; color:var(--ink); }
-
+  .toast{ position:fixed; left:50%; bottom:110px; transform:translateX(-50%); background:#211C29; color:#fff; padding:12px 18px; border-radius:999px; font-size:14px; font-weight:600; opacity:0; transition:opacity .25s; z-index:30; pointer-events:none; }
   .toast.show{ opacity:.95; }
 </style>
 </head>
@@ -284,7 +231,7 @@
 
   <div class="hidden" id="v-app">
     <div class="topbar">
-      <div class="who" id="t-who" onclick="openProfile()" role="button" tabindex="0" title="Ver mi perfil" style="cursor:pointer;">
+      <div class="who">
         <div class="avatar" id="t-avatar">··</div>
         <div style="min-width:0;"><div class="hi" id="t-greet">Bienvenida</div><div class="nm" id="t-name">—</div></div>
       </div>
@@ -312,16 +259,6 @@
         <span>Mi paquete</span>
       </button>
     </nav>
-  </div>
-
-  <div class="hidden" id="v-profile">
-    <div class="pf-top">
-      <button class="pf-back" onclick="closeProfile()" title="Volver" aria-label="Volver">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
-      </button>
-      <div class="pf-ttl">Mi perfil</div>
-    </div>
-    <div class="pf-body" id="pf-body"></div>
   </div>
 
   <div class="toast" id="toast"></div>
@@ -380,29 +317,58 @@
   async function boot(){
     checkUpdate();
     const token = new URLSearchParams(location.search).get('t');
-    const { data:{ session } } = await sb.auth.getSession();
-    if (session) return afterAuth();
+
     if (token){
+      // El link con token SIEMPRE manda: identifica de quién es la cuenta. En un teléfono
+      // compartido (varias alumnas en el mismo celular) esto evita quedarse con la sesión
+      // de otra alumna e impide mostrar la cuenta equivocada.
       $('loading-msg').textContent='Validando tu acceso…';
+
+      // Sesión previa que pudiera estar guardada en este teléfono (de otra alumna).
+      let prev = null;
+      try{ const r = await sb.auth.getSession(); prev = r.data.session; }catch(e){}
+
       let j;
       try{
         const r = await fetch('/api/alumna-auth',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token})});
         j = await r.json();
-      }catch(e){ return showError('No pudimos conectar','Revisa tu internet e intenta de nuevo.'); }
-      if(!j||!j.ok) return showError('Acceso no válido','Pídele al estudio que te reenvíe tu link por WhatsApp.');
+      }catch(e){
+        // Falla de red: no tocamos la sesión; que reintente tocando el link de nuevo.
+        return showError('No pudimos conectar','Revisa tu internet e intenta de nuevo.');
+      }
+      if(!j||!j.ok){
+        // Token inválido: por seguridad, no dejamos abierta una cuenta que podría no ser la del link.
+        if(prev){ try{ await sb.auth.signOut(); }catch(e){} }
+        return showError('Acceso no válido','Pídele al estudio que te reenvíe tu link por WhatsApp.');
+      }
+
+      // Si ya hay sesión guardada y es de LA MISMA cuenta del link, la reusamos (entra directo).
+      const sameUser = prev && prev.user && j.email &&
+        String(prev.user.email||'').toLowerCase() === String(j.email).toLowerCase();
+      if(sameUser){
+        history.replaceState({},'',location.pathname);
+        return afterAuth();
+      }
+
+      // Es otra alumna (teléfono compartido) o no había sesión: cerramos la previa y entramos con el link.
+      if(prev){ try{ await sb.auth.signOut(); }catch(e){} }
       let vr = await sb.auth.verifyOtp({ token_hash:j.token_hash, type:'email' });
       if(vr.error) vr = await sb.auth.verifyOtp({ email:j.email, token:j.email_otp, type:'magiclink' });
       if(vr.error) return showError('No pudimos iniciar tu sesión', vr.error.message);
       history.replaceState({},'',location.pathname);
       return afterAuth();
     }
+
+    // Sin token en la URL (por ejemplo, abierta desde el ícono guardado): usar la sesión persistida.
+    const { data:{ session } } = await sb.auth.getSession();
+    if (session) return afterAuth();
     showError('Bienvenida','Abre el link que te enviamos por WhatsApp para entrar a tu cuenta.');
   }
 
   async function afterAuth(){
     view('v-loading'); $('loading-msg').textContent='Cargando tu cuenta…';
     const { data: me, error } = await sb.from('students')
-      .select('id, first_name, last_name, phone, email, gender, app_welcomed_at, document_type, document_number, birth_date, emergency_contact_name, emergency_contact_phone, consent_signed, consent_signed_at, image_consent, health_tags, medical_notes').limit(1).maybeSingle();
+      .select('id, first_name, last_name, phone, email, gender, app_welcomed_at').limit(1).maybeSingle();
     if(error||!me) return showError('No pudimos cargar tu cuenta', error?.message||'Intenta de nuevo.');
     DATA.me = me;
     if(!me.app_welcomed_at) return showWelcome(me);
@@ -961,195 +927,6 @@
 
   window.addEventListener('resize', ()=>{ if(CL.view==='mes') fitMonth(); });
   setInterval(()=>{ if(document.visibilityState==='visible' && appReady) checkUpdate(); }, 25000);
-
-  // ======= Perfil de la alumna =======
-  const COUNTRIES = [
-    {d:'+51', n:'Perú'},{d:'+54', n:'Argentina'},{d:'+591', n:'Bolivia'},{d:'+55', n:'Brasil'},
-    {d:'+56', n:'Chile'},{d:'+57', n:'Colombia'},{d:'+593', n:'Ecuador'},{d:'+34', n:'España'},
-    {d:'+1', n:'EE. UU. / Canadá'},{d:'+52', n:'México'},{d:'+595', n:'Paraguay'},{d:'+598', n:'Uruguay'},{d:'+58', n:'Venezuela'}
-  ];
-  function splitPhone(raw){
-    raw=(raw||'').trim();
-    if(raw.startsWith('+')){
-      const dials=COUNTRIES.map(c=>c.d).sort((a,b)=>b.length-a.length);
-      for(const d of dials){ if(raw.startsWith(d)) return { dial:d, number: raw.slice(d.length).trim() }; }
-      return { dial:'+51', number: raw };
-    }
-    return { dial:'+51', number: raw };
-  }
-  function joinPhone(dial, number){ number=(number||'').trim(); return number ? (dial+' '+number) : ''; }
-  function ccOptions(sel){ return COUNTRIES.map(c=>`<option value="${c.d}" ${c.d===sel?'selected':''}>${esc(c.n)} ${c.d}</option>`).join(''); }
-
-  const HEALTH_LABELS = { lumbalgia:'Lumbalgia', cervicalgia:'Cervicalgia', hernia_discal:'Hernia discal', escoliosis:'Escoliosis',
-    dolor_rodilla:'Dolor de rodilla', menisco:'Lesión de menisco', artrosis_rodilla:'Artrosis de rodilla',
-    dolor_hombro:'Dolor de hombro', manguito_rotador:'Manguito rotador', tunel_carpiano:'Túnel carpiano',
-    dolor_cadera:'Dolor de cadera', inestabilidad_pelvica:'Inestabilidad pélvica',
-    lesion_tobillo:'Lesión de tobillo', fascitis_plantar:'Fascitis plantar',
-    embarazo:'Embarazo', postparto:'Postparto', diastasis:'Diástasis abdominal', osteoporosis:'Osteoporosis',
-    hipertension:'Hipertensión', vertigo:'Vértigo', cirugia_reciente:'Cirugía reciente', lesion_reciente:'Lesión reciente' };
-  const HEALTH_DETAIL = { embarazo:'weeks', postparto:'months', diastasis:'grade', cirugia_reciente:'what_when', lesion_reciente:'what_when' };
-
-  const CONSENT_VERSION = 'v1.0';
-  const CONSENT_HTML = `
-    <h2>1. Sobre la actividad</h2>
-    <p>El Pilates Reformer es un sistema de ejercicio físico de bajo impacto que mejora la fuerza, flexibilidad, postura y bienestar general. La práctica se realiza en máquinas reformer bajo la guía de un instructor certificado.</p>
-    <h3>Beneficios</h3>
-    <ul><li>Mejora de la fuerza muscular y resistencia</li><li>Aumento de la flexibilidad y rango de movimiento</li><li>Corrección postural</li><li>Reducción del estrés</li><li>Mejora del bienestar físico y mental general</li></ul>
-    <h3>Riesgos potenciales</h3>
-    <p>Como toda actividad física, el Pilates Reformer puede implicar riesgos de lesión muscular, articular o cardiovascular. Estos riesgos se minimizan considerablemente cuando el alumno informa con honestidad su estado de salud, sigue las indicaciones del instructor y respeta sus propias limitaciones físicas.</p>
-    <h2>2. Mis responsabilidades como alumno</h2>
-    <p>Al firmar este consentimiento, me comprometo a:</p>
-    <ul><li>Informar antes de iniciar cualquier condición médica preexistente, lesión, embarazo, cirugía reciente o cualquier otra condición que pueda afectar mi práctica.</li><li>Comunicar al instructor cualquier dolor, molestia, mareo o malestar que sienta durante la clase.</li><li>Seguir las indicaciones del instructor en todo momento.</li><li>No realizar ejercicios que sienta que están fuera de mi capacidad.</li><li>Mantener actualizada mi información médica si hay cambios relevantes en mi salud.</li><li>Cuidar el equipamiento y reportar cualquier desperfecto.</li></ul>
-    <h2>3. Política de cancelación y recuperación</h2>
-    <ul><li><strong>Cancelación con más de 4 horas de anticipación:</strong> la clase queda como recuperable dentro del periodo de validez del paquete.</li><li><strong>Cancelación con menos de 4 horas o ausencia sin aviso:</strong> la clase se considera tomada y se descuenta del paquete.</li><li><strong>Validez de paquetes:</strong> 30 días desde la fecha de compra.</li><li><strong>Congelación de paquete:</strong> en casos de lesión o viaje, previa coordinación con el estudio.</li></ul>
-    <h2>4. Datos personales y privacidad</h2>
-    <p>De acuerdo con la Ley N° 29733 de Protección de Datos Personales del Perú, autorizo a FIT Studio Peru a recolectar y tratar mis datos personales para gestión de mi reserva y paquete, comunicaciones del estudio, atención de emergencias médicas y análisis estadísticos internos.</p>
-    <p>Mis datos serán almacenados de forma segura y no serán compartidos con terceros sin mi autorización expresa, salvo cuando lo requiera la ley. Tengo derecho a acceder, rectificar, eliminar o revocar este consentimiento en cualquier momento.</p>
-    <h2>5. Declaración de salud</h2>
-    <ul><li>He leído y comprendido completamente este documento.</li><li>La información que he proporcionado sobre mi estado de salud es veraz y completa.</li><li>Soy mayor de edad o cuento con autorización de mi padre, madre o tutor legal.</li><li>Participo en la actividad de manera libre y voluntaria, asumiendo los riesgos inherentes a la práctica del Pilates Reformer.</li><li>Entiendo que FIT Studio Peru, sus instructores y personal toman las medidas razonables para mi seguridad, pero no son responsables de lesiones derivadas de información médica omitida o de la inobservancia de las indicaciones del instructor.</li></ul>`;
-
-  function fmtSignedDate(iso){ try{ const d=new Date(iso); return `${d.getDate()} de ${MESES[d.getMonth()]} de ${d.getFullYear()}`; }catch(e){ return ''; } }
-
-  window.openProfile=()=>{ if(!appReady) return; renderProfile(); $('v-profile').classList.remove('hidden'); $('pf-body').scrollTop=0; };
-  window.closeProfile=()=>{ $('v-profile').classList.add('hidden'); };
-
-  function renderProfile(){
-    const me=DATA.me||{}; const box=$('pf-body'); if(!box) return;
-    const ini=((me.first_name?.[0]||'')+(me.last_name?.[0]||'')).toUpperCase()||'··';
-    const ph=splitPhone(me.phone), eph=splitPhone(me.emergency_contact_phone);
-    const signed = me.consent_signed || !!me.consent_signed_at;
-
-    let consentCard;
-    if(signed){
-      const f=me.consent_signed_at?fmtSignedDate(me.consent_signed_at):'';
-      consentCard=`<div class="pf-consent done"><div class="cc-head">
-        <svg class="cc-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="9"/><path d="m8.5 12 2.5 2.5 4.5-5"/></svg>
-        <div><div class="cc-t">Consentimiento firmado</div><div class="cc-s">${f?'Firmado el '+f:'Firmado'}. Gracias.</div></div></div></div>`;
-    } else {
-      consentCard=`<div class="pf-consent pend"><div class="cc-head">
-        <svg class="cc-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
-        <div><div class="cc-t">Consentimiento pendiente</div><div class="cc-s">Aún no firmas tu consentimiento</div></div></div>
-        <button class="btn" style="margin-top:14px" onclick="openConsentSheet()">Firmar consentimiento</button></div>`;
-    }
-
-    // molestias (solo lectura)
-    const ht=me.health_tags||{}; const tags=Array.isArray(ht.tags)?ht.tags:[]; const det=ht.details||{};
-    const chips=tags.map(tid=>{ const lab=HEALTH_LABELS[tid]; if(!lab) return ''; let extra='';
-      const dd=det[tid], dt=HEALTH_DETAIL[tid];
-      if(dd){ if(dt==='weeks'&&dd.weeks) extra=` · ${dd.weeks} sem`; else if(dt==='months'&&dd.months) extra=` · ${dd.months} mes`;
-        else if(dt==='grade'&&dd.grade) extra=` · grado ${dd.grade}`; else if(dt==='what_when'){ const p=[]; if(dd.what)p.push(dd.what); if(dd.date)p.push(dd.date); if(p.length)extra=` · ${p.join(', ')}`; } }
-      const info=['embarazo','postparto'].includes(tid);
-      return `<span class="pf-chip ${info?'info':''}">${esc(lab)}${esc(extra)}</span>`;
-    }).filter(Boolean).join('');
-    const free=(me.medical_notes||'').trim();
-    const molBody = (chips||free)
-      ? `${chips?`<div class="pf-chips">${chips}</div>`:''}${free?`<div class="pf-free">"${esc(free)}"</div>`:''}`
-      : `<div class="empty">No tienes molestias registradas. Si tienes alguna, avísale al estudio para que la anote.</div>`;
-
-    box.innerHTML = `
-      <div class="pf-hero">
-        <div class="pf-ava">${ini}</div>
-        <div class="pf-name">${esc(me.first_name||'')} ${esc(me.last_name||'')}</div>
-        <div class="pf-phone">${esc(me.phone||'Sin teléfono')}</div>
-      </div>
-      ${consentCard}
-      <button class="pf-more-head" id="pf-more-head" onclick="toggleMore()">
-        <span class="pf-sec-h">Más datos</span>
-        <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
-      </button>
-      <div class="pf-more-body collapsed" id="pf-more-body">
-        <div class="pf-field"><div class="pf-lab">Correo</div><input class="pf-in" id="prof-email" type="email" value="${esc(me.email||'')}" placeholder="tucorreo@ejemplo.com"></div>
-        <div class="pf-field"><div class="pf-lab">Teléfono</div><div class="pf-phone-wrap"><select class="pf-sel pf-cc" id="prof-phone-cc">${ccOptions(ph.dial)}</select><input class="pf-in" id="prof-phone" inputmode="tel" value="${esc(ph.number)}" placeholder="999 888 777"></div></div>
-        <div class="pf-field"><div class="pf-lab">Género</div><select class="pf-sel" id="prof-gender">
-          <option value="" ${!me.gender?'selected':''}>Selecciona</option>
-          <option value="F" ${me.gender==='F'?'selected':''}>Femenino</option>
-          <option value="M" ${me.gender==='M'?'selected':''}>Masculino</option></select></div>
-        <div class="pf-field"><div class="pf-row2">
-          <div style="flex:1"><div class="pf-lab">Documento</div><select class="pf-sel" id="prof-doctype">
-            <option value="" ${!me.document_type?'selected':''}>—</option>
-            <option value="DNI" ${me.document_type==='DNI'?'selected':''}>DNI</option>
-            <option value="CE" ${me.document_type==='CE'?'selected':''}>C. Extranjería</option>
-            <option value="PASSPORT" ${me.document_type==='PASSPORT'?'selected':''}>Pasaporte</option></select></div>
-          <div style="flex:1.2"><div class="pf-lab">Número</div><input class="pf-in" id="prof-docnum" inputmode="numeric" value="${esc(me.document_number||'')}" placeholder="Número"></div>
-        </div></div>
-        <div class="pf-field"><div class="pf-lab">Fecha de nacimiento</div><input class="pf-in" id="prof-birth" type="date" value="${esc(me.birth_date||'')}"></div>
-        <div class="pf-field"><div class="pf-lab">Contacto de emergencia</div><input class="pf-in" id="prof-emname" value="${esc(me.emergency_contact_name||'')}" placeholder="Nombre y parentesco"></div>
-        <div class="pf-field"><div class="pf-lab">Número de emergencia</div><div class="pf-phone-wrap"><select class="pf-sel pf-cc" id="prof-emphone-cc">${ccOptions(eph.dial)}</select><input class="pf-in" id="prof-emphone" inputmode="tel" value="${esc(eph.number)}" placeholder="998 111 222"></div></div>
-        <button class="btn" id="prof-save" style="margin-top:18px" onclick="saveProfile()">Guardar mis datos</button>
-      </div>
-      <div class="divider"></div>
-      <div class="pf-sec-h">Mis molestias</div>
-      <div class="pf-sec-s">Lo que el estudio tiene registrado. Solo lectura.</div>
-      ${molBody}`;
-  }
-
-  window.toggleMore=()=>{ const b=$('pf-more-body'), h=$('pf-more-head'); if(!b) return; b.classList.toggle('collapsed'); h.classList.toggle('open'); };
-
-  window.saveProfile=async ()=>{
-    const btn=$('prof-save'); if(btn){ btn.disabled=true; btn.textContent='Guardando…'; }
-    const g=$('prof-gender').value, dt=$('prof-doctype').value, birth=$('prof-birth').value;
-    const payload={
-      p_email: $('prof-email').value.trim() || null,
-      p_phone: joinPhone($('prof-phone-cc').value, $('prof-phone').value) || null,
-      p_gender: g || null,
-      p_document_type: dt || null,
-      p_document_number: $('prof-docnum').value.trim() || null,
-      p_birth_date: birth || null,
-      p_emergency_contact_name: $('prof-emname').value.trim() || null,
-      p_emergency_contact_phone: joinPhone($('prof-emphone-cc').value, $('prof-emphone').value) || null
-    };
-    try{
-      const { error } = await sb.rpc('student_update_profile', payload);
-      if(error) throw error;
-      Object.assign(DATA.me, { email:payload.p_email, phone:payload.p_phone, gender:payload.p_gender,
-        document_type:payload.p_document_type, document_number:payload.p_document_number, birth_date:payload.p_birth_date,
-        emergency_contact_name:payload.p_emergency_contact_name, emergency_contact_phone:payload.p_emergency_contact_phone });
-      renderProfile(); toast('Datos guardados');
-    }catch(e){
-      if(btn){ btn.disabled=false; btn.textContent='Guardar mis datos'; }
-      toast('No se pudo guardar. Revisa tus datos e intenta de nuevo.');
-    }
-  };
-
-  // ======= Hoja del consentimiento =======
-  let CONSENT_SEL = { accept:false, image:false };
-  window.openConsentSheet=()=>{
-    CONSENT_SEL = { accept:false, image:false };
-    openSheet(`<div class="sh-h">Consentimiento informado</div>
-      <div class="sh-sub">Léelo hasta el final y acéptalo para poder firmar.</div>
-      <div class="consent-doc" id="consent-doc">${CONSENT_HTML}</div>
-      <div class="ck-accept" id="ck-accept" onclick="ckToggle('accept')"><span class="box">${CONSENT_SEL.accept?'✓':''}</span><span class="tx">He leído y acepto el consentimiento informado de FIT Studio Peru. Esta aceptación constituye mi firma electrónica conforme a la Ley N° 27269.</span></div>
-      <div class="ck-accept" id="ck-image" onclick="ckToggle('image')"><span class="box">${CONSENT_SEL.image?'✓':''}</span><span class="tx">Autorizo el uso de mi imagen en redes sociales y material promocional del estudio. (Opcional, puedes cambiarlo cuando quieras.)</span></div>
-      <button class="btn" id="sign-btn" style="margin-top:16px" disabled onclick="signConsent()">Firmar consentimiento</button>
-      <button class="linkbtn" onclick="closeSheet()">Ahora no</button>`);
-  };
-  window.ckToggle=(which)=>{
-    CONSENT_SEL[which]=!CONSENT_SEL[which];
-    const el=$(which==='accept'?'ck-accept':'ck-image');
-    el.classList.toggle('on', CONSENT_SEL[which]);
-    el.querySelector('.box').textContent = CONSENT_SEL[which] ? '✓' : '';
-    const btn=$('sign-btn'); if(btn) btn.disabled = !CONSENT_SEL.accept;
-  };
-  window.signConsent=async ()=>{
-    if(!CONSENT_SEL.accept){ toast('Marca que aceptas para poder firmar'); return; }
-    const btn=$('sign-btn'); if(btn){ btn.disabled=true; btn.textContent='Firmando…'; }
-    const fullText=($('consent-doc')?.innerText||'').trim();
-    try{
-      const { data, error } = await sb.rpc('student_sign_consent', {
-        p_full_consent_text: fullText, p_consent_version: CONSENT_VERSION,
-        p_user_agent: navigator.userAgent, p_image_consent: !!CONSENT_SEL.image
-      });
-      if(error) throw error;
-      const row=Array.isArray(data)?data[0]:data;
-      DATA.me.consent_signed=true;
-      DATA.me.consent_signed_at = row?.consent_signed_at || new Date().toISOString();
-      DATA.me.image_consent = !!CONSENT_SEL.image;
-      closeSheet(); renderProfile(); toast('Consentimiento firmado');
-    }catch(e){
-      if(btn){ btn.disabled=false; btn.textContent='Firmar consentimiento'; }
-      toast('No se pudo firmar. Intenta de nuevo.');
-    }
-  };
 
   boot();
 </script>
