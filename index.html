@@ -734,16 +734,28 @@
   .plt-legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 11.5px; color: var(--ink-mute); padding: 0 4px 12px; }
   .plt-legend span { display: inline-flex; align-items: center; gap: 6px; }
   .plt-legend i { width: 11px; height: 11px; border-radius: 3px; display: inline-block; }
+  .plt-sticky { position: sticky; top: var(--topbar-h); z-index: 7; background: var(--bg); padding-top: 6px; }
+  .plt-search { position: relative; }
+  .plt-search-input { width: 230px; font-size: 13px; padding: 8px 12px 8px 32px; border: 1px solid var(--line); border-radius: var(--radius-pill); background: #fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='15' height='15' viewBox='0 0 24 24' fill='none' stroke='%236B6473' stroke-width='2' stroke-linecap='round'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='M21 21l-4.3-4.3'/%3E%3C/svg%3E") no-repeat 11px center; color: var(--ink); outline: none; }
+  .plt-search-input:focus { border-color: var(--fit-purple); }
+  .plt-search-results { position: absolute; top: calc(100% + 5px); right: 0; width: 280px; max-height: 320px; overflow-y: auto; background: #fff; border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 12px 32px rgba(0,0,0,0.14); z-index: 30; padding: 5px; display: none; }
+  .plt-search-results.show { display: block; }
+  .plt-sr-item { display: flex; align-items: center; gap: 9px; padding: 8px 10px; border-radius: 8px; cursor: pointer; }
+  .plt-sr-item:hover, .plt-sr-item.active { background: var(--fit-lavender-pale); }
+  .plt-sr-av { width: 26px; height: 26px; border-radius: 50%; background: var(--fit-lavender-pale); color: var(--fit-purple); font-size: 10px; font-weight: 600; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .plt-sr-nm { font-size: 13px; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .plt-sr-sub { font-size: 11px; color: var(--ink-mute); }
+  .plt-sr-empty { padding: 12px; font-size: 12px; color: var(--ink-mute); text-align: center; }
 
-  .plt-scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: 14px; background: #fff; }
+  .plt-scroll { overflow: auto; max-height: calc(100vh - var(--topbar-h) - 226px); border: 1px solid var(--line); border-radius: 14px; background: #fff; }
   .plt-grid { display: grid; grid-template-columns: 56px repeat(7, minmax(118px, 1fr)); min-width: 880px; }
-  .plt-cell { border-right: 1px solid var(--line-soft); border-bottom: 1px solid var(--line-soft); padding: 6px; min-height: 56px; }
+  .plt-cell { border-right: 1px solid var(--line-soft); border-bottom: 1px solid #D6CFE1; padding: 6px; min-height: 56px; }
   .plt-grid > .plt-cell:nth-child(8n) { border-right: none; }
   .plt-colh { position: sticky; top: 0; z-index: 2; background: var(--fit-cream); text-align: center; padding: 9px 4px; border-bottom: 1px solid var(--line); }
   .plt-colh .d { font-size: 12px; font-weight: 600; color: var(--ink); text-transform: uppercase; letter-spacing: 0.03em; }
   .plt-colh .dt { font-size: 11px; color: var(--ink-mute); margin-top: 1px; }
   .plt-colh.is-today .d, .plt-colh.is-today .dt { color: var(--fit-purple); }
-  .plt-hourh { position: sticky; left: 0; z-index: 1; background: var(--fit-cream); border-right: 1px solid var(--line); border-bottom: 1px solid var(--line-soft); display: flex; align-items: center; justify-content: center; font-size: 11px; color: var(--ink-mute); font-weight: 600; }
+  .plt-hourh { position: sticky; left: 0; z-index: 1; background: var(--fit-cream); border-right: 1px solid var(--line); border-bottom: 1px solid #D6CFE1; display: flex; align-items: center; justify-content: center; font-size: 11px; color: var(--ink-mute); font-weight: 600; }
   .plt-corner { position: sticky; left: 0; top: 0; z-index: 3; background: var(--fit-cream); border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); }
 
   .plt-chip { display: flex; align-items: center; gap: 5px; height: 24px; box-sizing: border-box; font-size: 12.5px; line-height: 1.15; padding: 0 8px; border-radius: 7px; margin-bottom: 4px; cursor: pointer; border: 1px solid; white-space: nowrap; overflow: hidden; transition: box-shadow .08s ease; }
@@ -755,7 +767,7 @@
   .plt-chip.st-nopkg { background: #FBE3E6; border-color: #E3A9AE; color: #8C1D2E; }
   .plt-chip-empty { visibility: hidden; pointer-events: none; }
   .plt-chip.hl { box-shadow: 0 0 0 2px rgba(91,42,143,0.30); }
-  .plt-chip.sel-peer { box-shadow: 0 0 0 2px rgba(91,42,143,0.55); }
+  .plt-chip.sel-peer { background: #EFE7F8 !important; border-color: var(--fit-purple) !important; box-shadow: 0 0 0 1px rgba(91,42,143,0.30); }
   .plt-chip.sel { background: var(--fit-purple) !important; border-color: var(--fit-purple) !important; color: #fff !important; box-shadow: 0 0 0 2px rgba(91,42,143,0.35); }
   .plt-chip.sel .ok { color: #fff; }
   .plt-empty-state { padding: 60px 20px; text-align: center; color: var(--ink-mute); font-size: 14px; }
@@ -3868,12 +3880,19 @@
   <!-- PLANTILLA SEMANAL (guía de horarios fijos) -->
   <section class="view" id="view-plantilla">
     <div class="plt-screen">
+      <div class="plt-sticky">
       <div class="plt-head">
         <div>
           <h1 class="plt-title"><em>Plantilla semanal</em></h1>
           <div class="plt-sub">Guía de horarios fijos · no son reservas, es referencia</div>
         </div>
         <div class="plt-controls">
+          <div class="plt-search">
+            <input type="text" id="plt-search-input" class="plt-search-input" placeholder="Buscar alumno…" autocomplete="off"
+              oninput="pltSearch(this.value)" onfocus="pltSearch(this.value)" onkeydown="pltSearchKey(event)"
+              onblur="setTimeout(()=>{const b=document.getElementById('plt-search-results'); if(b) b.classList.remove('show');},160)">
+            <div class="plt-search-results" id="plt-search-results"></div>
+          </div>
           <div class="plt-sedes" id="plt-sedes"></div>
           <div class="plt-week">
             <button type="button" onclick="pltNavWeek(-1)" aria-label="Semana anterior">‹</button>
@@ -3889,6 +3908,7 @@
         <span><i style="background:#FBE3E6;border:1px solid #E3A9AE;"></i>Sin paquete</span>
         <span><b style="color:var(--good);">✓</b> ya en Mi día</span>
         <span id="plt-nopkg-count" style="margin-left:auto;"></span>
+      </div>
       </div>
       <div class="plt-scroll">
         <div class="plt-grid" id="plt-grid"></div>
@@ -14130,7 +14150,7 @@ function pltRenderGrid() {
     const st = pltStudentState(s);
     const booked = PLT_BOOKED.has(`${s.id}|${dn}|${h}`);
     const nm = `${s.first_name || ''} ${s.last_name || ''}`.trim();
-    return `<div class="plt-chip st-${st}" data-sid="${s.id}" onclick="pltOpenChipMenu('${s.id}', ${dn}, ${h}, event)" onmouseenter="pltHover('${s.id}',1)" onmouseleave="pltHover('${s.id}',0)" title="${escape((s.first_name || '') + ' ' + (s.last_name || ''))}"><span class="nm">${escape(nm)}</span>${booked ? '<span class="ok">✓</span>' : ''}</div>`;
+    return `<div class="plt-chip st-${st}" data-sid="${s.id}" data-day="${dn}" data-hour="${h}" onclick="pltOpenChipMenu('${s.id}', ${dn}, ${h}, event)" onmouseenter="pltHover('${s.id}',1)" onmouseleave="pltHover('${s.id}',0)" title="${escape((s.first_name || '') + ' ' + (s.last_name || ''))}"><span class="nm">${escape(nm)}</span>${booked ? '<span class="ok">✓</span>' : ''}</div>`;
   };
   const pltSortStuds = (arr, hh) => arr.slice().sort((a, b) => {
     const ka = pltSortKey(a, hh), kb = pltSortKey(b, hh);
@@ -14264,11 +14284,13 @@ function pltApplySelection(id, chipEl) {
 function pltCloseChipMenu() { const m = document.getElementById('plt-chip-menu'); if (m) m.remove(); pltClearSelection(); }
 function pltOpenChipMenu(studentId, dayN, hour, evt) {
   evt.stopPropagation();
-  const chipEl = evt.currentTarget;
+  pltShowChipMenu(studentId, dayN, hour, evt.currentTarget);
+}
+function pltShowChipMenu(studentId, dayN, hour, anchorEl) {
   pltCloseChipMenu();
   const stud = STATE.students.find(s => s.id === studentId);
   if (!stud) return;
-  pltApplySelection(studentId, chipEl);
+  pltApplySelection(studentId, anchorEl);
   const dateObj = pltDayToDate(dayN);
   const dateIso = dateToIsoLocal(dateObj);
   const booked = PLT_BOOKED.has(`${studentId}|${dayN}|${hour}`);
@@ -14277,7 +14299,7 @@ function pltOpenChipMenu(studentId, dayN, hour, evt) {
   const menu = document.createElement('div');
   menu.id = 'plt-chip-menu';
   menu.style.cssText = 'position:fixed; z-index:9999; background:#fff; border-radius:12px; box-shadow:0 12px 32px rgba(0,0,0,0.16); border:1px solid var(--line); width:268px; padding:6px; font-size:13px;';
-  const rect = evt.currentTarget.getBoundingClientRect();
+  const rect = anchorEl.getBoundingClientRect();
   let top = rect.bottom + 6;
   if (top + 290 > window.innerHeight) top = Math.max(8, rect.top - 290);
   menu.style.top = top + 'px';
@@ -14297,6 +14319,61 @@ function pltOpenChipMenu(studentId, dayN, hour, evt) {
   menu.innerHTML = html;
   document.body.appendChild(menu);
   setTimeout(() => document.addEventListener('click', pltCloseChipMenu, { once: true }), 50);
+}
+
+// --- Buscador flotante de la Plantilla ---
+let PLT_SR = [];
+function pltSearchNorm(s) { return (s || '').toString().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim(); }
+function pltSearch(q) {
+  const box = document.getElementById('plt-search-results');
+  if (!box) return;
+  const query = pltSearchNorm(q);
+  if (!query) { box.classList.remove('show'); box.innerHTML = ''; PLT_SR = []; return; }
+  const studs = pltFixedStudents().filter(s => pltSearchNorm(`${s.first_name} ${s.last_name}`).includes(query));
+  studs.sort((a, b) => `${a.first_name} ${a.last_name}`.localeCompare(`${b.first_name} ${b.last_name}`, 'es'));
+  PLT_SR = studs.slice(0, 8);
+  if (!PLT_SR.length) {
+    box.innerHTML = '<div class="plt-sr-empty">Sin coincidencias en esta sede</div>';
+    box.classList.add('show');
+    return;
+  }
+  box.innerHTML = PLT_SR.map((s, i) => {
+    const full = `${s.first_name || ''} ${s.last_name || ''}`.trim();
+    const ini = `${(s.first_name || '').charAt(0)}${(s.last_name || '').charAt(0)}`.toUpperCase();
+    return `<div class="plt-sr-item${i === 0 ? ' active' : ''}" data-sid="${s.id}" onmousedown="event.preventDefault()" onclick="pltSearchGoTo('${s.id}')">
+      <span class="plt-sr-av">${escape(ini)}</span>
+      <div style="min-width:0;"><div class="plt-sr-nm">${escape(full)}</div><div class="plt-sr-sub">${escape(pltPendSummary(s))}</div></div>
+    </div>`;
+  }).join('');
+  box.classList.add('show');
+}
+function pltSearchKey(evt) {
+  const box = document.getElementById('plt-search-results');
+  if (!box) return;
+  if (evt.key === 'Enter') {
+    evt.preventDefault();
+    const active = box.querySelector('.plt-sr-item.active') || box.querySelector('.plt-sr-item');
+    if (active) pltSearchGoTo(active.getAttribute('data-sid'));
+  } else if (evt.key === 'Escape') {
+    box.classList.remove('show');
+  }
+}
+function pltSearchGoTo(id) {
+  const box = document.getElementById('plt-search-results');
+  if (box) box.classList.remove('show');
+  const input = document.getElementById('plt-search-input');
+  const liveChips = () => Array.from(document.querySelectorAll(`#plt-grid .plt-chip[data-sid="${id}"]`)).filter(el => !el.classList.contains('plt-chip-empty'));
+  const chips = liveChips();
+  if (!chips.length) { showToast('Ese alumno no está en la grilla de esta sede', 'info'); return; }
+  const chip = chips[0];
+  chip.scrollIntoView({ block: 'center', inline: 'center' });
+  const dayN = parseInt(chip.getAttribute('data-day'), 10);
+  const hour = parseInt(chip.getAttribute('data-hour'), 10);
+  setTimeout(() => {
+    const live = liveChips()[0] || chip;
+    pltShowChipMenu(id, dayN, hour, live);
+  }, 70);
+  if (input) input.value = '';
 }
 
 async function pltPasarAClase(studentId, dayN, hour) {
