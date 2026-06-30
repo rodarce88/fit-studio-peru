@@ -1299,6 +1299,53 @@
   }
 
   /* ==============================================================
+     PERFIL DEL ALUMNO (coord) — adaptación móvil/tablet
+     Cabecera: en mobile la columna de botones se colapsa en un
+     botón ⋮ que abre un bottom sheet (#profile-actions-sheet).
+     Historial de clases: la tabla rígida pasa a lista de tarjetas.
+     ============================================================== */
+  /* Botón de tres puntitos (oculto en desktop) */
+  .sd-kebab {
+    display: none;
+    flex: none;
+    width: 40px;
+    height: 40px;
+    border-radius: 999px;
+    border: 1px solid var(--line);
+    background: white;
+    color: var(--ink-soft);
+    font-size: 22px;
+    line-height: 1;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    align-self: flex-start;
+    font-family: var(--body);
+  }
+  .sd-kebab:hover, .sd-kebab:active { background: var(--fit-cream); color: var(--fit-purple); }
+
+  /* Historial de clases como lista de tarjetas (responsiva en todo ancho) */
+  .sd-cls-row { padding: 11px 14px; border-bottom: 1px solid var(--line); }
+  .sd-cls-row:last-child { border-bottom: none; }
+  .sd-cls-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+  .sd-cls-date { font-weight: 600; font-size: 13.5px; color: var(--ink); }
+  .sd-cls-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 5px; font-size: 12px; color: var(--ink-mute); }
+  .sd-cls-meta .sd-cls-prof { color: var(--ink-soft); max-width: 170px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .sd-cls-dot { opacity: 0.45; }
+
+  /* Contenedor del bottom sheet de acciones del perfil (reusa clases .as-*) */
+  #profile-actions-sheet { display: none; position: fixed; inset: 0; z-index: 9998; }
+  #profile-actions-sheet.is-open { display: block; }
+
+  @media (max-width: 800px) {
+    .sd-head-card { padding: 18px 16px !important; }
+    .sd-actions-desktop { display: none !important; }
+    .sd-kebab { display: flex !important; }
+    .sd-head-name { font-size: 22px !important; }
+    .sd-head-avatar { width: 54px !important; height: 54px !important; font-size: 19px !important; }
+  }
+
+  /* ==============================================================
      INSTRUCTOR MOBILE — bottom bar (3 items) + menu overview
      Mismo patrón que el coord, pero sin FAB, sin Buscar/Alumnos.
      La alerta y la próxima clase pasan al menú overview.
@@ -5345,6 +5392,20 @@ body:not(.doctor-mode) .doc-bottomnav{ display:none; }
     </div>
 
     <button class="as-cancel" type="button" onclick="closeStudentActionsSheet()">Cancelar</button>
+  </div>
+</div>
+
+<!-- Action sheet de acciones del PERFIL del alumno (coord, mobile) — abre con el botón ⋮ -->
+<div id="profile-actions-sheet" aria-hidden="true" role="dialog" aria-label="Acciones del alumno">
+  <div class="as-backdrop" onclick="closeProfileActionsSheet()"></div>
+  <div class="as-panel">
+    <div class="as-handle"></div>
+    <div class="as-header">
+      <div class="as-title">Acciones</div>
+      <div class="as-subtitle" id="pas-student-name">—</div>
+    </div>
+    <div class="as-body" id="pas-body"></div>
+    <button class="as-cancel" type="button" onclick="closeProfileActionsSheet()">Cancelar</button>
   </div>
 </div>
 
@@ -13919,6 +13980,77 @@ function closeStudentActionsSheet() {
   sheet.setAttribute('aria-hidden', 'true');
   document.body.style.overflow = '';
   asShowMainView(); // reset al cerrar
+}
+
+// ============================================
+// PERFIL DEL ALUMNO — bottom sheet del botón ⋮ (mobile/tablet)
+// Agrupa las acciones de la cabecera del perfil (Editar, PDF, Confirmar,
+// Agendar, Reconciliar, Copiar link, Asignar paquete) en un sheet que
+// sube de abajo hacia arriba. Reusa las clases .as-* del otro sheet.
+// ============================================
+const PAS_ICONS = {
+  pkg:   '<svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>',
+  cal:   '<svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>',
+  chat:  '<svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8z"/></svg>',
+  link:  '<svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>',
+  recon: '<svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>',
+  edit:  '<svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>',
+  pdf:   '<svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>',
+};
+
+function openProfileActionsSheet(studentId) {
+  const stud = STATE.students.find(s => s.id === studentId);
+  const sheet = document.getElementById('profile-actions-sheet');
+  const body = document.getElementById('pas-body');
+  if (!stud || !sheet || !body) return;
+
+  const data = STATE.studentDetailData || {};
+  const activePkg = (typeof getActivePackage === 'function') ? getActivePackage(data.packages || []) : null;
+  const hasNoActivePkg = !activePkg;
+  const hasFrozenPkg = (data.packages || []).some(p => p.is_frozen === true);
+  const hasCompletedPkgs = (data.packages || []).some(p => { const u = p.classes_used || 0; return u >= (p.classes_total || 0) && (p.classes_total || 0) > 0; });
+  const agendarDisabled = hasNoActivePkg;
+  const agendarSub = agendarDisabled
+    ? (hasFrozenPkg ? 'Paquete congelado · reactívalo para agendar' : 'Sin paquete activo · asigna uno primero')
+    : 'Reservar clases en el calendario';
+  const assignLabel = (hasCompletedPkgs && hasNoActivePkg) ? 'Renovar paquete' : 'Asignar paquete';
+
+  const nameEl = document.getElementById('pas-student-name');
+  if (nameEl) nameEl.textContent = `${stud.first_name} ${stud.last_name || ''}`.trim();
+
+  const id = stud.id;
+  const item = (color, icon, label, sub, onclick, disabled) => `
+    <button class="as-btn" type="button" ${disabled
+        ? 'disabled style="opacity:0.45; cursor:not-allowed;"'
+        : `onclick="closeProfileActionsSheet(); ${onclick}"`}>
+      <span class="as-icon" style="background:${color};">${icon}</span>
+      <div>
+        <div class="as-label">${label}</div>
+        <div class="as-sub">${sub}</div>
+      </div>
+    </button>`;
+
+  body.innerHTML = [
+    item('var(--fit-purple)', PAS_ICONS.pkg, assignLabel, 'Vender o renovar un paquete', `openAssignPackageFromDetail('${id}')`),
+    item('#3b82f6', PAS_ICONS.cal, 'Agendar clases', agendarSub, `openStudentScheduleEditor('${id}')`, agendarDisabled),
+    item('#10b981', PAS_ICONS.chat, 'Confirmar clases', 'Mensaje de WhatsApp con sus clases', `openConfirmClassesModal('${id}')`),
+    item('#8b5cf6', PAS_ICONS.link, 'Copiar link app', 'Enlace de acceso a su app', `copyAppLink('${id}')`),
+    item('#f59e0b', PAS_ICONS.recon, 'Reconciliar', 'Cuadrar clases y paquetes', `reconOpenModal('${id}')`),
+    item('#64748b', PAS_ICONS.edit, 'Editar perfil', 'Datos personales y contacto', `openStudentModal('${id}')`),
+    item('#94a3b8', PAS_ICONS.pdf, 'Generar PDF', 'Ficha del alumno en PDF', `generateStudentPDF('${id}')`),
+  ].join('');
+
+  sheet.classList.add('is-open');
+  sheet.setAttribute('aria-hidden', 'false');
+  document.body.style.overflow = 'hidden';
+}
+
+function closeProfileActionsSheet() {
+  const sheet = document.getElementById('profile-actions-sheet');
+  if (!sheet) return;
+  sheet.classList.remove('is-open');
+  sheet.setAttribute('aria-hidden', 'true');
+  document.body.style.overflow = '';
 }
 
 function asShowMainView() {
@@ -25419,11 +25551,11 @@ function renderStudentDetail() {
 
     ${frozenBannerHTML}
 
-    <div style="background: white; border: 1px solid var(--line); border-radius: var(--radius-lg); padding: 24px; margin-bottom: 16px;">
-      <div style="display: flex; gap: 18px; align-items: flex-start;">
-        <div class="student-avatar" style="width: 64px; height: 64px; font-size: 22px; ${studentSedeAvatarStyle(stud)}">${initials(stud)}</div>
+    <div class="sd-head-card" style="background: white; border: 1px solid var(--line); border-radius: var(--radius-lg); padding: 24px; margin-bottom: 16px;">
+      <div class="sd-head-row" style="display: flex; gap: 18px; align-items: flex-start;">
+        <div class="student-avatar sd-head-avatar" style="width: 64px; height: 64px; font-size: 22px; ${studentSedeAvatarStyle(stud)}">${initials(stud)}</div>
         <div style="flex: 1;">
-          <h1 style="font-family: var(--display); font-size: 28px; margin: 0 0 6px; font-weight: 400;">${escape(stud.first_name)} <em>${escape(stud.last_name || '')}</em>${loc ? ` <span title="${escape(loc.name)}" style="display: inline-block; vertical-align: middle; background: ${loc.color || '#7C3AED'}; color: white; font-size: 11px; font-weight: 600; padding: 3px 10px; border-radius: 999px; letter-spacing: 0.08em; margin-left: 8px; line-height: 1.4; transform: translateY(-3px);">${getLocationInitials(loc)}</span>` : ''}</h1>
+          <h1 class="sd-head-name" style="font-family: var(--display); font-size: 28px; margin: 0 0 6px; font-weight: 400;">${escape(stud.first_name)} <em>${escape(stud.last_name || '')}</em>${loc ? ` <span title="${escape(loc.name)}" style="display: inline-block; vertical-align: middle; background: ${loc.color || '#7C3AED'}; color: white; font-size: 11px; font-weight: 600; padding: 3px 10px; border-radius: 999px; letter-spacing: 0.08em; margin-left: 8px; line-height: 1.4; transform: translateY(-3px);">${getLocationInitials(loc)}</span>` : ''}</h1>
           <div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-bottom: 6px;">
             ${modPill}
             ${getConsentBadge(stud)}
@@ -25433,7 +25565,7 @@ function renderStudentDetail() {
             ${escape(stud.email || 'Sin email')}${stud.phone ? ' · ' + escape(stud.phone) : ''}
           </div>
         </div>
-        <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+        <div class="sd-actions-desktop" style="display: flex; gap: 8px; flex-wrap: wrap;">
           <button class="btn btn-ghost" onclick="openStudentModal('${stud.id}')" style="padding: 8px 14px; font-size: 12px;">Editar perfil</button>
           <button class="btn btn-ghost" onclick="generateStudentPDF('${stud.id}')" style="padding: 8px 14px; font-size: 12px;">Generar PDF</button>
           <button class="btn btn-ghost" onclick="openConfirmClassesModal('${stud.id}')" style="padding: 8px 14px; font-size: 12px;">Confirmar clases</button>
@@ -25442,6 +25574,7 @@ function renderStudentDetail() {
           <button class="btn btn-ghost" onclick="copyAppLink('${stud.id}', this)" style="padding: 8px 14px; font-size: 12px;">Copiar link app</button>
           <button class="btn btn-primary" onclick="openAssignPackageFromDetail('${stud.id}')" style="padding: 8px 14px; font-size: 12px;">${_hasCompletedPkgs && _hasNoActivePkg ? 'Renovar paquete' : 'Asignar paquete'}</button>
         </div>
+        <button class="sd-kebab" type="button" aria-label="Acciones del alumno" onclick="openProfileActionsSheet('${stud.id}')">⋮</button>
       </div>
     </div>
 
@@ -26376,10 +26509,8 @@ function renderDetailClasses(stud) {
   sortedAsc.filter(p => p.id !== activePkgId && !isChangedPkg(p) && !p.is_frozen && (p.classes_used || 0) < (p.classes_total || 0)).forEach(p => order.push(p.id));
   [...packages].filter(p => !order.includes(p.id) && !isChangedPkg(p)).sort((a, b) => (b.purchase_date || b.start_date || '1900-01-01').localeCompare(a.purchase_date || a.start_date || '1900-01-01')).forEach(p => order.push(p.id));
 
-  const GRID = 'grid-template-columns: 104px 92px 58px 1fr 132px 116px; gap:10px;';
-  const headerRow = `<div style="display:grid; ${GRID} padding:7px 14px; font-size:10px; letter-spacing:0.04em; text-transform:uppercase; color:var(--ink-mute); border-bottom:1px solid var(--line); background:var(--fit-cream);">
-      <span>Fecha</span><span>Día</span><span>Hora</span><span>Profesor</span><span>Sede</span><span style="text-align:right;">Estado</span></div>`;
-
+  // Historial como lista de tarjetas responsiva (clases .sd-cls-*): no se desborda en móvil.
+  const headerRow = ''; // el encabezado de columnas ya no se usa; cada fila se describe sola
   const renderRows = (items) => {
     if (!items.length) return `<div style="padding:12px 14px; font-size:12px; color:var(--ink-mute);">Sin clases registradas.</div>`;
     const sorted = [...items].sort((a, b) => b.b.class_sessions.session_date.localeCompare(a.b.class_sessions.session_date) || b.b.class_sessions.hour - a.b.class_sessions.hour);
@@ -26387,13 +26518,17 @@ function renderDetailClasses(stud) {
       const sess = b.class_sessions;
       const inst = STATE.instructors.find(i => i.id === sess.instructor_id);
       const profName = inst ? escape(`${inst.first_name}${inst.last_name ? ' ' + inst.last_name : ''}`) : '—';
-      return `<div style="display:grid; ${GRID} padding:8px 14px; font-size:13px; align-items:center; border-bottom:1px solid var(--line);">
-        <span style="font-weight:500;">${formatDate(sess.session_date)}</span>
-        <span style="color:var(--ink-mute);">${_dia(sess.session_date)}</span>
-        <span style="color:var(--ink-mute);">${formatHour(sess.hour)}</span>
-        <span style="min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${profName}</span>
-        <span style="font-size:12px; color:var(--ink-soft);">${_sedeName(sess)}</span>
-        <span style="text-align:right;">${_renderAttBadge(att?.status, b.status)}</span>
+      return `<div class="sd-cls-row">
+        <div class="sd-cls-top">
+          <span class="sd-cls-date">${formatDate(sess.session_date)}</span>
+          <span>${_renderAttBadge(att?.status, b.status)}</span>
+        </div>
+        <div class="sd-cls-meta">
+          <span>${_dia(sess.session_date)}</span><span class="sd-cls-dot">·</span>
+          <span>${formatHour(sess.hour)}</span><span class="sd-cls-dot">·</span>
+          <span class="sd-cls-prof">${profName}</span><span class="sd-cls-dot">·</span>
+          <span>${_sedeName(sess)}</span>
+        </div>
       </div>`;
     }).join('');
   };
