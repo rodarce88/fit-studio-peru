@@ -14086,7 +14086,7 @@ function pltRenderGrid() {
         const st = pltStudentState(s);
         const booked = PLT_BOOKED.has(`${s.id}|${d.n}|${h}`);
         const nm = `${s.first_name || ''} ${(s.last_name || '').charAt(0)}${s.last_name ? '.' : ''}`.trim();
-        return `<div class="plt-chip st-${st}" onclick="openStudentModalWithPackages('${s.id}')" title="${escape((s.first_name || '') + ' ' + (s.last_name || ''))}"><span class="nm">${escape(nm)}</span>${booked ? '<span class="ok">✓</span>' : ''}</div>`;
+        return `<div class="plt-chip st-${st}" onclick="pltOpenChipMenu('${s.id}', ${d.n}, ${h}, event)" title="${escape((s.first_name || '') + ' ' + (s.last_name || ''))}"><span class="nm">${escape(nm)}</span>${booked ? '<span class="ok">✓</span>' : ''}</div>`;
       }).join('');
       html += `<div class="plt-cell">${chips}</div>`;
     });
@@ -14094,8 +14094,102 @@ function pltRenderGrid() {
   grid.innerHTML = html;
 }
 
-// MOBILE COORD — Bottom bar + Menu screen
-// Funciones que solo aplican a coord en viewport mobile.
+// --- Acciones rápidas del chip (Fase 2) ---
+function pltCloseChipMenu() { const m = document.getElementById('plt-chip-menu'); if (m) m.remove(); }
+function pltOpenChipMenu(studentId, dayN, hour, evt) {
+  evt.stopPropagation();
+  pltCloseChipMenu();
+  const stud = STATE.students.find(s => s.id === studentId);
+  if (!stud) return;
+  const dateObj = pltDayToDate(dayN);
+  const dateIso = dateToIsoLocal(dateObj);
+  const booked = PLT_BOOKED.has(`${studentId}|${dayN}|${hour}`);
+  const fullName = `${stud.first_name || ''} ${stud.last_name || ''}`.trim();
+  const dayFull = (FIXED_DAYS.find(d => d.n === dayN) || {}).full || '';
+  const menu = document.createElement('div');
+  menu.id = 'plt-chip-menu';
+  menu.style.cssText = 'position:fixed; z-index:9999; background:#fff; border-radius:12px; box-shadow:0 12px 32px rgba(0,0,0,0.16); border:1px solid var(--line); width:268px; padding:6px; font-size:13px;';
+  const rect = evt.currentTarget.getBoundingClientRect();
+  let top = rect.bottom + 6;
+  if (top + 230 > window.innerHeight) top = Math.max(8, rect.top - 230);
+  menu.style.top = top + 'px';
+  menu.style.left = Math.min(window.innerWidth - 276, Math.max(8, rect.left)) + 'px';
+  const item = (iconHtml, label, sub, onclick, color) =>
+    `<button onclick="pltCloseChipMenu(); ${onclick}" style="width:100%; display:flex; gap:11px; align-items:center; padding:10px 12px; border-radius:8px; border:none; background:#fff; text-align:left; cursor:pointer;" onmouseover="this.style.background='var(--fit-lavender-pale)'" onmouseout="this.style.background='#fff'"><span style="width:20px; text-align:center; color:${color || 'var(--fit-purple)'}; font-size:17px;">${iconHtml}</span><div><div style="font-weight:600; color:var(--ink);">${label}</div>${sub ? `<div style="font-size:11px; color:var(--ink-mute); margin-top:1px;">${sub}</div>` : ''}</div></button>`;
+  let html = `<div style="padding:8px 12px; border-bottom:1px solid var(--line-soft);"><div style="font-weight:600; color:var(--ink); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escape(fullName)}</div><div style="font-size:11px; color:var(--ink-mute);">${dayFull} ${dateObj.getDate()} · ${fixedHourLabel(hour)}</div></div>`;
+  if (booked) {
+    html += '<div style="padding:11px 12px; display:flex; gap:9px; align-items:center; color:var(--good); font-size:12.5px; font-weight:500;"><i class="ti ti-circle-check" style="font-size:17px;"></i> Ya está en Mi día</div>';
+  } else {
+    html += item('<i class="ti ti-circle-check"></i>', 'Pasar a clase y confirmar', 'Registra la clase y aparece en Mi día', `pltPasarAClase('${studentId}', ${dayN}, ${hour})`, 'var(--good)');
+  }
+  html += item('<i class="ti ti-copy"></i>', 'Copiar mensaje de confirmación', '', `copyConfirmMessageForCell('${studentId}','${dateIso}',${hour},'${PLT_SEDE}')`);
+  html += item('<i class="ti ti-brand-whatsapp"></i>', 'Abrir WhatsApp', '', `openWhatsAppForCell('${studentId}','${dateIso}',${hour},'${PLT_SEDE}')`, '#1FA855');
+  html += item('<i class="ti ti-user"></i>', 'Ver perfil', '', `openStudentModalWithPackages('${studentId}')`);
+  menu.innerHTML = html;
+  document.body.appendChild(menu);
+  setTimeout(() => document.addEventListener('click', pltCloseChipMenu, { once: true }), 50);
+}
+
+async function pltPasarAClase(studentId, dayN, hour) {
+  if (!isOnline) { showToast('Necesita conexión', 'error'); return; }
+  const stud = STATE.students.find(s => s.id === studentId);
+  const name = stud ? stud.first_name : 'el alumno';
+  const dateObj = pltDayToDate(dayN);
+  const dateIso = dateToIsoLocal(dateObj);
+  const todayIso = dateToIsoLocal(new Date());
+  if (dateIso < todayIso) {
+    showToast('Esa clase ya pasó · regístrala desde Mi día', 'info');
+    return;
+  }
+  const ok = await confirmSheet({
+    title: 'Pasar a clase y confirmar',
+    message: `Se registrará la clase de ${name} el ${dateObj.toLocaleDateString('es-PE', { weekday: 'long', day: 'numeric', month: 'short' })} a las ${fixedHourLabel(hour)} y quedará confirmada en Mi día.`,
+    okLabel: 'Pasar y confirmar',
+    cancelLabel: 'Cancelar',
+  });
+  if (!ok) return;
+  try {
+    const sessionId = await getOrCreateSession(PLT_SEDE, dateObj, hour);
+    if (!sessionId) throw new Error('No se pudo crear la sesión');
+    const nowIso = new Date().toISOString();
+    const { data: existing } = await sb.from('session_bookings')
+      .select('id, cancelled_at, confirmed_at')
+      .eq('session_id', sessionId).eq('student_id', studentId).maybeSingle();
+    if (!existing) {
+      const { error } = await sb.from('session_bookings').insert({
+        session_id: sessionId, student_id: studentId, source: 'fixed',
+        confirmed_at: nowIso, confirmed_via: 'coordinator',
+      });
+      if (error) throw error;
+    } else if (existing.cancelled_at) {
+      const { error } = await sb.from('session_bookings').update({
+        cancelled_at: null, cancelled_reason: null, confirmed_at: nowIso, confirmed_via: 'coordinator',
+      }).eq('id', existing.id);
+      if (error) throw error;
+    } else if (!existing.confirmed_at) {
+      const { error } = await sb.from('session_bookings').update({
+        confirmed_at: nowIso, confirmed_via: 'coordinator',
+      }).eq('id', existing.id);
+      if (error) throw error;
+    }
+    await recalcPackageCounters(studentId);
+    try {
+      const studName = stud ? `${stud.first_name || ''} ${stud.last_name || ''}`.trim() : 'Alumna';
+      logActivity('session_booking.create', {
+        table: 'session_bookings', id: null,
+        label: `${studName} · ${dateIso} ${formatHour(hour)} · plantilla`
+      }, { student_id: studentId, session_id: sessionId, source: 'fixed', from: 'plantilla' });
+    } catch (e) {}
+    showToast(`✓ ${name} pasó a clase y quedó confirmada`, 'success');
+    await pltLoadData();
+    pltRenderGrid();
+  } catch (err) {
+    console.error('pltPasarAClase:', err);
+    showToast('Error: ' + (err.message || 'desconocido'), 'error');
+  }
+}
+
+
 // El bottom bar tiene 4 tabs (Mi día, Alumnos, Buscar, Menú) + FAB de crear.
 // El menu screen replica los paneles laterales del dashboard (Por cobrar, etc.).
 // ============================================
