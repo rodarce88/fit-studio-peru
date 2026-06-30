@@ -1984,6 +1984,7 @@
   .inst-check-btn:hover { border-color: var(--good); color: var(--good); }
   .inst-check-btn:active { transform: scale(0.92); }
   .inst-check-btn.is-attended { background: var(--good); border-color: var(--good); color: white; }
+  .inst-check-btn.is-notice { background: #E3A0A6; border-color: #C8616B; color: #fff; font-size: 15px; }
   .inst-check-btn.is-saving { pointer-events: none; color: transparent !important; }
   .inst-check-btn.is-saving::after {
     content: '';
@@ -20633,10 +20634,13 @@ function renderInstructorStudentRow(item, classCtx) {
 
   // El check inline solo se muestra si NO está ya marcada como attended
   const isAttended = status === 'attended';
+  const isNoticeRow = status === 'notice_no_show';
   // Ventana de marcado: 4h antes de la clase hasta 3 días hábiles después.
   const _attWin = instAttendanceWindow(classCtx.dateIso, classCtx.hour);
   const checkBtnHtml = !_attWin.canMark
-    ? `<button class="inst-check-btn ${isAttended ? 'is-attended' : ''} is-locked" onclick="event.stopPropagation(); showToast('${instAttendanceLockMsg(_attWin)}', 'info')" title="${instAttendanceLockMsg(_attWin)}">${isAttended ? '✓' : LOCK_SVG}</button>`
+    ? `<button class="inst-check-btn ${isAttended ? 'is-attended' : ''} ${isNoticeRow ? 'is-notice' : ''} is-locked" onclick="event.stopPropagation(); showToast('${instAttendanceLockMsg(_attWin)}', 'info')" title="${instAttendanceLockMsg(_attWin)}">${isAttended ? '✓' : isNoticeRow ? '⚑' : LOCK_SVG}</button>`
+    : isNoticeRow
+    ? `<button class="inst-check-btn is-notice" onclick="event.stopPropagation(); instructorConfirmRemoveNotice('${s.id}', '${classCtx.dateIso}', ${classCtx.hour}, '${classCtx.location.id}')" title="Avisaste que no vino · tap para quitar el aviso">⚑</button>`
     : isAttended
     ? `<button class="inst-check-btn is-attended" onclick="event.stopPropagation(); instructorConfirmUndoAttendance('${s.id}', '${classCtx.dateIso}', ${classCtx.hour}, '${classCtx.location.id}')" title="Tap para deshacer asistencia"><span class="inst-confetti"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span>✓</button>`
     : `<button class="inst-check-btn" onclick="event.stopPropagation(); instructorMarkAttended('${s.id}', '${classCtx.dateIso}', ${classCtx.hour}, '${classCtx.location.id}')" title="Marcar asistencia"><span class="inst-confetti"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span>✓</button>`;
@@ -21145,7 +21149,20 @@ async function instructorConfirmUndoAttendance(studentId, dateIso, hour, locatio
   }
 }
 
-// Cambio de fecha desde el day-strip
+// Confirmación al quitar el aviso "no vino" (tap en el círculo rojo tenue)
+async function instructorConfirmRemoveNotice(studentId, dateIso, hour, locationId) {
+  const stud = STATE.students.find(s => s.id === studentId);
+  const name = stud ? stud.first_name : 'el alumno';
+  const ok = await confirmSheet({
+    title: 'Quitar aviso',
+    message: `¿Quitar el aviso de “no vino” de ${name}? Volverá a quedar sin marcar.`,
+    okLabel: 'Quitar aviso',
+    cancelLabel: 'Cancelar',
+  });
+  if (ok) {
+    instructorResetAttendance(studentId, dateIso, hour, locationId);
+  }
+}
 async function instructorSetDateIso(iso) {
   STATE.instDayDate = iso;
   const reqSeq = (STATE.instReqSeq = (STATE.instReqSeq || 0) + 1);
