@@ -735,7 +735,7 @@
   .plt-legend span { display: inline-flex; align-items: center; gap: 6px; }
   .plt-legend i { width: 11px; height: 11px; border-radius: 3px; display: inline-block; }
   .plt-sticky { padding-top: 0; }
-  .plt-search-float { position: fixed; top: calc(var(--topbar-h) + 54px); right: 24px; width: 320px; z-index: 70; }
+  .plt-search.plt-search-float { position: fixed; top: calc(var(--topbar-h) + 54px); right: 24px; width: 320px; z-index: 70; }
   .plt-search { position: relative; }
   .plt-search-input { width: 230px; font-size: 13px; padding: 8px 12px 8px 32px; border: 1px solid var(--line); border-radius: var(--radius-pill); background: #fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='15' height='15' viewBox='0 0 24 24' fill='none' stroke='%236B6473' stroke-width='2' stroke-linecap='round'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='M21 21l-4.3-4.3'/%3E%3C/svg%3E") no-repeat 11px center; color: var(--ink); outline: none; }
   .plt-search-input:focus { border-color: var(--fit-purple); }
@@ -769,6 +769,7 @@
   .plt-chip.st-nopkg { background: #FBE3E6; border-color: #E3A9AE; color: #8C1D2E; }
   .plt-chip.is-confirmed { background: #E7F6EA !important; border-color: #A9D9B4 !important; }
   .plt-chip .ok.pending { color: #6478D6; font-size: 13px; display: inline-flex; align-items: center; }
+  .plt-chip .wait-left { color: #C77F12; font-size: 13px; margin-right: 5px; display: inline-flex; align-items: center; flex-shrink: 0; }
   .plt-chip-empty { visibility: hidden; pointer-events: none; }
   .plt-chip.hl { box-shadow: 0 0 0 2px rgba(91,42,143,0.30); }
   .plt-chip.sel-peer { background: #EFE7F8 !important; border-color: var(--fit-purple) !important; box-shadow: 0 0 0 1px rgba(91,42,143,0.30); }
@@ -14180,14 +14181,20 @@ function pltRenderGrid() {
     const booked = PLT_BOOKED.has(key);
     const confirmed = PLT_CONFIRMED.has(key);
     const dateIso = dateToIsoLocal(pltDayToDate(dn));
-    const waiting = !booked && PLT_WAITING.has(pltWaitingKey(s.id, dateIso, h));
+    const waiting = PLT_WAITING.has(pltWaitingKey(s.id, dateIso, h));
     const nm = `${s.first_name || ''} ${s.last_name || ''}`.trim();
+    let leftMarker = '';
     let marker = '';
-    if (confirmed) marker = '<span class="ok" title="Confirmada · en Mi día">✓</span>';
-    else if (booked) marker = '<span class="ok pending" title="En Mi día · falta confirmar"><i class="ti ti-circle-check"></i></span>';
-    else if (waiting) marker = '<span class="ok wait" title="Esperando respuesta"><i class="ti ti-clock"></i></span>';
+    if (confirmed) {
+      marker = '<span class="ok" title="Confirmada · en Mi día">✓</span>';
+    } else if (booked) {
+      marker = '<span class="ok pending" title="En Mi día · falta confirmar"><i class="ti ti-circle-check"></i></span>';
+      if (waiting) leftMarker = '<span class="wait-left" title="Ya le escribí · esperando confirmación"><i class="ti ti-clock"></i></span>';
+    } else if (waiting) {
+      marker = '<span class="ok wait" title="Esperando respuesta"><i class="ti ti-clock"></i></span>';
+    }
     const cls = 'plt-chip st-' + st + (confirmed ? ' is-confirmed' : '');
-    return `<div class="${cls}" data-sid="${s.id}" data-day="${dn}" data-hour="${h}" onclick="pltOpenChipMenu('${s.id}', ${dn}, ${h}, event)" onmouseenter="pltHover('${s.id}',1)" onmouseleave="pltHover('${s.id}',0)" title="${escape((s.first_name || '') + ' ' + (s.last_name || ''))}"><span class="nm">${escape(nm)}</span>${marker}</div>`;
+    return `<div class="${cls}" data-sid="${s.id}" data-day="${dn}" data-hour="${h}" onclick="pltOpenChipMenu('${s.id}', ${dn}, ${h}, event)" onmouseenter="pltHover('${s.id}',1)" onmouseleave="pltHover('${s.id}',0)" title="${escape((s.first_name || '') + ' ' + (s.last_name || ''))}">${leftMarker}<span class="nm">${escape(nm)}</span>${marker}</div>`;
   };
   const pltSortStuds = (arr, hh) => arr.slice().sort((a, b) => {
     const ka = pltSortKey(a, hh), kb = pltSortKey(b, hh);
@@ -14331,6 +14338,7 @@ function pltShowChipMenu(studentId, dayN, hour, anchorEl) {
   const dateObj = pltDayToDate(dayN);
   const dateIso = dateToIsoLocal(dateObj);
   const booked = PLT_BOOKED.has(`${studentId}|${dayN}|${hour}`);
+  const confirmed = PLT_CONFIRMED.has(`${studentId}|${dayN}|${hour}`);
   const fullName = `${stud.first_name || ''} ${stud.last_name || ''}`.trim();
   const dayFull = (FIXED_DAYS.find(d => d.n === dayN) || {}).full || '';
   const menu = document.createElement('div');
@@ -14344,8 +14352,11 @@ function pltShowChipMenu(studentId, dayN, hour, anchorEl) {
   const item = (iconHtml, label, sub, onclick, color) =>
     `<button onclick="pltCloseChipMenu(); ${onclick}" style="width:100%; display:flex; gap:11px; align-items:center; padding:10px 12px; border-radius:8px; border:none; background:#fff; text-align:left; cursor:pointer;" onmouseover="this.style.background='var(--fit-lavender-pale)'" onmouseout="this.style.background='#fff'"><span style="width:20px; text-align:center; color:${color || 'var(--fit-purple)'}; font-size:17px;">${iconHtml}</span><div><div style="font-weight:600; color:var(--ink);">${label}</div>${sub ? `<div style="font-size:11px; color:var(--ink-mute); margin-top:1px;">${sub}</div>` : ''}</div></button>`;
   let html = `<div style="padding:8px 12px; border-bottom:1px solid var(--line-soft);"><div style="font-weight:600; color:var(--ink); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escape(fullName)}</div><div style="font-size:11px; color:var(--ink-mute);">${dayFull} ${dateObj.getDate()} · ${fixedHourLabel(hour)}</div></div>`;
-  if (booked) {
-    html += '<div style="padding:11px 12px; display:flex; gap:9px; align-items:center; color:var(--good); font-size:12.5px; font-weight:500;"><i class="ti ti-circle-check" style="font-size:17px;"></i> Ya está en Mi día</div>';
+  if (confirmed) {
+    html += '<div style="padding:11px 12px; display:flex; gap:9px; align-items:center; color:var(--good); font-size:12.5px; font-weight:500;"><i class="ti ti-circle-check" style="font-size:17px;"></i> Confirmada · en Mi día</div>';
+  } else if (booked) {
+    html += '<div style="padding:9px 12px 3px; display:flex; gap:8px; align-items:center; color:#6478D6; font-size:12px; font-weight:500;"><i class="ti ti-circle-check" style="font-size:16px;"></i> En Mi día · falta confirmar</div>';
+    html += item('<i class="ti ti-checks"></i>', 'Confirmar clase', 'Marca la clase como confirmada', `pltConfirmCell('${studentId}', ${dayN}, ${hour})`, 'var(--good)');
   } else {
     html += item('<i class="ti ti-circle-check"></i>', 'Pasar a clase y confirmar', 'Registra la clase y aparece en Mi día', `pltPasarAClase('${studentId}', ${dayN}, ${hour})`, 'var(--good)');
   }
@@ -14477,6 +14488,71 @@ async function pltPasarAClase(studentId, dayN, hour) {
     } catch (e) {}
   } catch (err) {
     console.error('pltPasarAClase:', err);
+    showToast('Error: ' + (err.message || 'desconocido'), 'error');
+  }
+}
+
+// Confirmar una clase que YA está en Mi día (booked) pero sin confirmar.
+async function pltConfirmCell(studentId, dayN, hour) {
+  if (!isOnline) { showToast('Necesita conexión', 'error'); return; }
+  const stud = STATE.students.find(s => s.id === studentId);
+  const name = stud ? stud.first_name : 'el alumno';
+  const dateObj = pltDayToDate(dayN);
+  const dateIso = dateToIsoLocal(dateObj);
+  const ok = await confirmSheet({
+    title: 'Confirmar clase',
+    message: `${name} ya está en Mi día el ${dateObj.toLocaleDateString('es-PE', { weekday: 'long', day: 'numeric', month: 'short' })} a las ${fixedHourLabel(hour)}. Quedará marcada como confirmada.`,
+    okLabel: 'Confirmar',
+    cancelLabel: 'Cancelar',
+  });
+  if (!ok) return;
+  try {
+    const sessionId = await getOrCreateSession(PLT_SEDE, dateObj, hour);
+    if (!sessionId) throw new Error('No se pudo crear la sesión');
+    const nowIso = new Date().toISOString();
+    const { data: existing } = await sb.from('session_bookings')
+      .select('id, cancelled_at, confirmed_at')
+      .eq('session_id', sessionId).eq('student_id', studentId).maybeSingle();
+    if (!existing) {
+      const { error } = await sb.from('session_bookings').insert({
+        session_id: sessionId, student_id: studentId, source: 'fixed',
+        confirmed_at: nowIso, confirmed_via: 'coordinator',
+      });
+      if (error) throw error;
+    } else if (existing.cancelled_at) {
+      const { error } = await sb.from('session_bookings').update({
+        cancelled_at: null, cancelled_reason: null, confirmed_at: nowIso, confirmed_via: 'coordinator',
+      }).eq('id', existing.id);
+      if (error) throw error;
+    } else if (!existing.confirmed_at) {
+      const { error } = await sb.from('session_bookings').update({
+        confirmed_at: nowIso, confirmed_via: 'coordinator',
+      }).eq('id', existing.id);
+      if (error) throw error;
+    } else {
+      showToast('Ya estaba confirmada', 'info'); return;
+    }
+    await recalcPackageCounters(studentId);
+    try {
+      const studName = stud ? `${stud.first_name || ''} ${stud.last_name || ''}`.trim() : 'Alumna';
+      logActivity('session_booking.update', {
+        table: 'session_bookings', id: null,
+        label: `${studName} · ${dateIso} ${formatHour(hour)} · confirmada desde plantilla`
+      }, { student_id: studentId, session_id: sessionId, from: 'plantilla_confirm' });
+    } catch (e) {}
+    showToast(`✓ ${name} confirmada`, 'success');
+    if (PLT_WAITING.delete(pltWaitingKey(studentId, dateIso, hour))) pltSaveWaiting();
+    await pltLoadData();
+    pltRenderGrid();
+    try {
+      if (typeof loadDayData === 'function') await loadDayData();
+      if (document.getElementById('view-dashboard')?.classList.contains('is-active')) {
+        if (typeof renderDashboard === 'function') renderDashboard();
+        if (typeof renderTimeline === 'function') renderTimeline();
+      }
+    } catch (e) {}
+  } catch (err) {
+    console.error('pltConfirmCell:', err);
     showToast('Error: ' + (err.message || 'desconocido'), 'error');
   }
 }
