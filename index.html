@@ -719,7 +719,7 @@
   /* ===== Plantilla semanal (grilla guía de horarios fijos) ===== */
   #view-plantilla.is-active { display: block; }
   .plt-screen { margin: -6px -22px 0; }
-  .plt-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 16px; padding: 0 4px; }
+  .plt-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 16px; padding: 0 320px 0 4px; }
   .plt-title { font-family: var(--display, serif); font-size: 30px; font-weight: 600; color: var(--ink); margin: 0; }
   .plt-title em { font-style: italic; }
   .plt-sub { font-size: 13px; color: var(--ink-mute); margin-top: 2px; }
@@ -734,7 +734,8 @@
   .plt-legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 11.5px; color: var(--ink-mute); padding: 0 4px 12px; }
   .plt-legend span { display: inline-flex; align-items: center; gap: 6px; }
   .plt-legend i { width: 11px; height: 11px; border-radius: 3px; display: inline-block; }
-  .plt-sticky { position: sticky; top: var(--topbar-h); z-index: 7; background: var(--bg); padding-top: 6px; }
+  .plt-sticky { padding-top: 0; }
+  .plt-search-float { position: fixed; top: calc(var(--topbar-h) + 12px); right: 36px; width: 300px; z-index: 70; }
   .plt-search { position: relative; }
   .plt-search-input { width: 230px; font-size: 13px; padding: 8px 12px 8px 32px; border: 1px solid var(--line); border-radius: var(--radius-pill); background: #fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='15' height='15' viewBox='0 0 24 24' fill='none' stroke='%236B6473' stroke-width='2' stroke-linecap='round'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='M21 21l-4.3-4.3'/%3E%3C/svg%3E") no-repeat 11px center; color: var(--ink); outline: none; }
   .plt-search-input:focus { border-color: var(--fit-purple); }
@@ -747,20 +748,21 @@
   .plt-sr-sub { font-size: 11px; color: var(--ink-mute); }
   .plt-sr-empty { padding: 12px; font-size: 12px; color: var(--ink-mute); text-align: center; }
 
-  .plt-scroll { overflow: auto; max-height: calc(100vh - var(--topbar-h) - 226px); border: 1px solid var(--line); border-radius: 14px; background: #fff; }
+  .plt-scroll { overflow: visible; border: 1px solid var(--line); border-radius: 14px; background: #fff; }
   .plt-grid { display: grid; grid-template-columns: 56px repeat(7, minmax(118px, 1fr)); min-width: 880px; }
   .plt-cell { border-right: 1px solid var(--line-soft); border-bottom: 1px solid #D6CFE1; padding: 6px; min-height: 56px; }
   .plt-grid > .plt-cell:nth-child(8n) { border-right: none; }
-  .plt-colh { position: sticky; top: 0; z-index: 2; background: var(--fit-cream); text-align: center; padding: 9px 4px; border-bottom: 1px solid var(--line); }
+  .plt-colh { position: sticky; top: var(--topbar-h); z-index: 5; background: var(--fit-cream); text-align: center; padding: 9px 4px; border-bottom: 1px solid var(--line); }
   .plt-colh .d { font-size: 12px; font-weight: 600; color: var(--ink); text-transform: uppercase; letter-spacing: 0.03em; }
   .plt-colh .dt { font-size: 11px; color: var(--ink-mute); margin-top: 1px; }
   .plt-colh.is-today .d, .plt-colh.is-today .dt { color: var(--fit-purple); }
-  .plt-hourh { position: sticky; left: 0; z-index: 1; background: var(--fit-cream); border-right: 1px solid var(--line); border-bottom: 1px solid #D6CFE1; display: flex; align-items: center; justify-content: center; font-size: 11px; color: var(--ink-mute); font-weight: 600; }
-  .plt-corner { position: sticky; left: 0; top: 0; z-index: 3; background: var(--fit-cream); border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+  .plt-hourh { background: var(--fit-cream); border-right: 1px solid var(--line); border-bottom: 1px solid #D6CFE1; display: flex; align-items: center; justify-content: center; font-size: 11px; color: var(--ink-mute); font-weight: 600; }
+  .plt-corner { position: sticky; top: var(--topbar-h); z-index: 6; background: var(--fit-cream); border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); }
 
   .plt-chip { display: flex; align-items: center; gap: 5px; height: 24px; box-sizing: border-box; font-size: 12.5px; line-height: 1.15; padding: 0 8px; border-radius: 7px; margin-bottom: 4px; cursor: pointer; border: 1px solid; white-space: nowrap; overflow: hidden; transition: box-shadow .08s ease; }
   .plt-chip .nm { overflow: hidden; text-overflow: ellipsis; }
   .plt-chip .ok { margin-left: auto; color: var(--good); font-weight: 700; flex-shrink: 0; }
+  .plt-chip .ok.wait { color: #C77F12; font-size: 13px; display: inline-flex; align-items: center; }
   .plt-chip.st-fijo { background: #fff; border-color: var(--line); color: var(--ink); }
   .plt-chip.st-noconfirm { background: #FBF1D9; border-color: #EBCB86; color: #8A5A06; }
   .plt-chip.st-frozen { background: #ECEAEF; border-color: #D6D2DC; color: #6B6676; }
@@ -3880,6 +3882,12 @@
   <!-- PLANTILLA SEMANAL (guía de horarios fijos) -->
   <section class="view" id="view-plantilla">
     <div class="plt-screen">
+      <div class="plt-search plt-search-float">
+        <input type="text" id="plt-search-input" class="plt-search-input" placeholder="Buscar alumno…" autocomplete="off" style="width:100%;"
+          oninput="pltSearch(this.value)" onfocus="pltSearch(this.value)" onkeydown="pltSearchKey(event)"
+          onblur="setTimeout(()=>{const b=document.getElementById('plt-search-results'); if(b) b.classList.remove('show');},160)">
+        <div class="plt-search-results" id="plt-search-results"></div>
+      </div>
       <div class="plt-sticky">
       <div class="plt-head">
         <div>
@@ -3887,12 +3895,6 @@
           <div class="plt-sub">Guía de horarios fijos · no son reservas, es referencia</div>
         </div>
         <div class="plt-controls">
-          <div class="plt-search">
-            <input type="text" id="plt-search-input" class="plt-search-input" placeholder="Buscar alumno…" autocomplete="off"
-              oninput="pltSearch(this.value)" onfocus="pltSearch(this.value)" onkeydown="pltSearchKey(event)"
-              onblur="setTimeout(()=>{const b=document.getElementById('plt-search-results'); if(b) b.classList.remove('show');},160)">
-            <div class="plt-search-results" id="plt-search-results"></div>
-          </div>
           <div class="plt-sedes" id="plt-sedes"></div>
           <div class="plt-week">
             <button type="button" onclick="pltNavWeek(-1)" aria-label="Semana anterior">‹</button>
@@ -14009,6 +14011,27 @@ let PLT_SEDE = null;        // sede seleccionada
 let PLT_WEEK_START = null;  // lunes (Date) de la semana mostrada
 let PLT_PKG_CACHE = {};     // student_id -> [paquetes] (para color)
 let PLT_BOOKED = new Set(); // `${student_id}|${dow}|${hour}` con clase real esta semana
+// "Esperando respuesta": se marca al copiar mensaje o abrir WhatsApp. Solo visual, persiste local.
+let PLT_WAITING = (() => {
+  try { return new Set(JSON.parse(localStorage.getItem('plt_waiting') || '[]')); } catch (e) { return new Set(); }
+})();
+function pltWaitingKey(studentId, dateIso, hour) { return `${studentId}|${dateIso}|${hour}`; }
+function pltSaveWaiting() {
+  try { localStorage.setItem('plt_waiting', JSON.stringify(Array.from(PLT_WAITING))); } catch (e) {}
+}
+function pltMarkWaiting(studentId, dateIso, hour) {
+  PLT_WAITING.add(pltWaitingKey(studentId, dateIso, hour));
+  pltSaveWaiting();
+  if (typeof pltRenderGrid === 'function') pltRenderGrid();
+}
+function pltCopyAndWait(studentId, dateIso, hour) {
+  pltMarkWaiting(studentId, dateIso, hour);
+  copyConfirmMessageForCell(studentId, dateIso, hour, PLT_SEDE);
+}
+function pltWhatsAndWait(studentId, dateIso, hour) {
+  pltMarkWaiting(studentId, dateIso, hour);
+  openWhatsAppForCell(studentId, dateIso, hour, PLT_SEDE);
+}
 
 function pltMonday(d) {
   const x = new Date(d);
@@ -14149,8 +14172,11 @@ function pltRenderGrid() {
   const pltChipHtml = (s, dn, h) => {
     const st = pltStudentState(s);
     const booked = PLT_BOOKED.has(`${s.id}|${dn}|${h}`);
+    const dateIso = dateToIsoLocal(pltDayToDate(dn));
+    const waiting = !booked && PLT_WAITING.has(pltWaitingKey(s.id, dateIso, h));
     const nm = `${s.first_name || ''} ${s.last_name || ''}`.trim();
-    return `<div class="plt-chip st-${st}" data-sid="${s.id}" data-day="${dn}" data-hour="${h}" onclick="pltOpenChipMenu('${s.id}', ${dn}, ${h}, event)" onmouseenter="pltHover('${s.id}',1)" onmouseleave="pltHover('${s.id}',0)" title="${escape((s.first_name || '') + ' ' + (s.last_name || ''))}"><span class="nm">${escape(nm)}</span>${booked ? '<span class="ok">✓</span>' : ''}</div>`;
+    const marker = booked ? '<span class="ok">✓</span>' : (waiting ? '<span class="ok wait" title="Esperando respuesta"><i class="ti ti-clock"></i></span>' : '');
+    return `<div class="plt-chip st-${st}" data-sid="${s.id}" data-day="${dn}" data-hour="${h}" onclick="pltOpenChipMenu('${s.id}', ${dn}, ${h}, event)" onmouseenter="pltHover('${s.id}',1)" onmouseleave="pltHover('${s.id}',0)" title="${escape((s.first_name || '') + ' ' + (s.last_name || ''))}"><span class="nm">${escape(nm)}</span>${marker}</div>`;
   };
   const pltSortStuds = (arr, hh) => arr.slice().sort((a, b) => {
     const ka = pltSortKey(a, hh), kb = pltSortKey(b, hh);
@@ -14312,8 +14338,8 @@ function pltShowChipMenu(studentId, dayN, hour, anchorEl) {
   } else {
     html += item('<i class="ti ti-circle-check"></i>', 'Pasar a clase y confirmar', 'Registra la clase y aparece en Mi día', `pltPasarAClase('${studentId}', ${dayN}, ${hour})`, 'var(--good)');
   }
-  html += item('<i class="ti ti-copy"></i>', 'Copiar mensaje de confirmación', '', `copyConfirmMessageForCell('${studentId}','${dateIso}',${hour},'${PLT_SEDE}')`);
-  html += item('<i class="ti ti-brand-whatsapp"></i>', 'Abrir WhatsApp', '', `openWhatsAppForCell('${studentId}','${dateIso}',${hour},'${PLT_SEDE}')`, '#1FA855');
+  html += item('<i class="ti ti-copy"></i>', 'Copiar mensaje de confirmación', '', `pltCopyAndWait('${studentId}','${dateIso}',${hour})`);
+  html += item('<i class="ti ti-brand-whatsapp"></i>', 'Abrir WhatsApp', '', `pltWhatsAndWait('${studentId}','${dateIso}',${hour})`, '#1FA855');
   html += item('<i class="ti ti-user"></i>', 'Ver perfil', '', `openStudentModalWithPackages('${studentId}')`);
   html += item('<i class="ti ti-clock-pause"></i>', 'Mover a pendientes', 'Lo saca de la grilla, conserva su horario', `pltMoveToPending('${studentId}')`, 'var(--ink-mute)');
   menu.innerHTML = html;
@@ -14427,6 +14453,7 @@ async function pltPasarAClase(studentId, dayN, hour) {
       }, { student_id: studentId, session_id: sessionId, source: 'fixed', from: 'plantilla' });
     } catch (e) {}
     showToast(`✓ ${name} pasó a clase y quedó confirmada`, 'success');
+    if (PLT_WAITING.delete(pltWaitingKey(studentId, dateIso, hour))) pltSaveWaiting();
     await pltLoadData();
     pltRenderGrid();
   } catch (err) {
