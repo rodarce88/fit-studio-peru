@@ -1147,13 +1147,20 @@
     body:not(.no-sidebar) #view-dashboard .page-header .page-actions { display: none; }
     /* Compactar header del timeline-card: "Clases de hoy · Miércoles 20 may" + day-nav
        ocupaban casi 40% del viewport. Reducimos padding, font-size y truncamos. */
-    body:not(.no-sidebar) .timeline-header { padding: 14px 16px; flex-wrap: nowrap; gap: 10px; }
+    body:not(.no-sidebar) .timeline-header { padding: 14px 14px; flex-wrap: nowrap; gap: 10px; }
     body:not(.no-sidebar) .timeline-title { flex: 1; min-width: 0; overflow: hidden; }
     body:not(.no-sidebar) .timeline-title h2 { font-size: 16px; line-height: 1.25; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    body:not(.no-sidebar) .day-nav { padding: 2px; flex-shrink: 0; gap: 2px; }
-    body:not(.no-sidebar) .day-nav button { padding: 5px 11px; font-size: 11px; }
-    body:not(.no-sidebar) .day-nav .nav-arrow { width: 28px; height: 28px; }
-    body:not(.no-sidebar) .day-nav .nav-arrow svg { width: 16px; height: 16px; }
+    body:not(.no-sidebar) .day-nav { padding: 3px; flex-shrink: 0; gap: 3px; }
+    body:not(.no-sidebar) #day-today-btn { padding: 9px 18px; font-size: 13px; font-weight: 600; }
+    body:not(.no-sidebar) .day-nav .nav-arrow { width: 40px; height: 40px; }
+    body:not(.no-sidebar) .day-nav .nav-arrow svg { width: 20px; height: 20px; }
+    /* Evita el desborde a lo ancho en el primer render: el flex en columna toma el
+       ancho del contenido y el título "Clases de..." es nowrap, así que sin esto empuja
+       el layout fuera de la pantalla. Estiramos al ancho y permitimos encoger. */
+    body:not(.no-sidebar) .dash-shell { align-items: stretch; }
+    body:not(.no-sidebar) .dash-shell > *,
+    body:not(.no-sidebar) .dash-top-left,
+    body:not(.no-sidebar) .timeline-card { min-width: 0; max-width: 100%; }
     /* Widget cobranza: layout compacto en mobile */
     .cobranza-widget { padding: 16px; gap: 12px !important; }
     .cob-gauge { max-width: 200px; margin: 0 auto; }
@@ -8052,6 +8059,12 @@ function updateMiDiaHeaderHeight() {
     if (header) {
       const h = header.offsetHeight;
       document.documentElement.style.setProperty('--mi-dia-header-h', h + 'px');
+    }
+    // Alto real del buscador sticky → el header "Clases de..." se pega justo debajo,
+    // sin dejar una franja transparente por donde se vea el scroll detrás.
+    const search = document.querySelector('.dash-search-wrap');
+    if (search) {
+      document.documentElement.style.setProperty('--dash-search-sticky-h', search.offsetHeight + 'px');
     }
   });
 }
