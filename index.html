@@ -14125,22 +14125,38 @@ function pltRenderGrid() {
     const today = isCurWeek && d.n === todayDow;
     html += `<div class="plt-colh ${today ? 'is-today' : ''}"><div class="d">${d.lbl}</div><div class="dt">${dt.getDate()}</div></div>`;
   });
+  // Constructor de chip reutilizable
+  const pltChipHtml = (s, dn, h) => {
+    const st = pltStudentState(s);
+    const booked = PLT_BOOKED.has(`${s.id}|${dn}|${h}`);
+    const nm = `${s.first_name || ''} ${s.last_name || ''}`.trim();
+    return `<div class="plt-chip st-${st}" data-sid="${s.id}" onclick="pltOpenChipMenu('${s.id}', ${dn}, ${h}, event)" onmouseenter="pltHover('${s.id}',1)" onmouseleave="pltHover('${s.id}',0)" title="${escape((s.first_name || '') + ' ' + (s.last_name || ''))}"><span class="nm">${escape(nm)}</span>${booked ? '<span class="ok">✓</span>' : ''}</div>`;
+  };
+  const pltSortStuds = (arr, hh) => arr.slice().sort((a, b) => {
+    const ka = pltSortKey(a, hh), kb = pltSortKey(b, hh);
+    if (ka !== kb) return ka - kb;
+    return (`${a.first_name} ${a.last_name}`).localeCompare(`${b.first_name} ${b.last_name}`, 'es');
+  });
   FIXED_HOURS.forEach(h => {
     html += `<div class="plt-hourh">${fixedHourLabel(h)}</div>`;
-    const roster = (studByHour[h] || []).slice().sort((a, b) => {
-      const ka = pltSortKey(a, h), kb = pltSortKey(b, h);
-      if (ka !== kb) return ka - kb;
-      return (`${a.first_name} ${a.last_name}`).localeCompare(`${b.first_name} ${b.last_name}`, 'es');
+    const daysAt = (s) => (s.fixed_schedule || []).filter(sl => sl.hour === h).map(sl => sl.day);
+    // Multi-día (2+ días a esta hora) → fila alineada entre columnas.
+    // Un solo día → se apilan compactas debajo, sin reservar espacio en otras columnas.
+    const multi = [];
+    const singleByDay = {};
+    (studByHour[h] || []).forEach(s => {
+      const ds = daysAt(s);
+      if (ds.length >= 2) multi.push(s);
+      else if (ds.length === 1) (singleByDay[ds[0]] = singleByDay[ds[0]] || []).push(s);
     });
+    const multiOrdered = pltSortStuds(multi, h);
+    Object.keys(singleByDay).forEach(k => { singleByDay[k] = pltSortStuds(singleByDay[k], h); });
     FIXED_DAYS.forEach(d => {
-      const cell = roster.map(s => {
-        const here = (s.fixed_schedule || []).some(sl => sl.day === d.n && sl.hour === h);
-        if (!here) return '<div class="plt-chip plt-chip-empty"></div>';
-        const st = pltStudentState(s);
-        const booked = PLT_BOOKED.has(`${s.id}|${d.n}|${h}`);
-        const nm = `${s.first_name || ''} ${s.last_name || ''}`.trim();
-        return `<div class="plt-chip st-${st}" data-sid="${s.id}" onclick="pltOpenChipMenu('${s.id}', ${d.n}, ${h}, event)" onmouseenter="pltHover('${s.id}',1)" onmouseleave="pltHover('${s.id}',0)" title="${escape((s.first_name || '') + ' ' + (s.last_name || ''))}"><span class="nm">${escape(nm)}</span>${booked ? '<span class="ok">✓</span>' : ''}</div>`;
-      }).join('');
+      let cell = '';
+      multiOrdered.forEach(s => {
+        cell += daysAt(s).includes(d.n) ? pltChipHtml(s, d.n, h) : '<div class="plt-chip plt-chip-empty"></div>';
+      });
+      (singleByDay[d.n] || []).forEach(s => { cell += pltChipHtml(s, d.n, h); });
       html += `<div class="plt-cell">${cell}</div>`;
     });
   });
