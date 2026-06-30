@@ -865,20 +865,29 @@
     body:not(.no-sidebar) .mobile-bottom-bar {
       display: flex;
       position: fixed;
-      bottom: 14px;
-      left: 14px;
-      right: 14px;
-      gap: 10px;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      gap: 0;
       align-items: center;
       z-index: 200;
       pointer-events: auto;
+      background: #F7F5F0;
+      border-top: 1px solid #EAE4D8;
+      padding: 4px 6px calc(4px + env(safe-area-inset-bottom, 0px));
     }
-    body:not(.no-sidebar) .main { padding-bottom: 100px; }
+    body:not(.no-sidebar) .main { padding-bottom: 72px; padding-left: 10px; padding-right: 10px; }
     /* Ocultar paneles laterales del dashboard en mobile coord (Por re-agendar / Por cobrar / etc.) */
     body:not(.no-sidebar) .layout-grid > div:nth-of-type(2), body:not(.no-sidebar) .dash-side-panels { display: none; }
-    /* Mi día sin sidebar de horas en mobile */
-    body:not(.no-sidebar) .mi-dia-layout { grid-template-columns: 1fr; gap: 0; }
+    /* Mi día: en celular se elimina la columna de horas (era para escritorio) y la
+       tarjeta de clase ocupa todo el ancho con márgenes mínimos. */
+    body:not(.no-sidebar) .mi-dia-layout { display: block; }
     body:not(.no-sidebar) .mi-dia-sidebar { display: none; }
+    body:not(.no-sidebar) .mi-dia-cards-stack { grid-column: auto; }
+    body:not(.no-sidebar) .timeline-header { padding: 14px 14px; }
+    body:not(.no-sidebar) .timeline-body { padding: 8px 8px 16px; }
+    body:not(.no-sidebar) .class-header { padding: 14px 12px; gap: 12px; }
+    body:not(.no-sidebar) .class-students { padding-left: 12px; padding-right: 12px; }
 
     /* Ocultar bottom bar + FAB cuando hay un modal abierto (no obstruir botones del modal).
        Aplica a coord, profesor y cualquier modal global. */
@@ -889,53 +898,46 @@
 
   .mobile-bottom-nav {
     flex: 1;
-    background: rgba(38, 33, 92, 0.98);
-    /* Por defecto (Android/desktop): fondo sólido, sin blur (mejor performance + look nativo Material) */
-    border-radius: 999px;
-    padding: 8px 6px;
+    background: transparent;
+    border-radius: 0;
+    padding: 0;
     display: flex;
     align-items: center;
     justify-content: space-around;
-    box-shadow: 0 6px 24px rgba(38, 33, 92, 0.28);
+    box-shadow: none;
   }
   /* iOS: Liquid Glass (iOS 26) — Opción B "Intenso · más cuerpo".
      Ver Apple HIG · Materials. En iPhone moderno backdrop-filter está
      acelerado por hardware (no afecta como en Macs Intel viejos). */
   html.is-ios .mobile-bottom-nav {
-    background:
-      linear-gradient(180deg, rgba(255,255,255,0.18) 0%, rgba(255,255,255,0) 40%),
-      rgba(38, 33, 92, 0.72);
-    -webkit-backdrop-filter: saturate(220%) blur(34px);
-    backdrop-filter: saturate(220%) blur(34px);
-    border: 0.5px solid rgba(255, 255, 255, 0.28);
-    box-shadow:
-      inset 0 1px 0 rgba(255, 255, 255, 0.32),
-      inset 0 -1px 0 rgba(0, 0, 0, 0.10),
-      0 12px 36px rgba(38, 33, 92, 0.30),
-      0 3px 10px rgba(38, 33, 92, 0.22);
+    background: transparent;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    border: none;
+    box-shadow: none;
   }
   .mobile-bottom-nav .m-nav-item {
     display: flex;
     flex-direction: column;
     align-items: center;
     gap: 2px;
-    padding: 6px 14px;
-    color: rgba(255, 255, 255, 0.6);
+    padding: 4px 10px;
+    color: var(--ink-mute);
     cursor: pointer;
     transition: all 0.15s;
-    border-radius: 999px;
+    border-radius: 10px;
     border: none;
     background: transparent;
     font-family: var(--body);
     position: relative; /* anchor para el badge de notificaciones */
   }
-  .mobile-bottom-nav .m-nav-item:hover { color: rgba(255, 255, 255, 0.85); }
+  .mobile-bottom-nav .m-nav-item:hover { color: var(--fit-purple); }
   .mobile-bottom-nav .m-nav-item.is-active {
-    color: white;
-    background: rgba(255, 255, 255, 0.14);
+    color: var(--fit-purple);
+    background: transparent;
   }
-  .mobile-bottom-nav .m-nav-item svg { width: 19px; height: 19px; }
-  .mobile-bottom-nav .m-nav-item span { font-size: 9.5px; font-weight: 500; }
+  .mobile-bottom-nav .m-nav-item svg { width: 20px; height: 20px; }
+  .mobile-bottom-nav .m-nav-item span { font-size: 10px; font-weight: 600; }
 
   /* Badge de notificación estilo industrial (Facebook/Instagram):
      bolita roja con número de pendientes sobre el ícono, arriba-izquierda */
@@ -954,7 +956,7 @@
     font-weight: 700;
     line-height: 18px;
     text-align: center;
-    border: 2px solid #26215C;
+    border: 2px solid #F7F5F0;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
     pointer-events: none;
     letter-spacing: 0;
@@ -962,6 +964,7 @@
   }
 
   .mobile-fab {
+    display: none !important;
     width: 50px;
     height: 50px;
     border-radius: 50%;
@@ -3129,8 +3132,8 @@
     /* Excepción única: bottom nav en iOS mantiene Liquid Glass por consistency con HIG.
        En iPhone backdrop-filter está acelerado por hardware. */
     html.is-ios .mobile-bottom-nav {
-      -webkit-backdrop-filter: saturate(220%) blur(34px) !important;
-      backdrop-filter: saturate(220%) blur(34px) !important;
+      -webkit-backdrop-filter: none !important;
+      backdrop-filter: none !important;
     }
   }
 </style>
