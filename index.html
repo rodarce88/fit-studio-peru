@@ -510,6 +510,40 @@
   .midia-resumen .mr-dot { width:9px; height:9px; border-radius:50%; flex:none; }
   .midia-resumen .mr-label { font-size:11px; text-transform:uppercase; letter-spacing:.1em; color:var(--ink-mute); font-weight:600; }
   .midia-resumen .mr-val { font-size:13.5px; color:var(--ink); font-weight:600; margin-left:auto; text-align:right; }
+  /* Reporte: clases sin marcar (coordinador). Filas que se adaptan a celular. */
+  .um-group { background:#fff; border:1px solid var(--line); border-radius:14px; overflow:hidden; margin-bottom:12px; }
+  .um-group-h { padding:10px 14px; background:var(--bg-soft,#FAF7F2); font-weight:600; color:var(--fit-purple); font-size:13px; }
+  .um-row { display:flex; align-items:center; gap:10px; padding:11px 14px; border-top:1px solid var(--line); }
+  .um-hour { flex:0 0 64px; font-weight:600; color:var(--ink); font-size:13px; }
+  .um-info { flex:1; min-width:0; }
+  .um-name { font-weight:600; color:var(--ink); font-size:14px; display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+  .um-name .nm { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:100%; }
+  .um-meta { font-size:11.5px; color:var(--ink-mute); margin-top:2px; }
+  .um-chip { font-size:10.5px; font-weight:700; padding:2px 8px; border-radius:999px; white-space:nowrap; }
+  .um-chip.conf { background:#ECFDF3; color:#15803D; }
+  .um-chip.noconf { background:var(--bg-soft,#F1EEF6); color:var(--ink-mute); }
+  .um-chip.aviso { background:#FBF2DE; color:#A85B08; }
+  .um-actions { display:flex; gap:6px; flex:0 0 auto; }
+  .um-btn { border-radius:8px; padding:6px 10px; font-size:12px; font-weight:600; cursor:pointer; border:1px solid; white-space:nowrap; font-family:var(--body); }
+  .um-btn.ok { border-color:#BBE3C4; background:#EAF7EE; color:#1F7A3D; }
+  .um-btn.rec { border-color:#CFE0F5; background:#EEF4FC; color:#2563A8; }
+  .um-btn.lost { border-color:#F2C9C9; background:#FBEEEE; color:#B0322E; }
+  .um-filters { display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-bottom:16px; }
+  .um-allchk { display:flex; align-items:center; gap:6px; font-size:13px; color:var(--ink); }
+  .um-fld { padding:7px 10px; border:1px solid var(--line); border-radius:9px; font-size:13px; font-family:var(--body); background:#fff; color:var(--ink); }
+  .um-refresh { cursor:pointer; white-space:nowrap; }
+  @media (max-width: 800px) {
+    .um-row { flex-wrap:wrap; align-items:flex-start; padding:12px 14px; gap:6px 10px; }
+    .um-hour { flex:0 0 auto; }
+    .um-info { flex:1 1 auto; }
+    .um-actions { order:3; flex:0 0 100%; width:100%; gap:8px; margin-top:6px; }
+    .um-actions .um-btn { flex:1; padding:11px 4px; font-size:13px; text-align:center; }
+    .um-allchk { flex:1 1 100%; }
+    .um-fld { flex:1 1 calc(50% - 4px); min-width:0; }
+    .um-refresh { flex:1 1 100%; }
+    .midia-resumen-row { flex-wrap:wrap; gap:4px 11px; }
+    .midia-resumen .mr-val { margin-left:auto; font-size:13px; }
+  }
   .actrail { background:#fff; border:1px solid var(--line); border-radius:var(--radius-lg); box-shadow:var(--shadow-sm); display:flex; flex-direction:column; }
   .actrail-head { padding:16px 18px 12px; border-bottom:1px solid var(--line-soft); }
   .actrail-titlerow { display:flex; align-items:center; justify-content:space-between; gap:10px; }
@@ -845,7 +879,7 @@
     .kpi-row { grid-template-columns: repeat(2, 1fr); }
   }
   @media (max-width: 800px) {
-    :root { --sidebar-w: 0px; }
+    :root { --sidebar-w: 0px; --topbar-h: 52px; }
     .sidebar { display: none; }
     .main { padding: 16px 18px 80px; }
     .page-title { font-size: 30px; }
@@ -6495,10 +6529,20 @@ function setMiDiaMinimized(min) {
   if (min) renderMiDiaResumen();
 }
 window.toggleCollapseAllMw = function() {
+  _mwUserToggled = true;
   const btn = document.getElementById('mw-collapse-all');
   setMiDiaMinimized(!(btn && btn.dataset.mode === 'expand'));
 };
-function applyMiDiaMinimized() { setMiDiaMinimized(_mwMin()); }
+let _mwUserToggled = false;
+function applyMiDiaMinimized() {
+  // En celular los widgets de analítica arrancan minimizados: se muestra el resumen
+  // compacto y el coordinador puede expandir manualmente si quiere ver un gráfico.
+  // En escritorio se respeta la preferencia guardada. Si el coordinador toca el botón
+  // en esta sesión, ya no se vuelve a forzar el colapso en los siguientes renders.
+  const isMobile = typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(max-width: 800px)').matches;
+  if (isMobile && !_mwUserToggled) { setMiDiaMinimized(true); return; }
+  setMiDiaMinimized(_mwMin());
+}
 
 let DEBT_SCOPE = 'all'; // 'sede' | 'all'
 
@@ -28834,9 +28878,9 @@ async function renderUnmarkedReport() {
 
   // Chip: ¿la alumna había confirmado o avisado que no vendría?
   const confChip = (r) => {
-    if (r.cancelReqAt) return `<span style="font-size:10.5px;font-weight:700;padding:2px 8px;border-radius:999px;background:#FBF2DE;color:#A85B08;white-space:nowrap;">Avisó que no vendría</span>`;
-    if (r.confirmedAt) return `<span style="font-size:10.5px;font-weight:700;padding:2px 8px;border-radius:999px;background:#ECFDF3;color:#15803D;white-space:nowrap;">Confirmó</span>`;
-    return `<span style="font-size:10.5px;font-weight:700;padding:2px 8px;border-radius:999px;background:var(--bg-soft,#F1EEF6);color:var(--ink-mute);white-space:nowrap;">No confirmó</span>`;
+    if (r.cancelReqAt) return `<span class="um-chip aviso">Avisó que no vendría</span>`;
+    if (r.confirmedAt) return `<span class="um-chip conf">Confirmó</span>`;
+    return `<span class="um-chip noconf">No confirmó</span>`;
   };
 
   // Agrupar por fecha
@@ -28846,36 +28890,36 @@ async function renderUnmarkedReport() {
 
   const groupsHtml = dates.length ? dates.map(d => {
     const items = byDate[d].map(r => `
-      <div style="display:flex;align-items:center;gap:10px;padding:11px 14px;border-top:1px solid var(--line);">
-        <div style="flex:0 0 64px;font-weight:600;color:var(--ink);font-size:13px;">${escape(r.hour)}</div>
-        <div style="flex:1;min-width:0;">
-          <div style="font-weight:600;color:var(--ink);font-size:14px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;"><span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escape(r.name)}</span>${confChip(r)}</div>
-          <div style="font-size:11.5px;color:var(--ink-mute);">${escape(r.sede)} · ${escape(r.instr)}</div>
+      <div class="um-row">
+        <div class="um-hour">${escape(r.hour)}</div>
+        <div class="um-info">
+          <div class="um-name"><span class="nm">${escape(r.name)}</span>${confChip(r)}</div>
+          <div class="um-meta">${escape(r.sede)} · ${escape(r.instr)}</div>
         </div>
-        <div style="display:flex;gap:6px;flex:0 0 auto;">
-          <button onclick="markUnmarkedClass('${r.bookingId}','${r.sessionId}','${r.studentId}','attended')" style="border:1px solid #BBE3C4;background:#EAF7EE;color:#1F7A3D;border-radius:8px;padding:6px 10px;font-size:12px;font-weight:600;cursor:pointer;">Asistió</button>
-          <button onclick="markUnmarkedClass('${r.bookingId}','${r.sessionId}','${r.studentId}','recoverable')" style="border:1px solid #CFE0F5;background:#EEF4FC;color:#2563A8;border-radius:8px;padding:6px 10px;font-size:12px;font-weight:600;cursor:pointer;">Recuperable</button>
-          <button onclick="markUnmarkedClass('${r.bookingId}','${r.sessionId}','${r.studentId}','lost')" style="border:1px solid #F2C9C9;background:#FBEEEE;color:#B0322E;border-radius:8px;padding:6px 10px;font-size:12px;font-weight:600;cursor:pointer;">Perdida</button>
+        <div class="um-actions">
+          <button class="um-btn ok" onclick="markUnmarkedClass('${r.bookingId}','${r.sessionId}','${r.studentId}','attended')">Asistió</button>
+          <button class="um-btn rec" onclick="markUnmarkedClass('${r.bookingId}','${r.sessionId}','${r.studentId}','recoverable')">Recuperable</button>
+          <button class="um-btn lost" onclick="markUnmarkedClass('${r.bookingId}','${r.sessionId}','${r.studentId}','lost')">Perdida</button>
         </div>
       </div>`).join('');
-    return `<div style="background:white;border:1px solid var(--line);border-radius:14px;overflow:hidden;margin-bottom:12px;">
-      <div style="padding:10px 14px;background:var(--bg-soft,#FAF7F2);font-weight:600;color:var(--fit-purple);font-size:13px;">${unmarkedDateLabel(d)} · ${byDate[d].length} sin marcar</div>
+    return `<div class="um-group">
+      <div class="um-group-h">${unmarkedDateLabel(d)} · ${byDate[d].length} sin marcar</div>
       ${items}
     </div>`;
   }).join('') : '<div style="padding:30px;text-align:center;color:var(--ink-mute);">🎉 No hay clases sin marcar con estos filtros.</div>';
 
   const filtersHtml = `
-      <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:16px;">
-        <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--ink);">
+      <div class="um-filters">
+        <label class="um-allchk">
           <input type="checkbox" ${UNMARKED_STATE.scope === 'all' ? 'checked' : ''} onchange="UNMARKED_STATE.scope=this.checked?'all':'day'; renderUnmarkedReport();">
           Ver todas las fechas
         </label>
-        <input type="date" value="${UNMARKED_STATE.date}" ${UNMARKED_STATE.scope === 'all' ? 'disabled' : ''}
+        <input type="date" class="um-fld" value="${UNMARKED_STATE.date}" ${UNMARKED_STATE.scope === 'all' ? 'disabled' : ''}
           onchange="UNMARKED_STATE.date=this.value; UNMARKED_STATE.scope='day'; renderUnmarkedReport();"
-          style="padding:7px 10px;border:1px solid var(--line);border-radius:9px;font-size:13px;${UNMARKED_STATE.scope === 'all' ? 'opacity:.4;' : ''}">
-        <select onchange="UNMARKED_STATE.sedeFilter=this.value; renderUnmarkedReport();" style="padding:7px 10px;border:1px solid var(--line);border-radius:9px;font-size:13px;">${sedeOpts}</select>
-        <select onchange="UNMARKED_STATE.instrFilter=this.value; renderUnmarkedReport();" style="padding:7px 10px;border:1px solid var(--line);border-radius:9px;font-size:13px;">${instrOpts}</select>
-        <button onclick="UNMARKED_STATE.all=null; renderUnmarkedReport();" style="padding:7px 12px;border:1px solid var(--line);border-radius:9px;background:white;font-size:13px;cursor:pointer;">↻ Refrescar</button>
+          ${UNMARKED_STATE.scope === 'all' ? 'style="opacity:.4;"' : ''}>
+        <select class="um-fld" onchange="UNMARKED_STATE.sedeFilter=this.value; renderUnmarkedReport();">${sedeOpts}</select>
+        <select class="um-fld" onchange="UNMARKED_STATE.instrFilter=this.value; renderUnmarkedReport();">${instrOpts}</select>
+        <button class="um-fld um-refresh" onclick="UNMARKED_STATE.all=null; renderUnmarkedReport();">↻ Refrescar</button>
       </div>`;
   const countTxt = `${rows.length} clase(s) sin marcar ${UNMARKED_STATE.scope === 'day' ? 'el ' + unmarkedDateLabel(UNMARKED_STATE.date) : 'en total'}`;
 
