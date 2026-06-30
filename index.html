@@ -3580,14 +3580,14 @@
       <div class="mw-head">
         <span class="mw-t">Deuda acumulada <button type="button" class="mw-i" onclick="mwInfo(event,'debt')" aria-label="Qué significa">i</button></span>
       </div>
-      <div class="mw-infobox" id="mw-info-debt" style="display:none;">Saldo pendiente de <b>todos</b> los paquetes vivos (no solo los del mes): precio del paquete menos lo pagado. El gráfico muestra cuántas alumnas tienen saldo en las últimas 4 semanas.</div>
+      <div class="mw-infobox" id="mw-info-debt" style="display:none;">Saldo pendiente de <b>todos</b> los paquetes vivos (no solo los del mes): precio del paquete menos lo pagado. El gráfico muestra cómo evoluciona cuántas alumnas tienen saldo en las últimas semanas.</div>
       <div class="mw-body">
         <div id="debt-amount" style="font-family:var(--display); font-size:32px; font-weight:500; letter-spacing:-0.5px; color:var(--ink); line-height:1.1; padding-top:2px;">S/ —</div>
         <div id="debt-count" style="font-size:13px; color:var(--ink-mute); margin-top:4px;">— alumnas con saldo</div>
         <div id="debt-scope-name" style="display:none;"></div>
         <div style="margin-top:16px;">
           <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
-            <span class="kpi-label" style="font-size:10px;">Alumnas con deuda · últimas 4 semanas</span>
+            <span class="kpi-label" id="debt-trend-scale-label" style="font-size:10px;">Alumnas con deuda · últimas 6 semanas</span>
             <span id="debt-trend-delta" style="font-size:12px; font-weight:600; color:var(--ink-mute);">—</span>
           </div>
           <div id="debt-chart"><div style="padding:18px 0; font-size:12px; color:var(--ink-mute);">Cargando…</div></div>
@@ -3617,14 +3617,14 @@
         <div style="margin-top:16px;">
           <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; gap:10px;">
             <span style="display:inline-flex; align-items:center; gap:7px; min-width:0;">
-              <span class="kpi-label" style="font-size:10px;">Alumnas que asistieron · por mes (últimos 3)</span>
+              <span class="kpi-label" id="active-trend-scale-label" style="font-size:10px;">Alumnas que asistieron · por mes (últimos 3)</span>
               <button type="button" onclick="toggleActiveInfo()" aria-label="Qué significa este gráfico" title="Qué significa" style="flex:none; width:16px; height:16px; border-radius:999px; border:1px solid var(--line); background:transparent; color:var(--ink-mute); font:600 10px/1 var(--body,system-ui); cursor:pointer; display:inline-flex; align-items:center; justify-content:center;">i</button>
             </span>
             <span id="active-trend-delta" style="font-size:12px; font-weight:600; color:var(--ink-mute); white-space:nowrap;">—</span>
           </div>
           <div id="active-trend-info" style="display:none; background:var(--bg-soft,#f5f2fb); border:1px solid var(--line); border-radius:12px; padding:11px 13px; margin-bottom:10px; font-size:11.5px; line-height:1.5; color:var(--ink-mute);">
-            Cada punto es cuántas <b>alumnas distintas</b> asistieron ese mes (clases marcadas como “asistió”), en la sede seleccionada. Una misma alumna que vino varias veces cuenta como 1.<br>
-            El <b>mes en curso</b> aparece como <b>“en curso”</b> (punto hueco y línea punteada): todavía no termina, por eso su número es bajo y no debe leerse como una caída. La comparación de la derecha usa el <b>último mes completo</b>, no el que está en curso.
+            Cada punto es cuántas <b>alumnas distintas</b> asistieron en ese periodo (clases marcadas como “asistió”), en la sede seleccionada. Una misma alumna que vino varias veces cuenta como 1. En el celular se agrupa por mes; en pantalla grande, por semana.<br>
+            El <b>periodo en curso</b> aparece como <b>“en curso”</b> (punto hueco y línea punteada): todavía no termina, por eso su número es bajo y no debe leerse como una caída. La comparación de la derecha usa el <b>último periodo completo</b>, no el que está en curso.
           </div>
           <div id="active-chart"><div style="padding:18px 0; font-size:12px; color:var(--ink-mute);">Cargando…</div></div>
         </div>
@@ -6665,12 +6665,13 @@ async function computeDebtSnapshot(locId) {
     return { total: Math.round(total), count };
   };
 
-  // 2 puntos: hace 3 semanas (ancla) y hoy. Línea simple "antes vs ahora".
+  // Serie completa de 6 cortes semanales (hoy y 5 semanas atrás). En PC se muestra
+  // completa; en móvil el pintor recorta a 2 puntos (hace 3 semanas y hoy).
   const base = STATE.currentDate ? new Date(STATE.currentDate) : new Date();
   const trend = [];
-  [3, 0].forEach(i => {
+  [5, 4, 3, 2, 1, 0].forEach(i => {
     const d = new Date(base); d.setDate(d.getDate() - i * 7); d.setHours(23, 59, 59, 999);
-    trend.push({ date: dateToIsoLocal(d), ...snapshotAt(d.getTime()) });
+    trend.push({ date: dateToIsoLocal(d), weeksAgo: i, ...snapshotAt(d.getTime()) });
   });
   const current = snapshotAt(null); // exacto = lista "Por cobrar"
   return { current, trend };
@@ -6698,7 +6699,20 @@ async function renderDebtSummary() {
   paintDebtSummary(data);
 }
 
+// Caché del último dato de cada gráfico para repintar (sin reconsultar) cuando
+// la ventana cruza el umbral móvil/PC (≤800px) y cambia la cantidad de puntos.
+let _lastDebtData = null, _lastActiveData = null;
+let _chartViewportIsMobile = window.matchMedia('(max-width: 800px)').matches;
+window.addEventListener('resize', () => {
+  const m = window.matchMedia('(max-width: 800px)').matches;
+  if (m === _chartViewportIsMobile) return; // no cruzó el umbral
+  _chartViewportIsMobile = m;
+  if (_lastDebtData && typeof paintDebtSummary === 'function') { try { paintDebtSummary(_lastDebtData); } catch (e) {} }
+  if (_lastActiveData && typeof paintActiveStudents === 'function') { try { paintActiveStudents(_lastActiveData); } catch (e) {} }
+});
+
 function paintDebtSummary(data) {
+  _lastDebtData = data;
   const amountEl = document.getElementById('debt-amount');
   const countEl  = document.getElementById('debt-count');
   const deltaEl  = document.getElementById('debt-trend-delta');
@@ -6709,12 +6723,20 @@ function paintDebtSummary(data) {
   if (countEl)  countEl.textContent  = `${data.current.count} alumna${data.current.count === 1 ? '' : 's'} con saldo`;
   if (typeof renderMiDiaResumen === 'function') renderMiDiaResumen();
 
-  const pts = data.trend || [];
+  const fullTrend = data.trend || [];
+  // Móvil (≤800px): solo hace 3 semanas y hoy (2 puntos). PC: serie completa (6).
+  const isMobile = window.matchMedia('(max-width: 800px)').matches;
+  const pts = isMobile ? fullTrend.filter(p => p.weeksAgo === 3 || p.weeksAgo === 0) : fullTrend;
+
+  const scaleLabelEl = document.getElementById('debt-trend-scale-label');
+  if (scaleLabelEl) scaleLabelEl.textContent = isMobile ? 'Alumnas con deuda · hace 3 sem. vs hoy' : 'Alumnas con deuda · últimas 6 semanas';
+
   if (deltaEl && pts.length >= 2) {
+    const wa = (pts[0].weeksAgo != null) ? pts[0].weeksAgo : 3;
     const diff = pts[pts.length - 1].count - pts[0].count;
-    if (diff < 0)      { deltaEl.textContent = `▼ ${Math.abs(diff)} menos que hace 3 sem`; deltaEl.style.color = 'var(--good,#1a8a4a)'; }
-    else if (diff > 0) { deltaEl.textContent = `▲ ${diff} más que hace 3 sem`;            deltaEl.style.color = 'var(--danger,#c0392b)'; }
-    else               { deltaEl.textContent = 'sin cambio';                                deltaEl.style.color = 'var(--ink-mute)'; }
+    if (diff < 0)      { deltaEl.textContent = `▼ ${Math.abs(diff)} menos que hace ${wa} sem`; deltaEl.style.color = 'var(--good,#1a8a4a)'; }
+    else if (diff > 0) { deltaEl.textContent = `▲ ${diff} más que hace ${wa} sem`;            deltaEl.style.color = 'var(--danger,#c0392b)'; }
+    else               { deltaEl.textContent = 'sin cambio';                                   deltaEl.style.color = 'var(--ink-mute)'; }
   } else if (deltaEl) { deltaEl.textContent = '—'; }
 
   if (!chart) return;
@@ -6886,6 +6908,7 @@ window.toggleActiveInfo = function() {
 };
 
 function paintActiveStudents(data) {
+  _lastActiveData = data;
   const todayEl = document.getElementById('active-today');
   const monthEl = document.getElementById('active-this-month');
   const monthDeltaEl = document.getElementById('active-month-delta');
@@ -6902,14 +6925,25 @@ function paintActiveStudents(data) {
     monthDeltaEl.style.color = diff > 0 ? 'var(--good,#1a8a4a)' : (diff < 0 ? 'var(--danger,#c0392b)' : 'var(--ink-mute)');
   }
 
-  const pts = (data.months && data.months.length) ? data.months : (data.weeks || []);
+  const isMobile = window.matchMedia('(max-width: 800px)').matches;
+  // Móvil: 3 puntos mensuales (mes-2, mes pasado, este mes). PC: últimas 6 semanas.
+  const pts = isMobile
+    ? ((data.months && data.months.length) ? data.months : [])
+    : (data.weeks || []).slice(-6);
   const ptLabel = (p) => p.label || (p.week ? `${p.week.split('-')[2]}/${p.week.split('-')[1]}` : '');
+  const isWeekly = !!(pts.length && pts[0] && pts[0].week);
+
+  const scaleLabelEl = document.getElementById('active-trend-scale-label');
+  if (scaleLabelEl) scaleLabelEl.textContent = isWeekly
+    ? `Alumnas que asistieron · por semana (últimas ${pts.length})`
+    : 'Alumnas que asistieron · por mes (últimos 3)';
+
   if (trendDeltaEl && pts.length >= 2) {
-    // El último punto (este mes) está EN CURSO; comparamos el último mes COMPLETO contra el primero.
+    // El último punto (periodo en curso) es parcial; comparamos el último periodo COMPLETO contra el primero.
     const lastComplete = pts[pts.length - 2].count;
     const first = pts[0].count;
     const diff = lastComplete - first;
-    const ref = ptLabel(pts[0]);
+    const ref = isWeekly ? `hace ${pts.length - 1} sem` : ptLabel(pts[0]);
     if (diff > 0)      { trendDeltaEl.textContent = `▲ ${diff} vs ${ref}`; trendDeltaEl.style.color = 'var(--good,#1a8a4a)'; }
     else if (diff < 0) { trendDeltaEl.textContent = `▼ ${Math.abs(diff)} vs ${ref}`; trendDeltaEl.style.color = 'var(--danger,#c0392b)'; }
     else               { trendDeltaEl.textContent = 'sin cambio'; trendDeltaEl.style.color = 'var(--ink-mute)'; }
