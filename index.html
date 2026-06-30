@@ -14084,7 +14084,7 @@ function pltRenderGrid() {
       const list = slots[`${d.n}|${h}`] || [];
       const chips = list.map(s => {
         const st = pltStudentState(s);
-        const booked = isCurWeek && PLT_BOOKED.has(`${s.id}|${d.n}|${h}`);
+        const booked = PLT_BOOKED.has(`${s.id}|${d.n}|${h}`);
         const nm = `${s.first_name || ''} ${(s.last_name || '').charAt(0)}${s.last_name ? '.' : ''}`.trim();
         return `<div class="plt-chip st-${st}" onclick="openStudentModalWithPackages('${s.id}')" title="${escape((s.first_name || '') + ' ' + (s.last_name || ''))}"><span class="nm">${escape(nm)}</span>${booked ? '<span class="ok">✓</span>' : ''}</div>`;
       }).join('');
