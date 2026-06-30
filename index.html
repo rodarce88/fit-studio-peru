@@ -746,7 +746,7 @@
   .plt-hourh { position: sticky; left: 0; z-index: 1; background: var(--fit-cream); border-right: 1px solid var(--line); border-bottom: 1px solid var(--line-soft); display: flex; align-items: center; justify-content: center; font-size: 11px; color: var(--ink-mute); font-weight: 600; }
   .plt-corner { position: sticky; left: 0; top: 0; z-index: 3; background: var(--fit-cream); border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); }
 
-  .plt-chip { display: flex; align-items: center; gap: 5px; font-size: 11.5px; line-height: 1.2; padding: 4px 7px; border-radius: 7px; margin-bottom: 4px; cursor: pointer; border: 1px solid; white-space: nowrap; overflow: hidden; }
+  .plt-chip { display: flex; align-items: center; gap: 5px; font-size: 12.5px; line-height: 1.15; padding: 4px 7px; border-radius: 7px; margin-bottom: 4px; cursor: pointer; border: 1px solid; white-space: nowrap; overflow: hidden; }
   .plt-chip .nm { overflow: hidden; text-overflow: ellipsis; }
   .plt-chip .ok { margin-left: auto; color: var(--good); font-weight: 700; flex-shrink: 0; }
   .plt-chip.st-fijo { background: #fff; border-color: var(--line); color: var(--ink); }
@@ -760,15 +760,15 @@
   .plt-pending-h { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; padding: 0 4px; }
   .plt-pending-h .t { font-size: 14px; font-weight: 600; color: var(--ink); }
   .plt-pending-h .c { font-size: 11px; color: var(--ink-mute); }
-  .plt-pending-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 10px; }
-  .plt-pend-card { display: flex; align-items: center; gap: 10px; background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 11px 13px; }
-  .plt-pend-av { width: 32px; height: 32px; border-radius: 50%; background: var(--fit-lavender-pale); color: var(--fit-purple); font-size: 11px; font-weight: 600; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
-  .plt-pend-info { flex: 1; min-width: 0; }
-  .plt-pend-name { font-size: 13px; font-weight: 500; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .plt-pend-sub { font-size: 11px; color: var(--ink-mute); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .plt-pend-list { background: #fff; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+  .plt-pend-row { display: flex; align-items: center; gap: 12px; padding: 9px 14px; border-bottom: 1px solid var(--line-soft); }
+  .plt-pend-row:last-child { border-bottom: none; }
+  .plt-pend-av { width: 28px; height: 28px; border-radius: 50%; background: var(--fit-lavender-pale); color: var(--fit-purple); font-size: 10px; font-weight: 600; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .plt-pend-name { font-size: 13px; font-weight: 500; color: var(--ink); flex: 0 0 230px; max-width: 230px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
+  .plt-pend-name:hover { color: var(--fit-purple); }
+  .plt-pend-sub { font-size: 12px; color: var(--ink-mute); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .plt-pend-back { font-size: 12px; color: var(--fit-purple); background: var(--fit-lavender-pale); border: none; border-radius: 8px; padding: 7px 11px; cursor: pointer; white-space: nowrap; flex-shrink: 0; }
   .plt-pend-back:hover { background: var(--fit-lavender); }
-  .plt-pending-empty { font-size: 12px; color: var(--ink-mute); padding: 4px; }
   .nav-new { position: absolute; top: -8px; left: -11px; background: var(--danger); color: #fff; font-size: 8px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; padding: 1px 4px; border-radius: 5px; line-height: 1.35; box-shadow: 0 1px 3px rgba(185,28,28,0.35); }
 
   .attendance-toggle { display: flex; gap: 4px; }
@@ -1426,12 +1426,12 @@
   .sd-kebab:hover, .sd-kebab:active { background: var(--fit-cream); color: var(--fit-purple); }
 
   /* Historial de clases como lista de tarjetas (responsiva en todo ancho) */
-  .sd-cls-row { padding: 11px 14px; border-bottom: 1px solid var(--line); }
+  .sd-cls-row { display: flex; align-items: center; gap: 12px; padding: 7px 14px; border-bottom: 1px solid var(--line-soft); }
   .sd-cls-row:last-child { border-bottom: none; }
-  .sd-cls-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
-  .sd-cls-date { font-weight: 600; font-size: 13.5px; color: var(--ink); }
-  .sd-cls-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 5px; font-size: 12px; color: var(--ink-mute); }
-  .sd-cls-meta .sd-cls-prof { color: var(--ink-soft); max-width: 170px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .sd-cls-date { font-weight: 600; font-size: 12.5px; color: var(--ink); flex: 0 0 92px; }
+  .sd-cls-meta { display: flex; align-items: center; gap: 6px; flex: 1; min-width: 0; font-size: 12px; color: var(--ink-mute); overflow: hidden; white-space: nowrap; }
+  .sd-cls-meta .sd-cls-prof { color: var(--ink-soft); max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .sd-cls-badge { flex: 0 0 auto; }
   .sd-cls-dot { opacity: 0.45; }
 
   /* Contenedor del bottom sheet de acciones del perfil (reusa clases .as-*) */
@@ -14116,7 +14116,7 @@ function pltRenderGrid() {
       const chips = list.map(s => {
         const st = pltStudentState(s);
         const booked = PLT_BOOKED.has(`${s.id}|${d.n}|${h}`);
-        const nm = `${s.first_name || ''} ${(s.last_name || '').charAt(0)}${s.last_name ? '.' : ''}`.trim();
+        const nm = `${s.first_name || ''} ${s.last_name || ''}`.trim();
         return `<div class="plt-chip st-${st}" onclick="pltOpenChipMenu('${s.id}', ${d.n}, ${h}, event)" title="${escape((s.first_name || '') + ' ' + (s.last_name || ''))}"><span class="nm">${escape(nm)}</span>${booked ? '<span class="ok">✓</span>' : ''}</div>`;
       }).join('');
       html += `<div class="plt-cell">${chips}</div>`;
@@ -14155,21 +14155,19 @@ function pltRenderPending() {
   if (!wrap) return;
   const list = pltPendingStudents();
   if (!list.length) { wrap.innerHTML = ''; return; }
-  const cards = list.map(s => {
+  const rows = list.map(s => {
     const fullName = `${s.first_name || ''} ${s.last_name || ''}`.trim();
     const initials = `${(s.first_name || '').charAt(0)}${(s.last_name || '').charAt(0)}`.toUpperCase();
-    return `<div class="plt-pend-card">
+    return `<div class="plt-pend-row">
       <span class="plt-pend-av">${escape(initials)}</span>
-      <div class="plt-pend-info">
-        <div class="plt-pend-name" onclick="openStudentModalWithPackages('${s.id}')" style="cursor:pointer;">${escape(fullName)}</div>
-        <div class="plt-pend-sub">${escape(pltPendSummary(s))}</div>
-      </div>
+      <span class="plt-pend-name" onclick="openStudentModalWithPackages('${s.id}')">${escape(fullName)}</span>
+      <span class="plt-pend-sub">${escape(pltPendSummary(s))}</span>
       <button class="plt-pend-back" onclick="pltReturnFromPending('${s.id}')">Devolver al horario</button>
     </div>`;
   }).join('');
   wrap.innerHTML = `<div class="plt-pending">
     <div class="plt-pending-h"><i class="ti ti-clock-pause" style="font-size:17px; color:var(--ink-mute);"></i><span class="t">Pendientes</span><span class="c">${list.length} · no contestan o no reagendan</span></div>
-    <div class="plt-pending-grid">${cards}</div>
+    <div class="plt-pend-list">${rows}</div>
   </div>`;
 }
 async function pltMoveToPending(studentId) {
@@ -27170,16 +27168,9 @@ function renderDetailClasses(stud) {
       const inst = STATE.instructors.find(i => i.id === sess.instructor_id);
       const profName = inst ? escape(`${inst.first_name}${inst.last_name ? ' ' + inst.last_name : ''}`) : '—';
       return `<div class="sd-cls-row">
-        <div class="sd-cls-top">
-          <span class="sd-cls-date">${formatDate(sess.session_date)}</span>
-          <span>${_renderAttBadge(att?.status, b.status)}</span>
-        </div>
-        <div class="sd-cls-meta">
-          <span>${_dia(sess.session_date)}</span><span class="sd-cls-dot">·</span>
-          <span>${formatHour(sess.hour)}</span><span class="sd-cls-dot">·</span>
-          <span class="sd-cls-prof">${profName}</span><span class="sd-cls-dot">·</span>
-          <span>${_sedeName(sess)}</span>
-        </div>
+        <span class="sd-cls-date">${formatDate(sess.session_date)}</span>
+        <span class="sd-cls-meta"><span>${_dia(sess.session_date)}</span><span class="sd-cls-dot">·</span><span>${formatHour(sess.hour)}</span><span class="sd-cls-dot">·</span><span class="sd-cls-prof">${profName}</span><span class="sd-cls-dot">·</span><span>${_sedeName(sess)}</span></span>
+        <span class="sd-cls-badge">${_renderAttBadge(att?.status, b.status)}</span>
       </div>`;
     }).join('');
   };
