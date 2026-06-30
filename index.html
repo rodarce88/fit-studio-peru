@@ -716,6 +716,47 @@
   .fix-row select { font-size: 13px; padding: 6px 10px; border-radius: 8px; border: 1px solid var(--line); background: #fff; color: var(--ink); min-width: 92px; }
   .fix-row select.missing { border-color: var(--danger); background: var(--danger-soft); }
 
+  /* ===== Plantilla semanal (grilla guía de horarios fijos) ===== */
+  #view-plantilla.is-active { display: block; }
+  .plt-screen { margin: -6px -22px 0; }
+  .plt-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 16px; padding: 0 4px; }
+  .plt-title { font-family: var(--display, serif); font-size: 30px; font-weight: 600; color: var(--ink); margin: 0; }
+  .plt-title em { font-style: italic; }
+  .plt-sub { font-size: 13px; color: var(--ink-mute); margin-top: 2px; }
+  .plt-controls { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .plt-sedes { display: flex; gap: 6px; }
+  .plt-sede { font-size: 12.5px; padding: 7px 13px; border-radius: var(--radius-pill); border: 1px solid var(--line); background: #fff; color: var(--ink-mute); cursor: pointer; font-weight: 500; }
+  .plt-sede.on { background: var(--fit-purple); color: #fff; border-color: var(--fit-purple); }
+  .plt-week { display: flex; align-items: center; gap: 6px; background: #fff; border: 1px solid var(--line); border-radius: var(--radius-pill); padding: 4px; }
+  .plt-week button { width: 30px; height: 30px; border: none; background: transparent; border-radius: 50%; cursor: pointer; color: var(--fit-purple); font-size: 15px; }
+  .plt-week button:hover { background: var(--fit-lavender-pale); }
+  .plt-week .pw-label { font-size: 12.5px; color: var(--ink); font-weight: 500; padding: 0 6px; min-width: 122px; text-align: center; }
+  .plt-legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 11.5px; color: var(--ink-mute); padding: 0 4px 12px; }
+  .plt-legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .plt-legend i { width: 11px; height: 11px; border-radius: 3px; display: inline-block; }
+
+  .plt-scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: 14px; background: #fff; }
+  .plt-grid { display: grid; grid-template-columns: 56px repeat(7, minmax(118px, 1fr)); min-width: 880px; }
+  .plt-cell { border-right: 1px solid var(--line-soft); border-bottom: 1px solid var(--line-soft); padding: 6px; min-height: 56px; }
+  .plt-grid > .plt-cell:nth-child(8n) { border-right: none; }
+  .plt-colh { position: sticky; top: 0; z-index: 2; background: var(--fit-cream); text-align: center; padding: 9px 4px; border-bottom: 1px solid var(--line); }
+  .plt-colh .d { font-size: 12px; font-weight: 600; color: var(--ink); text-transform: uppercase; letter-spacing: 0.03em; }
+  .plt-colh .dt { font-size: 11px; color: var(--ink-mute); margin-top: 1px; }
+  .plt-colh.is-today .d, .plt-colh.is-today .dt { color: var(--fit-purple); }
+  .plt-hourh { position: sticky; left: 0; z-index: 1; background: var(--fit-cream); border-right: 1px solid var(--line); border-bottom: 1px solid var(--line-soft); display: flex; align-items: center; justify-content: center; font-size: 11px; color: var(--ink-mute); font-weight: 600; }
+  .plt-corner { position: sticky; left: 0; top: 0; z-index: 3; background: var(--fit-cream); border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+
+  .plt-chip { display: flex; align-items: center; gap: 5px; font-size: 11.5px; line-height: 1.2; padding: 4px 7px; border-radius: 7px; margin-bottom: 4px; cursor: pointer; border: 1px solid; white-space: nowrap; overflow: hidden; }
+  .plt-chip .nm { overflow: hidden; text-overflow: ellipsis; }
+  .plt-chip .ok { margin-left: auto; color: var(--good); font-weight: 700; flex-shrink: 0; }
+  .plt-chip.st-fijo { background: #fff; border-color: var(--line); color: var(--ink); }
+  .plt-chip.st-noconfirm { background: #FBF1D9; border-color: #EBCB86; color: #8A5A06; }
+  .plt-chip.st-frozen { background: #ECEAEF; border-color: #D6D2DC; color: #6B6676; }
+  .plt-chip.st-nopkg { background: #FBE3E6; border-color: #E3A9AE; color: #8C1D2E; }
+  .plt-empty-state { padding: 60px 20px; text-align: center; color: var(--ink-mute); font-size: 14px; }
+  .plt-cell-empty { color: var(--ink-faint); font-size: 11px; text-align: center; padding-top: 8px; opacity: 0; }
+  .nav-new { position: absolute; top: -8px; left: -11px; background: var(--danger); color: #fff; font-size: 8px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; padding: 1px 4px; border-radius: 5px; line-height: 1.35; box-shadow: 0 1px 3px rgba(185,28,28,0.35); }
+
   .attendance-toggle { display: flex; gap: 4px; }
   .att-btn { width: 32px; height: 32px; border-radius: 50%; border: 1.5px solid var(--line); display: grid; place-items: center; color: var(--ink-faint); transition: all 0.15s; }
   .att-btn:hover { border-color: var(--fit-purple); color: var(--fit-purple); }
@@ -3477,6 +3518,10 @@
       <span class="nav-icon"><svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg></span>
       Calendario
     </button>
+    <button class="nav-item" data-view="plantilla" onclick="showView('plantilla', this); renderPlantillaView();">
+      <span class="nav-icon"><svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M8 4v16M13 4v16M18 4v16"/></svg></span>
+      <span style="position:relative;">Plantilla semanal<span class="nav-new">new</span></span>
+    </button>
     <button class="nav-item" data-view="pending-recovery" onclick="showView('pending-recovery', this)">
       <span class="nav-icon"><svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M12 8v4l3 2"/><circle cx="12" cy="12" r="10"/></svg></span>
       Recuperar
@@ -3799,6 +3844,36 @@
       </div><!-- /dash-side-panels -->
     </div><!-- /dash-col-right -->
     </div><!-- /dash-shell -->
+  </section>
+
+  <!-- PLANTILLA SEMANAL (guía de horarios fijos) -->
+  <section class="view" id="view-plantilla">
+    <div class="plt-screen">
+      <div class="plt-head">
+        <div>
+          <h1 class="plt-title"><em>Plantilla semanal</em></h1>
+          <div class="plt-sub">Guía de horarios fijos · no son reservas, es referencia</div>
+        </div>
+        <div class="plt-controls">
+          <div class="plt-sedes" id="plt-sedes"></div>
+          <div class="plt-week">
+            <button type="button" onclick="pltNavWeek(-1)" aria-label="Semana anterior">‹</button>
+            <span class="pw-label" id="plt-week-label">—</span>
+            <button type="button" onclick="pltNavWeek(1)" aria-label="Semana siguiente">›</button>
+          </div>
+        </div>
+      </div>
+      <div class="plt-legend">
+        <span><i style="background:#fff;border:1px solid var(--line);"></i>Fijo</span>
+        <span><i style="background:#FBF1D9;border:1px solid #EBCB86;"></i>No confirmar</span>
+        <span><i style="background:#ECEAEF;border:1px solid #D6D2DC;"></i>Congelado</span>
+        <span><i style="background:#FBE3E6;border:1px solid #E3A9AE;"></i>Sin paquete</span>
+        <span><b style="color:var(--good);">✓</b> ya en Mi día</span>
+      </div>
+      <div class="plt-scroll">
+        <div class="plt-grid" id="plt-grid"></div>
+      </div>
+    </div>
   </section>
 
   <!-- STUDENTS -->
@@ -13880,6 +13955,145 @@ function showView(name, btn) {
 }
 
 // ============================================
+// PLANTILLA SEMANAL — guía de horarios fijos (Fase 1)
+// Capa de referencia: alumnos modality 'fixed' con fixed_schedule.
+// NO son reservas. Colores derivados del estado (paquete/needs_confirmation).
+// Palomita "ya en Mi día" = cruce con clases reales de la semana actual.
+// ============================================
+let PLT_SEDE = null;        // sede seleccionada
+let PLT_WEEK_START = null;  // lunes (Date) de la semana mostrada
+let PLT_PKG_CACHE = {};     // student_id -> [paquetes] (para color)
+let PLT_BOOKED = new Set(); // `${student_id}|${dow}|${hour}` con clase real esta semana
+
+function pltMonday(d) {
+  const x = new Date(d);
+  const wd = (x.getDay() + 6) % 7; // 0 = lunes
+  x.setDate(x.getDate() - wd);
+  x.setHours(0, 0, 0, 0);
+  return x;
+}
+function pltFmtDate(d) { return d.toLocaleDateString('es-PE', { day: 'numeric', month: 'short' }); }
+function pltDayToDate(dayN) {
+  const d = new Date(PLT_WEEK_START);
+  d.setDate(d.getDate() + (dayN - 1));
+  return d;
+}
+function pltFixedStudents() {
+  return STATE.students.filter(s =>
+    s.modality === 'fixed' &&
+    s.location_id === PLT_SEDE &&
+    Array.isArray(s.fixed_schedule) && s.fixed_schedule.length
+  );
+}
+async function renderPlantillaView() {
+  if (!PLT_SEDE) PLT_SEDE = STATE.currentLocationId;
+  if (!PLT_WEEK_START) PLT_WEEK_START = pltMonday(new Date());
+  pltRenderSedes();
+  pltRenderWeekLabel();
+  const grid = document.getElementById('plt-grid');
+  if (grid) grid.innerHTML = '<div class="plt-empty-state" style="grid-column:1/-1;">Cargando…</div>';
+  await pltLoadData();
+  pltRenderGrid();
+}
+function pltRenderSedes() {
+  const el = document.getElementById('plt-sedes');
+  if (!el) return;
+  el.innerHTML = (STATE.locations || []).map(l =>
+    `<button type="button" class="plt-sede ${l.id === PLT_SEDE ? 'on' : ''}" onclick="pltSetSede('${l.id}')">${escape(l.name)}</button>`
+  ).join('');
+}
+function pltSetSede(id) { PLT_SEDE = id; renderPlantillaView(); }
+function pltRenderWeekLabel() {
+  const el = document.getElementById('plt-week-label');
+  if (!el) return;
+  const end = new Date(PLT_WEEK_START); end.setDate(end.getDate() + 6);
+  const cur = pltMonday(new Date()).getTime() === PLT_WEEK_START.getTime();
+  el.textContent = (cur ? 'Esta semana · ' : '') + `${pltFmtDate(PLT_WEEK_START)} – ${pltFmtDate(end)}`;
+}
+function pltNavWeek(delta) {
+  PLT_WEEK_START = new Date(PLT_WEEK_START);
+  PLT_WEEK_START.setDate(PLT_WEEK_START.getDate() + delta * 7);
+  renderPlantillaView();
+}
+async function pltLoadData() {
+  PLT_PKG_CACHE = {}; PLT_BOOKED = new Set();
+  const ids = pltFixedStudents().map(s => s.id);
+  if (!ids.length || typeof sb === 'undefined' || !isOnline) return;
+  try {
+    const { data } = await sb.from('student_packages')
+      .select('student_id, classes_total, classes_used, is_active, is_frozen, status')
+      .in('student_id', ids);
+    (data || []).forEach(p => { (PLT_PKG_CACHE[p.student_id] = PLT_PKG_CACHE[p.student_id] || []).push(p); });
+  } catch (e) {}
+  try {
+    const wEnd = new Date(PLT_WEEK_START); wEnd.setDate(wEnd.getDate() + 6);
+    const { data: sess } = await sb.from('class_sessions')
+      .select('id, session_date, hour')
+      .eq('location_id', PLT_SEDE)
+      .eq('is_cancelled', false)
+      .gte('session_date', dateToIsoLocal(PLT_WEEK_START))
+      .lte('session_date', dateToIsoLocal(wEnd));
+    const sessMap = {};
+    (sess || []).forEach(cs => { sessMap[cs.id] = cs; });
+    const sessIds = Object.keys(sessMap);
+    if (sessIds.length) {
+      const { data: bks } = await sb.from('session_bookings')
+        .select('session_id, student_id, cancelled_at')
+        .in('session_id', sessIds);
+      (bks || []).forEach(b => {
+        if (b.cancelled_at) return;
+        const cs = sessMap[b.session_id]; if (!cs) return;
+        const dow = (new Date(cs.session_date + 'T00:00:00').getDay() + 6) % 7 + 1;
+        PLT_BOOKED.add(`${b.student_id}|${dow}|${cs.hour}`);
+      });
+    }
+  } catch (e) {}
+}
+function pltStudentState(s) {
+  const pkgs = PLT_PKG_CACHE[s.id] || [];
+  if (pkgs.some(isPkgAlive)) return (s.needs_confirmation === false) ? 'noconfirm' : 'fijo';
+  if (pkgs.some(p => p.is_frozen)) return 'frozen';
+  return 'nopkg';
+}
+function pltRenderGrid() {
+  const grid = document.getElementById('plt-grid');
+  if (!grid) return;
+  const studs = pltFixedStudents();
+  if (!studs.length) {
+    grid.innerHTML = '<div class="plt-empty-state" style="grid-column:1/-1;">Aún no hay alumnos fijos con horario en esta sede.<br><span style="font-size:12px;">Agrega el horario preferido desde el perfil del alumno.</span></div>';
+    return;
+  }
+  const slots = {};
+  studs.forEach(s => {
+    s.fixed_schedule.forEach(sl => {
+      if (!Number.isInteger(sl.day) || !Number.isInteger(sl.hour)) return;
+      (slots[`${sl.day}|${sl.hour}`] = slots[`${sl.day}|${sl.hour}`] || []).push(s);
+    });
+  });
+  const todayDow = (new Date().getDay() + 6) % 7 + 1;
+  const isCurWeek = pltMonday(new Date()).getTime() === PLT_WEEK_START.getTime();
+  let html = '<div class="plt-corner"></div>';
+  FIXED_DAYS.forEach(d => {
+    const dt = pltDayToDate(d.n);
+    const today = isCurWeek && d.n === todayDow;
+    html += `<div class="plt-colh ${today ? 'is-today' : ''}"><div class="d">${d.lbl}</div><div class="dt">${dt.getDate()}</div></div>`;
+  });
+  FIXED_HOURS.forEach(h => {
+    html += `<div class="plt-hourh">${fixedHourLabel(h)}</div>`;
+    FIXED_DAYS.forEach(d => {
+      const list = slots[`${d.n}|${h}`] || [];
+      const chips = list.map(s => {
+        const st = pltStudentState(s);
+        const booked = isCurWeek && PLT_BOOKED.has(`${s.id}|${d.n}|${h}`);
+        const nm = `${s.first_name || ''} ${(s.last_name || '').charAt(0)}${s.last_name ? '.' : ''}`.trim();
+        return `<div class="plt-chip st-${st}" onclick="openStudentModalWithPackages('${s.id}')" title="${escape((s.first_name || '') + ' ' + (s.last_name || ''))}"><span class="nm">${escape(nm)}</span>${booked ? '<span class="ok">✓</span>' : ''}</div>`;
+      }).join('');
+      html += `<div class="plt-cell">${chips}</div>`;
+    });
+  });
+  grid.innerHTML = html;
+}
+
 // MOBILE COORD — Bottom bar + Menu screen
 // Funciones que solo aplican a coord en viewport mobile.
 // El bottom bar tiene 4 tabs (Mi día, Alumnos, Buscar, Menú) + FAB de crear.
@@ -13899,6 +14113,7 @@ function syncMobileBottomNav(viewName) {
     'renewals': 'menu',
     'instructors': 'menu',
     'schedule': 'menu',
+    'plantilla': 'menu',
     'packages': 'menu',
     'reports': 'menu',
     'logs': 'menu',
