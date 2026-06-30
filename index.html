@@ -755,6 +755,20 @@
   .plt-chip.st-nopkg { background: #FBE3E6; border-color: #E3A9AE; color: #8C1D2E; }
   .plt-empty-state { padding: 60px 20px; text-align: center; color: var(--ink-mute); font-size: 14px; }
   .plt-cell-empty { color: var(--ink-faint); font-size: 11px; text-align: center; padding-top: 8px; opacity: 0; }
+  .plt-nopkg-pill { display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; color: #8C1D2E; background: #FBE3E6; border: 1px solid #E3A9AE; border-radius: var(--radius-pill); padding: 3px 10px; }
+  .plt-pending { margin-top: 18px; }
+  .plt-pending-h { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; padding: 0 4px; }
+  .plt-pending-h .t { font-size: 14px; font-weight: 600; color: var(--ink); }
+  .plt-pending-h .c { font-size: 11px; color: var(--ink-mute); }
+  .plt-pending-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 10px; }
+  .plt-pend-card { display: flex; align-items: center; gap: 10px; background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 11px 13px; }
+  .plt-pend-av { width: 32px; height: 32px; border-radius: 50%; background: var(--fit-lavender-pale); color: var(--fit-purple); font-size: 11px; font-weight: 600; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .plt-pend-info { flex: 1; min-width: 0; }
+  .plt-pend-name { font-size: 13px; font-weight: 500; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .plt-pend-sub { font-size: 11px; color: var(--ink-mute); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .plt-pend-back { font-size: 12px; color: var(--fit-purple); background: var(--fit-lavender-pale); border: none; border-radius: 8px; padding: 7px 11px; cursor: pointer; white-space: nowrap; flex-shrink: 0; }
+  .plt-pend-back:hover { background: var(--fit-lavender); }
+  .plt-pending-empty { font-size: 12px; color: var(--ink-mute); padding: 4px; }
   .nav-new { position: absolute; top: -8px; left: -11px; background: var(--danger); color: #fff; font-size: 8px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; padding: 1px 4px; border-radius: 5px; line-height: 1.35; box-shadow: 0 1px 3px rgba(185,28,28,0.35); }
 
   .attendance-toggle { display: flex; gap: 4px; }
@@ -3869,10 +3883,12 @@
         <span><i style="background:#ECEAEF;border:1px solid #D6D2DC;"></i>Congelado</span>
         <span><i style="background:#FBE3E6;border:1px solid #E3A9AE;"></i>Sin paquete</span>
         <span><b style="color:var(--good);">✓</b> ya en Mi día</span>
+        <span id="plt-nopkg-count" style="margin-left:auto;"></span>
       </div>
       <div class="plt-scroll">
         <div class="plt-grid" id="plt-grid"></div>
       </div>
+      <div id="plt-pending"></div>
     </div>
   </section>
 
@@ -11784,6 +11800,7 @@ async function saveStudent() {
   showToast(isEdit ? 'Alumno actualizado' : 'Alumno creado ✨', 'success');
   closeModals();
   renderAll();
+  if (typeof pltRefreshAfterSave === 'function') pltRefreshAfterSave();
 }
 
 async function deactivateStudent() {
@@ -13985,7 +14002,15 @@ function pltFixedStudents() {
   return STATE.students.filter(s =>
     s.modality === 'fixed' &&
     s.location_id === PLT_SEDE &&
+    !s.fixed_pending &&
     Array.isArray(s.fixed_schedule) && s.fixed_schedule.length
+  );
+}
+function pltPendingStudents() {
+  return STATE.students.filter(s =>
+    s.modality === 'fixed' &&
+    s.location_id === PLT_SEDE &&
+    s.fixed_pending
   );
 }
 async function renderPlantillaView() {
@@ -14064,6 +14089,9 @@ function pltRenderGrid() {
   const studs = pltFixedStudents();
   if (!studs.length) {
     grid.innerHTML = '<div class="plt-empty-state" style="grid-column:1/-1;">Aún no hay alumnos fijos con horario en esta sede.<br><span style="font-size:12px;">Agrega el horario preferido desde el perfil del alumno.</span></div>';
+    const pill0 = document.getElementById('plt-nopkg-count');
+    if (pill0) pill0.innerHTML = '';
+    pltRenderPending();
     return;
   }
   const slots = {};
@@ -14095,6 +14123,89 @@ function pltRenderGrid() {
     });
   });
   grid.innerHTML = html;
+  const nopkg = studs.filter(s => pltStudentState(s) === 'nopkg').length;
+  const pill = document.getElementById('plt-nopkg-count');
+  if (pill) pill.innerHTML = nopkg ? `<span class="plt-nopkg-pill"><i class="ti ti-alert-triangle" style="font-size:13px;"></i> ${nopkg} sin paquete</span>` : '';
+  pltRenderPending();
+}
+
+// Refresca la Plantilla tras guardar un perfil (toggle no-confirmar, horario, etc.)
+// Pinta al instante con STATE.students ya actualizado y reconcilia paquetes en segundo plano.
+function pltRefreshAfterSave() {
+  if (STATE.currentView !== 'plantilla') return;
+  if (typeof pltRenderGrid !== 'function') return;
+  pltRenderGrid();
+  if (typeof pltLoadData === 'function') {
+    pltLoadData().then(() => pltRenderGrid()).catch(() => {});
+  }
+}
+
+// --- Pendientes (Fase 3) ---
+function pltPendSummary(s) {
+  // Resumen del horario que prefirió (días + horas) para la tarjeta de pendiente
+  if (!Array.isArray(s.fixed_schedule) || !s.fixed_schedule.length) return 'Sin horario guardado';
+  const ab = { 1: 'Lun', 2: 'Mar', 3: 'Mié', 4: 'Jue', 5: 'Vie', 6: 'Sáb', 7: 'Dom' };
+  return s.fixed_schedule
+    .slice().sort((a, b) => a.day - b.day)
+    .map(sl => `${ab[sl.day] || ''} ${fixedHourLabel(sl.hour)}`)
+    .join(' · ');
+}
+function pltRenderPending() {
+  const wrap = document.getElementById('plt-pending');
+  if (!wrap) return;
+  const list = pltPendingStudents();
+  if (!list.length) { wrap.innerHTML = ''; return; }
+  const cards = list.map(s => {
+    const fullName = `${s.first_name || ''} ${s.last_name || ''}`.trim();
+    const initials = `${(s.first_name || '').charAt(0)}${(s.last_name || '').charAt(0)}`.toUpperCase();
+    return `<div class="plt-pend-card">
+      <span class="plt-pend-av">${escape(initials)}</span>
+      <div class="plt-pend-info">
+        <div class="plt-pend-name" onclick="openStudentModalWithPackages('${s.id}')" style="cursor:pointer;">${escape(fullName)}</div>
+        <div class="plt-pend-sub">${escape(pltPendSummary(s))}</div>
+      </div>
+      <button class="plt-pend-back" onclick="pltReturnFromPending('${s.id}')">Devolver al horario</button>
+    </div>`;
+  }).join('');
+  wrap.innerHTML = `<div class="plt-pending">
+    <div class="plt-pending-h"><i class="ti ti-clock-pause" style="font-size:17px; color:var(--ink-mute);"></i><span class="t">Pendientes</span><span class="c">${list.length} · no contestan o no reagendan</span></div>
+    <div class="plt-pending-grid">${cards}</div>
+  </div>`;
+}
+async function pltMoveToPending(studentId) {
+  if (!isOnline) { showToast('Necesita conexión', 'error'); return; }
+  const stud = STATE.students.find(s => s.id === studentId);
+  const name = stud ? stud.first_name : 'el alumno';
+  const ok = await confirmSheet({
+    title: 'Mover a pendientes',
+    message: `${name} saldrá de la grilla y pasará a la lista de Pendientes. Conserva su horario; puedes devolverlo cuando quieras.`,
+    okLabel: 'Mover a pendientes',
+    cancelLabel: 'Cancelar',
+  });
+  if (!ok) return;
+  await pltSetPending(studentId, true);
+}
+async function pltReturnFromPending(studentId) {
+  await pltSetPending(studentId, false);
+}
+async function pltSetPending(studentId, val) {
+  if (!isOnline) { showToast('Necesita conexión', 'error'); return; }
+  try {
+    const { error } = await sb.from('students').update({ fixed_pending: val }).eq('id', studentId);
+    if (error) throw error;
+    const idx = STATE.students.findIndex(s => s.id === studentId);
+    if (idx >= 0) STATE.students[idx].fixed_pending = val;
+    const stud = STATE.students.find(s => s.id === studentId);
+    const name = stud ? stud.first_name : 'Alumno';
+    try {
+      logActivity('student.fixed_pending', { table: 'students', id: studentId, label: `${name} · ${val ? 'a pendientes' : 'devuelto al horario'}` }, { fixed_pending: val, from: 'plantilla' });
+    } catch (e) {}
+    showToast(val ? `${name} pasó a pendientes` : `${name} volvió al horario`, 'success');
+    pltRenderGrid();
+  } catch (err) {
+    console.error('pltSetPending:', err);
+    showToast('Error: ' + (err.message || 'desconocido'), 'error');
+  }
 }
 
 // --- Acciones rápidas del chip (Fase 2) ---
@@ -14114,7 +14225,7 @@ function pltOpenChipMenu(studentId, dayN, hour, evt) {
   menu.style.cssText = 'position:fixed; z-index:9999; background:#fff; border-radius:12px; box-shadow:0 12px 32px rgba(0,0,0,0.16); border:1px solid var(--line); width:268px; padding:6px; font-size:13px;';
   const rect = evt.currentTarget.getBoundingClientRect();
   let top = rect.bottom + 6;
-  if (top + 230 > window.innerHeight) top = Math.max(8, rect.top - 230);
+  if (top + 290 > window.innerHeight) top = Math.max(8, rect.top - 290);
   menu.style.top = top + 'px';
   menu.style.left = Math.min(window.innerWidth - 276, Math.max(8, rect.left)) + 'px';
   const item = (iconHtml, label, sub, onclick, color) =>
@@ -14128,6 +14239,7 @@ function pltOpenChipMenu(studentId, dayN, hour, evt) {
   html += item('<i class="ti ti-copy"></i>', 'Copiar mensaje de confirmación', '', `copyConfirmMessageForCell('${studentId}','${dateIso}',${hour},'${PLT_SEDE}')`);
   html += item('<i class="ti ti-brand-whatsapp"></i>', 'Abrir WhatsApp', '', `openWhatsAppForCell('${studentId}','${dateIso}',${hour},'${PLT_SEDE}')`, '#1FA855');
   html += item('<i class="ti ti-user"></i>', 'Ver perfil', '', `openStudentModalWithPackages('${studentId}')`);
+  html += item('<i class="ti ti-clock-pause"></i>', 'Mover a pendientes', 'Lo saca de la grilla, conserva su horario', `pltMoveToPending('${studentId}')`, 'var(--ink-mute)');
   menu.innerHTML = html;
   document.body.appendChild(menu);
   setTimeout(() => document.addEventListener('click', pltCloseChipMenu, { once: true }), 50);
