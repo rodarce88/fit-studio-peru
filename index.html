@@ -3570,14 +3570,14 @@
         <div style="margin-top:16px;">
           <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; gap:10px;">
             <span style="display:inline-flex; align-items:center; gap:7px; min-width:0;">
-              <span class="kpi-label" style="font-size:10px;">Alumnas que asistieron · por semana (últimas 8)</span>
+              <span class="kpi-label" style="font-size:10px;">Alumnas que asistieron · por mes (últimos 3)</span>
               <button type="button" onclick="toggleActiveInfo()" aria-label="Qué significa este gráfico" title="Qué significa" style="flex:none; width:16px; height:16px; border-radius:999px; border:1px solid var(--line); background:transparent; color:var(--ink-mute); font:600 10px/1 var(--body,system-ui); cursor:pointer; display:inline-flex; align-items:center; justify-content:center;">i</button>
             </span>
             <span id="active-trend-delta" style="font-size:12px; font-weight:600; color:var(--ink-mute); white-space:nowrap;">—</span>
           </div>
           <div id="active-trend-info" style="display:none; background:var(--bg-soft,#f5f2fb); border:1px solid var(--line); border-radius:12px; padding:11px 13px; margin-bottom:10px; font-size:11.5px; line-height:1.5; color:var(--ink-mute);">
-            Cada punto es cuántas <b>alumnas distintas</b> asistieron esa semana (clases marcadas como “asistió”), de lunes a domingo, en la sede seleccionada. Una misma alumna que vino 3 veces cuenta como 1.<br>
-            La <b>última semana</b> aparece como <b>“en curso”</b> (punto hueco y línea punteada): todavía no termina, por eso su número es bajo y no debe leerse como una caída. La comparación de la derecha usa la <b>última semana completa</b>, no la que está en curso.
+            Cada punto es cuántas <b>alumnas distintas</b> asistieron ese mes (clases marcadas como “asistió”), en la sede seleccionada. Una misma alumna que vino varias veces cuenta como 1.<br>
+            El <b>mes en curso</b> aparece como <b>“en curso”</b> (punto hueco y línea punteada): todavía no termina, por eso su número es bajo y no debe leerse como una caída. La comparación de la derecha usa el <b>último mes completo</b>, no el que está en curso.
           </div>
           <div id="active-chart"><div style="padding:18px 0; font-size:12px; color:var(--ink-mute);">Cargando…</div></div>
         </div>
@@ -6604,13 +6604,13 @@ async function computeDebtSnapshot(locId) {
     return { total: Math.round(total), count };
   };
 
-  // 4 cortes semanales: hoy y 3 semanas atrás (fin de día).
+  // 2 puntos: hace 3 semanas (ancla) y hoy. Línea simple "antes vs ahora".
   const base = STATE.currentDate ? new Date(STATE.currentDate) : new Date();
   const trend = [];
-  for (let i = 3; i >= 0; i--) {
+  [3, 0].forEach(i => {
     const d = new Date(base); d.setDate(d.getDate() - i * 7); d.setHours(23, 59, 59, 999);
     trend.push({ date: dateToIsoLocal(d), ...snapshotAt(d.getTime()) });
-  }
+  });
   const current = snapshotAt(null); // exacto = lista "Por cobrar"
   return { current, trend };
 }
@@ -6718,7 +6718,9 @@ async function computeActiveStudents(locId) {
   const thisWeekMon = mondayOf(base);
   const eightWeeksAgo = new Date(thisWeekMon); eightWeeksAgo.setDate(eightWeeksAgo.getDate() - 7 * 7);
   const startLastMonth = new Date(base.getFullYear(), base.getMonth() - 1, 1);
-  const since = eightWeeksAgo < startLastMonth ? eightWeeksAgo : startLastMonth;
+  const start2MonthsAgo = new Date(base.getFullYear(), base.getMonth() - 2, 1);
+  let since = eightWeeksAgo < startLastMonth ? eightWeeksAgo : startLastMonth;
+  if (start2MonthsAgo < since) since = start2MonthsAgo;
   const sinceIso = dateToIsoLocal(since);
 
   // 1) Sesiones del scope desde 'since' (incluye futuras para "agendadas")
@@ -6757,6 +6759,20 @@ async function computeActiveStudents(locId) {
   out.weeks = weeks;
   out.thisMonth = thisM.size;
   out.lastMonth = lastM.size;
+
+  // 3 puntos mensuales para el gráfico: mes-2, mes pasado y este mes (este mes en curso).
+  const MES_ABBR = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+  const monthKeys = [];
+  for (let i = 2; i >= 0; i--) { const d = new Date(thisYear, thisMonthIdx - i, 1); monthKeys.push({ y: d.getFullYear(), m: d.getMonth() }); }
+  const monthSets = monthKeys.map(() => new Set());
+  for (const a of attended) {
+    if (!scopedSet.has(a.student_id)) continue;
+    const sd = sessMap.get(a.session_id); if (!sd) continue;
+    const dt = new Date(sd + 'T12:00:00');
+    const mi = monthKeys.findIndex(k => k.y === dt.getFullYear() && k.m === dt.getMonth());
+    if (mi >= 0) monthSets[mi].add(a.student_id);
+  }
+  out.months = monthKeys.map((k, i) => ({ label: MES_ABBR[k.m], count: monthSets[i].size, current: i === monthKeys.length - 1 }));
 
   // 4) Activos hoy = paquete vivo ∩ booking futuro (no cancelado)
   const livePkg = new Set();
@@ -6825,15 +6841,16 @@ function paintActiveStudents(data) {
     monthDeltaEl.style.color = diff > 0 ? 'var(--good,#1a8a4a)' : (diff < 0 ? 'var(--danger,#c0392b)' : 'var(--ink-mute)');
   }
 
-  const pts = data.weeks || [];
-  if (trendDeltaEl && pts.length >= 3) {
-    // La última semana está EN CURSO (parcial); la tendencia compara la última semana COMPLETA contra la primera.
+  const pts = (data.months && data.months.length) ? data.months : (data.weeks || []);
+  const ptLabel = (p) => p.label || (p.week ? `${p.week.split('-')[2]}/${p.week.split('-')[1]}` : '');
+  if (trendDeltaEl && pts.length >= 2) {
+    // El último punto (este mes) está EN CURSO; comparamos el último mes COMPLETO contra el primero.
     const lastComplete = pts[pts.length - 2].count;
     const first = pts[0].count;
     const diff = lastComplete - first;
-    const span = pts.length - 2;
-    if (diff > 0)      { trendDeltaEl.textContent = `▲ ${diff} vs hace ${span} sem`; trendDeltaEl.style.color = 'var(--good,#1a8a4a)'; }
-    else if (diff < 0) { trendDeltaEl.textContent = `▼ ${Math.abs(diff)} vs hace ${span} sem`; trendDeltaEl.style.color = 'var(--danger,#c0392b)'; }
+    const ref = ptLabel(pts[0]);
+    if (diff > 0)      { trendDeltaEl.textContent = `▲ ${diff} vs ${ref}`; trendDeltaEl.style.color = 'var(--good,#1a8a4a)'; }
+    else if (diff < 0) { trendDeltaEl.textContent = `▼ ${Math.abs(diff)} vs ${ref}`; trendDeltaEl.style.color = 'var(--danger,#c0392b)'; }
     else               { trendDeltaEl.textContent = 'sin cambio'; trendDeltaEl.style.color = 'var(--ink-mute)'; }
   } else if (trendDeltaEl) { trendDeltaEl.textContent = '—'; }
 
@@ -6864,12 +6881,12 @@ function paintActiveStudents(data) {
     if (isCurrent) {
       svg += `<circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="4" fill="#fff" stroke="var(--accent, #5B2A8F)" stroke-width="2" stroke-dasharray="2 2"/>`;
       svg += `<text x="${cx.toFixed(1)}" y="${(cy - 10).toFixed(1)}" text-anchor="middle" font-size="11" font-weight="700" fill="var(--ink-faint)">${p.count}</text>`;
-      svg += `<text x="${cx.toFixed(1)}" y="${(H - 19).toFixed(1)}" text-anchor="middle" font-size="9" fill="var(--ink-faint)">${wkLabel(p.week)}</text>`;
+      svg += `<text x="${cx.toFixed(1)}" y="${(H - 19).toFixed(1)}" text-anchor="middle" font-size="9" fill="var(--ink-faint)">${ptLabel(p)}</text>`;
       svg += `<text x="${cx.toFixed(1)}" y="${(H - 9).toFixed(1)}" text-anchor="middle" font-size="8" font-weight="600" fill="var(--ink-faint)">en curso</text>`;
     } else {
       svg += `<circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="${isCmp ? 5 : 3}" fill="${isCmp ? 'var(--accent, #5B2A8F)' : '#fff'}" stroke="var(--accent, #5B2A8F)" stroke-width="2"/>`;
       svg += `<text x="${cx.toFixed(1)}" y="${(cy - 10).toFixed(1)}" text-anchor="middle" font-size="12" font-weight="700" fill="var(--ink)">${p.count}</text>`;
-      svg += `<text x="${cx.toFixed(1)}" y="${(H - 10).toFixed(1)}" text-anchor="middle" font-size="9" fill="var(--ink-faint)">${wkLabel(p.week)}</text>`;
+      svg += `<text x="${cx.toFixed(1)}" y="${(H - 10).toFixed(1)}" text-anchor="middle" font-size="9" fill="var(--ink-faint)">${ptLabel(p)}</text>`;
     }
   });
   svg += `</svg>`;
