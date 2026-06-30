@@ -1285,6 +1285,33 @@
     font-family: var(--body);
   }
   .as-cancel:hover, .as-cancel:active { background: var(--fit-lavender-pale); color: var(--fit-purple); }
+
+  /* Bottom sheet de confirmación (reemplaza confirm() nativo) — mismo lenguaje visual */
+  #fit-confirm-sheet { display: none; position: fixed; inset: 0; z-index: 10000; }
+  #fit-confirm-sheet.is-open { display: block; }
+  .cs-panel { padding: 8px 0 calc(16px + env(safe-area-inset-bottom)); }
+  .cs-body { padding: 4px 22px 14px; }
+  .cs-title { font-size: 18px; font-weight: 600; color: var(--ink); font-family: var(--display); font-style: italic; line-height: 1.2; }
+  .cs-title:empty { display: none; }
+  .cs-msg { font-size: 15px; line-height: 1.5; color: var(--ink); margin-top: 8px; }
+  .cs-msg:empty { display: none; }
+  .cs-actions { display: flex; flex-direction: column; gap: 10px; padding: 4px 14px 0; }
+  .cs-btn {
+    width: 100%;
+    padding: 15px;
+    border: none;
+    border-radius: 14px;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: var(--body);
+    transition: transform 0.12s ease, background 0.15s ease;
+  }
+  .cs-btn:active { transform: scale(0.985); }
+  .cs-ok { background: var(--fit-purple); color: #fff; }
+  .cs-ok.is-danger { background: var(--danger); color: #fff; }
+  .cs-cancel { background: var(--fit-cream); color: var(--ink); }
+  .cs-cancel:hover, .cs-cancel:active { background: var(--fit-lavender-pale); color: var(--fit-purple); }
   .as-back {
     background: transparent;
     border: none;
@@ -5409,6 +5436,22 @@ body:not(.doctor-mode) .doc-bottomnav{ display:none; }
   </div>
 </div>
 
+<!-- Bottom sheet de confirmación reutilizable (reemplaza al confirm() nativo de iOS) -->
+<div id="fit-confirm-sheet" aria-hidden="true" role="dialog" aria-modal="true" aria-label="Confirmar">
+  <div class="as-backdrop" id="cs-backdrop"></div>
+  <div class="as-panel cs-panel">
+    <div class="as-handle"></div>
+    <div class="cs-body">
+      <div class="cs-title" id="cs-title"></div>
+      <div class="cs-msg" id="cs-msg"></div>
+    </div>
+    <div class="cs-actions">
+      <button class="cs-btn cs-ok" id="cs-ok" type="button">OK</button>
+      <button class="cs-btn cs-cancel" id="cs-cancel" type="button">Cancelar</button>
+    </div>
+  </div>
+</div>
+
 </div><!-- /app-layout -->
 
 <!-- ============================================
@@ -8032,7 +8075,7 @@ function renderTimeline() {
           <button class="att-btn ${status === 'attended' ? 'is-attended' : ''}" onclick="event.stopPropagation(); markAttendance('${s.id}', ${h}, 'attended')" title="Asistió">
             <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
           </button>
-          <button class="att-btn ${status && status !== 'attended' ? 'is-noshow' : ''}" onclick="event.stopPropagation(); openAbsenceMenu('${s.id}', ${h}, event)" title="Falta / cambio">
+          <button class="att-btn ${['recoverable','lost','no_show'].includes(status) ? 'is-noshow' : ''}" onclick="event.stopPropagation(); openAbsenceMenu('${s.id}', ${h}, event)" title="Falta / cambio">
             <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
           </button>
           <button class="att-btn" onclick="event.stopPropagation(); openMoveStudentModal('${s.id}', ${h})" title="Mover a otro horario / día" style="background: var(--fit-lavender-pale); color: var(--fit-purple);">
@@ -14007,6 +14050,51 @@ function closeProfileActionsSheet() {
   sheet.classList.remove('is-open');
   sheet.setAttribute('aria-hidden', 'true');
   document.body.style.overflow = '';
+}
+
+// Confirmación con bottom sheet propio (en vez del confirm() nativo de iOS).
+// Devuelve una Promise<boolean>: true si confirma, false si cancela.
+// Uso: const ok = await confirmSheet({ title, message, okLabel, cancelLabel, danger });
+let _csResolve = null;
+function confirmSheet(opts) {
+  opts = opts || {};
+  const sheet = document.getElementById('fit-confirm-sheet');
+  const titleEl = document.getElementById('cs-title');
+  const msgEl = document.getElementById('cs-msg');
+  const okBtn = document.getElementById('cs-ok');
+  const cancelBtn = document.getElementById('cs-cancel');
+  const backdrop = document.getElementById('cs-backdrop');
+  // Si por algún motivo no está el sheet en el DOM, caemos al confirm nativo.
+  if (!sheet || !titleEl || !msgEl || !okBtn || !cancelBtn) {
+    return Promise.resolve(window.confirm(opts.message || '¿Confirmar?'));
+  }
+  titleEl.textContent = opts.title || '';
+  msgEl.textContent = opts.message || '';
+  okBtn.textContent = opts.okLabel || 'OK';
+  cancelBtn.textContent = opts.cancelLabel || 'Cancelar';
+  okBtn.classList.toggle('is-danger', !!opts.danger);
+
+  // Si quedó una confirmación previa abierta, resolverla como cancelada.
+  if (_csResolve) { const prev = _csResolve; _csResolve = null; prev(false); }
+
+  return new Promise((resolve) => {
+    _csResolve = resolve;
+    const done = (val) => {
+      sheet.classList.remove('is-open');
+      sheet.setAttribute('aria-hidden', 'true');
+      document.body.style.overflow = '';
+      okBtn.onclick = null;
+      cancelBtn.onclick = null;
+      if (backdrop) backdrop.onclick = null;
+      if (_csResolve) { const r = _csResolve; _csResolve = null; r(val); }
+    };
+    okBtn.onclick = () => done(true);
+    cancelBtn.onclick = () => done(false);
+    if (backdrop) backdrop.onclick = () => done(false);
+    sheet.classList.add('is-open');
+    sheet.setAttribute('aria-hidden', 'false');
+    document.body.style.overflow = 'hidden';
+  });
 }
 
 function asShowMainView() {
@@ -21038,11 +21126,17 @@ const STATES_LABELS = {
   pending: 'pendiente',
 };
 
-// Confirmación al deshacer asistencia
-function instructorConfirmUndoAttendance(studentId, dateIso, hour, locationId) {
+// Confirmación al deshacer asistencia (bottom sheet propio, no el confirm nativo)
+async function instructorConfirmUndoAttendance(studentId, dateIso, hour, locationId) {
   const stud = STATE.students.find(s => s.id === studentId);
   const name = stud ? stud.first_name : 'el alumno';
-  if (confirm(`¿Quitar la asistencia de ${name}? Esto liberará 1 clase de su paquete.`)) {
+  const ok = await confirmSheet({
+    title: 'Quitar asistencia',
+    message: `¿Quitar la asistencia de ${name}? Esto liberará 1 clase de su paquete.`,
+    okLabel: 'Quitar asistencia',
+    cancelLabel: 'Cancelar',
+  });
+  if (ok) {
     instructorResetAttendance(studentId, dateIso, hour, locationId);
   }
 }
