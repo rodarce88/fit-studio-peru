@@ -9381,7 +9381,8 @@ function openWhatsAppForCell(studentId, dateIso, hour, locationId) {
   if (!phoneRaw) { showToast('Sin teléfono registrado', 'error'); return; }
   // Si no empieza con código país, asumir Perú (+51)
   const phone = phoneRaw.startsWith('51') && phoneRaw.length >= 11 ? phoneRaw : ('51' + phoneRaw.replace(/^0+/, ''));
-  const url = `https://wa.me/${phone}?text=${encodeURIComponent(msg)}`;
+  // Link directo de WhatsApp Web: abre el chat sin la pantalla intermedia de "Open app / Continue".
+  const url = `https://web.whatsapp.com/send?phone=${phone}&text=${encodeURIComponent(msg)}`;
   // Target con nombre: reutiliza la MISMA pestaña de WhatsApp en cada uso (no abre una nueva cada vez).
   // Nota: el navegador no permite redirigir una pestaña que el usuario abrió a mano.
   window.open(url, 'fitstudioWhatsApp');
