@@ -697,6 +697,25 @@
   .modality-interested { background: #FFEFE0; color: #B45309; }
   .modality-monkeyfit { background: #DBEAFE; color: #1E40AF; }
 
+  /* Horario fijo (Plantilla semanal) en editar perfil */
+  .fix-sec { border: 1px solid var(--line); border-radius: 12px; padding: 14px; background: var(--fit-cream); }
+  .fix-sec-title { font-size: 13px; font-weight: 600; color: var(--ink); margin-bottom: 12px; }
+  .fixsw { position: relative; display: inline-block; width: 42px; height: 24px; flex: 0 0 auto; }
+  .fixsw input { opacity: 0; width: 0; height: 0; position: absolute; }
+  .fixsw .tr { position: absolute; inset: 0; background: #D6D2DC; border-radius: 12px; transition: .18s; cursor: pointer; }
+  .fixsw .tr::before { content: ''; position: absolute; width: 18px; height: 18px; border-radius: 50%; background: #fff; top: 3px; left: 3px; transition: .18s; box-shadow: 0 1px 2px rgba(0,0,0,0.2); }
+  .fixsw input:checked + .tr { background: var(--fit-purple); }
+  .fixsw input:checked + .tr::before { transform: translateX(18px); }
+  .fix-days { display: flex; gap: 6px; flex-wrap: wrap; }
+  .fix-day { width: 36px; height: 36px; border-radius: 9px; border: 1px solid var(--line); background: #fff; color: var(--ink-mute); font-size: 12px; font-weight: 600; cursor: pointer; transition: .12s; }
+  .fix-day.on { background: var(--fit-purple); color: #fff; border-color: var(--fit-purple); }
+  .fix-rows { display: flex; flex-direction: column; gap: 0; background: #fff; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+  .fix-row { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-bottom: 1px solid var(--line-soft); }
+  .fix-row:last-child { border-bottom: none; }
+  .fix-row .fr-day { flex: 1; font-size: 13px; color: var(--ink); }
+  .fix-row select { font-size: 13px; padding: 6px 10px; border-radius: 8px; border: 1px solid var(--line); background: #fff; color: var(--ink); min-width: 92px; }
+  .fix-row select.missing { border-color: var(--danger); background: var(--danger-soft); }
+
   .attendance-toggle { display: flex; gap: 4px; }
   .att-btn { width: 32px; height: 32px; border-radius: 50%; border: 1.5px solid var(--line); display: grid; place-items: center; color: var(--ink-faint); transition: all 0.15s; }
   .att-btn:hover { border-color: var(--fit-purple); color: var(--fit-purple); }
@@ -4558,7 +4577,24 @@ body:not(.doctor-mode) .doc-bottomnav{ display:none; }
             <input type="text" id="f-insurance" />
           </div>
           <div class="form-row full">
-            <label><input type="checkbox" id="f-needs-confirmation" checked style="margin-right: 6px;" /> Requiere confirmación previa por WhatsApp</label>
+            <div class="fix-sec">
+              <div class="fix-sec-title">Horario fijo · Plantilla semanal</div>
+              <div style="display:flex; align-items:center; gap:12px; padding-bottom:14px; border-bottom:1px solid var(--line);">
+                <div style="flex:1;">
+                  <div style="font-size:13px; color:var(--ink);">No confirmar en cada clase</div>
+                  <div style="font-size:11px; color:var(--ink-mute); margin-top:2px;">El alumno asiste sí o sí · se pinta en la Plantilla para no escribirle</div>
+                </div>
+                <label class="fixsw"><input type="checkbox" id="f-no-confirm" /><span class="tr"></span></label>
+              </div>
+              <div style="padding-top:14px;">
+                <div style="font-size:13px; color:var(--ink);">Horario que prefirió</div>
+                <div style="font-size:11px; color:var(--ink-mute); margin:2px 0 11px;">Elige los días · cada día pide su hora · necesario para que aparezca en la Plantilla</div>
+                <div class="fix-days" id="f-fixed-days"></div>
+                <div id="f-fixed-rows-wrap" style="margin-top:12px;"></div>
+                <div style="font-size:11px; color:var(--ink-mute); margin:14px 0 6px;">Nota (opcional)</div>
+                <textarea id="f-fixed-note" placeholder="Ej: prefiere temprano, no puede miércoles" style="min-height:46px;"></textarea>
+              </div>
+            </div>
           </div>
           <div class="form-row full">
             <label>Consentimiento informado</label>
@@ -10983,6 +11019,54 @@ async function _confirmScheduleEditorChangesImpl(toAdd, toCancel) {
 function openLocationModal() { document.getElementById('location-modal').classList.add('is-open'); }
 function closeModals() { document.querySelectorAll('.modal-backdrop').forEach(m => m.classList.remove('is-open')); }
 
+// ===== Horario fijo (Plantilla semanal) =====
+// Horas operativas: 6am-12pm y 4pm-8pm
+const FIXED_HOURS = [6, 7, 8, 9, 10, 11, 12, 16, 17, 18, 19, 20];
+const FIXED_DAYS = [
+  { n: 1, lbl: 'Lun', full: 'Lunes' }, { n: 2, lbl: 'Mar', full: 'Martes' },
+  { n: 3, lbl: 'Mié', full: 'Miércoles' }, { n: 4, lbl: 'Jue', full: 'Jueves' },
+  { n: 5, lbl: 'Vie', full: 'Viernes' }, { n: 6, lbl: 'Sáb', full: 'Sábado' },
+  { n: 7, lbl: 'Dom', full: 'Domingo' },
+];
+function fixedHourLabel(h) {
+  if (h == null) return '';
+  if (h < 12) return `${h} am`;
+  if (h === 12) return '12 pm';
+  return `${h - 12} pm`;
+}
+function toggleFixedDay(d) {
+  STATE._fixedDraft = STATE._fixedDraft || {};
+  if (d in STATE._fixedDraft) delete STATE._fixedDraft[d];
+  else STATE._fixedDraft[d] = null;
+  renderFixedScheduleEditor();
+}
+function setFixedHour(d, val) {
+  STATE._fixedDraft = STATE._fixedDraft || {};
+  STATE._fixedDraft[d] = (val === '' ? null : Number(val));
+  renderFixedScheduleEditor();
+}
+function renderFixedScheduleEditor() {
+  const draft = STATE._fixedDraft || {};
+  const daysEl = document.getElementById('f-fixed-days');
+  const wrapEl = document.getElementById('f-fixed-rows-wrap');
+  if (!daysEl || !wrapEl) return;
+  daysEl.innerHTML = FIXED_DAYS.map(d =>
+    `<button type="button" class="fix-day ${d.n in draft ? 'on' : ''}" onclick="toggleFixedDay(${d.n})">${d.lbl}</button>`
+  ).join('');
+  const selected = Object.keys(draft).map(Number).sort((a, b) => a - b);
+  if (!selected.length) { wrapEl.innerHTML = ''; return; }
+  const rows = selected.map(d => {
+    const full = (FIXED_DAYS.find(x => x.n === d) || {}).full || '';
+    const cur = draft[d];
+    const missing = !Number.isInteger(cur);
+    const opts = ['<option value="">Hora…</option>']
+      .concat(FIXED_HOURS.map(h => `<option value="${h}" ${cur === h ? 'selected' : ''}>${fixedHourLabel(h)}</option>`))
+      .join('');
+    return `<div class="fix-row"><span class="fr-day">${full}</span><select class="${missing ? 'missing' : ''}" onchange="setFixedHour(${d}, this.value)">${opts}</select></div>`;
+  }).join('');
+  wrapEl.innerHTML = `<div class="fix-rows">${rows}</div>`;
+}
+
 function openStudentModal(id) {
   const f = (k) => document.getElementById(k);
   const isEdit = !!id;
@@ -11014,7 +11098,17 @@ function openStudentModal(id) {
   f('f-emergency-phone').value = s?.emergency_contact_phone || '';
   f('f-medical').value = s?.medical_notes || '';
   f('f-insurance').value = s?.insurance_provider || '';
-  f('f-needs-confirmation').checked = s ? s.needs_confirmation !== false : true;
+  // Toggle "No confirmar en cada clase" = inverso de needs_confirmation (default: confirmar = toggle apagado)
+  f('f-no-confirm').checked = s ? s.needs_confirmation === false : false;
+  // Horario fijo preferido (Plantilla semanal)
+  STATE._fixedDraft = {};
+  if (s && Array.isArray(s.fixed_schedule)) {
+    s.fixed_schedule.forEach(slot => {
+      if (slot && slot.day >= 1 && slot.day <= 7) STATE._fixedDraft[slot.day] = (slot.hour ?? null);
+    });
+  }
+  f('f-fixed-note').value = s?.fixed_pref_note || '';
+  renderFixedScheduleEditor();
   renderConsentBlock(s);
   renderStudentFormHealthPreview(s);
 
@@ -11426,6 +11520,18 @@ async function saveStudent() {
 
   if (!f('f-gender').value) { showToast('Selecciona el género de la alumna o alumno', 'error'); return; }
 
+  // Horario fijo: validar que cada día elegido tenga su hora, luego armar los slots
+  const _fixedDraft = STATE._fixedDraft || {};
+  const _fixedDays = Object.keys(_fixedDraft).map(Number).sort((a,b)=>a-b);
+  const _missingHour = _fixedDays.filter(d => !Number.isInteger(_fixedDraft[d]));
+  if (_missingHour.length) {
+    showToast('Elige la hora de cada día del horario fijo', 'error');
+    renderFixedScheduleEditor();
+    return;
+  }
+  const _fixedSlots = _fixedDays.map(d => ({ day: d, hour: _fixedDraft[d] }));
+  const _fixedNote = f('f-fixed-note').value.trim();
+
   const data = {
     location_id: STATE.currentLocationId,
     first_name: toTitleCase(f('f-first-name').value.trim()),
@@ -11441,7 +11547,9 @@ async function saveStudent() {
     emergency_contact_phone: f('f-emergency-phone').value.trim() || null,
     medical_notes: f('f-medical').value.trim() || null,
     insurance_provider: f('f-insurance').value.trim() || null,
-    needs_confirmation: f('f-needs-confirmation').checked,
+    needs_confirmation: !f('f-no-confirm').checked,
+    fixed_schedule: _fixedSlots.length ? _fixedSlots : null,
+    fixed_pref_note: _fixedNote || null,
     data_complete: !!(f('f-email').value.trim() && f('f-doc-num').value.trim()),
     status: 'active',
   };
