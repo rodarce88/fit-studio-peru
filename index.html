@@ -9382,7 +9382,9 @@ function openWhatsAppForCell(studentId, dateIso, hour, locationId) {
   // Si no empieza con código país, asumir Perú (+51)
   const phone = phoneRaw.startsWith('51') && phoneRaw.length >= 11 ? phoneRaw : ('51' + phoneRaw.replace(/^0+/, ''));
   const url = `https://wa.me/${phone}?text=${encodeURIComponent(msg)}`;
-  window.open(url, '_blank', 'noopener');
+  // Target con nombre: reutiliza la MISMA pestaña de WhatsApp en cada uso (no abre una nueva cada vez).
+  // Nota: el navegador no permite redirigir una pestaña que el usuario abrió a mano.
+  window.open(url, 'fitstudioWhatsApp');
 }
 
 // Cell detail modal: legacy (mantener por si hay otros entry points, pero ya no se llama desde renderSchedule)
