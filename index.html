@@ -1873,6 +1873,7 @@
   .inst-stud-row { display: flex; align-items: center; gap: 12px; padding: 12px 16px; transition: background 0.15s; position: relative; }
   .inst-stud-row + .inst-stud-row { border-top: 1px solid var(--fit-lavender-pale); }
   .inst-stud-row.is-attended { background: var(--good-soft); }
+  .inst-stud-row.is-notice { background: #FCEFD6; }
   .inst-stud-row.is-recoverable { background: var(--warn-soft); }
   .inst-stud-row.is-lost, .inst-stud-row.is-no_show { background: #FCEBEB; }
   .inst-stud-row.is-confirmed { background: rgba(86, 161, 96, 0.05); }
@@ -2083,6 +2084,13 @@
   .inst-sa-btn.is-danger:hover { background: var(--danger-soft); border-color: var(--danger); color: var(--danger); }
   .inst-sa-icon { font-size: 22px; width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.04); }
   .inst-sa-btn.is-primary .inst-sa-icon { background: rgba(255,255,255,0.2); }
+  .inst-sa-btn.is-notice { background: #B3263B; border-color: #B3263B; color: white; }
+  .inst-sa-btn.is-notice .inst-sa-icon { background: rgba(255,255,255,0.2); }
+  .inst-notice-confirm { grid-column: 1 / -1; background: #F6DEE0; border: 1px solid #E3A9AE; border-radius: 14px; padding: 14px; }
+  .inst-notice-confirm-msg { font-size: 13px; color: #8C1D2E; line-height: 1.5; margin-bottom: 12px; }
+  .inst-notice-confirm-btns { display: flex; gap: 8px; }
+  .inst-nc-ok { flex: 1; padding: 12px; border: none; border-radius: 11px; background: #B3263B; color: #fff; font-size: 14px; font-weight: 600; font-family: var(--body); cursor: pointer; }
+  .inst-nc-cancel { flex: 1; padding: 12px; border: none; border-radius: 11px; background: var(--fit-cream); color: var(--ink); font-size: 14px; font-weight: 500; font-family: var(--body); cursor: pointer; }
   .inst-sa-label { font-size: 12px; font-weight: 500; }
   .inst-sa-sub { font-size: 10px; opacity: 0.7; }
 
@@ -8039,6 +8047,7 @@ function renderTimeline() {
       let statusBadge = '';
       let rowStyle = '';
       if (status === 'attended') { statusBadge = makeBadge('✓', 'ASISTIÓ', '#10b981', 'white'); rowStyle = 'background: #ecfdf5;'; }
+      else if (status === 'notice_no_show') { statusBadge = makeBadge('⚑', 'PROF: NO VINO', '#B3263B', 'white'); rowStyle = 'background: #FCEFD6;'; }
       else if (status === 'recoverable') { statusBadge = makeBadge('⊙', 'RECUPERABLE', '#3b82f6', 'white'); rowStyle = 'background: #eff6ff;'; }
       else if (status === 'lost') { statusBadge = makeBadge('⚠', 'PERDIDA', '#f97316', 'white'); rowStyle = 'background: #fff7ed;'; }
       else if (status === 'no_show') { statusBadge = makeBadge('✗', 'NO VINO', '#ef4444', 'white'); rowStyle = 'background: #fef2f2;'; }
@@ -20528,6 +20537,7 @@ function renderInstructorStudentRow(item, classCtx) {
 
   const STATES = {
     attended:    { label: 'Asistió',            klass: 'is-attended' },
+    notice_no_show: { label: 'No vino',         klass: 'is-notice' },
     recoverable: { label: 'Falta justificada',  klass: 'is-recoverable' },
     lost:        { label: 'Cancelación tardía', klass: 'is-lost' },
     no_show:     { label: 'No vino sin avisar', klass: 'is-no_show' },
@@ -20549,6 +20559,7 @@ function renderInstructorStudentRow(item, classCtx) {
   if (st) {
     let bg = '#EAF3DE', fg = '#27500A', pre = '';
     if (status === 'attended') { pre = '✓ '; }
+    else if (status === 'notice_no_show') { bg = '#F6DEE0'; fg = '#8C1D2E'; pre = '⚑ '; }
     else if (status === 'recoverable') { bg = '#FAEEDA'; fg = '#633806'; }
     else if (status === 'lost' || status === 'no_show') { bg = '#FCEBEB'; fg = '#791F1F'; }
     statusChip = `<span class="inst-stud-statchip" style="background:${bg}; color:${fg};">${pre}${escape(st.label)}</span>`;
@@ -20662,6 +20673,7 @@ function openInstructorStudentSheet(studentId, dateIso, hour, locationId, curren
 
   const status = currentStatus || null;
   const isAttended = status === 'attended';
+  const isNotice = status === 'notice_no_show';
 
   // Ventana de marcado (4h antes → 3 días hábiles después). Fuera de ella,
   // los botones de asistencia se ven pero quedan inhabilitados.
@@ -20733,47 +20745,20 @@ function openInstructorStudentSheet(studentId, dateIso, hour, locationId, curren
         ${_locked
           ? `<button class="inst-sa-btn is-locked" ${_lockTap}>
           <div class="inst-sa-icon">${LOCK_SVG}</div>
-          <div class="inst-sa-label">No vino</div>
+          <div class="inst-sa-label">${isNotice ? 'Quitar aviso' : 'Avisar que no vino'}</div>
           <div class="inst-sa-sub">${_lockSub}</div>
         </button>`
-          : `<button class="inst-sa-btn is-warn" onclick="closeInstructorStudentSheet(); instructorOpenAbsenceMenu('${studentId}', ${hour});">
-          <div class="inst-sa-icon">✕</div>
-          <div class="inst-sa-label">No vino</div>
-          <div class="inst-sa-sub">justificada / sin avisar</div>
-        </button>`}
-        ${_attWin.tooLate
-          ? `<button class="inst-sa-btn is-locked" onclick="showToast('Cerrado: ya pasaron 3 días hábiles desde la clase', 'info')">
-          <div class="inst-sa-icon">${LOCK_SVG}</div>
-          <div class="inst-sa-label">Mover de horario</div>
-          <div class="inst-sa-sub">cerrado: 3 días hábiles</div>
+          : isNotice
+          ? `<button class="inst-sa-btn" onclick="instructorResetAttendance('${studentId}','${dateIso}',${hour},'${locationId}'); closeInstructorStudentSheet();">
+          <div class="inst-sa-icon">↺</div>
+          <div class="inst-sa-label">Quitar aviso</div>
+          <div class="inst-sa-sub">volver a sin marcar</div>
         </button>`
-          : `<button class="inst-sa-btn" onclick="closeInstructorStudentSheet(); instructorOpenMoveModal('${studentId}','${dateIso}',${hour},'${locationId}');">
-          <div class="inst-sa-icon">⇄</div>
-          <div class="inst-sa-label">Mover de horario</div>
-          <div class="inst-sa-sub">a otro día u hora</div>
+          : `<button class="inst-sa-btn is-notice" onclick="instSheetAskNotice('${studentId}','${dateIso}',${hour},'${locationId}','${status || ''}')">
+          <div class="inst-sa-icon">⚑</div>
+          <div class="inst-sa-label">Avisar que no vino</div>
+          <div class="inst-sa-sub">le avisa a la coordinadora</div>
         </button>`}
-        ${_attWin.tooLate
-          ? `<button class="inst-sa-btn is-locked" onclick="showToast('Cerrado: ya pasaron 3 días hábiles desde la clase', 'info')">
-          <div class="inst-sa-icon">${LOCK_SVG}</div>
-          <div class="inst-sa-label">Quitar de la clase</div>
-          <div class="inst-sa-sub">cerrado: 3 días hábiles</div>
-        </button>`
-          : `<button class="inst-sa-btn is-danger" onclick="closeInstructorStudentSheet(); instructorRemoveFromClass('${studentId}','${dateIso}',${hour},'${locationId}');">
-          <div class="inst-sa-icon">⌫</div>
-          <div class="inst-sa-label">Quitar de la clase</div>
-          <div class="inst-sa-sub">liberar el cupo</div>
-        </button>`}
-        ${status && status !== 'attended' ? (_locked
-          ? `<button class="inst-sa-btn is-locked" style="grid-column: span 2;" ${_lockTap}>
-            <div class="inst-sa-icon">${LOCK_SVG}</div>
-            <div class="inst-sa-label">Resetear marca</div>
-            <div class="inst-sa-sub">${_lockSub}</div>
-          </button>`
-          : `<button class="inst-sa-btn" onclick="closeInstructorStudentSheet(); instructorResetAttendance('${studentId}','${dateIso}',${hour},'${locationId}');" style="grid-column: span 2;">
-            <div class="inst-sa-icon">↺</div>
-            <div class="inst-sa-label">Resetear marca</div>
-            <div class="inst-sa-sub">volver a sin marcar</div>
-          </button>`) : ''}
       </div>
       ${renderHealthNotesSection(stud)}
       <div id="inst-sheet-notes-history" data-student-id="${studentId}">
@@ -21118,12 +21103,31 @@ function closeInstructorStudentSheet() {
   if (el) el.remove();
 }
 
+// Confirmación inline del aviso "no vino": dentro del MISMO sheet, sin abrir otra hoja.
+// El mensaje y los botones reemplazan el área de acciones. Cancelar reabre el sheet normal.
+function instSheetAskNotice(studentId, dateIso, hour, locationId, status) {
+  const sheet = document.getElementById('inst-student-sheet');
+  if (!sheet) return;
+  const actions = sheet.querySelector('.inst-sheet-actions');
+  if (!actions) return;
+  actions.innerHTML = `
+    <div class="inst-notice-confirm">
+      <div class="inst-notice-confirm-msg">Esto le avisará a la coordinadora y ella se pondrá en contacto con el alumno.</div>
+      <div class="inst-notice-confirm-btns">
+        <button class="inst-nc-cancel" onclick="openInstructorStudentSheet('${studentId}','${dateIso}',${hour},'${locationId}','${status || ''}')">Cancelar</button>
+        <button class="inst-nc-ok" onclick="instructorMarkNoticeNoShow('${studentId}','${dateIso}',${hour},'${locationId}'); closeInstructorStudentSheet();">Confirmar aviso</button>
+      </div>
+    </div>
+  `;
+}
+
 const STATES_LABELS = {
   attended: 'asistió',
   recoverable: 'falta justificada',
   lost: 'cancelación tardía',
   no_show: 'no vino sin avisar',
   pending: 'pendiente',
+  notice_no_show: 'el profesor avisó que no vino',
 };
 
 // Confirmación al deshacer asistencia (bottom sheet propio, no el confirm nativo)
@@ -21312,6 +21316,12 @@ async function instructorMarkAbsence(studentId, dateIso, hour, locationId, statu
 
 async function instructorResetAttendance(studentId, dateIso, hour, locationId) {
   await instructorWriteAttendance(studentId, dateIso, hour, locationId, 'pending');
+}
+
+// Aviso visual "el profesor avisa que no vino": NO marca ausencia, NO descuenta
+// clase, NO libera el cupo. Solo deja constancia para la coordinadora.
+async function instructorMarkNoticeNoShow(studentId, dateIso, hour, locationId) {
+  await instructorWriteAttendance(studentId, dateIso, hour, locationId, 'notice_no_show');
 }
 
 // Quita al alumno del slot (cancela el booking). Si tenía attendance, también la borra.
@@ -21524,7 +21534,7 @@ async function instructorWriteAttendance(studentId, dateIso, hour, locationId, s
     const stamp = new Date().toLocaleString('es-PE', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
     const actor = `profesor (${CURRENT_USER.record.first_name || ''})`;
     const reasonMap = { recoverable: 'falta justificada', lost: 'cancelación tardía', no_show: 'no vino sin avisar' };
-    const labelMap = { attended: 'asistió', recoverable: 'falta justificada (recuperable)', lost: 'cancelación tardía', no_show: 'no vino sin avisar', pending: 'pendiente' };
+    const labelMap = { attended: 'asistió', recoverable: 'falta justificada (recuperable)', lost: 'cancelación tardía', no_show: 'no vino sin avisar', pending: 'pendiente', notice_no_show: 'aviso del profesor: no vino' };
     const noteLine = `[${stamp}] ${labelMap[status] || status} · marcado por ${actor}`;
     const isRecoverable = (status === 'recoverable');
     const countsAgainst = ['attended','lost','no_show'].includes(status);
@@ -21612,6 +21622,7 @@ async function instructorWriteAttendance(studentId, dateIso, hour, locationId, s
       let action = 'attendance.mark';
       if (status === 'pending') action = 'attendance.unmark';
       else if (status === 'attended') action = 'attendance.mark';
+      else if (status === 'notice_no_show') action = 'attendance.notice';
       else if (['recoverable','lost','no_show'].includes(status)) action = 'attendance.absence';
       logActivity(action, {
         table: 'attendance',
@@ -21671,7 +21682,7 @@ async function instructorWriteAttendance(studentId, dateIso, hour, locationId, s
       // re-renderizamos el panel. En ambos casos fijamos el scroll por si acaso.
       const _se = document.scrollingElement || document.documentElement;
       const _sy = _se ? _se.scrollTop : 0;
-      const _fluidInPlace = (status === 'attended' || status === 'pending');
+      const _fluidInPlace = (status === 'attended' || status === 'pending' || status === 'notice_no_show');
       let _markedCardObj = null;
       for (const _c of cachedNow) { if (_c.hour === hour && _c.location?.id === locationId) { _markedCardObj = _c; break; } }
       if (_fluidInPlace && _markedCardObj && typeof renderInstructorClassCard === 'function') {
@@ -21717,6 +21728,7 @@ async function instructorWriteAttendance(studentId, dateIso, hour, locationId, s
     // 15. Toast
     const toastMap = {
       attended: '✓ Asistió',
+      notice_no_show: '⚑ Avisaste: no vino · la coordinadora será avisada',
       recoverable: '⊙ Falta justificada · cupo liberado',
       lost: '⚠ Cancelación tardía · cupo liberado',
       no_show: '✕ No vino · cupo liberado',
