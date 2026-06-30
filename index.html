@@ -3617,14 +3617,14 @@
         <div style="margin-top:16px;">
           <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; gap:10px;">
             <span style="display:inline-flex; align-items:center; gap:7px; min-width:0;">
-              <span class="kpi-label" id="active-trend-scale-label" style="font-size:10px;">Alumnas que asistieron · por mes (últimos 3)</span>
+              <span class="kpi-label" id="active-trend-scale-label" style="font-size:10px;">Alumnas que asistieron · por semana (últimas 6)</span>
               <button type="button" onclick="toggleActiveInfo()" aria-label="Qué significa este gráfico" title="Qué significa" style="flex:none; width:16px; height:16px; border-radius:999px; border:1px solid var(--line); background:transparent; color:var(--ink-mute); font:600 10px/1 var(--body,system-ui); cursor:pointer; display:inline-flex; align-items:center; justify-content:center;">i</button>
             </span>
             <span id="active-trend-delta" style="font-size:12px; font-weight:600; color:var(--ink-mute); white-space:nowrap;">—</span>
           </div>
           <div id="active-trend-info" style="display:none; background:var(--bg-soft,#f5f2fb); border:1px solid var(--line); border-radius:12px; padding:11px 13px; margin-bottom:10px; font-size:11.5px; line-height:1.5; color:var(--ink-mute);">
-            Cada punto es cuántas <b>alumnas distintas</b> asistieron en ese periodo (clases marcadas como “asistió”), en la sede seleccionada. Una misma alumna que vino varias veces cuenta como 1. En el celular se agrupa por mes; en pantalla grande, por semana.<br>
-            El <b>periodo en curso</b> aparece como <b>“en curso”</b> (punto hueco y línea punteada): todavía no termina, por eso su número es bajo y no debe leerse como una caída. La comparación de la derecha usa el <b>último periodo completo</b>, no el que está en curso.
+            Cada punto es cuántas <b>alumnas distintas</b> asistieron esa semana (clases marcadas como “asistió”), de lunes a domingo, en la sede seleccionada. Una misma alumna que vino varias veces cuenta como 1. En el celular se ven las últimas 3 semanas; en pantalla grande, las últimas 6 (son los mismos datos).<br>
+            La <b>semana en curso</b> aparece como <b>“en curso”</b> (punto hueco y línea punteada): todavía no termina, por eso su número es bajo y no debe leerse como una caída. La comparación de la derecha usa la <b>última semana completa</b>, no la que está en curso.
           </div>
           <div id="active-chart"><div style="padding:18px 0; font-size:12px; color:var(--ink-mute);">Cargando…</div></div>
         </div>
@@ -6787,97 +6787,22 @@ function setActiveScope(scope) {
 }
 
 async function computeActiveStudents(locId) {
+  // El conteo se hace en la base (RPC dashboard_attendance_trend) para evitar el tope de
+  // 1000 filas del cliente, que truncaba las sesiones recientes y deformaba la tendencia
+  // (mostraba un desplome falso). Devuelve weeks (8 semanas), thisMonth, lastMonth y
+  // activeToday exactos, sin importar cuántas sesiones haya.
   const out = { activeToday: 0, weeks: [], thisMonth: 0, lastMonth: 0 };
-  const students = (STATE.students || []).filter(s => !locId || s.location_id === locId);
-  const studentIds = students.map(s => s.id);
-  if (studentIds.length === 0) return out;
-  const scopedSet = new Set(studentIds);
-  const chunk = (arr, n) => { const o = []; for (let i = 0; i < arr.length; i += n) o.push(arr.slice(i, i + n)); return o; };
-
-  const base = STATE.currentDate ? new Date(STATE.currentDate) : new Date();
-  base.setHours(12, 0, 0, 0);
-  const todayIso = dateToIsoLocal(base);
-  const mondayOf = (d) => { const x = new Date(d); const dow = (x.getDay() + 6) % 7; x.setDate(x.getDate() - dow); x.setHours(0, 0, 0, 0); return x; };
-  const thisWeekMon = mondayOf(base);
-  const eightWeeksAgo = new Date(thisWeekMon); eightWeeksAgo.setDate(eightWeeksAgo.getDate() - 7 * 7);
-  const startLastMonth = new Date(base.getFullYear(), base.getMonth() - 1, 1);
-  const start2MonthsAgo = new Date(base.getFullYear(), base.getMonth() - 2, 1);
-  let since = eightWeeksAgo < startLastMonth ? eightWeeksAgo : startLastMonth;
-  if (start2MonthsAgo < since) since = start2MonthsAgo;
-  const sinceIso = dateToIsoLocal(since);
-
-  // 1) Sesiones del scope desde 'since' (incluye futuras para "agendadas")
-  let sessQ = sb.from('class_sessions').select('id, session_date, location_id').gte('session_date', sinceIso);
-  if (locId) sessQ = sessQ.eq('location_id', locId);
-  const { data: sessions } = await sessQ;
-  const sessMap = new Map((sessions || []).map(s => [s.id, s.session_date]));
-  const pastSessIds = (sessions || []).filter(s => s.session_date <= todayIso).map(s => s.id);
-  const futureSessIds = (sessions || []).filter(s => s.session_date >= todayIso).map(s => s.id);
-
-  // 2) Asistencias 'attended' del scope en esas sesiones
-  const attended = [];
-  for (const ids of chunk(pastSessIds, 150)) {
-    if (ids.length === 0) continue;
-    const { data } = await sb.from('attendance').select('student_id, session_id, status').in('session_id', ids).eq('status', 'attended');
-    if (data) attended.push(...data);
-  }
-
-  // 3) Bucket por semana (lunes) y por mes — alumnos distintos
-  const weekSets = new Map();
-  const thisM = new Set(), lastM = new Set();
-  const thisMonthIdx = base.getMonth(), thisYear = base.getFullYear();
-  const lastMonthRef = new Date(thisYear, thisMonthIdx - 1, 1);
-  for (const a of attended) {
-    if (!scopedSet.has(a.student_id)) continue;
-    const sd = sessMap.get(a.session_id); if (!sd) continue;
-    const wk = dateToIsoLocal(mondayOf(new Date(sd + 'T12:00:00')));
-    if (!weekSets.has(wk)) weekSets.set(wk, new Set());
-    weekSets.get(wk).add(a.student_id);
-    const dt = new Date(sd + 'T12:00:00');
-    if (dt.getFullYear() === thisYear && dt.getMonth() === thisMonthIdx) thisM.add(a.student_id);
-    else if (dt.getFullYear() === lastMonthRef.getFullYear() && dt.getMonth() === lastMonthRef.getMonth()) lastM.add(a.student_id);
-  }
-  const weeks = [];
-  for (let i = 7; i >= 0; i--) { const m = new Date(thisWeekMon); m.setDate(m.getDate() - 7 * i); const k = dateToIsoLocal(m); weeks.push({ week: k, count: weekSets.get(k)?.size || 0 }); }
-  out.weeks = weeks;
-  out.thisMonth = thisM.size;
-  out.lastMonth = lastM.size;
-
-  // 3 puntos mensuales para el gráfico: mes-2, mes pasado y este mes (este mes en curso).
-  const MES_ABBR = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
-  const monthKeys = [];
-  for (let i = 2; i >= 0; i--) { const d = new Date(thisYear, thisMonthIdx - i, 1); monthKeys.push({ y: d.getFullYear(), m: d.getMonth() }); }
-  const monthSets = monthKeys.map(() => new Set());
-  for (const a of attended) {
-    if (!scopedSet.has(a.student_id)) continue;
-    const sd = sessMap.get(a.session_id); if (!sd) continue;
-    const dt = new Date(sd + 'T12:00:00');
-    const mi = monthKeys.findIndex(k => k.y === dt.getFullYear() && k.m === dt.getMonth());
-    if (mi >= 0) monthSets[mi].add(a.student_id);
-  }
-  out.months = monthKeys.map((k, i) => ({ label: MES_ABBR[k.m], count: monthSets[i].size, current: i === monthKeys.length - 1 }));
-
-  // 4) Activos hoy = paquete vivo ∩ booking futuro (no cancelado)
-  const livePkg = new Set();
-  for (const ids of chunk(studentIds, 200)) {
-    const { data } = await sb.from('student_packages')
-      .select('student_id, status, is_frozen, is_courtesy, classes_total, classes_used')
-      .in('student_id', ids);
-    (data || []).forEach(p => {
-      const live = (p.status === 'active' || p.status == null) && !p.is_frozen && !p.is_courtesy
-        && ((p.classes_used ?? 0) < (p.classes_total ?? 0));
-      if (live) livePkg.add(p.student_id);
-    });
-  }
-  const futureBooked = new Set();
-  for (const ids of chunk(futureSessIds, 150)) {
-    if (ids.length === 0) continue;
-    const { data } = await sb.from('session_bookings').select('student_id, cancelled_at').in('session_id', ids);
-    (data || []).forEach(b => { if (!b.cancelled_at && scopedSet.has(b.student_id)) futureBooked.add(b.student_id); });
-  }
-  let activeToday = 0;
-  livePkg.forEach(sid => { if (futureBooked.has(sid)) activeToday++; });
-  out.activeToday = activeToday;
+  const today = dateToIsoLocal(STATE.currentDate ? new Date(STATE.currentDate) : new Date());
+  try {
+    const { data, error } = await sb.rpc('dashboard_attendance_trend', { p_location_id: locId || null, p_today: today });
+    if (error) { console.warn('dashboard_attendance_trend:', error); return out; }
+    if (data) {
+      out.weeks = Array.isArray(data.weeks) ? data.weeks.map(w => ({ week: w.week, count: w.count })) : [];
+      out.thisMonth = data.thisMonth || 0;
+      out.lastMonth = data.lastMonth || 0;
+      out.activeToday = data.activeToday || 0;
+    }
+  } catch (e) { console.warn('dashboard_attendance_trend:', e); }
   return out;
 }
 
@@ -6926,24 +6851,21 @@ function paintActiveStudents(data) {
   }
 
   const isMobile = window.matchMedia('(max-width: 800px)').matches;
-  // Móvil: 3 puntos mensuales (mes-2, mes pasado, este mes). PC: últimas 6 semanas.
-  const pts = isMobile
-    ? ((data.months && data.months.length) ? data.months : [])
-    : (data.weeks || []).slice(-6);
-  const ptLabel = (p) => p.label || (p.week ? `${p.week.split('-')[2]}/${p.week.split('-')[1]}` : '');
-  const isWeekly = !!(pts.length && pts[0] && pts[0].week);
+  // Misma serie semanal en ambos: en móvil 3 puntos, en PC 6. Así los números coinciden
+  // entre celular y computadora (los puntos del móvil son los mismos de la PC, acercados).
+  const allWeeks = data.weeks || [];
+  const pts = isMobile ? allWeeks.slice(-3) : allWeeks.slice(-6);
+  const ptLabel = (p) => (p.week ? `${p.week.split('-')[2]}/${p.week.split('-')[1]}` : '');
 
   const scaleLabelEl = document.getElementById('active-trend-scale-label');
-  if (scaleLabelEl) scaleLabelEl.textContent = isWeekly
-    ? `Alumnas que asistieron · por semana (últimas ${pts.length})`
-    : 'Alumnas que asistieron · por mes (últimos 3)';
+  if (scaleLabelEl) scaleLabelEl.textContent = `Alumnas que asistieron · por semana (últimas ${pts.length})`;
 
   if (trendDeltaEl && pts.length >= 2) {
-    // El último punto (periodo en curso) es parcial; comparamos el último periodo COMPLETO contra el primero.
+    // La última semana está EN CURSO (parcial); comparamos la última semana COMPLETA contra la primera.
     const lastComplete = pts[pts.length - 2].count;
     const first = pts[0].count;
     const diff = lastComplete - first;
-    const ref = isWeekly ? `hace ${pts.length - 1} sem` : ptLabel(pts[0]);
+    const ref = `hace ${pts.length - 1} sem`;
     if (diff > 0)      { trendDeltaEl.textContent = `▲ ${diff} vs ${ref}`; trendDeltaEl.style.color = 'var(--good,#1a8a4a)'; }
     else if (diff < 0) { trendDeltaEl.textContent = `▼ ${Math.abs(diff)} vs ${ref}`; trendDeltaEl.style.color = 'var(--danger,#c0392b)'; }
     else               { trendDeltaEl.textContent = 'sin cambio'; trendDeltaEl.style.color = 'var(--ink-mute)'; }
