@@ -719,7 +719,7 @@
   /* ===== Plantilla semanal (grilla guía de horarios fijos) ===== */
   #view-plantilla.is-active { display: block; }
   .plt-screen { margin: -6px -22px 0; }
-  .plt-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 16px; padding: 0 320px 0 4px; }
+  .plt-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 16px; padding: 0 4px; }
   .plt-title { font-family: var(--display, serif); font-size: 30px; font-weight: 600; color: var(--ink); margin: 0; }
   .plt-title em { font-style: italic; }
   .plt-sub { font-size: 13px; color: var(--ink-mute); margin-top: 2px; }
@@ -735,7 +735,7 @@
   .plt-legend span { display: inline-flex; align-items: center; gap: 6px; }
   .plt-legend i { width: 11px; height: 11px; border-radius: 3px; display: inline-block; }
   .plt-sticky { padding-top: 0; }
-  .plt-search-float { position: fixed; top: calc(var(--topbar-h) + 12px); right: 36px; width: 300px; z-index: 70; }
+  .plt-search-float { position: fixed; top: calc(var(--topbar-h) + 54px); right: 24px; width: 320px; z-index: 70; }
   .plt-search { position: relative; }
   .plt-search-input { width: 230px; font-size: 13px; padding: 8px 12px 8px 32px; border: 1px solid var(--line); border-radius: var(--radius-pill); background: #fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='15' height='15' viewBox='0 0 24 24' fill='none' stroke='%236B6473' stroke-width='2' stroke-linecap='round'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='M21 21l-4.3-4.3'/%3E%3C/svg%3E") no-repeat 11px center; color: var(--ink); outline: none; }
   .plt-search-input:focus { border-color: var(--fit-purple); }
@@ -767,6 +767,8 @@
   .plt-chip.st-noconfirm { background: #FBF1D9; border-color: #EBCB86; color: #8A5A06; }
   .plt-chip.st-frozen { background: #ECEAEF; border-color: #D6D2DC; color: #6B6676; }
   .plt-chip.st-nopkg { background: #FBE3E6; border-color: #E3A9AE; color: #8C1D2E; }
+  .plt-chip.is-confirmed { background: #E7F6EA !important; border-color: #A9D9B4 !important; }
+  .plt-chip .ok.pending { color: #6478D6; font-size: 13px; display: inline-flex; align-items: center; }
   .plt-chip-empty { visibility: hidden; pointer-events: none; }
   .plt-chip.hl { box-shadow: 0 0 0 2px rgba(91,42,143,0.30); }
   .plt-chip.sel-peer { background: #EFE7F8 !important; border-color: var(--fit-purple) !important; box-shadow: 0 0 0 1px rgba(91,42,143,0.30); }
@@ -14011,6 +14013,7 @@ let PLT_SEDE = null;        // sede seleccionada
 let PLT_WEEK_START = null;  // lunes (Date) de la semana mostrada
 let PLT_PKG_CACHE = {};     // student_id -> [paquetes] (para color)
 let PLT_BOOKED = new Set(); // `${student_id}|${dow}|${hour}` con clase real esta semana
+let PLT_CONFIRMED = new Set(); // subconjunto de PLT_BOOKED con confirmed_at (confirmó coord)
 // "Esperando respuesta": se marca al copiar mensaje o abrir WhatsApp. Solo visual, persiste local.
 let PLT_WAITING = (() => {
   try { return new Set(JSON.parse(localStorage.getItem('plt_waiting') || '[]')); } catch (e) { return new Set(); }
@@ -14092,7 +14095,7 @@ function pltNavWeek(delta) {
   renderPlantillaView();
 }
 async function pltLoadData() {
-  PLT_PKG_CACHE = {}; PLT_BOOKED = new Set();
+  PLT_PKG_CACHE = {}; PLT_BOOKED = new Set(); PLT_CONFIRMED = new Set();
   const ids = pltFixedStudents().map(s => s.id);
   if (!ids.length || typeof sb === 'undefined' || !isOnline) return;
   try {
@@ -14114,13 +14117,15 @@ async function pltLoadData() {
     const sessIds = Object.keys(sessMap);
     if (sessIds.length) {
       const { data: bks } = await sb.from('session_bookings')
-        .select('session_id, student_id, cancelled_at')
+        .select('session_id, student_id, cancelled_at, confirmed_at')
         .in('session_id', sessIds);
       (bks || []).forEach(b => {
         if (b.cancelled_at) return;
         const cs = sessMap[b.session_id]; if (!cs) return;
         const dow = (new Date(cs.session_date + 'T00:00:00').getDay() + 6) % 7 + 1;
-        PLT_BOOKED.add(`${b.student_id}|${dow}|${cs.hour}`);
+        const key = `${b.student_id}|${dow}|${cs.hour}`;
+        PLT_BOOKED.add(key);
+        if (b.confirmed_at) PLT_CONFIRMED.add(key);
       });
     }
   } catch (e) {}
@@ -14171,12 +14176,18 @@ function pltRenderGrid() {
   // Constructor de chip reutilizable
   const pltChipHtml = (s, dn, h) => {
     const st = pltStudentState(s);
-    const booked = PLT_BOOKED.has(`${s.id}|${dn}|${h}`);
+    const key = `${s.id}|${dn}|${h}`;
+    const booked = PLT_BOOKED.has(key);
+    const confirmed = PLT_CONFIRMED.has(key);
     const dateIso = dateToIsoLocal(pltDayToDate(dn));
     const waiting = !booked && PLT_WAITING.has(pltWaitingKey(s.id, dateIso, h));
     const nm = `${s.first_name || ''} ${s.last_name || ''}`.trim();
-    const marker = booked ? '<span class="ok">✓</span>' : (waiting ? '<span class="ok wait" title="Esperando respuesta"><i class="ti ti-clock"></i></span>' : '');
-    return `<div class="plt-chip st-${st}" data-sid="${s.id}" data-day="${dn}" data-hour="${h}" onclick="pltOpenChipMenu('${s.id}', ${dn}, ${h}, event)" onmouseenter="pltHover('${s.id}',1)" onmouseleave="pltHover('${s.id}',0)" title="${escape((s.first_name || '') + ' ' + (s.last_name || ''))}"><span class="nm">${escape(nm)}</span>${marker}</div>`;
+    let marker = '';
+    if (confirmed) marker = '<span class="ok" title="Confirmada · en Mi día">✓</span>';
+    else if (booked) marker = '<span class="ok pending" title="En Mi día · falta confirmar"><i class="ti ti-circle-check"></i></span>';
+    else if (waiting) marker = '<span class="ok wait" title="Esperando respuesta"><i class="ti ti-clock"></i></span>';
+    const cls = 'plt-chip st-' + st + (confirmed ? ' is-confirmed' : '');
+    return `<div class="${cls}" data-sid="${s.id}" data-day="${dn}" data-hour="${h}" onclick="pltOpenChipMenu('${s.id}', ${dn}, ${h}, event)" onmouseenter="pltHover('${s.id}',1)" onmouseleave="pltHover('${s.id}',0)" title="${escape((s.first_name || '') + ' ' + (s.last_name || ''))}"><span class="nm">${escape(nm)}</span>${marker}</div>`;
   };
   const pltSortStuds = (arr, hh) => arr.slice().sort((a, b) => {
     const ka = pltSortKey(a, hh), kb = pltSortKey(b, hh);
@@ -14456,6 +14467,14 @@ async function pltPasarAClase(studentId, dayN, hour) {
     if (PLT_WAITING.delete(pltWaitingKey(studentId, dateIso, hour))) pltSaveWaiting();
     await pltLoadData();
     pltRenderGrid();
+    // Refrescar Mi día para que la clase aparezca sin recargar la página
+    try {
+      if (typeof loadDayData === 'function') await loadDayData();
+      if (document.getElementById('view-dashboard')?.classList.contains('is-active')) {
+        if (typeof renderDashboard === 'function') renderDashboard();
+        if (typeof renderTimeline === 'function') renderTimeline();
+      }
+    } catch (e) {}
   } catch (err) {
     console.error('pltPasarAClase:', err);
     showToast('Error: ' + (err.message || 'desconocido'), 'error');
