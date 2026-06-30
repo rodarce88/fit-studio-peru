@@ -14951,6 +14951,11 @@ function _coordLiveRefresh(payload) {
   clearTimeout(_coordRtTimer);
   _coordRtTimer = setTimeout(async () => {
     if (!isOnline || _hasOpenModal()) return;
+    // Eco de la propia marca del profesor: si yo (vista profesor) acabo de marcar,
+    // ya finalicé el círculo en el sitio. Ignorar este re-render del eco para que no
+    // haya un segundo "saltito" ~1.5 s después. Ver instructorWriteAttendance (paso 8b).
+    if (CURRENT_USER && CURRENT_USER.role === 'instructor'
+        && STATE._instSelfWriteTs && (Date.now() - STATE._instSelfWriteTs < 3000)) return;
     // si está haciendo scroll en este momento, espera (no dar el salto molesto)
     if (Date.now() - _lastUserScrollTs < 1200) { _coordLiveRefresh(); return; }
     const se = document.scrollingElement || document.documentElement;
@@ -21484,6 +21489,11 @@ async function instructorWriteAttendance(studentId, dateIso, hour, locationId, s
       if (r?.error) throw r.error;
     }
 
+    // Marca temporal de "yo acabo de escribir": el canal en vivo recibirá el eco de
+    // esta misma marca ~1.5 s después; en la vista del profesor lo ignoramos para no
+    // re-renderear de nuevo (ya actualizamos en el sitio). Ver _coordLiveRefresh.
+    STATE._instSelfWriteTs = Date.now();
+
     // 9. Capturar el id del attendance (insertado o existente)
     let attendanceId = existing?.id || cachedAttendanceId || null;
     if (!attendanceId && results[0]?.data) {
@@ -21558,21 +21568,51 @@ async function instructorWriteAttendance(studentId, dateIso, hour, locationId, s
         c.marked = c.students.filter(x => x.attendance && x.attendance.status !== 'pending').length;
         break;
       }
-      // Re-render local (instantáneo, sin queries)
-      if (typeof renderInstructorClassesBlock === 'function') renderInstructorClassesBlock(cachedNow);
-      if (typeof renderInstructorNextClassBlock === 'function') renderInstructorNextClassBlock(cachedNow);
+      // Render: NO reconstruir el panel ENTERO —ese rebuild de TODAS las tarjetas con
+      // innerHTML era el que causaba el "saltito" al confirmar la BD—. Para 'attended'
+      // y 'pending' (deshacer) re-renderizamos SOLO la tarjeta de la hora marcada y la
+      // cambiamos en su sitio (replaceWith): tiene la misma altura, así que no mueve el
+      // resto de la lista, pero igual actualiza todo (chip "Asistió", fondo de la fila,
+      // botón → deshacer, círculo). Para faltas (que cambian el cupo/donut) sí
+      // re-renderizamos el panel. En ambos casos fijamos el scroll por si acaso.
+      const _se = document.scrollingElement || document.documentElement;
+      const _sy = _se ? _se.scrollTop : 0;
+      const _fluidInPlace = (status === 'attended' || status === 'pending');
+      let _markedCardObj = null;
+      for (const _c of cachedNow) { if (_c.hour === hour && _c.location?.id === locationId) { _markedCardObj = _c; break; } }
+      if (_fluidInPlace && _markedCardObj && typeof renderInstructorClassCard === 'function') {
+        const _todayIso = dateToIsoLocal(new Date());
+        const _now = new Date();
+        const _ctx = { isViewingToday: STATE.instDayDate === _todayIso, currentHour: _now.getHours(), currentMin: _now.getMinutes() };
+        const _cardEl = document.querySelector(`.inst-hour-card[data-hour="${hour}"]:not(.is-other)`);
+        if (_cardEl) {
+          const _tmp = document.createElement('div');
+          _tmp.innerHTML = renderInstructorClassCard(_markedCardObj, _ctx);
+          const _newCard = _tmp.firstElementChild;
+          if (_newCard) _cardEl.replaceWith(_newCard);
+          else if (typeof renderInstructorClassesBlock === 'function') renderInstructorClassesBlock(cachedNow);
+        } else if (typeof renderInstructorClassesBlock === 'function') {
+          renderInstructorClassesBlock(cachedNow); // fallback raro: no ubicamos la tarjeta
+        }
+        if (typeof renderInstructorNextClassBlock === 'function') renderInstructorNextClassBlock(cachedNow);
+      } else {
+        if (typeof renderInstructorClassesBlock === 'function') renderInstructorClassesBlock(cachedNow);
+        if (typeof renderInstructorNextClassBlock === 'function') renderInstructorNextClassBlock(cachedNow);
+      }
+      if (_se) _se.scrollTop = _sy;
     }
 
     // 13.5. Confetti animation: solo cuando el guardado fue exitoso Y status='attended'.
-    // Buscar el botón NUEVO en el DOM (después del re-render) y dispararle la animación de pop.
+    // La tarjeta se re-renderizó (botón nuevo en el DOM); lo buscamos por su onclick y
+    // le disparamos el pop.
     if (status === 'attended') {
       requestAnimationFrame(() => {
-        const newBtn = document.querySelector(
+        const popBtn = document.querySelector(
           `.inst-check-btn[onclick*="${studentId}"][onclick*="${dateIso}"][onclick*="${hour}"][onclick*="${locationId}"]`
         );
-        if (newBtn) {
-          newBtn.classList.add('is-popping');
-          setTimeout(() => newBtn.classList.remove('is-popping'), 720);
+        if (popBtn) {
+          popBtn.classList.add('is-popping');
+          setTimeout(() => popBtn.classList.remove('is-popping'), 720);
         }
       });
     }
