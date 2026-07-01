@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>FIT Studio · Mi cuenta</title>
-<meta name="app-build" content="b20-2026-07-01">
+<meta name="app-build" content="b21-2026-07-01">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400..700;1,400..600&family=Mulish:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -82,6 +82,58 @@
   .pf-consent span{ font-weight:500; font-size:calc(12.5px*var(--scale)); }
   .pf-consent.ok{ background:#E8F5EF; color:#0E7A4F; } .pf-consent.ok span{ color:#3d7a5f; }
   .pf-consent.pend{ background:#FBF2DE; color:#7a5a16; } .pf-consent.pend span{ color:#8a6a26; }
+  /* Perfil a pantalla completa (fijo, no se mueve) */
+  .pf-screen{ position:absolute; inset:0; z-index:60; background:var(--cream); display:flex; flex-direction:column; overflow-x:hidden; transform:translateX(100%); transition:transform .26s cubic-bezier(.32,.72,.24,1); visibility:hidden; }
+  .pf-screen.show{ transform:translateX(0); visibility:visible; }
+  .pf-bar{ display:flex; align-items:center; gap:10px; padding:16px 18px 10px; flex:none; }
+  .pf-back{ width:38px; height:38px; border-radius:50%; border:0; background:#fff; box-shadow:0 2px 8px rgba(0,0,0,.06); font-size:22px; color:var(--ink-soft); display:flex; align-items:center; justify-content:center; cursor:pointer; }
+  .pf-bar .ttl{ font-family:var(--display); font-weight:600; font-size:calc(21px*var(--scale)); }
+  .pf-scroll{ flex:1; overflow-y:auto; overflow-x:hidden; -webkit-overflow-scrolling:touch; padding:6px 20px calc(30px + env(safe-area-inset-bottom)); }
+  .pf-hero{ display:flex; flex-direction:column; align-items:center; padding:10px 0 16px; }
+  .pf-hero .av{ width:76px; height:76px; border-radius:50%; background:var(--purple-soft); color:var(--purple-deep); display:flex; align-items:center; justify-content:center; font-weight:800; font-size:calc(27px*var(--scale)); margin-bottom:10px; }
+  .pf-hero .nm{ font-family:var(--display); font-weight:600; font-size:calc(23px*var(--scale)); color:var(--ink); text-align:center; line-height:1.15; }
+  .pf-hero .ph{ font-size:calc(14px*var(--scale)); color:var(--ink-mute); margin-top:3px; }
+  .pf-sec{ font-size:calc(11px*var(--scale)); font-weight:800; letter-spacing:.06em; text-transform:uppercase; color:var(--ink-mute); margin:20px 2px 10px; }
+  .pf-disc{ width:100%; border:1px solid var(--line); background:#fff; border-radius:16px; padding:14px 16px; display:flex; align-items:center; gap:12px; cursor:pointer; font-family:var(--body); text-align:left; }
+  .pf-disc .chev{ margin-left:auto; color:var(--ink-mute); font-size:20px; transition:transform .2s; }
+  .pf-disc.open .chev{ transform:rotate(90deg); }
+  .pf-more{ overflow:hidden; }
+  .pf-note-ro{ background:var(--purple-pale); border-radius:14px; padding:13px 15px; font-size:calc(13.5px*var(--scale)); color:var(--ink-soft); line-height:1.5; }
+  .pf-dateBtn{ width:100%; text-align:left; border:1px solid var(--line); border-radius:12px; padding:12px 14px; background:#fff; font-family:var(--body); font-size:calc(15px*var(--scale)); color:var(--ink); cursor:pointer; }
+  .pf-dateBtn.empty{ color:var(--ink-mute); }
+  /* Calendario propio (nacimiento) */
+  .bp-ov{ position:absolute; inset:0; z-index:80; background:rgba(20,16,26,.42); display:flex; align-items:center; justify-content:center; padding:22px; opacity:0; transition:opacity .18s; }
+  .bp-ov.show{ opacity:1; }
+  .bp-card{ width:100%; max-width:340px; background:#fff; border-radius:22px; padding:16px; box-shadow:0 20px 50px rgba(0,0,0,.28); }
+  .bp-head{ display:flex; align-items:center; margin-bottom:10px; }
+  .bp-title{ font-family:var(--display); font-weight:600; font-size:calc(18px*var(--scale)); color:var(--ink); cursor:pointer; display:flex; align-items:center; gap:4px; }
+  .bp-title .car{ color:var(--purple); font-size:14px; }
+  .bp-nav{ margin-left:auto; display:flex; gap:6px; }
+  .bp-nav button{ width:34px; height:34px; border-radius:10px; border:1px solid var(--line); background:#fff; font-size:18px; color:var(--ink-soft); cursor:pointer; }
+  .bp-grid{ display:grid; grid-template-columns:repeat(7,1fr); gap:2px; }
+  .bp-dow{ text-align:center; font-size:10.5px; font-weight:800; color:var(--ink-mute); padding:4px 0; }
+  .bp-day{ aspect-ratio:1; border:0; background:transparent; border-radius:10px; font-family:var(--body); font-size:calc(14px*var(--scale)); color:var(--ink); cursor:pointer; }
+  .bp-day:hover{ background:var(--purple-pale); }
+  .bp-day.sel{ background:var(--purple); color:#fff; font-weight:700; }
+  .bp-day.empty{ visibility:hidden; }
+  .bp-years{ display:grid; grid-template-columns:repeat(4,1fr); gap:6px; max-height:280px; overflow-y:auto; }
+  .bp-yr{ padding:11px 0; border:1px solid var(--line); background:#fff; border-radius:10px; font-family:var(--body); font-size:calc(14px*var(--scale)); color:var(--ink); cursor:pointer; }
+  .bp-yr.sel{ background:var(--purple); color:#fff; border-color:var(--purple); font-weight:700; }
+  /* Consentimiento (visor) */
+  .cv-screen{ position:absolute; inset:0; z-index:70; background:var(--cream); display:flex; flex-direction:column; transform:translateY(100%); transition:transform .26s cubic-bezier(.32,.72,.24,1); visibility:hidden; }
+  .cv-screen.show{ transform:translateY(0); visibility:visible; }
+  .cv-scroll{ flex:1; overflow-y:auto; padding:8px 22px 20px; }
+  .cv-cl{ margin-bottom:16px; }
+  .cv-cl .cn{ font-size:calc(11px*var(--scale)); font-weight:800; letter-spacing:.05em; color:var(--purple); }
+  .cv-cl .ct{ font-weight:800; font-size:calc(15px*var(--scale)); color:var(--ink); margin:2px 0 5px; }
+  .cv-cl .cd{ font-size:calc(14px*var(--scale)); color:var(--ink-soft); line-height:1.55; }
+  .cv-foot{ flex:none; padding:14px 22px calc(18px + env(safe-area-inset-bottom)); border-top:1px solid var(--line); background:var(--cream); }
+  .cv-img{ display:flex; align-items:flex-start; gap:11px; margin-bottom:12px; cursor:pointer; }
+  .cv-box{ width:24px; height:24px; border-radius:7px; border:2px solid var(--purple-soft); flex:none; display:flex; align-items:center; justify-content:center; color:#fff; margin-top:1px; }
+  .cv-img.on .cv-box{ background:var(--purple); border-color:var(--purple); }
+  .cv-img .cvt{ font-size:calc(13px*var(--scale)); color:var(--ink-soft); line-height:1.4; }
+  .btn:disabled{ opacity:.45; box-shadow:none; }
+  .cv-hint{ font-size:calc(12px*var(--scale)); color:var(--ink-mute); text-align:center; margin-top:8px; }
   .cklist{ display:flex; flex-direction:column; gap:10px; margin:16px 0 4px; }
   .ckrow{ width:100%; background:#fff; border:1px solid var(--line); border-radius:16px; padding:14px 15px; display:flex; align-items:center; gap:14px; cursor:pointer; text-align:left; font-family:var(--body); }
   .ckrow.off{ opacity:.5; }
@@ -240,7 +292,7 @@
 
   <div class="hidden" id="v-app">
     <div class="topbar">
-      <div class="who" onclick="openProfileSheet()" style="cursor:pointer" title="Ver mi perfil">
+      <div class="who" onclick="openProfile()" style="cursor:pointer" title="Ver mi perfil">
         <div class="avatar" id="t-avatar">··</div>
         <div style="min-width:0;"><div class="hi" id="t-greet">Bienvenida</div><div class="nm" id="t-name">—</div></div>
       </div>
@@ -877,41 +929,57 @@
   }
   window.closeSheet=()=>{ const ov=$('sheet'); if(ov) ov.classList.remove('show'); const ab=$('app-body'); if(ab) ab.style.overflow=''; };
 
-  window.openProfileSheet = async ()=>{
-    openSheet(`<div class="sh-h">Mi perfil</div><div class="sh-sub">Cargando tus datos…</div>`);
+  let PF = { p:null, birth:null, moreOpen:false };
+  let BP = { y:2000, m:0, mode:'days' };
+  let CV = { text:'', version:'v1.0', img:false };
+
+  window.openProfile = async ()=>{
+    let ov=$('pf-screen');
+    if(!ov){ ov=document.createElement('div'); ov.id='pf-screen'; ov.className='pf-screen'; document.querySelector('.phone').appendChild(ov); }
+    ov.innerHTML=`<div class="pf-bar"><button class="pf-back" onclick="closeProfile()">‹</button><div class="ttl">Mi perfil</div></div><div class="pf-scroll" id="pf-scroll"><div style="padding:40px 0;text-align:center;color:var(--ink-mute)">Cargando…</div></div>`;
+    requestAnimationFrame(()=>ov.classList.add('show'));
     let p;
     try{
       const { data, error } = await sb.from('students')
         .select('first_name,last_name,phone,email,gender,document_type,document_number,birth_date,emergency_contact_name,emergency_contact_phone,consent_signed_at,image_consent')
         .limit(1).maybeSingle();
       if(error||!data) throw (error||new Error('sin datos'));
-      p = data;
-    }catch(e){
-      openSheet(`<div class="sh-h">Mi perfil</div><div class="sh-sub">No pudimos cargar tus datos. Intenta de nuevo.</div><button class="btn ghost" onclick="closeSheet()">Cerrar</button>`);
-      return;
-    }
+      p=data;
+    }catch(e){ const s=$('pf-scroll'); if(s) s.innerHTML='<div style="padding:40px 0;text-align:center;color:var(--ink-mute)">No pudimos cargar tus datos.</div>'; return; }
+    PF={ p, birth:p.birth_date||null, moreOpen:false };
+    renderProfile();
+  };
+  window.closeProfile=()=>{ const ov=$('pf-screen'); if(ov) ov.classList.remove('show'); };
+
+  function renderProfile(){
+    const sc=$('pf-scroll'); if(!sc) return; const p=PF.p;
+    const initials=((p.first_name?.[0]||'')+(p.last_name?.[0]||'')).toUpperCase()||'··';
     const opt=(v,l,cur)=>`<option value="${v}" ${String(cur||'')===v?'selected':''}>${l}</option>`;
     const consent = p.consent_signed_at
       ? `<div class="pf-consent ok">Consentimiento firmado ✓<span>Firmado el ${new Date(p.consent_signed_at).toLocaleDateString('es-PE')}${p.image_consent?' · autorizas uso de imagen':''}</span></div>`
-      : `<div class="pf-consent pend">Consentimiento pendiente<span>Te lo compartiremos para firmarlo pronto.</span></div>`;
-    openSheet(`
-      <div class="sh-h">Mi perfil</div>
-      <div class="sh-sub">${esc(p.first_name||'')} ${esc(p.last_name||'')}</div>
-      <div class="pf-field"><label class="pf-lab">Correo</label><input class="pf-in" id="pf-email" type="email" value="${esc(p.email||'')}" placeholder="tucorreo@ejemplo.com"></div>
-      <div class="pf-field"><label class="pf-lab">Teléfono</label><input class="pf-in" id="pf-phone" type="tel" value="${esc(p.phone||'')}" placeholder="+51 9..."></div>
-      <div class="pf-field"><label class="pf-lab">Género</label><select class="pf-in" id="pf-gender">${opt('','—',p.gender)}${opt('F','Femenino',p.gender)}${opt('M','Masculino',p.gender)}${opt('O','Otro',p.gender)}</select></div>
-      <div class="pf-row">
-        <div class="pf-field"><label class="pf-lab">Documento</label><select class="pf-in" id="pf-doctype">${opt('','—',p.document_type)}${opt('DNI','DNI',p.document_type)}${opt('CE','C. Extranjería',p.document_type)}${opt('Pasaporte','Pasaporte',p.document_type)}</select></div>
-        <div class="pf-field"><label class="pf-lab">Número</label><input class="pf-in" id="pf-docnum" value="${esc(p.document_number||'')}"></div>
-      </div>
-      <div class="pf-field"><label class="pf-lab">Fecha de nacimiento</label><input class="pf-in" id="pf-birth" type="date" value="${p.birth_date||''}"></div>
-      <div class="pf-field"><label class="pf-lab">Contacto de emergencia</label><input class="pf-in" id="pf-emname" value="${esc(p.emergency_contact_name||'')}" placeholder="Nombre"></div>
-      <div class="pf-field"><input class="pf-in" id="pf-emphone" type="tel" value="${esc(p.emergency_contact_phone||'')}" placeholder="Teléfono de emergencia"></div>
+      : `<button class="pf-disc" onclick="openConsent()"><div><div style="font-weight:800;color:var(--ink)">Consentimiento pendiente</div><div style="font-size:12px;color:var(--ink-mute)">Léelo y fírmalo aquí</div></div><span class="chev">›</span></button>`;
+    const birthLabel = PF.birth ? bpFmt(PF.birth) : 'Agregar fecha';
+    sc.innerHTML = `
+      <div class="pf-hero"><div class="av">${initials}</div><div class="nm">${esc(p.first_name||'')} ${esc(p.last_name||'')}</div><div class="ph">${esc(p.phone||'Sin teléfono')}</div></div>
+      <div class="pf-sec">Consentimiento</div>
       ${consent}
-      <button class="btn" id="pf-save" onclick="saveProfile()">Guardar cambios</button>
-      <button class="linkbtn" onclick="closeSheet()">Cerrar</button>
-    `);
-  };
+      <div class="pf-sec">Más datos</div>
+      <button class="pf-disc ${PF.moreOpen?'open':''}" id="pf-more-toggle" onclick="pfToggleMore()"><div><div style="font-weight:700;color:var(--ink)">Ver y editar mis datos</div><div style="font-size:12px;color:var(--ink-mute)">Correo, documento, nacimiento, emergencia</div></div><span class="chev">›</span></button>
+      <div class="pf-more" id="pf-more" style="display:${PF.moreOpen?'block':'none'}">
+        <div class="pf-field"><label class="pf-lab">Correo</label><input class="pf-in" id="pf-email" type="email" value="${esc(p.email||'')}" placeholder="tucorreo@ejemplo.com"></div>
+        <div class="pf-field"><label class="pf-lab">Teléfono</label><input class="pf-in" id="pf-phone" type="tel" value="${esc(p.phone||'')}" placeholder="+51 9..."></div>
+        <div class="pf-field"><label class="pf-lab">Género</label><select class="pf-in" id="pf-gender">${opt('','—',p.gender)}${opt('F','Femenino',p.gender)}${opt('M','Masculino',p.gender)}${opt('O','Otro',p.gender)}</select></div>
+        <div class="pf-row">
+          <div class="pf-field"><label class="pf-lab">Documento</label><select class="pf-in" id="pf-doctype">${opt('','—',p.document_type)}${opt('DNI','DNI',p.document_type)}${opt('CE','C. Extranjería',p.document_type)}${opt('Pasaporte','Pasaporte',p.document_type)}</select></div>
+          <div class="pf-field"><label class="pf-lab">Número</label><input class="pf-in" id="pf-docnum" value="${esc(p.document_number||'')}"></div>
+        </div>
+        <div class="pf-field"><label class="pf-lab">Fecha de nacimiento</label><button type="button" class="pf-dateBtn ${PF.birth?'':'empty'}" id="pf-birthbtn" onclick="openBirthPicker()">${birthLabel}</button></div>
+        <div class="pf-field"><label class="pf-lab">Contacto de emergencia</label><input class="pf-in" id="pf-emname" value="${esc(p.emergency_contact_name||'')}" placeholder="Nombre"></div>
+        <div class="pf-field"><input class="pf-in" id="pf-emphone" type="tel" value="${esc(p.emergency_contact_phone||'')}" placeholder="Teléfono de emergencia"></div>
+        <button class="btn" id="pf-save" onclick="saveProfile()" style="margin-top:16px">Guardar cambios</button>
+      </div>`;
+  }
+  window.pfToggleMore=()=>{ PF.moreOpen=!PF.moreOpen; const m=$('pf-more'); const t=$('pf-more-toggle'); if(m) m.style.display=PF.moreOpen?'block':'none'; if(t) t.classList.toggle('open',PF.moreOpen); };
 
   window.saveProfile = async ()=>{
     const btn=$('pf-save'); if(btn){ btn.textContent='Guardando…'; btn.disabled=true; }
@@ -920,16 +988,83 @@
       const { error } = await sb.rpc('student_update_profile', {
         p_email: val('pf-email'), p_phone: val('pf-phone'), p_gender: val('pf-gender'),
         p_document_type: val('pf-doctype'), p_document_number: val('pf-docnum'),
-        p_birth_date: val('pf-birth'), p_emergency_contact_name: val('pf-emname'),
+        p_birth_date: PF.birth||null, p_emergency_contact_name: val('pf-emname'),
         p_emergency_contact_phone: val('pf-emphone')
       });
       if(error) throw error;
+      const p=PF.p; p.email=val('pf-email'); p.phone=val('pf-phone'); p.gender=val('pf-gender'); p.document_type=val('pf-doctype'); p.document_number=val('pf-docnum'); p.birth_date=PF.birth; p.emergency_contact_name=val('pf-emname'); p.emergency_contact_phone=val('pf-emphone');
+      const hero=document.querySelector('#pf-screen .pf-hero .ph'); if(hero) hero.textContent=p.phone||'Sin teléfono';
       toast('✓ Perfil actualizado');
-      closeSheet();
-    }catch(e){
-      toast('No se pudo guardar. Intenta de nuevo.');
       if(btn){ btn.textContent='Guardar cambios'; btn.disabled=false; }
+    }catch(e){ toast('No se pudo guardar. Intenta de nuevo.'); if(btn){ btn.textContent='Guardar cambios'; btn.disabled=false; } }
+  };
+
+  // ---- Calendario propio para la fecha de nacimiento ----
+  function bpFmt(iso){ const d=new Date(iso+'T12:00:00'); return `${d.getDate()} de ${MESES[d.getMonth()]}, ${d.getFullYear()}`; }
+  window.openBirthPicker=()=>{
+    let ov=$('bp-ov');
+    if(!ov){ ov=document.createElement('div'); ov.id='bp-ov'; ov.className='bp-ov'; ov.addEventListener('click',e=>{ if(e.target===ov) closeBirth(); }); document.querySelector('.phone').appendChild(ov); }
+    const init = PF.birth ? new Date(PF.birth+'T12:00:00') : new Date(2000,0,1);
+    BP={ y:init.getFullYear(), m:init.getMonth(), mode:'days' };
+    bpRender(); requestAnimationFrame(()=>ov.classList.add('show'));
+  };
+  window.closeBirth=()=>{ const ov=$('bp-ov'); if(ov) ov.classList.remove('show'); };
+  window.bpToggleMode=()=>{ BP.mode = BP.mode==='days'?'years':'days'; bpRender(); };
+  window.bpNav=(d)=>{ let m=BP.m+d, y=BP.y; if(m<0){m=11;y--;} if(m>11){m=0;y++;} BP.m=m; BP.y=y; bpRender(); };
+  window.bpPickYear=(y)=>{ BP.y=y; BP.mode='days'; bpRender(); };
+  window.bpPickDay=(d)=>{ const iso=`${BP.y}-${String(BP.m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`; PF.birth=iso; const b=$('pf-birthbtn'); if(b){ b.textContent=bpFmt(iso); b.classList.remove('empty'); } closeBirth(); };
+  function bpRender(){
+    const ov=$('bp-ov'); if(!ov) return; let inner;
+    if(BP.mode==='years'){
+      const now=new Date().getFullYear(); let ys='';
+      for(let y=now;y>=1930;y--) ys+=`<button class="bp-yr ${y===BP.y?'sel':''}" onclick="bpPickYear(${y})">${y}</button>`;
+      inner=`<div class="bp-head"><div class="bp-title" onclick="bpToggleMode()">${MESES[BP.m]} ${BP.y} <span class="car">▾</span></div></div><div class="bp-years">${ys}</div>`;
+    } else {
+      const first=new Date(BP.y,BP.m,1).getDay();
+      const days=new Date(BP.y,BP.m+1,0).getDate();
+      const dow=['D','L','M','M','J','V','S'];
+      let cells=dow.map(d=>`<div class="bp-dow">${d}</div>`).join('');
+      for(let i=0;i<first;i++) cells+=`<button class="bp-day empty"></button>`;
+      for(let d=1;d<=days;d++){ const iso=`${BP.y}-${String(BP.m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`; cells+=`<button class="bp-day ${iso===PF.birth?'sel':''}" onclick="bpPickDay(${d})">${d}</button>`; }
+      inner=`<div class="bp-head"><div class="bp-title" onclick="bpToggleMode()">${MESES[BP.m]} ${BP.y} <span class="car">▾</span></div><div class="bp-nav"><button onclick="bpNav(-1)">‹</button><button onclick="bpNav(1)">›</button></div></div><div class="bp-grid">${cells}</div>`;
     }
+    ov.innerHTML=`<div class="bp-card">${inner}</div>`;
+  }
+
+  // ---- Visor de consentimiento ----
+  window.openConsent=async ()=>{
+    let ov=$('cv-screen');
+    if(!ov){ ov=document.createElement('div'); ov.id='cv-screen'; ov.className='cv-screen'; document.querySelector('.phone').appendChild(ov); }
+    ov.innerHTML=`<div class="pf-bar"><button class="pf-back" onclick="closeConsent()">‹</button><div class="ttl">Consentimiento</div></div><div class="cv-scroll" id="cv-scroll"><div style="padding:40px 0;text-align:center;color:var(--ink-mute)">Cargando…</div></div>`;
+    requestAnimationFrame(()=>ov.classList.add('show'));
+    let c;
+    try{ const { data } = await sb.from('app_content').select('title,body,plain_text,version').eq('kind','consentimiento').eq('is_active',true).order('updated_at',{ascending:false}).limit(1).maybeSingle(); c=data; }catch(e){}
+    if(!c){ const s=$('cv-scroll'); if(s) s.innerHTML='<div style="padding:40px 0;text-align:center;color:var(--ink-mute)">No pudimos cargar el consentimiento.</div>'; return; }
+    CV={ text:c.plain_text||'', version:c.version||'v1.0', img:false };
+    const clausulas=(c.body&&c.body.clausulas)||[];
+    const clHtml=clausulas.map(cl=>`<div class="cv-cl"><div class="cn">${esc(cl.n)}</div><div class="ct">${esc(cl.t)}</div><div class="cd">${esc(cl.d)}</div></div>`).join('');
+    ov.innerHTML=`<div class="pf-bar"><button class="pf-back" onclick="closeConsent()">‹</button><div class="ttl">Consentimiento</div></div>
+      <div class="cv-scroll" id="cv-scroll"><div style="font-family:var(--display);font-weight:600;font-size:calc(19px*var(--scale));line-height:1.22;margin:6px 0 16px">${esc(c.title||'Consentimiento informado')}</div>${clHtml}<div style="height:4px"></div></div>
+      <div class="cv-foot">
+        <div class="cv-img" id="cv-img" onclick="cvToggleImg()"><div class="cv-box"></div><div class="cvt">Autorizo el uso de mi imagen (fotos/videos) con fines internos y de difusión del estudio. <b>Opcional</b>.</div></div>
+        <button class="btn" id="cv-sign" disabled onclick="cvSign()">Firmar consentimiento</button>
+        <div class="cv-hint" id="cv-hint">Desliza hasta el final para habilitar la firma</div>
+      </div>`;
+    const sc=$('cv-scroll');
+    const check=()=>{ if(sc.scrollTop+sc.clientHeight >= sc.scrollHeight-28){ const b=$('cv-sign'); if(b&&b.disabled){ b.disabled=false; const h=$('cv-hint'); if(h) h.textContent='Ya puedes firmar'; } } };
+    sc.onscroll=check; requestAnimationFrame(check);
+  };
+  window.closeConsent=()=>{ const ov=$('cv-screen'); if(ov) ov.classList.remove('show'); };
+  window.cvToggleImg=()=>{ CV.img=!CV.img; const el=$('cv-img'); if(el){ el.classList.toggle('on',CV.img); const box=el.querySelector('.cv-box'); if(box) box.innerHTML=CV.img?'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3"><path d="M20 6 9 17l-5-5"/></svg>':''; } };
+  window.cvSign=async ()=>{
+    const b=$('cv-sign'); if(b){ b.textContent='Firmando…'; b.disabled=true; }
+    try{
+      const { error } = await sb.rpc('student_sign_consent', { p_full_consent_text:CV.text, p_consent_version:CV.version, p_user_agent:navigator.userAgent, p_image_consent:!!CV.img });
+      if(error) throw error;
+      if(PF.p){ PF.p.consent_signed_at=new Date().toISOString(); PF.p.image_consent=!!CV.img; }
+      toast('✓ Consentimiento firmado');
+      window.closeConsent(); if(PF.p) renderProfile();
+    }catch(e){ toast('No se pudo firmar. Intenta de nuevo.'); if(b){ b.textContent='Firmar consentimiento'; b.disabled=false; } }
   };
 
   window.openClassSheet=(bid)=>{
