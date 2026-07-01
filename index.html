@@ -3587,6 +3587,10 @@
       <span class="nav-icon"><svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="M7 16l4-8 4 6 5-10"/></svg></span>
       Reportes
     </button>
+    <button class="nav-item" data-view="revenue" onclick="showView('revenue', this); renderRevenueView();">
+      <span class="nav-icon"><svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M12 1v22"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></span>
+      Revenue Management
+    </button>
   </div>
   <div class="nav-group" data-coord-only>
     <div class="nav-group-title">Más</div>
@@ -4053,6 +4057,80 @@
   <!-- VISTA COORDINADOR: REPORTES -->
   <section class="view" id="view-reports">
     <div id="reports-container"></div>
+  </section>
+
+  <style id="rv-styles">
+    #view-revenue .rv-tabs{ display:flex; gap:6px; border-bottom:1px solid var(--line); margin-bottom:22px; flex-wrap:wrap; }
+    #view-revenue .rv-tab{ border:0; background:transparent; padding:11px 16px; font-size:14px; font-weight:600; color:var(--ink-mute); cursor:pointer; border-bottom:2px solid transparent; margin-bottom:-1px; }
+    #view-revenue .rv-tab.on{ color:var(--fit-purple); border-bottom-color:var(--fit-purple); }
+    #view-revenue .rv-kpis{ display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:14px; margin-bottom:24px; }
+    #view-revenue .rv-kpi{ background:#fff; border:1px solid var(--line); border-radius:14px; padding:16px 18px; }
+    #view-revenue .rv-kpi .k-lab{ font-size:12px; font-weight:700; letter-spacing:.4px; text-transform:uppercase; color:var(--ink-mute); }
+    #view-revenue .rv-kpi .k-val{ font-size:27px; font-weight:800; color:var(--ink); margin-top:6px; line-height:1; font-variant-numeric:tabular-nums; }
+    #view-revenue .rv-kpi .k-sub{ font-size:12px; color:var(--ink-mute); margin-top:6px; }
+    #view-revenue .rv-kpi.accent{ background:linear-gradient(135deg,var(--fit-purple),var(--fit-purple-deep)); border:0; }
+    #view-revenue .rv-kpi.accent .k-lab{ color:#E8DFF5; } #view-revenue .rv-kpi.accent .k-val{ color:#fff; } #view-revenue .rv-kpi.accent .k-sub{ color:#D9C9F0; }
+    #view-revenue .rv-card{ background:#fff; border:1px solid var(--line); border-radius:14px; padding:20px; margin-bottom:20px; }
+    #view-revenue .rv-card h3{ font-size:16px; font-weight:700; color:var(--ink); margin:0 0 4px; }
+    #view-revenue .rv-card .rv-hint{ font-size:12.5px; color:var(--ink-mute); margin-bottom:16px; }
+    #view-revenue table.rv-tbl{ width:100%; border-collapse:collapse; font-size:13.5px; }
+    #view-revenue .rv-tbl th{ text-align:right; font-size:11px; text-transform:uppercase; letter-spacing:.4px; color:var(--ink-mute); padding:8px 10px; border-bottom:1px solid var(--line); }
+    #view-revenue .rv-tbl th:first-child{ text-align:left; }
+    #view-revenue .rv-tbl td{ text-align:right; padding:10px; border-bottom:1px solid var(--line-soft); font-variant-numeric:tabular-nums; }
+    #view-revenue .rv-tbl td:first-child{ text-align:left; font-weight:600; color:var(--ink); }
+    #view-revenue .rv-tbl tr:last-child td{ border-bottom:0; }
+    #view-revenue .rv-franja{ display:flex; align-items:center; gap:12px; padding:9px 0; }
+    #view-revenue .rv-franja .fh{ width:64px; font-weight:700; font-size:13px; color:var(--ink); flex:none; }
+    #view-revenue .rv-bar{ flex:1; height:26px; background:var(--line-soft); border-radius:7px; overflow:hidden; position:relative; }
+    #view-revenue .rv-bar > span{ display:block; height:100%; border-radius:7px; }
+    #view-revenue .rv-bar .lab{ position:absolute; right:8px; top:50%; transform:translateY(-50%); font-size:11.5px; font-weight:700; color:var(--ink-soft); }
+    #view-revenue .rv-tag{ display:inline-block; font-size:11px; font-weight:700; padding:3px 9px; border-radius:999px; }
+    #view-revenue .rv-tag.ok{ background:#E4F5EC; color:#0E7A4F; } #view-revenue .rv-tag.mid{ background:var(--warn-soft); color:var(--warn); } #view-revenue .rv-tag.bad{ background:var(--danger-soft); color:var(--danger); }
+    #view-revenue .rv-acc{ border:1px solid var(--line); border-radius:12px; margin-bottom:12px; overflow:hidden; }
+    #view-revenue .rv-acc summary{ cursor:pointer; padding:15px 18px; font-weight:700; font-size:15px; color:var(--ink); list-style:none; display:flex; align-items:center; gap:10px; }
+    #view-revenue .rv-acc summary::-webkit-details-marker{ display:none; }
+    #view-revenue .rv-acc summary .chev{ margin-left:auto; color:var(--ink-mute); transition:transform .2s; }
+    #view-revenue .rv-acc[open] summary .chev{ transform:rotate(90deg); }
+    #view-revenue .rv-acc summary .num{ width:26px; height:26px; border-radius:8px; background:var(--fit-lavender); color:var(--fit-purple); display:flex; align-items:center; justify-content:center; font-size:13px; flex:none; }
+    #view-revenue .rv-acc-body{ padding:2px 18px 18px; font-size:14px; color:var(--ink-soft); line-height:1.6; }
+    #view-revenue .rv-acc-body .lbl{ font-size:11px; font-weight:800; letter-spacing:.5px; text-transform:uppercase; color:var(--fit-purple); margin:14px 0 4px; }
+    #view-revenue .rv-formula{ background:var(--fit-purple-50); border:1px solid var(--fit-lavender); border-radius:10px; padding:12px 14px; font-family:ui-monospace,'SF Mono',Menlo,monospace; font-size:13px; color:var(--fit-purple-deep); margin:6px 0; }
+    #view-revenue .rv-ex{ background:var(--fit-cream); border-left:3px solid var(--fit-purple-soft); border-radius:0 8px 8px 0; padding:12px 14px; margin:8px 0; font-size:13.5px; }
+    #view-revenue .rv-ex b{ color:var(--ink); }
+    #view-revenue .rv-try{ background:#fff; border:1px dashed var(--fit-purple-soft); border-radius:10px; padding:14px; margin-top:12px; }
+    #view-revenue .rv-try label{ font-size:12px; font-weight:700; color:var(--ink-mute); display:block; margin-bottom:3px; }
+    #view-revenue .rv-try input[type=range]{ width:100%; accent-color:var(--fit-purple); }
+    #view-revenue .rv-try .out{ font-size:22px; font-weight:800; color:var(--fit-purple); margin-top:8px; font-variant-numeric:tabular-nums; }
+    #view-revenue .rv-exp-row{ display:grid; grid-template-columns:1fr 130px 40px; gap:8px; align-items:center; margin-bottom:8px; }
+    #view-revenue .rv-exp-row input{ padding:9px 11px; border:1px solid var(--line); border-radius:9px; font-size:14px; font-family:inherit; width:100%; }
+    #view-revenue .rv-exp-row input.amt{ text-align:right; font-variant-numeric:tabular-nums; }
+    #view-revenue .rv-exp-del{ border:0; background:transparent; color:var(--ink-faint); cursor:pointer; font-size:18px; }
+    #view-revenue .rv-exp-del:hover{ color:var(--danger); }
+    #view-revenue .rv-exp-h{ font-size:11px; font-weight:800; letter-spacing:.4px; text-transform:uppercase; color:var(--ink-mute); margin:16px 0 8px; }
+    #view-revenue .rv-proj{ display:grid; grid-template-columns:repeat(auto-fit,minmax(190px,1fr)); gap:14px; }
+    #view-revenue .rv-proj .p{ border:1px solid var(--line); border-radius:12px; padding:15px 16px; }
+    #view-revenue .rv-proj .p .pl{ font-size:12px; color:var(--ink-mute); font-weight:600; }
+    #view-revenue .rv-proj .p .pv{ font-size:23px; font-weight:800; margin-top:5px; font-variant-numeric:tabular-nums; }
+    #view-revenue .rv-proj .p .ps{ font-size:11.5px; color:var(--ink-mute); margin-top:4px; line-height:1.4; }
+    #view-revenue .pv.good{ color:#0E7A4F; } #view-revenue .pv.bad{ color:var(--danger); } #view-revenue .pv.neu{ color:var(--ink); }
+    #view-revenue .rv-note{ font-size:12.5px; color:var(--ink-mute); background:var(--fit-purple-50); border-radius:10px; padding:12px 14px; margin-top:8px; }
+  </style>
+  <section class="view" id="view-revenue">
+    <div class="page-header">
+      <div>
+        <h1 class="page-title">Revenue <em>Management</em></h1>
+        <div class="page-sub">Ingreso por clase, ocupación y rentabilidad — con técnicas de revenue de hotelería.</div>
+      </div>
+      <div class="page-actions">
+        <select id="rv-period" class="btn btn-ghost" onchange="RV_STATE.days=+this.value; renderRevenueView();" style="padding:8px 12px;">
+          <option value="30">Últimos 30 días</option>
+          <option value="60">Últimos 60 días</option>
+          <option value="90">Últimos 90 días</option>
+        </select>
+        <button class="btn btn-ghost" onclick="renderRevenueView()">↻ Actualizar</button>
+      </div>
+    </div>
+    <div id="rv-container"></div>
   </section>
 
   <!-- LOGS VIEW (coordinador) -->
@@ -31951,6 +32029,285 @@ function ccResolveInstructor(locationId, date, dow, hour) {
     if (inst) return inst;
   }
   return null;
+}
+
+// ============================================================
+// REVENUE MANAGEMENT (reporte + tutorial + egresos + proyecciones)
+// ============================================================
+var RV_STATE = { tab: 'reporte', days: 30, data: null, expenses: [] };
+var _rvSaveTimer = null;
+
+function rvMoney(n, dec) { const v = Number(n) || 0; return 'S/' + v.toLocaleString('es-PE', { minimumFractionDigits: dec || 0, maximumFractionDigits: dec || 0 }); }
+function rvPct(x) { return Math.round((Number(x) || 0) * 1000) / 10 + '%'; }
+function rvHourLabel(h) { const ap = h < 12 ? 'am' : 'pm'; let hh = h % 12; if (hh === 0) hh = 12; return hh + ap; }
+const RV_DOW = { 1: 'Lunes', 2: 'Martes', 3: 'Miércoles', 4: 'Jueves', 5: 'Viernes', 6: 'Sábado', 7: 'Domingo' };
+
+async function renderRevenueView() {
+  const c = document.getElementById('rv-container');
+  if (!c) return;
+  const sel = document.getElementById('rv-period'); if (sel) sel.value = String(RV_STATE.days);
+  if (!isOnline) { c.innerHTML = '<div style="padding:40px;text-align:center;color:var(--ink-mute)">Necesitas conexión para ver Revenue Management.</div>'; return; }
+  c.innerHTML = '<div style="padding:40px;text-align:center;color:var(--ink-mute)">Calculando métricas de revenue…</div>';
+  try {
+    const [rep, exp] = await Promise.all([
+      sb.rpc('revenue_report', { p_days: RV_STATE.days }),
+      sb.from('studio_expenses').select('*').order('sort', { ascending: true })
+    ]);
+    if (rep.error) throw rep.error;
+    RV_STATE.data = rep.data;
+    RV_STATE.expenses = exp.data || [];
+  } catch (e) {
+    c.innerHTML = '<div style="padding:40px;text-align:center;color:var(--danger)">No se pudo cargar. ' + escape((e && e.message) || '') + '</div>';
+    return;
+  }
+  const tabs = `<div class="rv-tabs">
+    <button class="rv-tab ${RV_STATE.tab === 'reporte' ? 'on' : ''}" onclick="rvSetTab('reporte')">Reporte</button>
+    <button class="rv-tab ${RV_STATE.tab === 'guia' ? 'on' : ''}" onclick="rvSetTab('guia')">Cómo leer este reporte</button>
+    <button class="rv-tab ${RV_STATE.tab === 'egresos' ? 'on' : ''}" onclick="rvSetTab('egresos')">Egresos y proyecciones</button>
+  </div>`;
+  let body = '';
+  if (RV_STATE.tab === 'reporte') body = rvRenderReporte();
+  else if (RV_STATE.tab === 'guia') body = rvRenderGuia();
+  else body = rvRenderEgresos();
+  c.innerHTML = tabs + body;
+  if (RV_STATE.tab === 'egresos') rvRecalcProjections();
+}
+function rvSetTab(t) { RV_STATE.tab = t; renderRevenueView(); }
+
+// ---------- helpers de salud de franja ----------
+function rvBreakEvenStudents() {
+  const d = RV_STATE.data; if (!d) return 3;
+  const varPer = rvSumExp('por_clase');
+  const adr = d.overall.adr || 0;
+  if (varPer > 0 && adr > 0) return varPer / adr; // alumnos que cubren el costo directo (profesor) de la clase
+  return 3; // fallback si aún no cargas el pago por clase
+}
+function rvHealth(prom) {
+  const be = rvBreakEvenStudents();
+  if (prom >= be) return 'ok';
+  if (prom >= be * 0.66) return 'mid';
+  return 'bad';
+}
+const RV_HEALTH_TXT = { ok: 'Sana', mid: 'Ajustada', bad: 'Floja' };
+const RV_HEALTH_COL = { ok: '#0E7A4F', mid: 'var(--warn)', bad: 'var(--danger)' };
+
+// ---------- TAB REPORTE ----------
+function rvRenderReporte() {
+  const d = RV_STATE.data; const o = d.overall; const bk = d.breakage; const st = d.students;
+  const kpis = `<div class="rv-kpis">
+    <div class="rv-kpi accent"><div class="k-lab">Ingreso reconocido</div><div class="k-val">${rvMoney(o.ingreso)}</div><div class="k-sub">${d.period_days} días · ${o.consumidas} clases dictadas</div></div>
+    <div class="rv-kpi"><div class="k-lab">ADR · precio/clase</div><div class="k-val">${rvMoney(o.adr, 1)}</div><div class="k-sub">por asiento ocupado</div></div>
+    <div class="rv-kpi"><div class="k-lab">Ocupación</div><div class="k-val">${rvPct(o.ocupacion)}</div><div class="k-sub">${o.consumidas} de ${o.asientos} asientos</div></div>
+    <div class="rv-kpi"><div class="k-lab">RevPAS</div><div class="k-val">${rvMoney(o.revpas, 1)}</div><div class="k-sub">ingreso ÷ asiento disponible</div></div>
+    <div class="rv-kpi"><div class="k-lab">Breakage</div><div class="k-val">${rvMoney(bk.pen)}</div><div class="k-sub">${bk.pct}% clases vencidas sin usar (${bk.ventana_dias}d)</div></div>
+  </div>`;
+
+  // por sede
+  let sedeRows = (d.by_sede || []).map(s => `<tr>
+    <td>${escape(s.sede)}</td><td>${rvMoney(s.ingreso)}</td><td>${rvMoney(s.adr, 1)}</td>
+    <td>${rvPct(s.ocupacion)}</td><td><b>${rvMoney(s.revpas, 1)}</b></td><td>${s.sesiones}</td></tr>`).join('');
+  const sedeTbl = `<div class="rv-card"><h3>Por sede</h3><div class="rv-hint">RevPAS es el número clave: mezcla precio y llenado. Más alto = sede más sana.</div>
+    <table class="rv-tbl"><thead><tr><th>Sede</th><th>Ingreso</th><th>ADR</th><th>Ocup.</th><th>RevPAS</th><th>Sesiones</th></tr></thead><tbody>${sedeRows}</tbody></table></div>`;
+
+  // franjas (por hora) con salud
+  const hrs = d.by_hour || [];
+  const maxRev = Math.max(1, ...hrs.map(h => h.revpas || 0));
+  let franjaHtml = hrs.map(h => {
+    const he = rvHealth(h.prom_alumnos || 0);
+    const w = Math.max(4, Math.round((h.revpas / maxRev) * 100));
+    return `<div class="rv-franja">
+      <div class="fh">${rvHourLabel(h.hour)}</div>
+      <div class="rv-bar"><span style="width:${w}%;background:${RV_HEALTH_COL[he]}"></span><span class="lab">${rvMoney(h.revpas, 1)} · ${h.prom_alumnos} alum/clase</span></div>
+      <span class="rv-tag ${he}" style="flex:none">${RV_HEALTH_TXT[he]}</span></div>`;
+  }).join('');
+  const be = rvBreakEvenStudents();
+  const franjaNote = rvSumExp('por_clase') > 0
+    ? `Una franja es <b>sana</b> cuando promedia ≥ ${be.toFixed(1)} alumnas/clase — el mínimo para cubrir el pago del profesor (S/${rvSumExp('por_clase')} ÷ ADR S/${(RV_STATE.data.overall.adr).toFixed(0)}).`
+    : `Umbral provisional: <b>sana</b> ≥ 3 alum/clase. Ingresa el <b>pago del profesor por clase</b> en "Egresos" y el umbral se vuelve exacto (punto de equilibrio real por clase).`;
+  const franjaCard = `<div class="rv-card"><h3>Franjas horarias — ¿cuáles son sanas?</h3><div class="rv-hint">RevPAS por hora (todas las sedes). Barra más larga y verde = hora más rentable.</div>
+    ${franjaHtml}<div class="rv-note">${franjaNote}</div></div>`;
+
+  // por día de semana
+  const wd = d.by_weekday || [];
+  let wdRows = wd.map(w => `<tr><td>${RV_DOW[w.dow] || w.dow}</td><td>${rvMoney(w.ingreso)}</td><td>${rvPct(w.ocupacion)}</td><td><b>${rvMoney(w.revpas, 1)}</b></td><td>${w.sesiones}</td></tr>`).join('');
+  const wdCard = `<div class="rv-card"><h3>Por día de la semana</h3>
+    <table class="rv-tbl"><thead><tr><th>Día</th><th>Ingreso</th><th>Ocup.</th><th>RevPAS</th><th>Sesiones</th></tr></thead><tbody>${wdRows}</tbody></table></div>`;
+
+  return kpis + sedeTbl + franjaCard + wdCard;
+}
+
+// ---------- TAB GUÍA (tutorial interactivo) ----------
+function rvRenderGuia() {
+  const d = RV_STATE.data; const o = d.overall; const bk = d.breakage;
+  const acc = (n, title, inner, open) => `<details class="rv-acc" ${open ? 'open' : ''}><summary><span class="num">${n}</span>${title}<span class="chev">›</span></summary><div class="rv-acc-body">${inner}</div></details>`;
+  const intro = `<div class="rv-card"><h3>Piensa tu estudio como un hotel</h3><div class="rv-hint" style="margin:0">Una reformer en una hora es como una habitación por una noche: si no se vende, se pierde para siempre, y abrir la clase cuesta casi lo mismo esté llena o vacía. Por eso usamos las mismas métricas que un hotel: <b>ADR</b> (precio), <b>ocupación</b> (llenado) y <b>RevPAS</b> (ambas juntas). Abajo, cada concepto con tus números reales.</div></div>`;
+
+  const c1 = acc(1, 'Tarifa por clase', `
+    <div class="lbl">Qué es</div>Cuánto vale una clase para cada alumna. Como venden paquetes, se reparte el precio pagado entre las clases del paquete.
+    <div class="lbl">Cómo se calcula</div><div class="rv-formula">tarifa_por_clase = price_paid ÷ classes_total</div>Usamos el precio <b>realmente pagado</b> (ya con descuentos), no el de lista.
+    <div class="lbl">Ejemplo (tu tarifario)</div><div class="rv-ex">Paquete 8 = 480 ÷ 8 = <b>S/60</b> · Paquete 16 = 800 ÷ 16 = <b>S/50</b> · Clase suelta = <b>S/70</b>.</div>
+    <div class="lbl">Variación</div><div class="rv-ex">La suelta es tu tarifa más alta por clase; los paquetes grandes, la más baja. Por eso el <b>mix</b> de paquetes mueve tu ingreso: más sueltas y paquetes chicos suben el precio promedio.</div>`, true);
+
+  const c2 = acc(2, 'Ingreso reconocido de una clase', `
+    <div class="lbl">Qué es</div>La plata que "ganó" una clase específica: la suma de las tarifas de las alumnas que <b>consumieron</b> su clase ahí.
+    <div class="lbl">Cómo se calcula</div><div class="rv-formula">ingreso_clase = Σ (price_paid ÷ classes_total) de cada asistente que gastó clase</div>
+    <div class="lbl">Por qué importa</div>Solo cuentan las que descuentan del paquete (asistió / falta / no-show). Una <b>recuperable</b> o <b>reprogramada</b> no genera ingreso ese día: es plata que debes en servicio a futuro.
+    <div class="lbl">Ejemplo</div><div class="rv-ex">Clase con 4 en Paquete 16 (S/50), 1 en Paquete 8 (S/60) y 1 suelta (S/70) → 4×50 + 60 + 70 = <b>S/330</b> esa clase.</div>`);
+
+  const c3 = acc(3, 'ADR — precio promedio por clase', `
+    <div class="lbl">Qué es</div>El precio realizado por <b>asiento ocupado</b> (Average Daily Rate, de hotelería).
+    <div class="lbl">Cómo se calcula</div><div class="rv-formula">ADR = ingreso reconocido ÷ clases consumidas</div>
+    <div class="lbl">Tu número real</div><div class="rv-ex">En los últimos ${d.period_days} días tu ADR es <b>${rvMoney(o.adr, 1)}</b> por asiento.</div>
+    <div class="lbl">Ojo</div>El ADR no dice si la clase estaba llena. Una clase con ADR alto pero medio vacía rinde poco. Para eso está el RevPAS (punto 5).`);
+
+  const c4 = acc(4, 'Ocupación', `
+    <div class="lbl">Qué es</div>Qué tan llenas van tus clases: asientos vendidos ÷ asientos disponibles.
+    <div class="lbl">Cómo se calcula</div><div class="rv-formula">ocupación = clases consumidas ÷ (sesiones × capacidad)</div>
+    <div class="lbl">Tu número real</div><div class="rv-ex">Ocupación global: <b>${rvPct(o.ocupacion)}</b> (${o.consumidas} de ${o.asientos} asientos). Hay bastante asiento vacío = oportunidad de llenar sin costo extra.</div>`);
+
+  const c5 = acc(5, 'RevPAS — el número estrella', `
+    <div class="lbl">Qué es</div>Revenue per Available Seat: cuánto ingreso saca cada asiento que ofreces, esté lleno o no. Es el RevPAR del hotel.
+    <div class="lbl">Cómo se calcula</div><div class="rv-formula">RevPAS = ingreso ÷ asientos disponibles = ADR × ocupación</div>
+    <div class="lbl">Por qué es la estrella</div>Mezcla precio y llenado en un solo número. Sirve para comparar sedes, horas y días de forma justa.
+    <div class="lbl">Tu número real</div><div class="rv-ex">RevPAS global: <b>${rvMoney(o.revpas, 1)}</b> = ADR ${rvMoney(o.adr, 1)} × ocupación ${rvPct(o.ocupacion)}.</div>
+    <div class="rv-try"><div style="font-weight:700;color:var(--ink);margin-bottom:8px">Pruébalo tú</div>
+      <label>ADR (precio por asiento): <span id="rv-try-adr">${Math.round(o.adr)}</span></label>
+      <input type="range" min="40" max="120" value="${Math.round(o.adr)}" oninput="rvTryCalc()" id="rv-try-adr-in">
+      <label style="margin-top:10px">Ocupación: <span id="rv-try-occ">${Math.round(o.ocupacion * 100)}</span>%</label>
+      <input type="range" min="0" max="100" value="${Math.round(o.ocupacion * 100)}" oninput="rvTryCalc()" id="rv-try-occ-in">
+      <div class="out">RevPAS = <span id="rv-try-out">${rvMoney(o.revpas, 1)}</span></div>
+      <div style="font-size:12px;color:var(--ink-mute);margin-top:4px">Sube la ocupación y mira cómo el RevPAS crece sin tocar el precio. Ese es tu mayor palanca.</div></div>`);
+
+  const c6 = acc(6, 'Breakage — plata ya cobrada, no entregada', `
+    <div class="lbl">Qué es</div>Cuando un paquete <b>vence con clases sin usar</b>: cobraste pero no diste el servicio. Es como el saldo no usado de una gift card o el depósito no reembolsable de un hotel — margen casi puro.
+    <div class="lbl">Cómo se calcula</div><div class="rv-formula">breakage = price_paid × (clases_no_usadas ÷ classes_total)</div>
+    <div class="lbl">Tu número real</div><div class="rv-ex">En ${bk.ventana_dias} días: <b>${rvMoney(bk.pen)}</b> de breakage (${bk.pct}% de las clases de paquetes vencidos quedaron sin usar).</div>
+    <div class="lbl">Variación útil</div><div class="rv-ex">La <b>tarifa efectiva</b> por clase entregada sube: si pagó S/800 por 16 pero usó 12, cada clase entregada valió 800÷12 = <b>S/66.7</b>, no S/50. Tu ingreso real está entre la tarifa nominal (piso) y la efectiva (techo).</div>`);
+
+  const c7 = acc(7, 'Punto de equilibrio — ¿vale abrir la clase?', `
+    <div class="lbl">Qué es</div>El mínimo de alumnas para que una clase no pierda plata. Responde tu duda del profesor yendo por una sola persona.
+    <div class="lbl">Cómo se calcula</div><div class="rv-formula">break-even asientos = costo de la sesión ÷ ADR
+contribución = ingreso de la clase − pago del profesor</div>
+    <div class="lbl">Ejemplo</div><div class="rv-ex">Si el profe cobra S/60 y asignas S/80 de renta a esa hora (costo S/140) y tu ADR es S/55 → break-even = 140 ÷ 55 ≈ <b>2.5 alumnas</b>. Con 2 o menos, esa clase pierde; con 3+, gana.</div>
+    <div class="rv-try"><div style="font-weight:700;color:var(--ink);margin-bottom:8px">Pruébalo tú</div>
+      <label>Costo de la sesión (profe + renta asignada): S/<span id="rv-be-cost">140</span></label>
+      <input type="range" min="40" max="300" value="140" oninput="rvBeCalc()" id="rv-be-cost-in">
+      <label style="margin-top:10px">ADR: S/<span id="rv-be-adr">${Math.round(o.adr)}</span></label>
+      <input type="range" min="40" max="120" value="${Math.round(o.adr)}" oninput="rvBeCalc()" id="rv-be-adr-in">
+      <div class="out">Break-even ≈ <span id="rv-be-out">2.5</span> alumnas/clase</div>
+      <div style="font-size:12px;color:var(--ink-mute);margin-top:4px">Abajo de eso, no conviene abrir la clase. Llénalo en "Egresos" con tus costos reales y lo aplico a cada franja.</div></div>`);
+
+  return intro + c1 + c2 + c3 + c4 + c5 + c6 + c7;
+}
+function rvTryCalc() {
+  const adr = +document.getElementById('rv-try-adr-in').value;
+  const occ = +document.getElementById('rv-try-occ-in').value;
+  document.getElementById('rv-try-adr').textContent = adr;
+  document.getElementById('rv-try-occ').textContent = occ;
+  document.getElementById('rv-try-out').textContent = rvMoney(adr * occ / 100, 1);
+}
+function rvBeCalc() {
+  const cost = +document.getElementById('rv-be-cost-in').value;
+  const adr = +document.getElementById('rv-be-adr-in').value;
+  document.getElementById('rv-be-cost').textContent = cost;
+  document.getElementById('rv-be-adr').textContent = adr;
+  document.getElementById('rv-be-out').textContent = adr > 0 ? (cost / adr).toFixed(1) : '—';
+}
+
+// ---------- TAB EGRESOS + PROYECCIONES ----------
+function rvSumExp(kind) { return (RV_STATE.expenses || []).filter(e => e.kind === kind).reduce((s, e) => s + (Number(e.amount_pen) || 0), 0); }
+
+function rvRenderEgresos() {
+  const fixed = (RV_STATE.expenses || []).filter(e => e.kind === 'mensual_fijo');
+  const varc = (RV_STATE.expenses || []).filter(e => e.kind === 'por_clase');
+  const row = e => `<div class="rv-exp-row" data-id="${e.id}">
+    <input type="text" value="${escape(e.label || '')}" onchange="rvExpEdit('${e.id}','label',this.value)" placeholder="Concepto">
+    <input type="number" class="amt" value="${e.amount_pen || 0}" onchange="rvExpEdit('${e.id}','amount_pen',this.value)" oninput="rvRecalcProjections()" min="0" step="10">
+    <button class="rv-exp-del" title="Eliminar" onclick="rvExpDel('${e.id}')">×</button></div>`;
+  const form = `<div class="rv-card"><h3>Tus egresos</h3><div class="rv-hint">Pon tus promedios mensuales. Se guardan solos y las proyecciones se recalculan al instante.</div>
+    <div class="rv-exp-h">Gastos fijos mensuales (S/)</div>
+    ${fixed.map(row).join('')}
+    <button class="btn btn-ghost" style="margin-top:6px" onclick="rvExpAdd('mensual_fijo')">+ agregar gasto fijo</button>
+    <div class="rv-exp-h" style="margin-top:22px">Costo variable por clase (S/)</div>
+    <div class="rv-hint" style="margin-top:-4px">Sobre todo el pago del profesor por clase dictada.</div>
+    ${varc.map(row).join('')}
+    <button class="btn btn-ghost" style="margin-top:6px" onclick="rvExpAdd('por_clase')">+ agregar costo por clase</button>
+  </div>
+  <div class="rv-card"><h3>Rentabilidad y proyecciones</h3><div class="rv-hint">Estimado mensual, escalando tus últimos ${RV_STATE.data.period_days} días a 30. Se actualiza mientras editas arriba.</div>
+    <div id="rv-proj-box" class="rv-proj"></div>
+    <div id="rv-proj-note"></div>
+  </div>`;
+  return form;
+}
+
+function rvRecalcProjections() {
+  const box = document.getElementById('rv-proj-box'); if (!box) return;
+  const d = RV_STATE.data; const o = d.overall; const st = d.students;
+  const scale = 30 / d.period_days;
+  const revMes = o.ingreso * scale;
+  const clasesMes = o.consumidas * scale;
+  const asientosMes = o.asientos * scale;
+  const adr = o.adr || 0;
+  const activos = st.activos || 0;
+  const clasesXAlumnoMes = activos > 0 ? clasesMes / activos : 0;
+  const fixed = rvSumExp('mensual_fijo');
+  const varPer = rvSumExp('por_clase');
+  const varCost = varPer * clasesMes;
+  const costTotal = fixed + varCost;
+  const util = revMes - costTotal;
+  const contrib = adr - varPer;
+  const beClases = contrib > 0 ? fixed / contrib : Infinity;
+  const beAlumnos = (contrib > 0 && clasesXAlumnoMes > 0) ? beClases / clasesXAlumnoMes : Infinity;
+  const beOcup = (asientosMes > 0 && isFinite(beClases)) ? beClases / asientosMes : 0;
+  const faltan = isFinite(beAlumnos) ? Math.round(beAlumnos - activos) : null;
+
+  const hasExp = fixed > 0 || varPer > 0;
+  const utilCls = !hasExp ? 'neu' : (util >= 0 ? 'good' : 'bad');
+  const P = (lab, val, sub, cls) => `<div class="p"><div class="pl">${lab}</div><div class="pv ${cls || 'neu'}">${val}</div><div class="ps">${sub || ''}</div></div>`;
+
+  let cards = '';
+  cards += P('Ingreso mensual (est.)', rvMoney(revMes), `${Math.round(clasesMes)} clases · ${activos} alumnas activas`, 'neu');
+  cards += P('Costo total mensual', rvMoney(costTotal), hasExp ? `Fijos ${rvMoney(fixed)} + variable ${rvMoney(varCost)}` : 'Ingresa tus egresos →', 'neu');
+  cards += P('Utilidad mensual (est.)', hasExp ? rvMoney(util) : '—', hasExp ? (util >= 0 ? 'En azul: rentable' : 'En rojo: pierde') : 'Llena egresos para verla', utilCls);
+  cards += P('Margen de contribución / clase', hasExp ? rvMoney(contrib, 1) : '—', hasExp ? `ADR ${rvMoney(adr, 1)} − costo variable ${rvMoney(varPer, 1)}` : 'ADR − costo por clase', contrib >= 0 ? 'good' : 'bad');
+
+  if (hasExp && contrib > 0) {
+    cards += P('Punto de equilibrio', Math.round(beClases) + ' clases/mes', `≈ ${Math.round(beAlumnos)} alumnas activas · ${rvPct(beOcup)} ocupación`, 'neu');
+    if (faltan !== null) {
+      if (faltan > 0) cards += P('Para no perder', '+' + faltan + ' alumnas', `Te faltan ${faltan} alumnas activas (o llenar clases) para el equilibrio`, 'bad');
+      else cards += P('Colchón', (-faltan) + ' alumnas', `Estás ${(-faltan)} alumnas por encima del equilibrio`, 'good');
+    }
+  } else if (hasExp && contrib <= 0) {
+    cards += P('Alerta', 'Sin margen', 'El costo por clase iguala o supera el ADR: cada clase pierde. Sube precio o baja costo variable.', 'bad');
+  }
+  box.innerHTML = cards;
+
+  const note = document.getElementById('rv-proj-note');
+  if (note) {
+    if (!hasExp) note.innerHTML = `<div class="rv-note">Ingresa al menos el <b>alquiler</b> y el <b>pago del profesor por clase</b> y verás utilidad, punto de equilibrio y cuántas alumnas te faltan para ser rentable.</div>`;
+    else note.innerHTML = `<div class="rv-note">Además, el <b>breakage</b> (${rvMoney(d.breakage.pen)} en ${d.breakage.ventana_dias}d) es ingreso extra ya cobrado que no está en el ingreso reconocido — súbelo como colchón adicional. El equilibrio de arriba es conservador (solo ingreso por clases dictadas).</div>`;
+  }
+}
+
+// CRUD egresos
+function rvExpEdit(id, field, val) {
+  const e = (RV_STATE.expenses || []).find(x => x.id === id); if (!e) return;
+  e[field] = field === 'amount_pen' ? (Number(val) || 0) : val;
+  clearTimeout(_rvSaveTimer);
+  _rvSaveTimer = setTimeout(async () => { try { await sb.from('studio_expenses').update({ [field]: e[field], updated_at: new Date().toISOString() }).eq('id', id); } catch (err) { showToast('No se pudo guardar el egreso','error'); } }, 500);
+}
+async function rvExpAdd(kind) {
+  try {
+    const maxSort = Math.max(0, ...(RV_STATE.expenses || []).map(e => e.sort || 0));
+    const { data, error } = await sb.from('studio_expenses').insert({ kind, label: kind === 'por_clase' ? 'Nuevo costo por clase' : 'Nuevo gasto', amount_pen: 0, sort: maxSort + 10 }).select().single();
+    if (error) throw error;
+    RV_STATE.expenses.push(data);
+    renderRevenueView();
+  } catch (e) { showToast('No se pudo agregar','error'); }
+}
+async function rvExpDel(id) {
+  try { await sb.from('studio_expenses').delete().eq('id', id); RV_STATE.expenses = RV_STATE.expenses.filter(x => x.id !== id); renderRevenueView(); }
+  catch (e) { showToast('No se pudo eliminar','error'); }
 }
 
 async function renderReportsView() {
