@@ -11746,7 +11746,6 @@ async function saveStudent() {
   const _fixedNote = f('f-fixed-note').value.trim();
 
   const data = {
-    location_id: STATE.currentLocationId,
     first_name: toTitleCase(f('f-first-name').value.trim()),
     last_name: toTitleCase(f('f-last-name').value.trim()) || null,
     email: f('f-email').value.trim() || null,
@@ -11766,6 +11765,13 @@ async function saveStudent() {
     data_complete: !!(f('f-email').value.trim() && f('f-doc-num').value.trim()),
     status: 'active',
   };
+
+  // La sede (location_id) solo se asigna al CREAR una alumna nueva (nace en la sede
+  // donde se está trabajando). Al EDITAR NO se toca, para no reasignarle la sede por
+  // error con la sede activa del contexto (bug que movía alumnas de sede al guardar perfil).
+  if (!isEdit) {
+    data.location_id = STATE.currentLocationId;
+  }
 
   if (!data.first_name) {
     showToast('El nombre es obligatorio', 'error');
