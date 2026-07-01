@@ -1767,9 +1767,10 @@
   .actf-day{ font-size:10.5px; letter-spacing:.12em; text-transform:uppercase; color:var(--ink-mute); padding:16px 2px 8px; border-bottom:1px solid var(--line-soft); }
   .actf-row{ display:flex; gap:12px; align-items:flex-start; padding:14px 2px; border-bottom:1px solid var(--line-soft); }
   .actf-row.unseen{ background:#F6F2FE; margin:0 -16px; padding:14px 16px; border-bottom:1px solid #ECE3FB; }
-  .actf-avwrap{ position:relative; flex-shrink:0; }
+  .actf-avwrap{ position:relative; flex-shrink:0; width:38px; height:38px; }
   .actf-av{ width:38px; height:38px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:700; color:#fff; }
-  .actf-av-extra{ position:absolute; right:-5px; bottom:-3px; background:#fff; color:var(--ink-mute); font-size:9px; font-weight:700; border-radius:10px; padding:1px 5px; box-shadow:0 0 0 1px var(--line); }
+  .actf-av2{ position:absolute; right:-6px; bottom:-4px; width:23px; height:23px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:8.5px; font-weight:800; color:#fff; box-shadow:0 0 0 2px #fff; }
+  .actf-av-extra{ position:absolute; right:-6px; top:-4px; background:#fff; color:var(--ink-mute); font-size:9px; font-weight:700; border-radius:10px; padding:1px 5px; box-shadow:0 0 0 1px var(--line); }
   .actf-body{ flex:1; min-width:0; }
   .actf-lead{ font-size:10px; letter-spacing:.1em; text-transform:uppercase; color:var(--ink-mute); font-weight:600; margin-bottom:3px; }
   .actf-row.mine .actf-lead{ color:var(--fit-purple); }
@@ -15102,8 +15103,16 @@ function _actWords(ev) {
 function _actAvatars(list) {
   if (!list || !list.length) return `<div class="actf-avwrap"><div class="actf-av" style="background:#6B7280">FIT</div></div>`;
   const a = list[0];
-  const extra = list.length > 1 ? `<span class="actf-av-extra">+${list.length - 1}</span>` : '';
-  return `<div class="actf-avwrap"><div class="actf-av" style="background:${a.color}">${escape(a.initials)}</div>${extra}</div>`;
+  const main = `<div class="actf-av" style="background:${a.color}">${escape(a.initials)}</div>`;
+  // Segundo profesor: círculo más pequeño apilado abajo-derecha (en vez de "+1").
+  let second = '';
+  if (list.length >= 2) {
+    const b = list[1];
+    second = `<div class="actf-av2" style="background:${b.color}" title="${escape(b.name || b.initials || '')}">${escape(b.initials)}</div>`;
+  }
+  // Si hay 3+, un contador chico arriba-derecha con los restantes.
+  const more = list.length > 2 ? `<span class="actf-av-extra">+${list.length - 2}</span>` : '';
+  return `<div class="actf-avwrap${list.length >= 2 ? ' has2' : ''}">${main}${second}${more}</div>`;
 }
 function _actDayLabel(iso) {
   const d = new Date(iso), today = new Date(), y = new Date(); y.setDate(y.getDate() - 1);
