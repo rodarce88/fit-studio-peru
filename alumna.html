@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>FIT Studio · Mi cuenta</title>
-<meta name="app-build" content="b16-2026-06-30">
+<meta name="app-build" content="b17-2026-07-01">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400..700;1,400..600&family=Mulish:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -540,16 +540,20 @@
         const sbx = cardStatusBox(next.status);
         html += `<div class="sbox ${sbx.cls}">${sbx.label}</div>${sbx.note?`<div class="micro">${sbx.note}</div>`:''}`;
       } else if(!started){
+        const hrsNext = (start - now) / 3600000;
+        const changeOrAbsent = hrsNext >= 4
+          ? `<button class="btn ghost" style="margin-top:10px" onclick="openChangeSheet('${next.bid}')">Cambiar mi clase</button>`
+          : `<button class="linkbtn" onclick="openClassSheet('${next.bid}')">No podré ir a esta clase</button>`;
         if(next.cancel){
           html += `<div class="sbox aviso">Avisaste que no vendrás</div>
             <div class="micro">La coordinadora se pondrá en contacto contigo.</div>
             <button class="btn ghost" style="margin-top:12px" onclick="confirmar('${next.bid}', false)">Sí voy a venir</button>`;
         } else if(next.conf){
           html += `<button class="btn confirmed" id="confbtn" onclick="confirmar('${next.bid}', true)">Asistencia confirmada</button>
-            <button class="linkbtn" onclick="openClassSheet('${next.bid}')">No podré ir a esta clase</button>`;
+            ${changeOrAbsent}`;
         } else {
           html += `<button class="btn" id="confbtn" onclick="confirmar('${next.bid}', false)">Confirmar mi asistencia</button>
-            <button class="linkbtn" onclick="openClassSheet('${next.bid}')">No podré ir a esta clase</button>`;
+            ${changeOrAbsent}`;
         }
       } else if(!ended){
         html += (next.conf
@@ -580,7 +584,22 @@
         }
       }
     }
-    html += `</div>${bulkBtn}
+    let addBtn = '';
+    {
+      const livePkgs = (DATA.packages||[]).filter(p => !p.is_frozen && (!p.status||p.status==='active') && (p.classes_used||0) < (p.classes_total||0));
+      if(livePkgs.length){
+        const maxCred = livePkgs.reduce((s,p)=> s + Math.max(0,(p.classes_total||0)-(p.classes_used||0)), 0);
+        const futureBk = upcoming.filter(e => e.bid && !e.status && e.start > now).length;
+        const remaining = Math.max(0, maxCred - futureBk);
+        const sub = remaining > 0 ? `Tienes ${remaining} ${remaining===1?'clase disponible':'clases disponibles'}` : 'Compra un paquete para agregar';
+        const act = remaining > 0 ? `openDatePicker('add', null)` : `openBuySheet()`;
+        addBtn = `<button class="packbtn" onclick="${act}">
+          <span class="pic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg></span>
+          <span class="ptx"><span class="pt">Agregar una clase</span><span class="ps">${sub}</span></span>
+          <span class="parr">&rsaquo;</span></button>`;
+      }
+    }
+    html += `</div>${bulkBtn}${addBtn}
       <div class="seg">
         <button class="${CL.view==='lista'?'on':''}" onclick="clView('lista',this)">Lista</button>
         <button class="${CL.view==='semana'?'on':''}" onclick="clView('semana',this)">Semana</button>
@@ -835,7 +854,11 @@
 
   window.openClassSheet=(bid)=>{
     const info=_bkInfo(bid); if(!info){ toast('No encontramos tu reserva'); return; }
-    const b=info.b; let body;
+    const b=info.b; const canChange = info.hrs >= 4;
+    const secondary = canChange
+      ? `<button class="btn ghost" onclick="openChangeSheet('${bid}')">Cambiar mi clase</button>`
+      : `<button class="btn danger" onclick="askAbsence('${bid}')">No podré ir</button>`;
+    let body;
     if(b.cancel_requested_at){
       body=`<div class="sh-h">¿Vas a venir?</div><div class="sh-sub">${info.line} · ${info.sede}</div>
         <div class="sh-note amber"><b>Avisaste que no vendrás.</b> La coordinadora se pondrá en contacto contigo.</div>
@@ -845,12 +868,12 @@
       body=`<div class="sh-h">Tu clase</div><div class="sh-sub">${info.line} · ${info.sede}</div>
         <div class="sh-note ok">Confirmaste tu asistencia.</div>
         <button class="btn ghost" onclick="confirmar('${bid}', true)">Quitar confirmación</button>
-        <button class="btn danger" onclick="askAbsence('${bid}')">No podré ir</button>
+        ${secondary}
         <button class="linkbtn" onclick="closeSheet()">Cerrar</button>`;
     } else {
       body=`<div class="sh-h">Tu clase</div><div class="sh-sub">${info.line} · ${info.sede}</div>
         <button class="btn" onclick="confirmar('${bid}', false)">Confirmar mi asistencia</button>
-        <button class="btn danger" onclick="askAbsence('${bid}')">No podré ir</button>
+        ${secondary}
         <button class="linkbtn" onclick="closeSheet()">Cerrar</button>`;
     }
     openSheet(body);
@@ -921,6 +944,183 @@
     }));
     closeSheet(); renderClases();
     toast(okN ? `Confirmaste ${okN} ${okN===1?'clase':'clases'}` : 'No se pudo confirmar. Intenta de nuevo.');
+  };
+
+  // ======= MOVER / SOLTAR / AGREGAR una clase (flujo del alumno) =======
+  // Reglas: hasta 4h antes puede mover o soltar; agregar en cualquier momento no pasado,
+  // solo con crédito + cupo. Cupo real y acciones vía RPC (server-side). Calendario propio
+  // (no nativo). p_location_id se deja en null: hoy es su sede; listo para ampliar luego.
+  const COORD_WA = ''; // TODO: número de WhatsApp de coordinación (formato 51999...) para "comprar paquete"
+  let DP = { y:0, m:0, mode:'move', bid:null };
+
+  function _rpcErr(e, btn, label){
+    const m=(e&&e.message)||'';
+    let t='No se pudo. Intenta de nuevo.';
+    if(/cupo/i.test(m)) t='Esa clase ya no tiene cupo. Elige otra.';
+    else if(/4 horas/i.test(m)) t='Faltan menos de 4 horas: ya no puedes moverla. Avísale a coordinación.';
+    else if(/pas[oó]/i.test(m)) t='Esa clase ya pasó. Elige otra.';
+    else if(/disponibles/i.test(m)) t='No tienes clases disponibles en tu paquete.';
+    else if(/ya tienes/i.test(m)) t='Ya tienes esa clase.';
+    else if(/no hay clase/i.test(m)) t='No hay clase a esa hora. Elige otra.';
+    toast(t);
+    if(btn){ btn.disabled=false; btn.textContent=label; }
+  }
+
+  window.openChangeSheet=(bid)=>{
+    const info=_bkInfo(bid); if(!info){ toast('No encontramos tu reserva'); return; }
+    if(info.hrs < 4){ askAbsence(bid); return; }
+    openSheet(`<div class="sh-h">¿Qué quieres hacer<br>con esta clase?</div>
+      <div class="sh-sub">${info.line} · ${info.sede}</div>
+      <div class="cklist" style="margin-top:16px;">
+        <button class="ckrow" onclick="openDatePicker('move','${bid}')"><span class="ckd"><span class="ckdd">Moverla a otro día u hora</span><span class="ckdm">Sueltas esta y eliges otra. No pierdes tu clase.</span></span><span style="color:var(--ink-mute);font-size:22px">&rsaquo;</span></button>
+        <button class="ckrow" onclick="openReleaseSheet('${bid}')"><span class="ckd"><span class="ckdd">Guardarla para después</span><span class="ckdm">Vuelve a estar disponible para agendarla otro día.</span></span><span style="color:var(--ink-mute);font-size:22px">&rsaquo;</span></button>
+        <button class="ckrow" onclick="askAbsence('${bid}')"><span class="ckd"><span class="ckdd">Avisar que no podré ir</span><span class="ckdm">Le avisamos a coordinación.</span></span><span style="color:var(--ink-mute);font-size:22px">&rsaquo;</span></button>
+      </div>
+      <button class="linkbtn" onclick="closeSheet()">Volver</button>`);
+  };
+
+  window.openReleaseSheet=(bid)=>{
+    const info=_bkInfo(bid); if(!info){ toast('No encontramos tu reserva'); return; }
+    openSheet(`<div class="sh-h">Guardar para después</div><div class="sh-sub">${info.line} · ${info.sede}</div>
+      <div class="sh-note amber">Soltamos esta clase y tu crédito vuelve a estar disponible. La puedes agendar otro día cuando quieras, desde <b>“Agregar una clase”</b>. No pierdes tu clase.</div>
+      <button class="btn" id="relbtn" onclick="doRelease('${bid}')">Guardar esta clase</button>
+      <button class="linkbtn" onclick="openChangeSheet('${bid}')">Volver</button>`);
+  };
+  window.doRelease=async (bid)=>{
+    const btn=$('relbtn'); if(btn){ btn.disabled=true; btn.textContent='Guardando…'; }
+    try{
+      const { error }=await sb.rpc('student_release_booking', { p_booking_id: bid });
+      if(error) throw error;
+      closeSheet(); await refresh(true); toast('Listo, guardamos tu clase');
+    }catch(e){ _rpcErr(e, btn, 'Guardar esta clase'); }
+  };
+
+  window.openBuySheet=()=>{
+    openSheet(`<div class="sh-h">No tienes clases<br>disponibles</div>
+      <div class="sh-note amber">Para agregar una clase necesitas comprar un paquete. Desde la app no se crean paquetes: escríbele a coordinación y con gusto te ayudan.</div>
+      ${COORD_WA ? `<button class="btn" onclick="window.open('https://wa.me/${COORD_WA}','_blank')">Escribir a coordinación</button>` : `<div class="sh-note ok">Escríbele a coordinación por WhatsApp para comprar tu paquete.</div>`}
+      <button class="linkbtn" onclick="closeSheet()">Volver</button>`);
+  };
+
+  // ---- Calendario propio (date picker) ----
+  window.openDatePicker=(mode, bid)=>{
+    const now=new Date();
+    DP={ y:now.getFullYear(), m:now.getMonth(), mode, bid };
+    _renderDatePicker();
+  };
+  function _renderDatePicker(){
+    const isMove = DP.mode==='move';
+    const title = isMove ? 'Elige tu nuevo horario' : 'Agrega una clase';
+    const back = isMove ? `openChangeSheet('${DP.bid}')` : 'closeSheet()';
+    let intro = '';
+    if(isMove){
+      const info=_bkInfo(DP.bid);
+      intro = `<div class="sh-note ok">Sueltas <b>${info?info.line:'tu clase'}</b> y eliges otra. No pierdes ninguna clase de tu paquete.</div>`;
+    } else {
+      intro = `<div class="sh-sub">Elige el día y verás los horarios con cupo.</div>`;
+    }
+    openSheet(`<div class="sh-h">${title}</div>${intro}
+      <div id="dp-cal">${_dpCalHTML()}</div>
+      <button class="linkbtn" onclick="${back}">Volver</button>`);
+  }
+  function _dpCalHTML(){
+    const y=DP.y, m=DP.m;
+    const first=new Date(y,m,1);
+    const startWd=(first.getDay()+6)%7; // Lunes=0
+    const days=new Date(y,m+1,0).getDate();
+    const todayIso=clTodayIso();
+    const monthName=first.toLocaleDateString('es-PE',{month:'long', year:'numeric'});
+    let cells='';
+    for(let i=0;i<startWd;i++) cells+=`<button class="cell empty"></button>`;
+    for(let d=1; d<=days; d++){
+      const iso=clIso(y,m,d);
+      const past = iso < todayIso;
+      const isToday = iso===todayIso;
+      const on = past ? '' : `onclick="dpPick('${iso}')"`;
+      const st = past ? 'style="opacity:.28"' : '';
+      cells+=`<button class="cell ${isToday?'is-today':''}" ${on} ${st}><span class="ncirc"><span class="cnum">${d}</span></span></button>`;
+    }
+    return `<div class="cal-nav"><button onclick="dpNav(-1)">&lsaquo;</button><div class="cal-ttl">${monthName}</div><button onclick="dpNav(1)">&rsaquo;</button></div>
+      <div class="dow"><span>L</span><span>M</span><span>M</span><span>J</span><span>V</span><span>S</span><span>D</span></div>
+      <div class="grid" style="--cellH:46px;--circ:38px;">${cells}</div>`;
+  }
+  window.dpNav=(n)=>{
+    let m=DP.m+n, y=DP.y;
+    if(m<0){ m=11; y--; } if(m>11){ m=0; y++; }
+    const now=new Date();
+    const minKey=now.getFullYear()*12+now.getMonth(), maxKey=minKey+2, key=y*12+m;
+    if(key<minKey || key>maxKey) return;
+    DP.y=y; DP.m=m;
+    const c=$('dp-cal'); if(c) c.innerHTML=_dpCalHTML();
+  };
+  window.dpPick=async (iso)=>{
+    const c=$('dp-cal'); if(c) c.innerHTML='<div class="empty">Cargando horarios…</div>';
+    let slots=[];
+    try{
+      const { data, error }=await sb.rpc('student_day_slots', { p_date: iso });
+      if(error) throw error;
+      slots=data||[];
+    }catch(e){ toast('No se pudieron cargar los horarios.'); _renderDatePicker(); return; }
+    _renderDaySlots(iso, slots);
+  };
+  function _renderDaySlots(iso, slots){
+    const avail=(slots||[]).filter(s=> !s.mine);
+    let rows='';
+    if(!avail.length){
+      rows=`<div class="empty">No hay clases con cupo ese día. Elige otra fecha.</div>`;
+    } else {
+      avail.forEach(s=>{
+        const free=(s.capacity||0)-(s.taken||0);
+        const full = free<=0 || s.started;
+        const cupo = s.started ? 'Ya pasó' : (free<=0 ? 'Sin cupo' : (free===1 ? '1 cupo libre' : `${free} cupos libres`));
+        const cls = full ? 'ckrow off' : 'ckrow';
+        const act = DP.mode==='move' ? `dpConfirmMove('${iso}',${s.hour})` : `dpConfirmAdd('${iso}',${s.hour})`;
+        const right = full ? `<span class="ck-tag aviso">${free<=0?'Lleno':'Pasó'}</span>` : `<span class="pill todo">Elegir</span>`;
+        rows+=`<button class="${cls}" ${full?'':`onclick="${act}"`}><span class="ckd"><span class="ckdd">${fmtHour(s.hour)}</span><span class="ckdm">${cupo}</span></span>${right}</button>`;
+      });
+    }
+    openSheet(`<div class="sh-h">${dayFull(iso)}</div><div class="sh-sub">Elige tu horario</div>
+      <div class="cklist">${rows}</div>
+      <button class="linkbtn" onclick="_renderDatePicker()">&lsaquo; Volver a las fechas</button>`);
+  }
+  window._renderDatePicker=_renderDatePicker;
+
+  window.dpConfirmMove=(iso,hour)=>{
+    const info=_bkInfo(DP.bid);
+    openSheet(`<div class="sh-h">Confirma el cambio</div><div class="sh-sub">Revisa antes de confirmar.</div>
+      <div class="next-rows" style="margin-top:12px;">
+        <div class="r"><span class="lab">Sueltas</span><span class="val">${info?info.line:'—'}</span></div>
+        <div class="r"><span class="lab">Tomas</span><span class="val">${dayFull(iso)} · ${fmtHour(hour)}</span></div>
+      </div>
+      <div class="sh-note ok">Tu paquete queda igual: sigues con las mismas clases.</div>
+      <button class="btn" id="mvbtn" onclick="doMove('${iso}',${hour})">Confirmar cambio</button>
+      <button class="linkbtn" onclick="dpPick('${iso}')">Volver</button>`);
+  };
+  window.doMove=async (iso,hour)=>{
+    const btn=$('mvbtn'); if(btn){ btn.disabled=true; btn.textContent='Cambiando…'; }
+    try{
+      const { error }=await sb.rpc('student_move_booking', { p_from_booking_id: DP.bid, p_to_date: iso, p_to_hour: hour });
+      if(error) throw error;
+      closeSheet(); await refresh(true); toast('Listo, cambiaste tu clase');
+    }catch(e){ _rpcErr(e, btn, 'Confirmar cambio'); }
+  };
+
+  window.dpConfirmAdd=(iso,hour)=>{
+    openSheet(`<div class="sh-h">Confirma tu clase</div>
+      <div class="next-rows" style="margin-top:12px;">
+        <div class="r"><span class="lab">Agregas</span><span class="val">${dayFull(iso)} · ${fmtHour(hour)}</span></div>
+      </div>
+      <div class="sh-note amber">Usarás <b>1 clase</b> de tu paquete.</div>
+      <button class="btn" id="addbtn" onclick="doAdd('${iso}',${hour})">Agregar esta clase</button>
+      <button class="linkbtn" onclick="dpPick('${iso}')">Volver</button>`);
+  };
+  window.doAdd=async (iso,hour)=>{
+    const btn=$('addbtn'); if(btn){ btn.disabled=true; btn.textContent='Agregando…'; }
+    try{
+      const { error }=await sb.rpc('student_book_class', { p_date: iso, p_hour: hour });
+      if(error) throw error;
+      closeSheet(); await refresh(true); toast('Listo, agregaste tu clase');
+    }catch(e){ _rpcErr(e, btn, 'Agregar esta clase'); }
   };
 
   document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='visible' && appReady){ checkUpdate().then(up=>{ if(!up && Date.now()-lastFetch > 8000) refresh(true); }); } });
