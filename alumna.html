@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>FIT Studio · Mi cuenta</title>
-<meta name="app-build" content="b17-2026-07-01">
+<meta name="app-build" content="b18-2026-07-01">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400..700;1,400..600&family=Mulish:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -521,8 +521,19 @@
     const el=$('tab-clases');
     if(events.length===0){
       $('app-body')?.classList.remove('cal');
-      el.innerHTML = `<div class="eyebrow">Mis clases</div><div class="accent"></div>
-        <div class="empty">No tienes clases agendadas. Cuando el estudio te agende una, aparecerá aquí.</div>`;
+      const livePkgs = (DATA.packages||[]).filter(p => !p.is_frozen && (!p.status||p.status==='active') && (p.classes_used||0) < (p.classes_total||0));
+      const remaining = livePkgs.reduce((s,p)=> s + Math.max(0,(p.classes_total||0)-(p.classes_used||0)), 0);
+      if(remaining > 0){
+        el.innerHTML = `<div class="eyebrow">Mis clases</div><div class="accent"></div>
+          <div class="empty">Todavía no tienes clases agendadas. Tienes <b>${remaining} ${remaining===1?'clase disponible':'clases disponibles'}</b> en tu paquete: agenda tu primera clase o espera a que el estudio te agende.</div>
+          <button class="packbtn" onclick="openDatePicker('add', null)">
+            <span class="pic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg></span>
+            <span class="ptx"><span class="pt">Agregar una clase</span><span class="ps">Tienes ${remaining} ${remaining===1?'clase disponible':'clases disponibles'}</span></span>
+            <span class="parr">&rsaquo;</span></button>`;
+      } else {
+        el.innerHTML = `<div class="eyebrow">Mis clases</div><div class="accent"></div>
+          <div class="empty">No tienes clases agendadas. Cuando el estudio te agende una, aparecerá aquí.</div>`;
+      }
       return;
     }
     const next = CLE.next;
