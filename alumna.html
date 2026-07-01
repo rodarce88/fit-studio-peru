@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>FIT Studio · Mi cuenta</title>
-<meta name="app-build" content="b18-2026-07-01">
+<meta name="app-build" content="b19-2026-07-01">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400..700;1,400..600&family=Mulish:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -73,6 +73,15 @@
   .sh-note{ border-radius:14px; padding:14px 16px; margin:16px 0; font-size:calc(14.5px*var(--scale)); line-height:1.5; }
   .sh-note.amber{ background:#FBF2DE; color:#7a5a16; } .sh-note.red{ background:#FBEAEA; color:#9B2C20; } .sh-note.ok{ background:#E8F5EF; color:#0E7A4F; }
   .sheet-panel .btn, .sheet-panel .linkbtn{ margin-top:10px; }
+  .pf-field{ margin-top:12px; }
+  .pf-lab{ display:block; font-size:calc(12px*var(--scale)); font-weight:700; color:var(--ink-soft); margin-bottom:5px; letter-spacing:.02em; }
+  .pf-in{ width:100%; box-sizing:border-box; padding:12px 14px; border:1px solid var(--line); border-radius:12px; font-family:var(--body); font-size:calc(15px*var(--scale)); background:#fff; color:var(--ink); }
+  .pf-in:focus{ outline:none; border-color:var(--purple); box-shadow:0 0 0 3px var(--purple-pale); }
+  .pf-row{ display:flex; gap:10px; } .pf-row .pf-field{ flex:1; }
+  .pf-consent{ margin-top:18px; padding:13px 15px; border-radius:14px; font-size:calc(13.5px*var(--scale)); font-weight:700; display:flex; flex-direction:column; gap:3px; }
+  .pf-consent span{ font-weight:500; font-size:calc(12.5px*var(--scale)); }
+  .pf-consent.ok{ background:#E8F5EF; color:#0E7A4F; } .pf-consent.ok span{ color:#3d7a5f; }
+  .pf-consent.pend{ background:#FBF2DE; color:#7a5a16; } .pf-consent.pend span{ color:#8a6a26; }
   .cklist{ display:flex; flex-direction:column; gap:10px; margin:16px 0 4px; }
   .ckrow{ width:100%; background:#fff; border:1px solid var(--line); border-radius:16px; padding:14px 15px; display:flex; align-items:center; gap:14px; cursor:pointer; text-align:left; font-family:var(--body); }
   .ckrow.off{ opacity:.5; }
@@ -231,7 +240,7 @@
 
   <div class="hidden" id="v-app">
     <div class="topbar">
-      <div class="who">
+      <div class="who" onclick="openProfileSheet()" style="cursor:pointer" title="Ver mi perfil">
         <div class="avatar" id="t-avatar">··</div>
         <div style="min-width:0;"><div class="hi" id="t-greet">Bienvenida</div><div class="nm" id="t-name">—</div></div>
       </div>
@@ -371,7 +380,7 @@
       .select('id, first_name, last_name, phone, email, gender, app_welcomed_at').limit(1).maybeSingle();
     if(error||!me) return showError('No pudimos cargar tu cuenta', error?.message||'Intenta de nuevo.');
     DATA.me = me;
-    if(!me.app_welcomed_at) return showWelcome(me);
+    if(!localStorage.getItem('fitWelcomed:'+me.id)) return showWelcome(me);
     return loadApp();
   }
 
@@ -384,6 +393,7 @@
       <div class="r"><span class="lab">Correo</span><span class="val">${esc(me.email||'Sin correo')}</span></div>`;
     $('w-enter').onclick = async ()=>{
       $('w-enter').textContent='Entrando…'; $('w-enter').disabled=true;
+      try{ localStorage.setItem('fitWelcomed:'+me.id,'1'); }catch(e){}
       try{ await sb.rpc('student_mark_welcomed'); }catch(e){}
       loadApp();
     };
@@ -862,6 +872,61 @@
     requestAnimationFrame(()=>ov.classList.add('show'));
   }
   window.closeSheet=()=>{ const ov=$('sheet'); if(ov) ov.classList.remove('show'); const ab=$('app-body'); if(ab) ab.style.overflow=''; };
+
+  window.openProfileSheet = async ()=>{
+    openSheet(`<div class="sh-h">Mi perfil</div><div class="sh-sub">Cargando tus datos…</div>`);
+    let p;
+    try{
+      const { data, error } = await sb.from('students')
+        .select('first_name,last_name,phone,email,gender,document_type,document_number,birth_date,emergency_contact_name,emergency_contact_phone,consent_signed_at,image_consent')
+        .limit(1).maybeSingle();
+      if(error||!data) throw (error||new Error('sin datos'));
+      p = data;
+    }catch(e){
+      openSheet(`<div class="sh-h">Mi perfil</div><div class="sh-sub">No pudimos cargar tus datos. Intenta de nuevo.</div><button class="btn ghost" onclick="closeSheet()">Cerrar</button>`);
+      return;
+    }
+    const opt=(v,l,cur)=>`<option value="${v}" ${String(cur||'')===v?'selected':''}>${l}</option>`;
+    const consent = p.consent_signed_at
+      ? `<div class="pf-consent ok">Consentimiento firmado ✓<span>Firmado el ${new Date(p.consent_signed_at).toLocaleDateString('es-PE')}${p.image_consent?' · autorizas uso de imagen':''}</span></div>`
+      : `<div class="pf-consent pend">Consentimiento pendiente<span>Te lo compartiremos para firmarlo pronto.</span></div>`;
+    openSheet(`
+      <div class="sh-h">Mi perfil</div>
+      <div class="sh-sub">${esc(p.first_name||'')} ${esc(p.last_name||'')}</div>
+      <div class="pf-field"><label class="pf-lab">Correo</label><input class="pf-in" id="pf-email" type="email" value="${esc(p.email||'')}" placeholder="tucorreo@ejemplo.com"></div>
+      <div class="pf-field"><label class="pf-lab">Teléfono</label><input class="pf-in" id="pf-phone" type="tel" value="${esc(p.phone||'')}" placeholder="+51 9..."></div>
+      <div class="pf-field"><label class="pf-lab">Género</label><select class="pf-in" id="pf-gender">${opt('','—',p.gender)}${opt('F','Femenino',p.gender)}${opt('M','Masculino',p.gender)}${opt('O','Otro',p.gender)}</select></div>
+      <div class="pf-row">
+        <div class="pf-field"><label class="pf-lab">Documento</label><select class="pf-in" id="pf-doctype">${opt('','—',p.document_type)}${opt('DNI','DNI',p.document_type)}${opt('CE','C. Extranjería',p.document_type)}${opt('Pasaporte','Pasaporte',p.document_type)}</select></div>
+        <div class="pf-field"><label class="pf-lab">Número</label><input class="pf-in" id="pf-docnum" value="${esc(p.document_number||'')}"></div>
+      </div>
+      <div class="pf-field"><label class="pf-lab">Fecha de nacimiento</label><input class="pf-in" id="pf-birth" type="date" value="${p.birth_date||''}"></div>
+      <div class="pf-field"><label class="pf-lab">Contacto de emergencia</label><input class="pf-in" id="pf-emname" value="${esc(p.emergency_contact_name||'')}" placeholder="Nombre"></div>
+      <div class="pf-field"><input class="pf-in" id="pf-emphone" type="tel" value="${esc(p.emergency_contact_phone||'')}" placeholder="Teléfono de emergencia"></div>
+      ${consent}
+      <button class="btn" id="pf-save" onclick="saveProfile()">Guardar cambios</button>
+      <button class="linkbtn" onclick="closeSheet()">Cerrar</button>
+    `);
+  };
+
+  window.saveProfile = async ()=>{
+    const btn=$('pf-save'); if(btn){ btn.textContent='Guardando…'; btn.disabled=true; }
+    const val=id=>{ const el=$(id); return (el && String(el.value).trim()!=='') ? String(el.value).trim() : null; };
+    try{
+      const { error } = await sb.rpc('student_update_profile', {
+        p_email: val('pf-email'), p_phone: val('pf-phone'), p_gender: val('pf-gender'),
+        p_document_type: val('pf-doctype'), p_document_number: val('pf-docnum'),
+        p_birth_date: val('pf-birth'), p_emergency_contact_name: val('pf-emname'),
+        p_emergency_contact_phone: val('pf-emphone')
+      });
+      if(error) throw error;
+      toast('✓ Perfil actualizado');
+      closeSheet();
+    }catch(e){
+      toast('No se pudo guardar. Intenta de nuevo.');
+      if(btn){ btn.textContent='Guardar cambios'; btn.disabled=false; }
+    }
+  };
 
   window.openClassSheet=(bid)=>{
     const info=_bkInfo(bid); if(!info){ toast('No encontramos tu reserva'); return; }

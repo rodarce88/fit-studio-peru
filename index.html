@@ -1458,13 +1458,14 @@
   .sd-kebab:hover, .sd-kebab:active { background: var(--fit-cream); color: var(--fit-purple); }
 
   /* Historial de clases como lista de tarjetas (responsiva en todo ancho) */
-  .sd-cls-row { display: grid; grid-template-columns: 96px 84px 52px minmax(110px,1fr) minmax(96px,150px) auto; align-items: center; gap: 10px; padding: 7px 14px; border-bottom: 1px solid var(--line-soft); }
+  .sd-cls-row { display: grid; grid-template-columns: 96px 84px 52px minmax(100px,1fr) 116px 124px; align-items: center; gap: 10px; padding: 7px 14px; border-bottom: 1px solid var(--line-soft); transition: background .12s ease; }
   .sd-cls-row:last-child { border-bottom: none; }
+  .sd-cls-row:hover { background: var(--fit-lavender-pale); }
   .sd-cls-date { font-weight: 600; font-size: 12.5px; color: var(--ink); }
   .sd-cls-day, .sd-cls-hour { font-size: 12px; color: var(--ink-mute); white-space: nowrap; }
   .sd-cls-prof { font-size: 12px; color: var(--ink-soft); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .sd-cls-sede { font-size: 12px; color: var(--ink-mute); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .sd-cls-badge { justify-self: end; }
+  .sd-cls-badge { justify-self: end; white-space: nowrap; }
 
   /* Contenedor del bottom sheet de acciones del perfil (reusa clases .as-*) */
   #profile-actions-sheet { display: none; position: fixed; inset: 0; z-index: 9998; }
@@ -11746,7 +11747,6 @@ async function saveStudent() {
   const _fixedNote = f('f-fixed-note').value.trim();
 
   const data = {
-    location_id: STATE.currentLocationId,
     first_name: toTitleCase(f('f-first-name').value.trim()),
     last_name: toTitleCase(f('f-last-name').value.trim()) || null,
     email: f('f-email').value.trim() || null,
@@ -11766,6 +11766,13 @@ async function saveStudent() {
     data_complete: !!(f('f-email').value.trim() && f('f-doc-num').value.trim()),
     status: 'active',
   };
+
+  // La sede (location_id) solo se asigna al CREAR una alumna nueva (nace en la sede
+  // donde se está trabajando). Al EDITAR NO se toca, para no reasignarle la sede por
+  // error con la sede activa del contexto (bug que movía alumnas de sede al guardar perfil).
+  if (!isEdit) {
+    data.location_id = STATE.currentLocationId;
+  }
 
   if (!data.first_name) {
     showToast('El nombre es obligatorio', 'error');
@@ -14470,7 +14477,31 @@ function pltApplySelection(id, chipEl) {
 function pltCloseChipMenu() { const m = document.getElementById('plt-chip-menu'); if (m) m.remove(); pltClearSelection(); }
 function pltOpenChipMenu(studentId, dayN, hour, evt) {
   evt.stopPropagation();
+  // Copiar el nombre automáticamente para pegarlo en WhatsApp
+  const stud = STATE.students.find(s => s.id === studentId);
+  if (stud) pltCopyName(`${stud.first_name || ''} ${stud.last_name || ''}`.trim());
   pltShowChipMenu(studentId, dayN, hour, evt.currentTarget);
+}
+function pltCopyName(name) {
+  const txt = (name || '').trim();
+  if (!txt) return;
+  const done = () => showToast('✓ Nombre copiado', 'success', 1100);
+  try {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(txt).then(done).catch(() => pltCopyFallback(txt, done));
+    } else {
+      pltCopyFallback(txt, done);
+    }
+  } catch (e) { pltCopyFallback(txt, done); }
+}
+function pltCopyFallback(txt, done) {
+  try {
+    const ta = document.createElement('textarea');
+    ta.value = txt; ta.style.position = 'fixed'; ta.style.top = '-1000px'; ta.style.opacity = '0';
+    document.body.appendChild(ta); ta.focus(); ta.select();
+    document.execCommand('copy'); document.body.removeChild(ta);
+    if (done) done();
+  } catch (e) {}
 }
 function pltShowChipMenu(studentId, dayN, hour, anchorEl) {
   pltCloseChipMenu();
@@ -18942,11 +18973,12 @@ function closeChangePkgWizard() {
   STATE.changePkgWizard = null;
 }
 
-function showToast(msg, type = '') {
+function showToast(msg, type = '', ms = 3000) {
   const t = document.getElementById('toast');
   t.textContent = msg;
   t.className = 'toast is-show toast-' + type;
-  setTimeout(() => t.classList.remove('is-show'), 3000);
+  if (t._tmr) clearTimeout(t._tmr);
+  t._tmr = setTimeout(() => t.classList.remove('is-show'), ms);
 }
 
 // ============================================
