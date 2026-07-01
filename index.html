@@ -14476,7 +14476,31 @@ function pltApplySelection(id, chipEl) {
 function pltCloseChipMenu() { const m = document.getElementById('plt-chip-menu'); if (m) m.remove(); pltClearSelection(); }
 function pltOpenChipMenu(studentId, dayN, hour, evt) {
   evt.stopPropagation();
+  // Copiar el nombre automáticamente para pegarlo en WhatsApp
+  const stud = STATE.students.find(s => s.id === studentId);
+  if (stud) pltCopyName(`${stud.first_name || ''} ${stud.last_name || ''}`.trim());
   pltShowChipMenu(studentId, dayN, hour, evt.currentTarget);
+}
+function pltCopyName(name) {
+  const txt = (name || '').trim();
+  if (!txt) return;
+  const done = () => showToast('✓ Nombre copiado', 'success', 1100);
+  try {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(txt).then(done).catch(() => pltCopyFallback(txt, done));
+    } else {
+      pltCopyFallback(txt, done);
+    }
+  } catch (e) { pltCopyFallback(txt, done); }
+}
+function pltCopyFallback(txt, done) {
+  try {
+    const ta = document.createElement('textarea');
+    ta.value = txt; ta.style.position = 'fixed'; ta.style.top = '-1000px'; ta.style.opacity = '0';
+    document.body.appendChild(ta); ta.focus(); ta.select();
+    document.execCommand('copy'); document.body.removeChild(ta);
+    if (done) done();
+  } catch (e) {}
 }
 function pltShowChipMenu(studentId, dayN, hour, anchorEl) {
   pltCloseChipMenu();
@@ -18948,11 +18972,12 @@ function closeChangePkgWizard() {
   STATE.changePkgWizard = null;
 }
 
-function showToast(msg, type = '') {
+function showToast(msg, type = '', ms = 3000) {
   const t = document.getElementById('toast');
   t.textContent = msg;
   t.className = 'toast is-show toast-' + type;
-  setTimeout(() => t.classList.remove('is-show'), 3000);
+  if (t._tmr) clearTimeout(t._tmr);
+  t._tmr = setTimeout(() => t.classList.remove('is-show'), ms);
 }
 
 // ============================================
