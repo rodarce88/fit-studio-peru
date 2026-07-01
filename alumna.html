@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>FIT Studio · Mi cuenta</title>
-<meta name="app-build" content="b19-2026-07-01">
+<meta name="app-build" content="b20-2026-07-01">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400..700;1,400..600&family=Mulish:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -295,30 +295,34 @@
   let DATA = { me:null, inst:{}, locs:{}, pkgNames:{}, bookings:[], attendance:[], packages:[], sessById:{} };
   let lastFetch = 0, fetching = false, appReady = false;
 
-  // Auto-actualización: si Vercel sirve una versión nueva del archivo, recarga sola.
-  let BUILT_TAG = null;
+  // Auto-actualización: compara el build que corre AHORA (MY_BUILD) contra el que
+  // sirve Vercel. Si difieren, recarga. Así una pestaña que quedó abierta con una
+  // versión vieja se actualiza sola al reenfocar (antes fijaba como referencia el
+  // build del servidor al abrir, y una pestaña vieja nunca se enteraba de estar vieja).
   const MY_BUILD = document.querySelector('meta[name="app-build"]')?.content || '';
-  async function fetchTag(){
+  let _checking = false;
+  async function fetchServerBuild(){
     const u = location.pathname + '?_v=' + Date.now();
-    try{
-      const r = await fetch(u, { method:'HEAD', cache:'no-store' });
-      const tag = r.headers.get('etag') || r.headers.get('last-modified');
-      if(tag) return 'h:'+tag;
-    }catch(e){}
     try{
       const r = await fetch(u, { cache:'no-store' });
       const t = await r.text();
       const m = t.match(/name="app-build"\s+content="([^"]+)"/);
-      if(m) return 'b:'+m[1];
+      if(m) return m[1];
     }catch(e){}
     return null;
   }
   async function checkUpdate(){
-    const t = await fetchTag();
-    if(!t) return false;
-    if(BUILT_TAG && t !== BUILT_TAG){ try{ sessionStorage.setItem('fit_updated','1'); }catch(e){} location.reload(); return true; }
-    if(!BUILT_TAG) BUILT_TAG = t;
-    return false;
+    if(_checking) return false;
+    _checking = true;
+    try{
+      const serverBuild = await fetchServerBuild();
+      if(serverBuild && MY_BUILD && serverBuild !== MY_BUILD){
+        try{ sessionStorage.setItem('fit_updated','1'); }catch(e){}
+        location.reload();
+        return true;
+      }
+      return false;
+    } finally { _checking = false; }
   }
 
   function showError(title, msg){ view('v-error'); $('err-title').textContent=title; $('err-msg').textContent=msg||''; }
