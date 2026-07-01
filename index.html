@@ -767,6 +767,8 @@
 
   .plt-chip { display: flex; align-items: center; gap: 5px; height: 24px; box-sizing: border-box; font-size: 12.5px; line-height: 1.15; padding: 0 8px; border-radius: 7px; margin-bottom: 4px; cursor: pointer; border: 1px solid; white-space: nowrap; overflow: hidden; transition: box-shadow .08s ease; }
   .plt-chip .nm { overflow: hidden; text-overflow: ellipsis; }
+  .plt-chip .apptag { flex-shrink: 0; background: #10b981; color: #fff; font-size: 8.5px; font-weight: 800; letter-spacing: .05em; padding: 1.5px 5px; border-radius: 999px; line-height: 1.3; margin-left: 4px; }
+  .plt-chip.st-noconfirm .apptag { background: #fff; color: #0E9F5A; }
   .plt-chip .ok { margin-left: auto; color: var(--good); font-weight: 700; flex-shrink: 0; }
   .plt-chip .ok.wait { color: #C77F12; font-size: 13px; display: inline-flex; align-items: center; }
   .plt-chip.st-fijo { background: #fff; border-color: var(--line); color: var(--ink); }
@@ -6118,7 +6120,7 @@ async function loadFromSupabase() {
 function loadFromMock() {
   // Minimal mock data so the UI works offline without Supabase
   STATE.locations = [
-    { id: '11111111-1111-1111-1111-111111111111', slug: 'santa-cruz', name: 'Santa Cruz', address: 'Av. Sta. Cruz 1341', capacity: 8 },
+    { id: '11111111-1111-1111-1111-111111111111', slug: 'santa-cruz', name: 'Santa Cruz', address: 'Av. Sta. Cruz 1341', capacity: 9 },
     { id: '22222222-2222-2222-2222-222222222222', slug: 'inmaculado-corazon', name: 'Inmaculado Corazón', capacity: 6 },
     { id: '33333333-3333-3333-3333-333333333333', slug: 'san-antonio', name: 'San Antonio', capacity: 7 },
   ];
@@ -8313,12 +8315,13 @@ function renderTimeline() {
       const modalityIcon = getModalityIcon(s.modality);
       const modalityLabel = getModalityLabel(s.modality);
       const fullName = (escape(s.first_name) + ' ' + escape(s.last_name || '')).trim();
+      const appUserTag = s.app_welcomed_at ? '<span title="Confirmó su cuenta en la app de alumna" style="background: #5B2A8F; color: white; font-size: 8.5px; font-weight: 800; padding: 1.5px 6px; border-radius: 999px; letter-spacing: 0.06em; flex-shrink: 0; line-height: 1.3;">APP</span>' : '';
 
       return `
       <div class="student-row" style="${rowStyle}">
         <div class="student-avatar" style="${studentSedeAvatarStyle(s)}">${initials(s)}</div>
         <div>
-          <div class="student-name">${fullName}</div>
+          <div class="student-name" style="display:flex; align-items:center; gap:6px; min-width:0;"><span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${fullName}</span>${appUserTag}</div>
           <div class="student-meta">
             <span class="modality-pill modality-${s.modality}">
               <span class="hide-mobile">${modalityIcon} ${modalityLabel}</span>
@@ -14000,8 +14003,8 @@ function _renderDashStudentSearchRow(s) {
     : `<span title="${escape(loc.name)}" style="border: 1px solid ${sedeColor}55; color: ${sedeColor}; font-size: 9.5px; font-weight: 600; padding: 1.5px 6px; border-radius: 999px; letter-spacing: 0.06em; flex-shrink: 0; line-height: 1.3;">${sedeInitials}</span>`
   ) : '';
   const modalityBadge = `<span class="modality-pill modality-${s.modality}" style="font-size:10px; padding:2px 7px; flex-shrink:0;">${getModalityIcon(s.modality)} ${getModalityShortLabel(s.modality)}</span>`;
-  // Chip "App": la alumna ya inició sesión en la app (auth_user_id seteado al vincularse)
-  const appBadge = s.auth_user_id ? `<span title="Ya usa la app de alumna" style="background: #5B2A8F; color: white; font-size: 9.5px; font-weight: 700; padding: 2px 7px; border-radius: 999px; letter-spacing: 0.04em; flex-shrink: 0; line-height: 1.3;">App</span>` : '';
+  // Chip "APP": la alumna confirmó su identidad en la app (app_welcomed_at)
+  const appBadge = s.app_welcomed_at ? `<span title="Confirmó su cuenta en la app de alumna" style="background: #5B2A8F; color: white; font-size: 9px; font-weight: 800; padding: 2px 7px; border-radius: 999px; letter-spacing: 0.06em; flex-shrink: 0; line-height: 1.3;">APP</span>` : '';
   const contact = s.email || s.phone || s.document_number || '';
   return `<div onclick="addRecentStudentSearch('${s.id}'); openStudentDetail('${s.id}'); document.getElementById('dash-student-search').value=''; document.getElementById('dash-student-search-results').style.display='none';" style="display: flex; align-items: center; gap: 10px; padding: 10px 14px; cursor: pointer; border-bottom: 1px solid var(--line-soft); transition: background 0.1s;" onmouseover="this.style.background='var(--fit-cream)'" onmouseout="this.style.background='white'">
     <div class="student-avatar" style="width: 32px; height: 32px; font-size: 11px; flex-shrink: 0; background: ${sedeColor}; color: white;">${initials(s)}</div>
@@ -14111,6 +14114,7 @@ let PLT_WEEK_START = null;  // lunes (Date) de la semana mostrada
 let PLT_PKG_CACHE = {};     // student_id -> [paquetes] (para color)
 let PLT_BOOKED = new Set(); // `${student_id}|${dow}|${hour}` con clase real esta semana
 let PLT_CONFIRMED = new Set(); // subconjunto de PLT_BOOKED con confirmed_at (confirmó coord)
+let PLT_APPCONF = new Set(); // subconjunto de PLT_CONFIRMED con confirmed_via='student' (confirmó por su app)
 // "Esperando respuesta": se marca al copiar mensaje o abrir WhatsApp. Solo visual, persiste local.
 let PLT_WAITING = (() => {
   try { return new Set(JSON.parse(localStorage.getItem('plt_waiting') || '[]')); } catch (e) { return new Set(); }
@@ -14230,7 +14234,7 @@ function pltNavWeek(delta) {
   renderPlantillaView();
 }
 async function pltLoadData() {
-  PLT_PKG_CACHE = {}; PLT_BOOKED = new Set(); PLT_CONFIRMED = new Set();
+  PLT_PKG_CACHE = {}; PLT_BOOKED = new Set(); PLT_CONFIRMED = new Set(); PLT_APPCONF = new Set();
   const ids = pltFixedStudents().map(s => s.id);
   if (!ids.length || typeof sb === 'undefined' || !isOnline) return;
   try {
@@ -14252,7 +14256,7 @@ async function pltLoadData() {
     const sessIds = Object.keys(sessMap);
     if (sessIds.length) {
       const { data: bks } = await sb.from('session_bookings')
-        .select('session_id, student_id, cancelled_at, confirmed_at')
+        .select('session_id, student_id, cancelled_at, confirmed_at, confirmed_via')
         .in('session_id', sessIds);
       (bks || []).forEach(b => {
         if (b.cancelled_at) return;
@@ -14260,7 +14264,10 @@ async function pltLoadData() {
         const dow = (new Date(cs.session_date + 'T00:00:00').getDay() + 6) % 7 + 1;
         const key = `${b.student_id}|${dow}|${cs.hour}`;
         PLT_BOOKED.add(key);
-        if (b.confirmed_at) PLT_CONFIRMED.add(key);
+        if (b.confirmed_at) {
+          PLT_CONFIRMED.add(key);
+          if (b.confirmed_via === 'student') PLT_APPCONF.add(key);
+        }
       });
     }
   } catch (e) {}
@@ -14320,10 +14327,14 @@ function pltRenderGrid() {
     const waiting = PLT_WAITING.has(pltWaitingKey(s.id, dateIso, h));
     const noshow = !booked && PLT_NOSHOW.has(pltNoShowKey(s.id, dateIso, h));
     const nm = `${s.first_name || ''} ${s.last_name || ''}`.trim();
+    const appConf = confirmed && PLT_APPCONF.has(key);
+    const appTag = appConf ? '<span class="apptag" title="Confirmó por su app">APP</span>' : '';
     let leftMarker = '';
     let marker = '';
     if (confirmed) {
-      marker = '<span class="ok" title="Confirmada · en Mi día">✓</span>';
+      marker = appConf
+        ? '<span class="ok" title="Confirmada por la alumna desde su app">✓</span>'
+        : '<span class="ok" title="Confirmada · en Mi día">✓</span>';
     } else if (booked) {
       marker = '<span class="ok pending" title="En Mi día · falta confirmar"><i class="ti ti-circle-check"></i></span>';
       if (waiting) leftMarker = '<span class="wait-left" title="Ya le escribí · esperando confirmación"><i class="ti ti-clock"></i></span>';
@@ -14333,7 +14344,7 @@ function pltRenderGrid() {
       marker = '<span class="ok wait" title="Esperando respuesta"><i class="ti ti-clock"></i></span>';
     }
     const cls = 'plt-chip st-' + st + (confirmed ? ' is-confirmed' : '') + (noshow ? ' is-noshow' : '');
-    return `<div class="${cls}" data-sid="${s.id}" data-day="${dn}" data-hour="${h}" onclick="pltOpenChipMenu('${s.id}', ${dn}, ${h}, event)" onmouseenter="pltHover('${s.id}',1)" onmouseleave="pltHover('${s.id}',0)" title="${escape((s.first_name || '') + ' ' + (s.last_name || ''))}">${leftMarker}<span class="nm">${escape(nm)}</span>${marker}</div>`;
+    return `<div class="${cls}" data-sid="${s.id}" data-day="${dn}" data-hour="${h}" onclick="pltOpenChipMenu('${s.id}', ${dn}, ${h}, event)" onmouseenter="pltHover('${s.id}',1)" onmouseleave="pltHover('${s.id}',0)" title="${escape((s.first_name || '') + ' ' + (s.last_name || ''))}">${leftMarker}<span class="nm">${escape(nm)}</span>${appTag}${marker}</div>`;
   };
   const pltSortStuds = (arr, hh, dn) => arr.slice().sort((a, b) => {
     const ka = pltSortKey(a, hh, dn), kb = pltSortKey(b, hh, dn);
@@ -14531,7 +14542,9 @@ function pltShowChipMenu(studentId, dayN, hour, anchorEl) {
     `<div style="padding:9px 12px ${sub ? '1px' : '6px'}; display:flex; gap:8px; align-items:center; color:${color}; font-size:12.5px; font-weight:600;"><i class="ti ${icon}" style="font-size:16px;"></i> ${text}</div>` +
     (sub ? `<div style="padding:0 12px 7px 34px; font-size:11px; color:var(--ink-mute);">${sub}</div>` : '');
   if (confirmed) {
-    html += sLine('var(--good)', 'ti-circle-check', 'Confirmada · en Mi día');
+    html += PLT_APPCONF.has(`${studentId}|${dayN}|${hour}`)
+      ? sLine('var(--good)', 'ti-device-mobile', 'Confirmó por su app · en Mi día')
+      : sLine('var(--good)', 'ti-circle-check', 'Confirmada · en Mi día');
   } else if (booked) {
     html += sLine('#6478D6', 'ti-circle-check', 'En Mi día · falta confirmar', waiting ? 'Ya le escribí · esperando confirmación' : '');
     html += item('<i class="ti ti-checks"></i>', 'Confirmar clase', 'Marca la clase como confirmada', `pltConfirmCell('${studentId}', ${dayN}, ${hour})`, 'var(--good)');
