@@ -751,12 +751,18 @@
   .plt-scroll { overflow: visible; border: 1px solid var(--line); border-radius: 14px; background: #fff; }
   .plt-grid { display: grid; grid-template-columns: 56px repeat(7, minmax(118px, 1fr)); min-width: 880px; }
   .plt-cell { position: relative; border-right: 1px solid var(--line-soft); border-bottom: 1px solid #D6CFE1; padding: 6px; min-height: 56px; }
-  .plt-slot-free { height: 22px; box-sizing: border-box; border: 1px solid #EDEAF2; border-radius: 7px; margin-bottom: 4px; background: #F7F5FA; display: flex; align-items: center; justify-content: flex-end; padding: 0 5px; }
+  .plt-slot-free { height: 22px; box-sizing: border-box; border: 1px solid #EDEAF2; border-radius: 7px; margin-bottom: 4px; background: #F7F5FA; display: flex; align-items: center; justify-content: space-between; padding: 0 5px; }
   .plt-cap { display: none; align-items: center; gap: 6px; background: rgba(255,255,255,0.92); border: 1px solid #DEDEE4; border-radius: 999px; padding: 2px 8px; font-size: 10px; font-weight: 700; color: #6B6B73; white-space: nowrap; }
   .plt-cap .sep { color: #B9B9C2; }
   .plt-cap .bar { width: 34px; height: 5px; border-radius: 4px; background: #E4E4EA; overflow: hidden; }
   .plt-cap .bar > i { display: block; height: 100%; background: #B4B4BD; }
   .plt-cell:hover .plt-cap { display: inline-flex; }
+  .plt-goday { display: none; align-items: center; gap: 4px; border: 0; background: var(--fit-purple); color: #fff; border-radius: 999px; padding: 3px 9px; font-size: 10px; font-weight: 700; cursor: pointer; white-space: nowrap; font-family: var(--body); line-height: 1.3; flex-shrink: 0; }
+  .plt-goday:hover { background: var(--fit-purple-deep, #3C1D6E); }
+  .plt-goday i { font-size: 12px; }
+  .plt-cell:hover .plt-goday { display: inline-flex; }
+  .plt-slot-free.is-ghost { border-color: transparent; background: transparent; height: 20px; margin-bottom: 0; }
+  .plt-cell:hover .plt-slot-free.is-ghost { border-color: #EDEAF2; background: #F7F5FA; }
   .plt-grid > .plt-cell:nth-child(8n) { border-right: none; }
   .plt-colh { position: sticky; top: var(--topbar-h); z-index: 5; background: var(--fit-cream); text-align: center; padding: 9px 4px; border-bottom: 1px solid var(--line); }
   .plt-colh .d { font-size: 12px; font-weight: 600; color: var(--ink); text-transform: uppercase; letter-spacing: 0.03em; }
@@ -14115,6 +14121,7 @@ let PLT_PKG_CACHE = {};     // student_id -> [paquetes] (para color)
 let PLT_BOOKED = new Set(); // `${student_id}|${dow}|${hour}` con clase real esta semana
 let PLT_CONFIRMED = new Set(); // subconjunto de PLT_BOOKED con confirmed_at (confirmó coord)
 let PLT_APPCONF = new Set(); // subconjunto de PLT_CONFIRMED con confirmed_via='student' (confirmó por su app)
+let PLT_APPNOTICE = new Set(); // reservas donde la alumna avisó (por su app) que no viene y sigue sin confirmar
 // "Esperando respuesta": se marca al copiar mensaje o abrir WhatsApp. Solo visual, persiste local.
 let PLT_WAITING = (() => {
   try { return new Set(JSON.parse(localStorage.getItem('plt_waiting') || '[]')); } catch (e) { return new Set(); }
@@ -14234,7 +14241,7 @@ function pltNavWeek(delta) {
   renderPlantillaView();
 }
 async function pltLoadData() {
-  PLT_PKG_CACHE = {}; PLT_BOOKED = new Set(); PLT_CONFIRMED = new Set(); PLT_APPCONF = new Set();
+  PLT_PKG_CACHE = {}; PLT_BOOKED = new Set(); PLT_CONFIRMED = new Set(); PLT_APPCONF = new Set(); PLT_APPNOTICE = new Set();
   const ids = pltFixedStudents().map(s => s.id);
   if (!ids.length || typeof sb === 'undefined' || !isOnline) return;
   try {
@@ -14256,7 +14263,7 @@ async function pltLoadData() {
     const sessIds = Object.keys(sessMap);
     if (sessIds.length) {
       const { data: bks } = await sb.from('session_bookings')
-        .select('session_id, student_id, cancelled_at, confirmed_at, confirmed_via')
+        .select('session_id, student_id, cancelled_at, confirmed_at, confirmed_via, cancel_requested_at')
         .in('session_id', sessIds);
       (bks || []).forEach(b => {
         if (b.cancelled_at) return;
@@ -14267,6 +14274,9 @@ async function pltLoadData() {
         if (b.confirmed_at) {
           PLT_CONFIRMED.add(key);
           if (b.confirmed_via === 'student') PLT_APPCONF.add(key);
+        } else if (b.cancel_requested_at) {
+          // Avisó (desde su app) que no vendrá y no ha vuelto a confirmar → misma regla que Mi día
+          PLT_APPNOTICE.add(key);
         }
       });
     }
@@ -14325,7 +14335,8 @@ function pltRenderGrid() {
     const confirmed = PLT_CONFIRMED.has(key);
     const dateIso = dateToIsoLocal(pltDayToDate(dn));
     const waiting = PLT_WAITING.has(pltWaitingKey(s.id, dateIso, h));
-    const noshow = !booked && PLT_NOSHOW.has(pltNoShowKey(s.id, dateIso, h));
+    const appNotice = booked && !confirmed && PLT_APPNOTICE.has(key);
+    const noshow = appNotice || (!booked && PLT_NOSHOW.has(pltNoShowKey(s.id, dateIso, h)));
     const nm = `${s.first_name || ''} ${s.last_name || ''}`.trim();
     const appConf = confirmed && PLT_APPCONF.has(key);
     const appTag = appConf ? '<span class="apptag" title="Confirmó por su app">APP</span>' : '';
@@ -14335,6 +14346,8 @@ function pltRenderGrid() {
       marker = appConf
         ? '<span class="ok" title="Confirmada por la alumna desde su app">✓</span>'
         : '<span class="ok" title="Confirmada · en Mi día">✓</span>';
+    } else if (appNotice) {
+      marker = '<span class="ok noshow" title="Avisó por su app que no viene"><i class="ti ti-x"></i></span>';
     } else if (booked) {
       marker = '<span class="ok pending" title="En Mi día · falta confirmar"><i class="ti ti-circle-check"></i></span>';
       if (waiting) leftMarker = '<span class="wait-left" title="Ya le escribí · esperando confirmación"><i class="ti ti-clock"></i></span>';
@@ -14374,9 +14387,15 @@ function pltRenderGrid() {
       if (occ > 0 && free > 0) {
         const pct = Math.min(100, Math.round(occ / cap * 100));
         const capInner = `<div class="plt-cap"><span>${occ} de ${cap}</span><span class="sep">·</span><span>${free} libres</span><span class="bar"><i style="width:${pct}%"></i></span></div>`;
+        const goBtn = `<button class="plt-goday" onclick="event.stopPropagation(); pltGoToMiDia(${d.n}, ${h})" title="Abrir esta hora en Mi día de esta sede"><i class="ti ti-arrow-right"></i> Ir a Mi día</button>`;
         for (let i = 0; i < free; i++) {
-          cell += `<div class="plt-slot-free">${i === free - 1 ? capInner : ''}</div>`;
+          cell += `<div class="plt-slot-free">${i === free - 1 ? capInner + goBtn : ''}</div>`;
         }
+      } else if (occ > 0) {
+        // Celda llena: fila fantasma (invisible salvo en hover) con "lleno" + Ir a Mi día
+        const capInner = `<div class="plt-cap"><span>${occ} de ${cap}</span><span class="sep">·</span><span style="color:#B3263B;">lleno</span></div>`;
+        const goBtn = `<button class="plt-goday" onclick="event.stopPropagation(); pltGoToMiDia(${d.n}, ${h})" title="Abrir esta hora en Mi día de esta sede"><i class="ti ti-arrow-right"></i> Ir a Mi día</button>`;
+        cell += `<div class="plt-slot-free is-ghost">${capInner}${goBtn}</div>`;
       }
       // 3) Sin paquete · 4) Congelados (no ocupan cama)
       nopkgArr.forEach(s => { cell += pltChipHtml(s, d.n, h); });
@@ -14391,8 +14410,23 @@ function pltRenderGrid() {
   pltRenderPending();
 }
 
-// Refresca la Plantilla tras guardar un perfil (toggle no-confirmar, horario, etc.)
-// Pinta al instante con STATE.students ya actualizado y reconcilia paquetes en segundo plano.
+// "Ir a Mi día" desde un slot de la Plantilla: cambia a Mi día de ESA sede,
+// en ESA fecha (de la semana mostrada), hace scroll a la hora y la expande.
+// El scroll+expandir lo resuelve renderTimeline con STATE.miDiaExpandedHour.
+window.pltGoToMiDia = function(dayN, hour) {
+  const dateObj = pltDayToDate(dayN);
+  STATE.currentDate = new Date(dateObj);
+  STATE.miDiaExpandedHour = hour;
+  if (STATE.currentLocationId !== PLT_SEDE) {
+    switchLocation(PLT_SEDE);  // navega a Mi día y repinta todo con la sede nueva
+  } else {
+    const dashBtn = document.querySelector('.sidebar .nav-item[data-view="dashboard"]');
+    showView('dashboard', dashBtn || null);
+    renderAll();
+  }
+};
+
+// Refresca la Plantilla tras guardar un perfil (toggle no-confirmar, horario, etc.)// Pinta al instante con STATE.students ya actualizado y reconcilia paquetes en segundo plano.
 function pltRefreshAfterSave() {
   if (STATE.currentView !== 'plantilla') return;
   if (typeof pltRenderGrid !== 'function') return;
@@ -14546,8 +14580,13 @@ function pltShowChipMenu(studentId, dayN, hour, anchorEl) {
       ? sLine('var(--good)', 'ti-device-mobile', 'Confirmó por su app · en Mi día')
       : sLine('var(--good)', 'ti-circle-check', 'Confirmada · en Mi día');
   } else if (booked) {
-    html += sLine('#6478D6', 'ti-circle-check', 'En Mi día · falta confirmar', waiting ? 'Ya le escribí · esperando confirmación' : '');
-    html += item('<i class="ti ti-checks"></i>', 'Confirmar clase', 'Marca la clase como confirmada', `pltConfirmCell('${studentId}', ${dayN}, ${hour})`, 'var(--good)');
+    if (PLT_APPNOTICE.has(`${studentId}|${dayN}|${hour}`)) {
+      html += sLine('#A85B08', 'ti-device-mobile', 'Avisó por su app que no viene', 'La coordinadora debe contactarla');
+      html += item('<i class="ti ti-checks"></i>', 'Confirmar clase', 'Si cambió de opinión y sí viene', `pltConfirmCell('${studentId}', ${dayN}, ${hour})`, 'var(--good)');
+    } else {
+      html += sLine('#6478D6', 'ti-circle-check', 'En Mi día · falta confirmar', waiting ? 'Ya le escribí · esperando confirmación' : '');
+      html += item('<i class="ti ti-checks"></i>', 'Confirmar clase', 'Marca la clase como confirmada', `pltConfirmCell('${studentId}', ${dayN}, ${hour})`, 'var(--good)');
+    }
   } else {
     const noshow = PLT_NOSHOW.has(pltNoShowKey(studentId, dateIso, hour));
     if (noshow) html += sLine('#8A93A0', 'ti-x', 'No viene · avisó');
