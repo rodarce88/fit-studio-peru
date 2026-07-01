@@ -32075,12 +32075,21 @@ async function renderRevenueView() {
 function rvSetTab(t) { RV_STATE.tab = t; renderRevenueView(); }
 
 // ---------- helpers de salud de franja ----------
+function rvProfPerClass() { const d = RV_STATE.data; return (d && d.costo_profesor && Number(d.costo_profesor.prom_x_clase)) || 0; }
+function rvVarPerClass() { return rvProfPerClass() + rvSumExp('por_clase'); }
+function rvFixedPerSession() {
+  const d = RV_STATE.data; if (!d) return 0;
+  const sesMes = d.overall.sesiones * (30 / d.period_days);
+  const fixed = rvSumExp('mensual_fijo');
+  return sesMes > 0 ? fixed / sesMes : 0;
+}
 function rvBreakEvenStudents() {
   const d = RV_STATE.data; if (!d) return 3;
-  const varPer = rvSumExp('por_clase');
   const adr = d.overall.adr || 0;
-  if (varPer > 0 && adr > 0) return varPer / adr; // alumnos que cubren el costo directo (profesor) de la clase
-  return 3; // fallback si aún no cargas el pago por clase
+  const fixedPerSes = rvFixedPerSession();
+  // Con fijos cargados: umbral exacto = costo cargado por clase ÷ ADR. Sin fijos: heurística 3.
+  if (fixedPerSes > 0 && adr > 0) return (fixedPerSes + rvVarPerClass()) / adr;
+  return 3;
 }
 function rvHealth(prom) {
   const be = rvBreakEvenStudents();
@@ -32099,6 +32108,7 @@ function rvRenderReporte() {
     <div class="rv-kpi"><div class="k-lab">ADR · precio/clase</div><div class="k-val">${rvMoney(o.adr, 1)}</div><div class="k-sub">por asiento ocupado</div></div>
     <div class="rv-kpi"><div class="k-lab">Ocupación</div><div class="k-val">${rvPct(o.ocupacion)}</div><div class="k-sub">${o.consumidas} de ${o.asientos} asientos</div></div>
     <div class="rv-kpi"><div class="k-lab">RevPAS</div><div class="k-val">${rvMoney(o.revpas, 1)}</div><div class="k-sub">ingreso ÷ asiento disponible</div></div>
+    <div class="rv-kpi"><div class="k-lab">Costo profesor/clase</div><div class="k-val">${rvMoney(d.costo_profesor.prom_x_clase, 1)}</div><div class="k-sub">real · tiers de asistencia</div></div>
     <div class="rv-kpi"><div class="k-lab">Breakage</div><div class="k-val">${rvMoney(bk.pen)}</div><div class="k-sub">${bk.pct}% clases vencidas sin usar (${bk.ventana_dias}d)</div></div>
   </div>`;
 
@@ -32121,9 +32131,11 @@ function rvRenderReporte() {
       <span class="rv-tag ${he}" style="flex:none">${RV_HEALTH_TXT[he]}</span></div>`;
   }).join('');
   const be = rvBreakEvenStudents();
-  const franjaNote = rvSumExp('por_clase') > 0
-    ? `Una franja es <b>sana</b> cuando promedia ≥ ${be.toFixed(1)} alumnas/clase — el mínimo para cubrir el pago del profesor (S/${rvSumExp('por_clase')} ÷ ADR S/${(RV_STATE.data.overall.adr).toFixed(0)}).`
-    : `Umbral provisional: <b>sana</b> ≥ 3 alum/clase. Ingresa el <b>pago del profesor por clase</b> en "Egresos" y el umbral se vuelve exacto (punto de equilibrio real por clase).`;
+  const prof = rvProfPerClass();
+  const hasFixed = rvSumExp('mensual_fijo') > 0;
+  const franjaNote = hasFixed
+    ? `Una franja es <b>sana</b> cuando promedia ≥ ${be.toFixed(1)} alumnas/clase — el mínimo para cubrir su costo cargado por clase (profesor ${rvMoney(rvVarPerClass(), 0)} + parte de fijos ${rvMoney(rvFixedPerSession(), 0)}, ÷ ADR ${rvMoney(RV_STATE.data.overall.adr, 0)}).`
+    : `Umbral provisional: <b>sana</b> ≥ 3 alum/clase. El pago del profesor ya lo tomo de tu data real (${rvMoney(prof, 2)}/clase). Ingresa tus <b>gastos fijos</b> (alquiler, etc.) en "Egresos" y el umbral pasa a ser el punto de equilibrio exacto por clase.`;
   const franjaCard = `<div class="rv-card"><h3>Franjas horarias — ¿cuáles son sanas?</h3><div class="rv-hint">RevPAS por hora (todas las sedes). Barra más larga y verde = hora más rentable.</div>
     ${franjaHtml}<div class="rv-note">${franjaNote}</div></div>`;
 
@@ -32139,6 +32151,8 @@ function rvRenderReporte() {
 // ---------- TAB GUÍA (tutorial interactivo) ----------
 function rvRenderGuia() {
   const d = RV_STATE.data; const o = d.overall; const bk = d.breakage;
+  const prof = Math.round((d.costo_profesor && d.costo_profesor.prom_x_clase) || 40);
+  const rentEx = 80; const costEx = prof + rentEx; const adrR = Math.round(o.adr || 55); const beEx = (costEx / adrR);
   const acc = (n, title, inner, open) => `<details class="rv-acc" ${open ? 'open' : ''}><summary><span class="num">${n}</span>${title}<span class="chev">›</span></summary><div class="rv-acc-body">${inner}</div></details>`;
   const intro = `<div class="rv-card"><h3>Piensa tu estudio como un hotel</h3><div class="rv-hint" style="margin:0">Una reformer en una hora es como una habitación por una noche: si no se vende, se pierde para siempre, y abrir la clase cuesta casi lo mismo esté llena o vacía. Por eso usamos las mismas métricas que un hotel: <b>ADR</b> (precio), <b>ocupación</b> (llenado) y <b>RevPAS</b> (ambas juntas). Abajo, cada concepto con tus números reales.</div></div>`;
 
@@ -32188,14 +32202,14 @@ function rvRenderGuia() {
     <div class="lbl">Qué es</div>El mínimo de alumnas para que una clase no pierda plata. Responde tu duda del profesor yendo por una sola persona.
     <div class="lbl">Cómo se calcula</div><div class="rv-formula">break-even asientos = costo de la sesión ÷ ADR
 contribución = ingreso de la clase − pago del profesor</div>
-    <div class="lbl">Ejemplo</div><div class="rv-ex">Si el profe cobra S/60 y asignas S/80 de renta a esa hora (costo S/140) y tu ADR es S/55 → break-even = 140 ÷ 55 ≈ <b>2.5 alumnas</b>. Con 2 o menos, esa clase pierde; con 3+, gana.</div>
+    <div class="lbl">Ejemplo (con tu data real)</div><div class="rv-ex">Tu profe cuesta <b>${rvMoney(prof, 0)}/clase</b> (calculado de la asistencia real). Si asignas ${rvMoney(rentEx, 0)} de renta a esa hora → costo ${rvMoney(costEx, 0)}. Con ADR ${rvMoney(adrR, 0)}: break-even = ${costEx} ÷ ${adrR} ≈ <b>${beEx.toFixed(1)} alumnas</b>. Con menos, esa clase pierde; con más, gana.</div>
     <div class="rv-try"><div style="font-weight:700;color:var(--ink);margin-bottom:8px">Pruébalo tú</div>
-      <label>Costo de la sesión (profe + renta asignada): S/<span id="rv-be-cost">140</span></label>
-      <input type="range" min="40" max="300" value="140" oninput="rvBeCalc()" id="rv-be-cost-in">
-      <label style="margin-top:10px">ADR: S/<span id="rv-be-adr">${Math.round(o.adr)}</span></label>
-      <input type="range" min="40" max="120" value="${Math.round(o.adr)}" oninput="rvBeCalc()" id="rv-be-adr-in">
-      <div class="out">Break-even ≈ <span id="rv-be-out">2.5</span> alumnas/clase</div>
-      <div style="font-size:12px;color:var(--ink-mute);margin-top:4px">Abajo de eso, no conviene abrir la clase. Llénalo en "Egresos" con tus costos reales y lo aplico a cada franja.</div></div>`);
+      <label>Costo de la sesión (profe + renta asignada): S/<span id="rv-be-cost">${costEx}</span></label>
+      <input type="range" min="40" max="300" value="${costEx}" oninput="rvBeCalc()" id="rv-be-cost-in">
+      <label style="margin-top:10px">ADR: S/<span id="rv-be-adr">${adrR}</span></label>
+      <input type="range" min="40" max="120" value="${adrR}" oninput="rvBeCalc()" id="rv-be-adr-in">
+      <div class="out">Break-even ≈ <span id="rv-be-out">${beEx.toFixed(1)}</span> alumnas/clase</div>
+      <div style="font-size:12px;color:var(--ink-mute);margin-top:4px">Abajo de eso, no conviene abrir la clase. Carga tus fijos en "Egresos" y lo aplico a cada franja automáticamente.</div></div>`);
 
   return intro + c1 + c2 + c3 + c4 + c5 + c6 + c7;
 }
@@ -32228,8 +32242,12 @@ function rvRenderEgresos() {
     <div class="rv-exp-h">Gastos fijos mensuales (S/)</div>
     ${fixed.map(row).join('')}
     <button class="btn btn-ghost" style="margin-top:6px" onclick="rvExpAdd('mensual_fijo')">+ agregar gasto fijo</button>
-    <div class="rv-exp-h" style="margin-top:22px">Costo variable por clase (S/)</div>
-    <div class="rv-hint" style="margin-top:-4px">Sobre todo el pago del profesor por clase dictada.</div>
+    <div class="rv-exp-h" style="margin-top:22px">Costo variable por clase</div>
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;background:var(--fit-purple-50);border:1px solid var(--fit-lavender);border-radius:10px;padding:12px 14px;margin-bottom:10px">
+      <div><b style="color:var(--ink)">Pago del profesor por clase</b><div style="font-size:12px;color:var(--ink-mute)">Calculado de tu data real (tiers por asistencia, ${RV_STATE.data.costo_profesor.clases} clases)</div></div>
+      <div style="font-size:20px;font-weight:800;color:var(--fit-purple);white-space:nowrap">${rvMoney(rvProfPerClass(), 2)}</div>
+    </div>
+    <div class="rv-hint" style="margin-top:0">¿Otros costos por clase? Agrégalos aquí y se suman al pago del profesor.</div>
     ${varc.map(row).join('')}
     <button class="btn btn-ghost" style="margin-top:6px" onclick="rvExpAdd('por_clase')">+ agregar costo por clase</button>
   </div>
@@ -32251,7 +32269,7 @@ function rvRecalcProjections() {
   const activos = st.activos || 0;
   const clasesXAlumnoMes = activos > 0 ? clasesMes / activos : 0;
   const fixed = rvSumExp('mensual_fijo');
-  const varPer = rvSumExp('por_clase');
+  const varPer = rvVarPerClass();
   const varCost = varPer * clasesMes;
   const costTotal = fixed + varCost;
   const util = revMes - costTotal;
@@ -32261,15 +32279,15 @@ function rvRecalcProjections() {
   const beOcup = (asientosMes > 0 && isFinite(beClases)) ? beClases / asientosMes : 0;
   const faltan = isFinite(beAlumnos) ? Math.round(beAlumnos - activos) : null;
 
-  const hasExp = fixed > 0 || varPer > 0;
+  const hasExp = fixed > 0;
   const utilCls = !hasExp ? 'neu' : (util >= 0 ? 'good' : 'bad');
   const P = (lab, val, sub, cls) => `<div class="p"><div class="pl">${lab}</div><div class="pv ${cls || 'neu'}">${val}</div><div class="ps">${sub || ''}</div></div>`;
 
   let cards = '';
   cards += P('Ingreso mensual (est.)', rvMoney(revMes), `${Math.round(clasesMes)} clases · ${activos} alumnas activas`, 'neu');
-  cards += P('Costo total mensual', rvMoney(costTotal), hasExp ? `Fijos ${rvMoney(fixed)} + variable ${rvMoney(varCost)}` : 'Ingresa tus egresos →', 'neu');
-  cards += P('Utilidad mensual (est.)', hasExp ? rvMoney(util) : '—', hasExp ? (util >= 0 ? 'En azul: rentable' : 'En rojo: pierde') : 'Llena egresos para verla', utilCls);
-  cards += P('Margen de contribución / clase', hasExp ? rvMoney(contrib, 1) : '—', hasExp ? `ADR ${rvMoney(adr, 1)} − costo variable ${rvMoney(varPer, 1)}` : 'ADR − costo por clase', contrib >= 0 ? 'good' : 'bad');
+  cards += P('Costo total mensual', hasExp ? rvMoney(costTotal) : rvMoney(varCost) + ' + fijos', hasExp ? `Fijos ${rvMoney(fixed)} + profesor/variable ${rvMoney(varCost)}` : 'Ingresa tus gastos fijos →', 'neu');
+  cards += P('Utilidad mensual (est.)', hasExp ? rvMoney(util) : '—', hasExp ? (util >= 0 ? 'En azul: rentable' : 'En rojo: pierde') : 'Llena los fijos para verla', utilCls);
+  cards += P('Margen de contribución / clase', rvMoney(contrib, 1), `ADR ${rvMoney(adr, 1)} − costo variable ${rvMoney(varPer, 1)}`, contrib >= 0 ? 'good' : 'bad');
 
   if (hasExp && contrib > 0) {
     cards += P('Punto de equilibrio', Math.round(beClases) + ' clases/mes', `≈ ${Math.round(beAlumnos)} alumnas activas · ${rvPct(beOcup)} ocupación`, 'neu');
@@ -32284,7 +32302,7 @@ function rvRecalcProjections() {
 
   const note = document.getElementById('rv-proj-note');
   if (note) {
-    if (!hasExp) note.innerHTML = `<div class="rv-note">Ingresa al menos el <b>alquiler</b> y el <b>pago del profesor por clase</b> y verás utilidad, punto de equilibrio y cuántas alumnas te faltan para ser rentable.</div>`;
+    if (!hasExp) note.innerHTML = `<div class="rv-note">El <b>pago del profesor</b> ya sale de tu data real (${rvMoney(rvProfPerClass(), 2)}/clase). Ingresa tus <b>gastos fijos</b> (alquiler, sueldos, servicios…) y verás utilidad, punto de equilibrio y cuántas alumnas te faltan para ser rentable.</div>`;
     else note.innerHTML = `<div class="rv-note">Además, el <b>breakage</b> (${rvMoney(d.breakage.pen)} en ${d.breakage.ventana_dias}d) es ingreso extra ya cobrado que no está en el ingreso reconocido — súbelo como colchón adicional. El equilibrio de arriba es conservador (solo ingreso por clases dictadas).</div>`;
   }
 }
