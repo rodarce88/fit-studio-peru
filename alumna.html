@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>FIT Studio · Mi cuenta</title>
-<meta name="app-build" content="b21-2026-07-01">
+<meta name="app-build" content="b22-2026-07-01">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400..700;1,400..600&family=Mulish:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -94,16 +94,66 @@
   .pf-hero .nm{ font-family:var(--display); font-weight:600; font-size:calc(23px*var(--scale)); color:var(--ink); text-align:center; line-height:1.15; }
   .pf-hero .ph{ font-size:calc(14px*var(--scale)); color:var(--ink-mute); margin-top:3px; }
   .pf-sec{ font-size:calc(11px*var(--scale)); font-weight:800; letter-spacing:.06em; text-transform:uppercase; color:var(--ink-mute); margin:20px 2px 10px; }
-  .pf-disc{ width:100%; border:1px solid var(--line); background:#fff; border-radius:16px; padding:14px 16px; display:flex; align-items:center; gap:12px; cursor:pointer; font-family:var(--body); text-align:left; }
-  .pf-disc .chev{ margin-left:auto; color:var(--ink-mute); font-size:20px; transition:transform .2s; }
+  .pf-disc{ width:100%; border:1.5px solid var(--purple-soft); background:#fff; border-radius:16px; padding:14px 15px; display:flex; align-items:center; gap:13px; cursor:pointer; font-family:var(--body); text-align:left; }
+  .pf-disc:active{ transform:scale(.99); }
+  .pf-disc .pic{ width:42px; height:42px; border-radius:12px; flex:none; background:var(--purple-pale); display:flex; align-items:center; justify-content:center; }
+  .pf-disc .pic svg{ width:22px; height:22px; stroke:var(--purple); }
+  .pf-disc .chev{ margin-left:auto; color:var(--purple); font-size:22px; font-weight:600; transition:transform .2s; flex:none; }
   .pf-disc.open .chev{ transform:rotate(90deg); }
+  /* teléfono con código de país */
+  .pf-phrow{ display:flex; gap:8px; }
+  .pf-phrow select{ width:108px; flex:none; padding-left:10px; padding-right:6px; }
+  .pf-phrow input{ flex:1; min-width:0; }
+  /* errores de validación */
+  .pf-err{ display:none; color:#B42318; font-size:calc(12px*var(--scale)); font-weight:600; margin-top:4px; }
+  .pf-err.show{ display:block; }
+  .pf-in.err{ border-color:#B42318; box-shadow:0 0 0 3px #FBEAEA; }
+  /* alerta lineamientos en perfil */
+  .pf-lnalert{ width:100%; border:0; background:#FBF2DE; border-radius:16px; padding:14px 15px; display:flex; align-items:center; gap:13px; cursor:pointer; font-family:var(--body); text-align:left; margin-top:10px; }
+  .pf-lnalert .pic{ width:42px; height:42px; border-radius:12px; flex:none; background:#F5E4BC; display:flex; align-items:center; justify-content:center; }
+  .pf-lnalert .pic svg{ width:22px; height:22px; stroke:#A85B08; }
+  .pf-lnalert .t1{ font-weight:800; color:#7a5a16; font-size:calc(14.5px*var(--scale)); }
+  .pf-lnalert .t2{ font-size:calc(12px*var(--scale)); color:#8a6a26; margin-top:1px; }
+  .pf-lnalert .chev{ margin-left:auto; color:#A85B08; font-size:22px; flex:none; }
+  /* banner lineamientos en inicio */
+  .ln-banner{ width:100%; border:0; border-radius:16px; padding:15px 16px; display:flex; align-items:center; gap:13px; cursor:pointer; font-family:var(--body); text-align:left; margin:12px 0 4px; }
+  .ln-banner.new{ background:var(--purple); }
+  .ln-banner.new .t1{ color:#fff; } .ln-banner.new .t2{ color:#D9C8F2; } .ln-banner.new .chev{ color:#fff; }
+  .ln-banner.new .pic{ background:rgba(255,255,255,.16); } .ln-banner.new .pic svg{ stroke:#fff; }
+  .ln-banner.half{ background:#FBF2DE; }
+  .ln-banner.half .t1{ color:#7a5a16; } .ln-banner.half .t2{ color:#8a6a26; } .ln-banner.half .chev{ color:#A85B08; }
+  .ln-banner.half .pic{ background:#F5E4BC; } .ln-banner.half .pic svg{ stroke:#A85B08; }
+  .ln-banner .pic{ width:42px; height:42px; border-radius:12px; flex:none; display:flex; align-items:center; justify-content:center; }
+  .ln-banner .pic svg{ width:22px; height:22px; }
+  .ln-banner .t1{ font-weight:800; font-size:calc(14.5px*var(--scale)); }
+  .ln-banner .t2{ font-size:calc(12px*var(--scale)); margin-top:1px; }
+  .ln-banner .chev{ margin-left:auto; font-size:22px; flex:none; }
+  /* pantalla de lineamientos */
+  .ln-screen{ position:absolute; inset:0; z-index:75; background:var(--cream); display:flex; flex-direction:column; transform:translateY(100%); transition:transform .26s cubic-bezier(.32,.72,.24,1); visibility:hidden; }
+  .ln-screen.show{ transform:translateY(0); visibility:visible; }
+  .ln-body{ flex:1; overflow-y:auto; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; padding:20px 30px; }
+  .ln-ic{ width:88px; height:88px; border-radius:50%; background:var(--purple-pale); display:flex; align-items:center; justify-content:center; margin-bottom:22px; }
+  .ln-ic svg{ width:40px; height:40px; stroke:var(--purple); }
+  .ln-ic.done{ background:#E8F5EF; } .ln-ic.done svg{ stroke:#0E7A4F; }
+  .ln-ttl{ font-family:var(--display); font-weight:600; font-size:calc(24px*var(--scale)); line-height:1.2; color:var(--ink); margin-bottom:12px; }
+  .ln-txt{ font-size:calc(15.5px*var(--scale)); line-height:1.6; color:var(--ink-soft); max-width:320px; }
+  .ln-dots{ display:flex; gap:7px; justify-content:center; margin-top:26px; }
+  .ln-dots i{ width:8px; height:8px; border-radius:50%; background:var(--purple-soft); }
+  .ln-dots i.on{ background:var(--purple); width:22px; border-radius:4px; }
+  .ln-foot{ flex:none; padding:14px 24px calc(20px + env(safe-area-inset-bottom)); }
+  .ln-count{ text-align:center; font-size:calc(12px*var(--scale)); font-weight:700; color:var(--ink-mute); margin-bottom:10px; letter-spacing:.03em; }
   .pf-more{ overflow:hidden; }
   .pf-note-ro{ background:var(--purple-pale); border-radius:14px; padding:13px 15px; font-size:calc(13.5px*var(--scale)); color:var(--ink-soft); line-height:1.5; }
   .pf-dateBtn{ width:100%; text-align:left; border:1px solid var(--line); border-radius:12px; padding:12px 14px; background:#fff; font-family:var(--body); font-size:calc(15px*var(--scale)); color:var(--ink); cursor:pointer; }
   .pf-dateBtn.empty{ color:var(--ink-mute); }
   /* Calendario propio (nacimiento) */
-  .bp-ov{ position:absolute; inset:0; z-index:80; background:rgba(20,16,26,.42); display:flex; align-items:center; justify-content:center; padding:22px; opacity:0; transition:opacity .18s; }
-  .bp-ov.show{ opacity:1; }
+  .bp-ov{ position:absolute; inset:0; z-index:80; background:rgba(20,16,26,.42); display:flex; align-items:center; justify-content:center; padding:22px; opacity:0; visibility:hidden; pointer-events:none; transition:opacity .18s, visibility .18s; }
+  .bp-ov.show{ opacity:1; visibility:visible; pointer-events:auto; }
+  .bp-step{ font-size:calc(11px*var(--scale)); font-weight:800; letter-spacing:.06em; text-transform:uppercase; color:var(--purple); margin-bottom:2px; }
+  .bp-backbtn{ width:34px; height:34px; border-radius:10px; border:1px solid var(--line); background:#fff; font-size:18px; color:var(--ink-soft); cursor:pointer; margin-right:8px; flex:none; }
+  .bp-months{ display:grid; grid-template-columns:repeat(3,1fr); gap:6px; }
+  .bp-mo{ padding:13px 0; border:1px solid var(--line); background:#fff; border-radius:10px; font-family:var(--body); font-size:calc(14px*var(--scale)); color:var(--ink); cursor:pointer; text-transform:capitalize; }
+  .bp-mo.sel{ background:var(--purple); color:#fff; border-color:var(--purple); font-weight:700; }
   .bp-card{ width:100%; max-width:340px; background:#fff; border-radius:22px; padding:16px; box-shadow:0 20px 50px rgba(0,0,0,.28); }
   .bp-head{ display:flex; align-items:center; margin-bottom:10px; }
   .bp-title{ font-family:var(--display); font-weight:600; font-size:calc(18px*var(--scale)); color:var(--ink); cursor:pointer; display:flex; align-items:center; gap:4px; }
@@ -433,7 +483,7 @@
   async function afterAuth(){
     view('v-loading'); $('loading-msg').textContent='Cargando tu cuenta…';
     const { data: me, error } = await sb.from('students')
-      .select('id, first_name, last_name, phone, email, gender, app_welcomed_at').limit(1).maybeSingle();
+      .select('id, first_name, last_name, phone, email, gender, app_welcomed_at, lineamientos_opened_at, lineamientos_ack_at').limit(1).maybeSingle();
     if(error||!me) return showError('No pudimos cargar tu cuenta', error?.message||'Intenta de nuevo.');
     DATA.me = me;
     if(!localStorage.getItem('fitWelcomed:'+me.id)) return showWelcome(me);
@@ -590,20 +640,20 @@
       const livePkgs = (DATA.packages||[]).filter(p => !p.is_frozen && (!p.status||p.status==='active') && (p.classes_used||0) < (p.classes_total||0));
       const remaining = livePkgs.reduce((s,p)=> s + Math.max(0,(p.classes_total||0)-(p.classes_used||0)), 0);
       if(remaining > 0){
-        el.innerHTML = `<div class="eyebrow">Mis clases</div><div class="accent"></div>
+        el.innerHTML = `<div class="eyebrow">Mis clases</div><div class="accent"></div>${lnHomeBanner()}
           <div class="empty">Todavía no tienes clases agendadas. Tienes <b>${remaining} ${remaining===1?'clase disponible':'clases disponibles'}</b> en tu paquete: agenda tu primera clase o espera a que el estudio te agende.</div>
           <button class="packbtn" onclick="openDatePicker('add', null)">
             <span class="pic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg></span>
             <span class="ptx"><span class="pt">Agregar una clase</span><span class="ps">Tienes ${remaining} ${remaining===1?'clase disponible':'clases disponibles'}</span></span>
             <span class="parr">&rsaquo;</span></button>`;
       } else {
-        el.innerHTML = `<div class="eyebrow">Mis clases</div><div class="accent"></div>
+        el.innerHTML = `<div class="eyebrow">Mis clases</div><div class="accent"></div>${lnHomeBanner()}
           <div class="empty">No tienes clases agendadas. Cuando el estudio te agende una, aparecerá aquí.</div>`;
       }
       return;
     }
     const next = CLE.next;
-    let html = `<div id="cl-top"><div class="eyebrow">Mis clases</div><div class="accent"></div>`;
+    let html = `<div id="cl-top"><div class="eyebrow">Mis clases</div><div class="accent"></div>${lnHomeBanner()}`;
     if(next){
       const start = next.start, started = start <= now, ended = now >= start + CLASS_DUR_MS;
       html += `<div class="px-lab">${started ? 'Tu clase de hoy' : 'Tu próxima clase'}</div>
@@ -930,7 +980,7 @@
   window.closeSheet=()=>{ const ov=$('sheet'); if(ov) ov.classList.remove('show'); const ab=$('app-body'); if(ab) ab.style.overflow=''; };
 
   let PF = { p:null, birth:null, moreOpen:false };
-  let BP = { y:2000, m:0, mode:'days' };
+  let BP = { y:1965, m:0, step:'year' };
   let CV = { text:'', version:'v1.0', img:false };
 
   window.openProfile = async ()=>{
@@ -951,74 +1001,126 @@
   };
   window.closeProfile=()=>{ const ov=$('pf-screen'); if(ov) ov.classList.remove('show'); };
 
+  const PH_CODES=[['+51','🇵🇪 +51'],['+1','🇺🇸 +1'],['+34','🇪🇸 +34'],['+52','🇲🇽 +52'],['+54','🇦🇷 +54'],['+55','🇧🇷 +55'],['+56','🇨🇱 +56'],['+57','🇨🇴 +57'],['+58','🇻🇪 +58'],['+593','🇪🇨 +593'],['+591','🇧🇴 +591']];
+  function parsePhone(raw){
+    const s=String(raw||'').trim();
+    if(!s) return { code:'+51', num:'' };
+    const clean=s.replace(/[\s\-().]/g,'');
+    if(clean.startsWith('+')){
+      const codes=PH_CODES.map(c=>c[0]).sort((a,b)=>b.length-a.length);
+      for(const c of codes){ if(clean.startsWith(c)) return { code:c, num:clean.slice(c.length) }; }
+      const m=clean.match(/^(\+\d{1,3})(\d+)$/); if(m) return { code:m[1], num:m[2] };
+    }
+    return { code:'+51', num:clean };
+  }
+  function phSelect(id,code){
+    const known=PH_CODES.some(c=>c[0]===code);
+    const opts=PH_CODES.map(c=>`<option value="${c[0]}" ${c[0]===code?'selected':''}>${c[1]}</option>`).join('')+(known?'':`<option value="${esc(code)}" selected>${esc(code)}</option>`);
+    return `<select class="pf-in" id="${id}">${opts}</select>`;
+  }
+
   function renderProfile(){
-    const sc=$('pf-scroll'); if(!sc) return; const p=PF.p;
+    const sc=$('pf-scroll'); if(sc) sc.scrollTop=0;
+    if(!sc) return; const p=PF.p;
     const initials=((p.first_name?.[0]||'')+(p.last_name?.[0]||'')).toUpperCase()||'··';
     const opt=(v,l,cur)=>`<option value="${v}" ${String(cur||'')===v?'selected':''}>${l}</option>`;
+    const icDoc='<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M9 15l2 2 4-4"/></svg>';
+    const icUser='<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>';
+    const icBook='<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>';
     const consent = p.consent_signed_at
       ? `<div class="pf-consent ok">Consentimiento firmado ✓<span>Firmado el ${new Date(p.consent_signed_at).toLocaleDateString('es-PE')}${p.image_consent?' · autorizas uso de imagen':''}</span></div>`
-      : `<button class="pf-disc" onclick="openConsent()"><div><div style="font-weight:800;color:var(--ink)">Consentimiento pendiente</div><div style="font-size:12px;color:var(--ink-mute)">Léelo y fírmalo aquí</div></div><span class="chev">›</span></button>`;
+      : `<button class="pf-disc" onclick="openConsent()"><span class="pic">${icDoc}</span><div><div style="font-weight:800;color:var(--ink)">Consentimiento pendiente</div><div style="font-size:12px;color:var(--ink-mute)">Léelo y fírmalo aquí</div></div><span class="chev">›</span></button>`;
     const birthLabel = PF.birth ? bpFmt(PF.birth) : 'Agregar fecha';
+    const mainPh=parsePhone(p.phone), emPh=parsePhone(p.emergency_contact_phone);
     sc.innerHTML = `
       <div class="pf-hero"><div class="av">${initials}</div><div class="nm">${esc(p.first_name||'')} ${esc(p.last_name||'')}</div><div class="ph">${esc(p.phone||'Sin teléfono')}</div></div>
       <div class="pf-sec">Consentimiento</div>
       ${consent}
+      <div class="pf-sec">Lineamientos</div>
+      <button class="pf-lnalert" onclick="openLineamientos()" style="margin-top:0"><span class="pic">${icBook}</span><div><div class="t1">Lee nuestros lineamientos</div><div class="t2">Lo que hace que tus clases fluyan mejor</div></div><span class="chev">›</span></button>
       <div class="pf-sec">Más datos</div>
-      <button class="pf-disc ${PF.moreOpen?'open':''}" id="pf-more-toggle" onclick="pfToggleMore()"><div><div style="font-weight:700;color:var(--ink)">Ver y editar mis datos</div><div style="font-size:12px;color:var(--ink-mute)">Correo, documento, nacimiento, emergencia</div></div><span class="chev">›</span></button>
+      <button class="pf-disc ${PF.moreOpen?'open':''}" id="pf-more-toggle" onclick="pfToggleMore()"><span class="pic">${icUser}</span><div><div style="font-weight:700;color:var(--ink)">Ver y editar mis datos</div><div style="font-size:12px;color:var(--ink-mute)">Correo, documento, nacimiento, emergencia</div></div><span class="chev">›</span></button>
       <div class="pf-more" id="pf-more" style="display:${PF.moreOpen?'block':'none'}">
-        <div class="pf-field"><label class="pf-lab">Correo</label><input class="pf-in" id="pf-email" type="email" value="${esc(p.email||'')}" placeholder="tucorreo@ejemplo.com"></div>
-        <div class="pf-field"><label class="pf-lab">Teléfono</label><input class="pf-in" id="pf-phone" type="tel" value="${esc(p.phone||'')}" placeholder="+51 9..."></div>
+        <div class="pf-field"><label class="pf-lab">Correo</label><input class="pf-in" id="pf-email" type="email" value="${esc(p.email||'')}" placeholder="tucorreo@ejemplo.com" oninput="pfClearErr('pf-email')"><div class="pf-err" id="err-pf-email"></div></div>
+        <div class="pf-field"><label class="pf-lab">Teléfono</label><div class="pf-phrow">${phSelect('pf-phone-code',mainPh.code)}<input class="pf-in" id="pf-phone" type="tel" inputmode="numeric" value="${esc(mainPh.num)}" placeholder="987 654 321" oninput="pfClearErr('pf-phone')"></div><div class="pf-err" id="err-pf-phone"></div></div>
         <div class="pf-field"><label class="pf-lab">Género</label><select class="pf-in" id="pf-gender">${opt('','—',p.gender)}${opt('F','Femenino',p.gender)}${opt('M','Masculino',p.gender)}${opt('O','Otro',p.gender)}</select></div>
         <div class="pf-row">
-          <div class="pf-field"><label class="pf-lab">Documento</label><select class="pf-in" id="pf-doctype">${opt('','—',p.document_type)}${opt('DNI','DNI',p.document_type)}${opt('CE','C. Extranjería',p.document_type)}${opt('Pasaporte','Pasaporte',p.document_type)}</select></div>
-          <div class="pf-field"><label class="pf-lab">Número</label><input class="pf-in" id="pf-docnum" value="${esc(p.document_number||'')}"></div>
+          <div class="pf-field"><label class="pf-lab">Documento</label><select class="pf-in" id="pf-doctype" onchange="pfClearErr('pf-docnum')">${opt('','—',p.document_type)}${opt('DNI','DNI',p.document_type)}${opt('CE','C. Extranjería',p.document_type)}${opt('Pasaporte','Pasaporte',p.document_type)}</select></div>
+          <div class="pf-field"><label class="pf-lab">Número</label><input class="pf-in" id="pf-docnum" value="${esc(p.document_number||'')}" oninput="pfClearErr('pf-docnum')"></div>
         </div>
+        <div class="pf-err" id="err-pf-docnum" style="margin-top:-6px"></div>
         <div class="pf-field"><label class="pf-lab">Fecha de nacimiento</label><button type="button" class="pf-dateBtn ${PF.birth?'':'empty'}" id="pf-birthbtn" onclick="openBirthPicker()">${birthLabel}</button></div>
         <div class="pf-field"><label class="pf-lab">Contacto de emergencia</label><input class="pf-in" id="pf-emname" value="${esc(p.emergency_contact_name||'')}" placeholder="Nombre"></div>
-        <div class="pf-field"><input class="pf-in" id="pf-emphone" type="tel" value="${esc(p.emergency_contact_phone||'')}" placeholder="Teléfono de emergencia"></div>
+        <div class="pf-field"><label class="pf-lab">Teléfono de emergencia</label><div class="pf-phrow">${phSelect('pf-emphone-code',emPh.code)}<input class="pf-in" id="pf-emphone" type="tel" inputmode="numeric" value="${esc(emPh.num)}" placeholder="987 654 321" oninput="pfClearErr('pf-emphone')"></div><div class="pf-err" id="err-pf-emphone"></div></div>
         <button class="btn" id="pf-save" onclick="saveProfile()" style="margin-top:16px">Guardar cambios</button>
       </div>`;
   }
+  window.pfClearErr=(id)=>{ const el=$(id); if(el) el.classList.remove('err'); const er=$('err-'+id); if(er){ er.classList.remove('show'); er.textContent=''; } };
+  function pfSetErr(id,msg){ const el=$(id); if(el) el.classList.add('err'); const er=$('err-'+id); if(er){ er.textContent=msg; er.classList.add('show'); } }
   window.pfToggleMore=()=>{ PF.moreOpen=!PF.moreOpen; const m=$('pf-more'); const t=$('pf-more-toggle'); if(m) m.style.display=PF.moreOpen?'block':'none'; if(t) t.classList.toggle('open',PF.moreOpen); };
 
   window.saveProfile = async ()=>{
-    const btn=$('pf-save'); if(btn){ btn.textContent='Guardando…'; btn.disabled=true; }
     const val=id=>{ const el=$(id); return (el && String(el.value).trim()!=='') ? String(el.value).trim() : null; };
+    // validaciones (bloquean el guardado si algo está mal)
+    let ok=true, firstErr=null;
+    const fail=(id,msg)=>{ pfSetErr(id,msg); ok=false; if(!firstErr) firstErr=id; };
+    const email=val('pf-email');
+    if(email && !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) fail('pf-email','Escribe un correo válido (ej. nombre@correo.com)');
+    const phNum=(val('pf-phone')||'').replace(/\D/g,'');
+    if(val('pf-phone') && (phNum.length<6 || phNum.length>15)) fail('pf-phone','El teléfono debe tener entre 6 y 15 números');
+    const emNum=(val('pf-emphone')||'').replace(/\D/g,'');
+    if(val('pf-emphone') && (emNum.length<6 || emNum.length>15)) fail('pf-emphone','El teléfono debe tener entre 6 y 15 números');
+    const dt=val('pf-doctype'), dn=val('pf-docnum');
+    if(dn){
+      if(dt==='DNI' && !/^\d{8}$/.test(dn)) fail('pf-docnum','El DNI son 8 números exactos');
+      else if(dt==='CE' && !/^[A-Za-z0-9]{6,15}$/.test(dn)) fail('pf-docnum','El C.E. son 6 a 15 letras y números');
+      else if(dt==='Pasaporte' && dn.length<4) fail('pf-docnum','Revisa el número de pasaporte');
+      else if(!dt) fail('pf-docnum','Elige primero el tipo de documento');
+    }
+    if(!ok){ const el=$(firstErr); if(el) el.scrollIntoView({behavior:'smooth',block:'center'}); toast('Revisa los campos marcados en rojo'); return; }
+    // combinar código de país + número
+    const phone = phNum ? `${val('pf-phone-code')||'+51'} ${phNum}` : null;
+    const emphone = emNum ? `${val('pf-emphone-code')||'+51'} ${emNum}` : null;
+    const btn=$('pf-save'); if(btn){ btn.textContent='Guardando…'; btn.disabled=true; }
     try{
       const { error } = await sb.rpc('student_update_profile', {
-        p_email: val('pf-email'), p_phone: val('pf-phone'), p_gender: val('pf-gender'),
-        p_document_type: val('pf-doctype'), p_document_number: val('pf-docnum'),
+        p_email: email, p_phone: phone, p_gender: val('pf-gender'),
+        p_document_type: dt, p_document_number: dn,
         p_birth_date: PF.birth||null, p_emergency_contact_name: val('pf-emname'),
-        p_emergency_contact_phone: val('pf-emphone')
+        p_emergency_contact_phone: emphone
       });
       if(error) throw error;
-      const p=PF.p; p.email=val('pf-email'); p.phone=val('pf-phone'); p.gender=val('pf-gender'); p.document_type=val('pf-doctype'); p.document_number=val('pf-docnum'); p.birth_date=PF.birth; p.emergency_contact_name=val('pf-emname'); p.emergency_contact_phone=val('pf-emphone');
+      const p=PF.p; p.email=email; p.phone=phone; p.gender=val('pf-gender'); p.document_type=dt; p.document_number=dn; p.birth_date=PF.birth; p.emergency_contact_name=val('pf-emname'); p.emergency_contact_phone=emphone;
       const hero=document.querySelector('#pf-screen .pf-hero .ph'); if(hero) hero.textContent=p.phone||'Sin teléfono';
       toast('✓ Perfil actualizado');
       if(btn){ btn.textContent='Guardar cambios'; btn.disabled=false; }
     }catch(e){ toast('No se pudo guardar. Intenta de nuevo.'); if(btn){ btn.textContent='Guardar cambios'; btn.disabled=false; } }
   };
 
-  // ---- Calendario propio para la fecha de nacimiento ----
+  // ---- Calendario propio para la fecha de nacimiento (3 pasos: año → mes → día) ----
   function bpFmt(iso){ const d=new Date(iso+'T12:00:00'); return `${d.getDate()} de ${MESES[d.getMonth()]}, ${d.getFullYear()}`; }
   window.openBirthPicker=()=>{
     let ov=$('bp-ov');
     if(!ov){ ov=document.createElement('div'); ov.id='bp-ov'; ov.className='bp-ov'; ov.addEventListener('click',e=>{ if(e.target===ov) closeBirth(); }); document.querySelector('.phone').appendChild(ov); }
-    const init = PF.birth ? new Date(PF.birth+'T12:00:00') : new Date(2000,0,1);
-    BP={ y:init.getFullYear(), m:init.getMonth(), mode:'days' };
+    const init = PF.birth ? new Date(PF.birth+'T12:00:00') : new Date(1965,0,1);
+    BP={ y:init.getFullYear(), m:init.getMonth(), step:'year' };  // siempre arranca eligiendo el año
     bpRender(); requestAnimationFrame(()=>ov.classList.add('show'));
   };
   window.closeBirth=()=>{ const ov=$('bp-ov'); if(ov) ov.classList.remove('show'); };
-  window.bpToggleMode=()=>{ BP.mode = BP.mode==='days'?'years':'days'; bpRender(); };
-  window.bpNav=(d)=>{ let m=BP.m+d, y=BP.y; if(m<0){m=11;y--;} if(m>11){m=0;y++;} BP.m=m; BP.y=y; bpRender(); };
-  window.bpPickYear=(y)=>{ BP.y=y; BP.mode='days'; bpRender(); };
+  window.bpBack=()=>{ BP.step = BP.step==='day' ? 'month' : 'year'; bpRender(); };
+  window.bpPickYear=(y)=>{ BP.y=y; BP.step='month'; bpRender(); };
+  window.bpPickMonth=(m)=>{ BP.m=m; BP.step='day'; bpRender(); };
   window.bpPickDay=(d)=>{ const iso=`${BP.y}-${String(BP.m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`; PF.birth=iso; const b=$('pf-birthbtn'); if(b){ b.textContent=bpFmt(iso); b.classList.remove('empty'); } closeBirth(); };
   function bpRender(){
     const ov=$('bp-ov'); if(!ov) return; let inner;
-    if(BP.mode==='years'){
+    const back = BP.step==='year' ? '' : `<button class="bp-backbtn" onclick="bpBack()">‹</button>`;
+    if(BP.step==='year'){
       const now=new Date().getFullYear(); let ys='';
       for(let y=now;y>=1930;y--) ys+=`<button class="bp-yr ${y===BP.y?'sel':''}" onclick="bpPickYear(${y})">${y}</button>`;
-      inner=`<div class="bp-head"><div class="bp-title" onclick="bpToggleMode()">${MESES[BP.m]} ${BP.y} <span class="car">▾</span></div></div><div class="bp-years">${ys}</div>`;
+      inner=`<div class="bp-head"><div><div class="bp-step">Paso 1 de 3</div><div class="bp-title">¿En qué año naciste?</div></div></div><div class="bp-years">${ys}</div>`;
+    } else if(BP.step==='month'){
+      const ms=MESES.map((mn,i)=>`<button class="bp-mo ${i===BP.m?'sel':''}" onclick="bpPickMonth(${i})">${mn}</button>`).join('');
+      inner=`<div class="bp-head">${back}<div><div class="bp-step">Paso 2 de 3 · ${BP.y}</div><div class="bp-title">¿En qué mes?</div></div></div><div class="bp-months">${ms}</div>`;
     } else {
       const first=new Date(BP.y,BP.m,1).getDay();
       const days=new Date(BP.y,BP.m+1,0).getDate();
@@ -1026,7 +1128,7 @@
       let cells=dow.map(d=>`<div class="bp-dow">${d}</div>`).join('');
       for(let i=0;i<first;i++) cells+=`<button class="bp-day empty"></button>`;
       for(let d=1;d<=days;d++){ const iso=`${BP.y}-${String(BP.m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`; cells+=`<button class="bp-day ${iso===PF.birth?'sel':''}" onclick="bpPickDay(${d})">${d}</button>`; }
-      inner=`<div class="bp-head"><div class="bp-title" onclick="bpToggleMode()">${MESES[BP.m]} ${BP.y} <span class="car">▾</span></div><div class="bp-nav"><button onclick="bpNav(-1)">‹</button><button onclick="bpNav(1)">›</button></div></div><div class="bp-grid">${cells}</div>`;
+      inner=`<div class="bp-head">${back}<div><div class="bp-step">Paso 3 de 3 · ${MESES[BP.m]} ${BP.y}</div><div class="bp-title">¿Qué día?</div></div></div><div class="bp-grid">${cells}</div>`;
     }
     ov.innerHTML=`<div class="bp-card">${inner}</div>`;
   }
@@ -1066,6 +1168,78 @@
       window.closeConsent(); if(PF.p) renderProfile();
     }catch(e){ toast('No se pudo firmar. Intenta de nuevo.'); if(b){ b.textContent='Firmar consentimiento'; b.disabled=false; } }
   };
+
+  // ---- Lineamientos (banner en inicio + pantallas deslizables) ----
+  let LN = { screens:[], title:'', i:0, loaded:false };
+  const LN_ICONS = {
+    prep:    '<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 4 3.6 6.6 5 10l3-1v11h8V9l3 1 1.4-3.4L16 4a4 4 0 0 1-8 0z"/></svg>',
+    clock:   '<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>',
+    health:  '<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 14c1.5-1.5 3-3.2 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.8 0-3.4 1-4.5 2.5A5.6 5.6 0 0 0 7.5 3 5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4 3 5.5l7 7z"/></svg>',
+    chat:    '<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>',
+    hours:   '<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="17" rx="3"/><path d="M8 2v4M16 2v4M3 10h18"/></svg>',
+    cancel:  '<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>',
+    validity:'<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="m8.5 12 2.5 2.5 5-5"/></svg>',
+    silence: '<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.9 1.9 0 0 0 3.4 0"/><path d="M4 4 20 20"/></svg>',
+    done:    '<svg viewBox="0 0 24 24" fill="none" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>'
+  };
+  function lnHomeBanner(){
+    const me=DATA.me||{};
+    if(me.lineamientos_ack_at) return '';   // ya los revisó todos → nunca más en inicio
+    const icBook='<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>';
+    if(me.lineamientos_opened_at)
+      return `<button class="ln-banner half" onclick="openLineamientos()"><span class="pic">${icBook}</span><div><div class="t1">Te faltan lineamientos por leer</div><div class="t2">Revísalos todos para que este mensaje desaparezca</div></div><span class="chev">›</span></button>`;
+    return `<button class="ln-banner new" onclick="openLineamientos()"><span class="pic">${icBook}</span><div><div class="t1">Conoce nuestros lineamientos</div><div class="t2">2 minutos · lo que hace que tus clases fluyan mejor</div></div><span class="chev">›</span></button>`;
+  }
+  window.openLineamientos=async ()=>{
+    let ov=$('ln-screen');
+    if(!ov){ ov=document.createElement('div'); ov.id='ln-screen'; ov.className='ln-screen'; document.querySelector('.phone').appendChild(ov); }
+    ov.innerHTML=`<div class="pf-bar"><button class="pf-back" onclick="closeLineamientos()">‹</button><div class="ttl">Lineamientos</div></div><div class="ln-body"><div style="color:var(--ink-mute)">Cargando…</div></div>`;
+    requestAnimationFrame(()=>ov.classList.add('show'));
+    if(!LN.loaded){
+      try{
+        const { data } = await sb.from('app_content').select('title,body').eq('kind','lineamientos').eq('is_active',true).order('updated_at',{ascending:false}).limit(1).maybeSingle();
+        if(data){ LN.screens=(data.body&&data.body.screens)||[]; LN.title=data.title||'Lineamientos'; LN.loaded=true; }
+      }catch(e){}
+    }
+    if(!LN.screens.length){ const b=ov.querySelector('.ln-body'); if(b) b.innerHTML='<div style="color:var(--ink-mute)">No pudimos cargar los lineamientos. Intenta de nuevo.</div>'; return; }
+    LN.i=0; lnRender();
+    // marcar "lo abrió" (primera vez): en la base + en memoria para el banner
+    if(DATA.me && !DATA.me.lineamientos_opened_at){
+      DATA.me.lineamientos_opened_at=new Date().toISOString();
+      try{ sb.rpc('student_lineamientos_opened'); }catch(e){}
+    }
+  };
+  window.closeLineamientos=()=>{ const ov=$('ln-screen'); if(ov) ov.classList.remove('show'); renderClases(); };
+  window.lnNext=()=>{ if(LN.i < LN.screens.length){ LN.i++; lnRender(); } };
+  window.lnBack=()=>{ if(LN.i>0){ LN.i--; lnRender(); } else closeLineamientos(); };
+  window.lnFinish=async ()=>{
+    const b=$('ln-done'); if(b){ b.textContent='Guardando…'; b.disabled=true; }
+    try{ await sb.rpc('student_lineamientos_ack'); }catch(e){}
+    if(DATA.me){ DATA.me.lineamientos_ack_at=new Date().toISOString(); if(!DATA.me.lineamientos_opened_at) DATA.me.lineamientos_opened_at=DATA.me.lineamientos_ack_at; }
+    toast('✓ ¡Gracias por leerlos!');
+    closeLineamientos();
+  };
+  function lnRender(){
+    const ov=$('ln-screen'); if(!ov) return;
+    const n=LN.screens.length;
+    if(LN.i>=n){
+      // pantalla final
+      ov.innerHTML=`<div class="pf-bar"><button class="pf-back" onclick="lnBack()">‹</button><div class="ttl">Lineamientos</div></div>
+        <div class="ln-body"><div class="ln-ic done">${LN_ICONS.done}</div><div class="ln-ttl">¡Listo!</div><div class="ln-txt">Ya conoces nuestros lineamientos. Están siempre en tu perfil por si quieres releerlos.</div></div>
+        <div class="ln-foot"><button class="btn" id="ln-done" onclick="lnFinish()">Entendido</button></div>`;
+      return;
+    }
+    const s=LN.screens[LN.i]||{};
+    const dots=LN.screens.map((_,j)=>`<i class="${j===LN.i?'on':''}"></i>`).join('');
+    ov.innerHTML=`<div class="pf-bar"><button class="pf-back" onclick="lnBack()">‹</button><div class="ttl">Lineamientos</div></div>
+      <div class="ln-body">
+        <div class="ln-ic">${LN_ICONS[s.icon]||LN_ICONS.validity}</div>
+        <div class="ln-ttl">${esc(s.title||'')}</div>
+        <div class="ln-txt">${esc(s.text||'')}</div>
+        <div class="ln-dots">${dots}</div>
+      </div>
+      <div class="ln-foot"><div class="ln-count">${LN.i+1} de ${n}</div><button class="btn" onclick="lnNext()">Continuar</button></div>`;
+  }
 
   window.openClassSheet=(bid)=>{
     const info=_bkInfo(bid); if(!info){ toast('No encontramos tu reserva'); return; }
