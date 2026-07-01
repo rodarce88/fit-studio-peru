@@ -772,6 +772,8 @@
   .plt-chip.is-confirmed { background: #E7F6EA !important; border-color: #A9D9B4 !important; }
   .plt-chip .ok.pending { color: #6478D6; font-size: 13px; display: inline-flex; align-items: center; }
   .plt-chip .wait-left { color: #C77F12; font-size: 13px; margin-right: 5px; display: inline-flex; align-items: center; flex-shrink: 0; }
+  .plt-chip .ok.noshow { color: #9AA0AA; font-size: 13px; display: inline-flex; align-items: center; }
+  .plt-chip.is-noshow { opacity: 0.62; text-decoration: line-through; text-decoration-color: #C3C7CF; }
   .plt-chip-empty { visibility: hidden; pointer-events: none; }
   .plt-chip.hl { box-shadow: 0 0 0 2px rgba(91,42,143,0.30); }
   .plt-chip.sel-peer { background: #EFE7F8 !important; border-color: var(--fit-purple) !important; box-shadow: 0 0 0 1px rgba(91,42,143,0.30); }
@@ -14030,6 +14032,20 @@ function pltMarkWaiting(studentId, dateIso, hour) {
   pltSaveWaiting();
   if (typeof pltRenderGrid === 'function') pltRenderGrid();
 }
+// "No va a venir": el alumno avisó que no asistirá (celda en blanco, no está en Mi día). Solo visual, local.
+let PLT_NOSHOW = (() => {
+  try { return new Set(JSON.parse(localStorage.getItem('plt_noshow') || '[]')); } catch (e) { return new Set(); }
+})();
+function pltNoShowKey(studentId, dateIso, hour) { return `${studentId}|${dateIso}|${hour}`; }
+function pltSaveNoShow() {
+  try { localStorage.setItem('plt_noshow', JSON.stringify(Array.from(PLT_NOSHOW))); } catch (e) {}
+}
+function pltToggleNoShow(studentId, dateIso, hour) {
+  const k = pltNoShowKey(studentId, dateIso, hour);
+  if (PLT_NOSHOW.has(k)) PLT_NOSHOW.delete(k); else PLT_NOSHOW.add(k);
+  pltSaveNoShow();
+  if (typeof pltRenderGrid === 'function') pltRenderGrid();
+}
 function pltCopyAndWait(studentId, dateIso, hour) {
   pltMarkWaiting(studentId, dateIso, hour);
   copyConfirmMessageForCell(studentId, dateIso, hour, PLT_SEDE);
@@ -14076,6 +14092,30 @@ async function renderPlantillaView() {
   if (grid) grid.innerHTML = '<div class="plt-empty-state" style="grid-column:1/-1;">Cargando…</div>';
   await pltLoadData();
   pltRenderGrid();
+  pltBindSearchSync();
+  requestAnimationFrame(pltSyncSearchTop);
+}
+// El buscador flotante debe quedar SIEMPRE justo debajo de la fila de días (SÁB/DOM),
+// nunca subir a la zona de filtros. Como la fila de días es sticky, seguimos su borde inferior.
+let PLT_SEARCH_BOUND = false;
+let _pltSearchRaf = 0;
+function pltSyncSearchTop() {
+  const search = document.querySelector('.plt-search-float');
+  const view = document.getElementById('view-plantilla');
+  if (!search || !view || !view.classList.contains('is-active')) return;
+  const ref = document.querySelector('#view-plantilla .plt-corner') || document.querySelector('#view-plantilla .plt-colh');
+  if (!ref) return;
+  search.style.top = (ref.getBoundingClientRect().bottom + 8) + 'px';
+}
+function pltOnScrollSync() {
+  if (_pltSearchRaf) return;
+  _pltSearchRaf = requestAnimationFrame(() => { _pltSearchRaf = 0; pltSyncSearchTop(); });
+}
+function pltBindSearchSync() {
+  if (PLT_SEARCH_BOUND) return;
+  PLT_SEARCH_BOUND = true;
+  window.addEventListener('scroll', pltOnScrollSync, { passive: true });
+  window.addEventListener('resize', pltOnScrollSync);
 }
 function pltRenderSedes() {
   const el = document.getElementById('plt-sedes');
@@ -14184,6 +14224,7 @@ function pltRenderGrid() {
     const confirmed = PLT_CONFIRMED.has(key);
     const dateIso = dateToIsoLocal(pltDayToDate(dn));
     const waiting = PLT_WAITING.has(pltWaitingKey(s.id, dateIso, h));
+    const noshow = !booked && PLT_NOSHOW.has(pltNoShowKey(s.id, dateIso, h));
     const nm = `${s.first_name || ''} ${s.last_name || ''}`.trim();
     let leftMarker = '';
     let marker = '';
@@ -14192,10 +14233,12 @@ function pltRenderGrid() {
     } else if (booked) {
       marker = '<span class="ok pending" title="En Mi día · falta confirmar"><i class="ti ti-circle-check"></i></span>';
       if (waiting) leftMarker = '<span class="wait-left" title="Ya le escribí · esperando confirmación"><i class="ti ti-clock"></i></span>';
+    } else if (noshow) {
+      marker = '<span class="ok noshow" title="Avisó que no viene"><i class="ti ti-x"></i></span>';
     } else if (waiting) {
       marker = '<span class="ok wait" title="Esperando respuesta"><i class="ti ti-clock"></i></span>';
     }
-    const cls = 'plt-chip st-' + st + (confirmed ? ' is-confirmed' : '');
+    const cls = 'plt-chip st-' + st + (confirmed ? ' is-confirmed' : '') + (noshow ? ' is-noshow' : '');
     return `<div class="${cls}" data-sid="${s.id}" data-day="${dn}" data-hour="${h}" onclick="pltOpenChipMenu('${s.id}', ${dn}, ${h}, event)" onmouseenter="pltHover('${s.id}',1)" onmouseleave="pltHover('${s.id}',0)" title="${escape((s.first_name || '') + ' ' + (s.last_name || ''))}">${leftMarker}<span class="nm">${escape(nm)}</span>${marker}</div>`;
   };
   const pltSortStuds = (arr, hh) => arr.slice().sort((a, b) => {
@@ -14365,8 +14408,11 @@ function pltShowChipMenu(studentId, dayN, hour, anchorEl) {
     html += sLine('#6478D6', 'ti-circle-check', 'En Mi día · falta confirmar', waiting ? 'Ya le escribí · esperando confirmación' : '');
     html += item('<i class="ti ti-checks"></i>', 'Confirmar clase', 'Marca la clase como confirmada', `pltConfirmCell('${studentId}', ${dayN}, ${hour})`, 'var(--good)');
   } else {
-    if (waiting) html += sLine('#C77F12', 'ti-clock', 'Esperando respuesta');
+    const noshow = PLT_NOSHOW.has(pltNoShowKey(studentId, dateIso, hour));
+    if (noshow) html += sLine('#8A93A0', 'ti-x', 'No viene · avisó');
+    else if (waiting) html += sLine('#C77F12', 'ti-clock', 'Esperando respuesta');
     html += item('<i class="ti ti-circle-check"></i>', 'Pasar a clase y confirmar', 'Aún no está en Mi día · lo registra ahora', `pltPasarAClase('${studentId}', ${dayN}, ${hour})`, 'var(--good)');
+    html += item(noshow ? '<i class="ti ti-rotate"></i>' : '<i class="ti ti-user-x"></i>', noshow ? "Quitar 'no viene'" : 'No va a venir', noshow ? '' : 'Avisó que no asistirá', `pltToggleNoShow('${studentId}','${dateIso}',${hour})`, '#8A93A0');
   }
   if (stState === 'nopkg') html += sLine('#C0392B', 'ti-alert-triangle', 'Sin paquete');
   else if (stState === 'frozen') html += sLine('#6B6676', 'ti-snowflake', 'Congelado');
