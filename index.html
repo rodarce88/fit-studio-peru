@@ -750,7 +750,13 @@
 
   .plt-scroll { overflow: visible; border: 1px solid var(--line); border-radius: 14px; background: #fff; }
   .plt-grid { display: grid; grid-template-columns: 56px repeat(7, minmax(118px, 1fr)); min-width: 880px; }
-  .plt-cell { border-right: 1px solid var(--line-soft); border-bottom: 1px solid #D6CFE1; padding: 6px; min-height: 56px; }
+  .plt-cell { position: relative; border-right: 1px solid var(--line-soft); border-bottom: 1px solid #D6CFE1; padding: 6px; min-height: 56px; }
+  .plt-slot-free { height: 22px; box-sizing: border-box; border: 1px dashed #D6CFE1; border-radius: 7px; margin-bottom: 4px; display: flex; align-items: center; padding: 0 8px; font-size: 11px; color: #B7AEC6; background: repeating-linear-gradient(135deg,#FCFBFE,#FCFBFE 6px,#F6F1FB 6px,#F6F1FB 12px); }
+  .plt-cap { position: absolute; top: 5px; right: 6px; z-index: 4; display: none; align-items: center; gap: 6px; background: rgba(242,242,245,0.97); border: 1px solid #DCDCE2; border-radius: 999px; padding: 3px 9px; font-size: 10.5px; font-weight: 700; color: #6B6B73; box-shadow: 0 2px 7px rgba(0,0,0,0.07); white-space: nowrap; }
+  .plt-cap .sep { color: #B9B9C2; }
+  .plt-cap .bar { width: 40px; height: 5px; border-radius: 4px; background: #E1E1E7; overflow: hidden; }
+  .plt-cap .bar > i { display: block; height: 100%; background: #B4B4BD; }
+  .plt-cell:hover .plt-cap { display: inline-flex; }
   .plt-grid > .plt-cell:nth-child(8n) { border-right: none; }
   .plt-colh { position: sticky; top: var(--topbar-h); z-index: 5; background: var(--fit-cream); text-align: center; padding: 9px 4px; border-bottom: 1px solid var(--line); }
   .plt-colh .d { font-size: 12px; font-weight: 600; color: var(--ink); text-transform: uppercase; letter-spacing: 0.03em; }
@@ -14200,14 +14206,8 @@ function pltRenderGrid() {
     const bookedAtHour = FIXED_DAYS.some(d => PLT_BOOKED.has(`${s.id}|${d.n}|${h}`));
     return bookedAtHour ? 1 : 2;
   };
-  // Alumnos por hora (únicos en cualquier día) → roster compartido para alinear filas entre días.
-  const studByHour = {};
-  studs.forEach(s => {
-    const hrs = new Set((s.fixed_schedule || [])
-      .filter(sl => Number.isInteger(sl.day) && Number.isInteger(sl.hour))
-      .map(sl => sl.hour));
-    hrs.forEach(h => (studByHour[h] = studByHour[h] || []).push(s));
-  });
+  const _loc = (STATE.locations || []).find(l => l.id === PLT_SEDE);
+  const cap = (_loc && _loc.capacity) ? _loc.capacity : 8;
   const todayDow = (new Date().getDay() + 6) % 7 + 1;
   const isCurWeek = pltMonday(new Date()).getTime() === PLT_WEEK_START.getTime();
   let html = '<div class="plt-corner"></div>';
@@ -14248,25 +14248,35 @@ function pltRenderGrid() {
   });
   FIXED_HOURS.forEach(h => {
     html += `<div class="plt-hourh">${fixedHourLabel(h)}</div>`;
-    const daysAt = (s) => (s.fixed_schedule || []).filter(sl => sl.hour === h).map(sl => sl.day);
-    // Multi-día (2+ días a esta hora) → fila alineada entre columnas.
-    // Un solo día → se apilan compactas debajo, sin reservar espacio en otras columnas.
-    const multi = [];
-    const singleByDay = {};
-    (studByHour[h] || []).forEach(s => {
-      const ds = daysAt(s);
-      if (ds.length >= 2) multi.push(s);
-      else if (ds.length === 1) (singleByDay[ds[0]] = singleByDay[ds[0]] || []).push(s);
-    });
-    const multiOrdered = pltSortStuds(multi, h);
-    Object.keys(singleByDay).forEach(k => { singleByDay[k] = pltSortStuds(singleByDay[k], h); });
     FIXED_DAYS.forEach(d => {
-      let cell = '';
-      multiOrdered.forEach(s => {
-        cell += daysAt(s).includes(d.n) ? pltChipHtml(s, d.n, h) : '<div class="plt-chip plt-chip-empty"></div>';
+      const here = pltSortStuds(
+        studs.filter(s => (s.fixed_schedule || []).some(sl => sl.day === d.n && sl.hour === h)),
+        h
+      );
+      const active = [], nopkgArr = [], frozenArr = [];
+      here.forEach(s => {
+        const st = pltStudentState(s);
+        if (st === 'frozen') frozenArr.push(s);
+        else if (st === 'nopkg') nopkgArr.push(s);
+        else active.push(s);
       });
-      (singleByDay[d.n] || []).forEach(s => { cell += pltChipHtml(s, d.n, h); });
-      html += `<div class="plt-cell">${cell}</div>`;
+      let cell = '';
+      // 1) Ocupados (apilados arriba)
+      active.forEach(s => { cell += pltChipHtml(s, d.n, h); });
+      // 2) Camas libres (antes de sin-paquete y congelados)
+      const occ = active.length;
+      const free = Math.max(0, cap - occ);
+      if (occ > 0) for (let i = 0; i < free; i++) cell += '<div class="plt-slot-free">Libre</div>';
+      // 3) Sin paquete · 4) Congelados
+      nopkgArr.forEach(s => { cell += pltChipHtml(s, d.n, h); });
+      frozenArr.forEach(s => { cell += pltChipHtml(s, d.n, h); });
+      // Contador de cupos (solo visible al pasar el mouse)
+      let capHtml = '';
+      if (occ > 0 || nopkgArr.length || frozenArr.length) {
+        const pct = Math.min(100, Math.round(occ / cap * 100));
+        capHtml = `<div class="plt-cap"><span>${occ} de ${cap}</span><span class="sep">·</span><span>${free} libres</span><span class="bar"><i style="width:${pct}%"></i></span></div>`;
+      }
+      html += `<div class="plt-cell" data-day="${d.n}" data-hour="${h}">${capHtml}${cell}</div>`;
     });
   });
   grid.innerHTML = html;
