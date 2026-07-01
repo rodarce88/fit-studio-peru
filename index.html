@@ -14196,19 +14196,23 @@ function pltRenderGrid() {
     pltRenderPending();
     return;
   }
-  // Orden dentro de cada celda (día · hora):
-  // 0 no molestar (siempre arriba) · 1 por confirmar (blanco) · 2 en Mi día (falta confirmar) · 3 confirmado
-  // (sin paquete y congelado se separan aparte, van al fondo).
+  // Orden dentro de cada celda (día · hora), de lo más resuelto a lo menos:
+  // 1 no molestar (cualquier estado) · 2 confirmado en Mi día · 3 en Mi día falta confirmar
+  // · 4 esperando respuesta (no en Mi día) · 5 por confirmar (blanco).
+  // (sin paquete y congelado se separan aparte y van al fondo).
   const pltSortKey = (s, h, dn) => {
     const st = pltStudentState(s);
-    if (st === 'noconfirm') return 0;
-    if (st === 'nopkg') return 8;
-    if (st === 'frozen') return 9;
+    if (st === 'noconfirm') return 1;
+    if (st === 'nopkg') return 7;
+    if (st === 'frozen') return 8;
     const booked = PLT_BOOKED.has(`${s.id}|${dn}|${h}`);
-    const confirmed = PLT_CONFIRMED.has(`${s.id}|${dn}|${h}`);
-    if (!booked) return 1;
-    if (!confirmed) return 2;
-    return 3;
+    if (booked) {
+      const confirmed = PLT_CONFIRMED.has(`${s.id}|${dn}|${h}`);
+      return confirmed ? 2 : 3;
+    }
+    const dateIso = dateToIsoLocal(pltDayToDate(dn));
+    const waiting = PLT_WAITING.has(pltWaitingKey(s.id, dateIso, h));
+    return waiting ? 4 : 5;
   };
   const _loc = (STATE.locations || []).find(l => l.id === PLT_SEDE);
   const cap = (_loc && _loc.capacity) ? _loc.capacity : 8;
