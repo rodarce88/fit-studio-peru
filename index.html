@@ -23031,7 +23031,12 @@ function _instAddCtxLabel() {
 // antes de que cambie la pantalla. Sin esto la navegación es instantánea y no
 // hay ninguna señal visual de que el toque funcionó.
 window.instTapGo = function(el, fn) {
-  if (el && el.classList) el.classList.add('is-pressed');
+  if (el && el.classList) {
+    el.classList.add('is-pressed');
+    // Soltar el estado solo: si el usuario navega, el cambio de pantalla lo tapa;
+    // si vuelve atrás (X / atrás), el elemento ya no queda pintado de morado.
+    setTimeout(() => { try { el.classList.remove('is-pressed'); } catch(e){} }, 600);
+  }
   setTimeout(fn, 150);
 };
 // Truco iOS Safari: un listener touchstart (aunque vacío) habilita los estados

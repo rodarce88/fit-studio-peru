@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>FIT Studio · Mi cuenta</title>
-<meta name="app-build" content="b22-2026-07-01">
+<meta name="app-build" content="b23-2026-07-01">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400..700;1,400..600&family=Mulish:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -31,7 +31,8 @@
   .data-list .r{ display:flex; justify-content:space-between; gap:14px; padding:14px 0; border-bottom:1px solid var(--line); font-size:calc(16px*var(--scale)); }
   .data-list .r .lab{ color:var(--ink-mute); } .data-list .r .val{ font-weight:700; text-align:right; }
   .session-note{ font-size:calc(14px*var(--scale)); color:var(--ink-mute); margin:14px 0 22px; }
-  .btn{ width:100%; border:0; border-radius:16px; font-family:var(--body); font-size:calc(19px*var(--scale)); font-weight:700; padding:19px 20px; cursor:pointer; background:var(--purple); color:#fff; box-shadow:0 8px 20px rgba(91,42,143,.28); }
+  .btn{ width:100%; border:0; border-radius:16px; font-family:var(--body); font-size:calc(19px*var(--scale)); font-weight:700; padding:19px 20px; cursor:pointer; background:var(--purple); color:#fff; box-shadow:0 8px 20px rgba(91,42,143,.28); transition:background .25s ease; }
+  .btn.saved{ background:#1D9E75; box-shadow:0 8px 20px rgba(29,158,117,.26); }
   .btn.confirmed{ background:#0E7A4F; box-shadow:0 8px 20px rgba(14,122,79,.26); }
   .btn:disabled{ opacity:.65; cursor:default; }
   .sbox{ width:100%; border-radius:16px; padding:17px 18px; font-weight:700; font-size:calc(18px*var(--scale)); text-align:center; }
@@ -268,10 +269,16 @@
   #app-body.cal .cal-detail{ flex:1; min-height:0; overflow-y:auto; -webkit-overflow-scrolling:touch; margin-top:12px; padding-top:12px; }
   .group-h{ font-family:var(--display); font-weight:600; font-size:calc(20px*var(--scale)); margin-bottom:4px; color:var(--ink); }
   .group-sub{ font-size:calc(13px*var(--scale)); color:var(--ink-mute); margin-bottom:14px; }
-  .pkg-head{ width:100%; border:0; background:transparent; display:flex; align-items:center; justify-content:space-between; gap:12px; padding:4px 0; cursor:pointer; text-align:left; font-family:var(--body); color:var(--ink); -webkit-appearance:none; appearance:none; }
+  .pkg-card{ border:1.5px solid var(--line); border-radius:18px; background:#fff; margin-top:14px; overflow:hidden; }
+  .pkg-card.is-active{ border-color:#CBB4E8; }
+  .pkg-card.open{ box-shadow:0 4px 14px rgba(91,42,143,.07); }
+  .pkg-head{ width:100%; border:0; background:transparent; display:flex; align-items:center; justify-content:space-between; gap:12px; padding:16px; cursor:pointer; text-align:left; font-family:var(--body); color:var(--ink); -webkit-appearance:none; appearance:none; }
+  .pkg-head:active{ background:var(--purple-pale,#F4EEFB); }
   .pkg-head-txt{ min-width:0; }
-  .pkg-chev{ width:22px; height:22px; flex:none; color:var(--ink-mute); transition:transform .2s ease; }
+  .pkg-chev{ width:20px; height:20px; flex:none; color:var(--purple); transition:transform .2s ease; }
+  .pkg-chev-wrap{ width:36px; height:36px; flex:none; border-radius:50%; background:#F1EAF9; display:flex; align-items:center; justify-content:center; }
   .pkg-head.open .pkg-chev{ transform:rotate(180deg); }
+  .pkg-body{ border-top:1px solid var(--line); background:#FCFAF7; padding:0 16px; }
   .pkg-body.collapsed{ display:none; }
   .row{ display:flex; align-items:center; gap:14px; padding:15px 0; border-top:1px solid var(--line); }
   .row.first{ border-top:0; }
@@ -291,8 +298,8 @@
 
   .pkg-num{ font-family:var(--display); font-weight:600; font-size:calc(78px*var(--scale)); color:var(--purple); line-height:.95; }
   .pkg-word{ font-size:calc(20px*var(--scale)); font-weight:600; margin-top:4px; }
-  .pkg-bar{ display:flex; gap:7px; margin:22px 0 10px; }
-  .pkg-bar .seg{ flex:1; height:15px; border-radius:5px; background:#E7E0F0; }
+  .pkg-bar{ display:grid; gap:7px; margin:22px 0 10px; }
+  .pkg-bar .seg{ height:15px; border-radius:5px; background:#E7E0F0; }
   .pkg-bar .seg.used{ background:#97C459; }
   .pkg-info{ color:var(--ink-soft); font-size:calc(15px*var(--scale)); }
   .pkg-info b{ color:var(--ink); }
@@ -872,7 +879,7 @@
       const total=active.classes_total||0, used=active.classes_used||0, remain=Math.max(0,total-used);
       let segs=''; for(let i=0;i<total;i++) segs+=`<div class="seg${i<used?' used':''}"></div>`;
       html += `<div class="pkg-num">${remain}</div><div class="pkg-word">clases te quedan</div>
-        <div class="pkg-bar">${segs}</div>
+        <div class="pkg-bar" style="grid-template-columns:repeat(${Math.min(total,10)||1},1fr)">${segs}</div>
         <div class="pkg-info"><b>${esc(pname(active))}</b>${active.expiration_date?` · vence el <b>${dayShort(active.expiration_date)}</b>`:''}</div>`;
     } else {
       html += `<div class="empty">No tienes un paquete con clases disponibles ahora mismo.</div>`;
@@ -910,8 +917,8 @@
       else if(!isDone(p)){ label='Paquete próximo'; sub=`${total} clases · empieza cuando termines el actual`; }
       else { label='Paquete anterior'; sub=`${total} clases · completado`; }
       const open = (pid===activeId);
-      html += `<div class="divider"></div>`;
-      html += `<button class="pkg-head${open?' open':''}" onclick="togglePkg('${pid}', this)"><div class="pkg-head-txt"><div class="group-h">${label}</div><div class="group-sub" style="margin-bottom:0;">${sub}</div></div><svg class="pkg-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></button>`;
+      html += `<div class="pkg-card${open?' open':''}${pid===activeId?' is-active':''}" id="card-${pid}">`;
+      html += `<button class="pkg-head${open?' open':''}" onclick="togglePkg('${pid}', this)"><div class="pkg-head-txt"><div class="group-h">${label}</div><div class="group-sub" style="margin-bottom:0;">${sub}</div></div><span class="pkg-chev-wrap"><svg class="pkg-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></span></button>`;
       html += `<div class="pkg-body${open?'':' collapsed'}" id="body-${pid}">`;
       if(rows.length===0){ html+=`<div class="empty">Sin clases registradas todavía.</div>`; }
       rows.forEach((r,i)=>{
@@ -920,7 +927,7 @@
         else { [cls,label2]=stateChip(r.att.status); }
         html += `<div class="row${i===0?' first':''}"><div class="when"><div class="d">${dayFull(r.s.session_date)}</div><div class="s">${fmtHour(r.s.hour)} · ${esc(DATA.locs[r.s.location_id]||'—')} · con ${esc(DATA.inst[r.s.instructor_id]||'—')}</div></div><span class="chk ${cls}">${label2}</span></div>`;
       });
-      html += `</div>`;
+      html += `</div></div>`;
     });
 
     html += `<div class="legend"><span><i class="pp"></i> Próxima</span><span><i class="ag"></i> Agendada</span><span><i class="g"></i> Asististe</span><span><i class="gd"></i> Recuperable</span><span><i class="b"></i> Reprogramada</span><span><i class="r"></i> Perdida</span></div>`;
@@ -938,7 +945,7 @@
     if(appReady && Date.now()-lastFetch > 15000) refresh(true);
   };
   window.setSize=(mode,el)=>{ document.documentElement.setAttribute('data-size', mode==='lg'?'lg':'normal'); el.parentElement.querySelectorAll('button').forEach(b=>b.classList.remove('on')); el.classList.add('on'); if(CL.view==='mes') requestAnimationFrame(fitMonth); };
-  window.togglePkg=(pid, btn)=>{ const b=$('body-'+pid); if(!b) return; b.classList.toggle('collapsed'); btn.classList.toggle('open'); };
+  window.togglePkg=(pid, btn)=>{ const b=$('body-'+pid); if(!b) return; b.classList.toggle('collapsed'); btn.classList.toggle('open'); const c=$('card-'+pid); if(c) c.classList.toggle('open', !b.classList.contains('collapsed')); };
   window.confirmar = async (bid, isConfirmed)=>{
     if(!bid){ toast('No encontramos tu reserva'); return; }
     const btn = document.getElementById('confbtn');
@@ -1093,7 +1100,11 @@
       const p=PF.p; p.email=email; p.phone=phone; p.gender=val('pf-gender'); p.document_type=dt; p.document_number=dn; p.birth_date=PF.birth; p.emergency_contact_name=val('pf-emname'); p.emergency_contact_phone=emphone;
       const hero=document.querySelector('#pf-screen .pf-hero .ph'); if(hero) hero.textContent=p.phone||'Sin teléfono';
       toast('✓ Perfil actualizado');
-      if(btn){ btn.textContent='Guardar cambios'; btn.disabled=false; }
+      if(btn){
+        btn.textContent='✓ Datos guardados'; btn.classList.add('saved'); btn.disabled=false;
+        clearTimeout(btn._savedT);
+        btn._savedT=setTimeout(()=>{ btn.textContent='Guardar cambios'; btn.classList.remove('saved'); }, 2500);
+      }
     }catch(e){ toast('No se pudo guardar. Intenta de nuevo.'); if(btn){ btn.textContent='Guardar cambios'; btn.disabled=false; } }
   };
 
