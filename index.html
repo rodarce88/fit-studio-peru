@@ -782,7 +782,7 @@
   .plt-cell:hover .plt-slot-free.is-ghost { border-color: #EDEAF2; background: #F7F5FA; }
 
   /* ── Plantilla móvil: día-a-día con swipe (concepto agenda Terapias) ── */
-  #plt-grid.is-mobile { display: block; }
+  #plt-grid.is-mobile { display: block; min-width: 0; }
   .plt-m-days { display: flex; gap: 3px; margin: 2px 0 10px; }
   .plt-m-day { flex: 1; min-width: 0; border: 0; background: transparent; border-radius: 14px; padding: 7px 0 6px; text-align: center; font-family: var(--body); cursor: pointer; color: var(--ink-mute); -webkit-tap-highlight-color: transparent; }
   .plt-m-day .dl { display: block; font-size: 10.5px; letter-spacing: .02em; }
@@ -813,7 +813,8 @@
   .plt-m-body .plt-chip { width: 100%; box-sizing: border-box; margin-top: 6px; font-size: 13px; padding-top: 8px; padding-bottom: 8px; }
   .plt-m-free { font-size: 11.5px; color: #A9A4B3; padding: 9px 2px 2px; font-weight: 600; }
   @media (max-width: 720px) {
-    .plt-screen { padding: 10px 10px 30px; }
+    .plt-screen { padding: 10px 10px 30px; margin: 0; }
+    .plt-scroll { border: 0; background: transparent; border-radius: 0; overflow: visible; }
     .plt-head { flex-wrap: wrap; gap: 10px; }
     .plt-controls { flex-wrap: wrap; width: 100%; gap: 8px; }
     .plt-sedes { overflow-x: auto; scrollbar-width: none; max-width: 100%; }
@@ -14488,8 +14489,11 @@ function pltSortStuds(arr, hh, dn) {
 function pltRenderGrid() {
   const grid = document.getElementById('plt-grid');
   if (!grid) return;
-  // Móvil: vista día-a-día con swipe (concepto de la agenda de Terapias)
-  if (window.innerWidth <= 720) { pltRenderMobile(grid); return; }
+  // Móvil: vista día-a-día con swipe (concepto de la agenda de Terapias).
+  // Se usa TAMBIÉN screen.width porque en iOS, si la página se desbordó alguna vez,
+  // el viewport se agranda y window.innerWidth reporta ~880+ aunque sea un celular.
+  const _isMobileScreen = window.matchMedia('(max-width: 720px)').matches || (window.screen && Math.min(window.screen.width, window.screen.height) <= 600);
+  if (_isMobileScreen) { pltRenderMobile(grid); return; }
   grid.classList.remove('is-mobile');
   const studs = pltFixedStudents();
   if (!studs.length) {
@@ -27021,7 +27025,7 @@ function renderStudentDetail() {
       <div class="sd-head-row" style="display: flex; gap: 18px; align-items: flex-start;">
         <div class="student-avatar sd-head-avatar" style="width: 64px; height: 64px; font-size: 22px; ${studentSedeAvatarStyle(stud)}">${initials(stud)}</div>
         <div style="flex: 1;">
-          <h1 class="sd-head-name" style="font-family: var(--display); font-size: 28px; margin: 0 0 6px; font-weight: 400;">${escape(stud.first_name)} <em>${escape(stud.last_name || '')}</em>${loc ? ` <span title="${escape(loc.name)}" style="display: inline-block; vertical-align: middle; background: ${loc.color || '#7C3AED'}; color: white; font-size: 11px; font-weight: 600; padding: 3px 10px; border-radius: 999px; letter-spacing: 0.08em; margin-left: 8px; line-height: 1.4; transform: translateY(-3px);">${getLocationInitials(loc)}</span>` : ''}</h1>
+          <h1 class="sd-head-name" style="font-family: var(--display); font-size: 28px; margin: 0 0 6px; font-weight: 400;">${escape(stud.first_name)} <em>${escape(stud.last_name || '')}</em>${loc ? ` <span title="${escape(loc.name)}" style="display: inline-block; vertical-align: middle; background: ${loc.color || '#7C3AED'}; color: white; font-size: 11px; font-weight: 600; padding: 3px 10px; border-radius: 999px; letter-spacing: 0.08em; margin-left: 8px; line-height: 1.4; transform: translateY(-3px);">${getLocationInitials(loc)}</span>` : ''}${stud.app_welcomed_at ? ` <span title="Confirmó su cuenta en la app de alumna" style="display: inline-block; vertical-align: middle; background: #5B2A8F; color: white; font-size: 11px; font-weight: 800; padding: 3px 10px; border-radius: 999px; letter-spacing: 0.08em; margin-left: 6px; line-height: 1.4; transform: translateY(-3px);">APP</span>` : ''}</h1>
           <div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-bottom: 6px;">
             ${modPill}
             ${getConsentBadge(stud)}
