@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>FIT Studio · Mi cuenta</title>
-<meta name="app-build" content="b25-2026-07-01">
+<meta name="app-build" content="b26-2026-07-01">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400..700;1,400..600&family=Mulish:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -758,9 +758,11 @@
         html += `<div class="sbox ${sbx.cls}">${sbx.label}</div>${sbx.note?`<div class="micro">${sbx.note}</div>`:''}`;
       } else if(!started){
         const hrsNext = (start - now) / 3600000;
-        const changeOrAbsent = hrsNext >= 4
+        // El enlace gris "No podré ir a esta clase" está SIEMPRE (abre el sheet de aviso).
+        // "Cambiar mi clase" se suma encima solo cuando faltan 4h o más.
+        const changeOrAbsent = (hrsNext >= 4
           ? `<button class="btn ghost" style="margin-top:10px" onclick="openChangeSheet('${next.bid}')">Cambiar mi clase</button>`
-          : `<button class="linkbtn" onclick="openClassSheet('${next.bid}')">No podré ir a esta clase</button>`;
+          : '') + `<button class="linkbtn" onclick="openClassSheet('${next.bid}')">No podré ir a esta clase</button>`;
         if(next.cancel){
           html += `<div class="sbox aviso">Avisaste que no vendrás</div>
             <div class="micro">La coordinadora se pondrá en contacto contigo.</div>
@@ -1341,9 +1343,11 @@
   window.openClassSheet=(bid)=>{
     const info=_bkInfo(bid); if(!info){ toast('No encontramos tu reserva'); return; }
     const b=info.b; const canChange = info.hrs >= 4;
-    const secondary = canChange
+    // "No podré ir" está SIEMPRE disponible (avisa a la coordinadora → tag "no vendrá").
+    // "Cambiar mi clase" se suma solo cuando faltan 4h o más (regla para mover clases).
+    const secondary = (canChange
       ? `<button class="btn ghost" onclick="openChangeSheet('${bid}')">Cambiar mi clase</button>`
-      : `<button class="btn danger" onclick="askAbsence('${bid}')">No podré ir</button>`;
+      : '') + `<button class="btn danger" onclick="askAbsence('${bid}')">No podré ir</button>`;
     let body;
     if(b.cancel_requested_at){
       body=`<div class="sh-h">¿Vas a venir?</div><div class="sh-sub">${info.line} · ${info.sede}</div>
