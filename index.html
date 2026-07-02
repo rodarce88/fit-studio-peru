@@ -768,17 +768,16 @@
   .plt-scroll { overflow: visible; border: 1px solid var(--line); border-radius: 14px; background: #fff; }
   .plt-grid { display: grid; grid-template-columns: 56px repeat(7, minmax(118px, 1fr)); min-width: 880px; }
   .plt-cell { position: relative; border-right: 1px solid var(--line-soft); border-bottom: 1px solid #D6CFE1; padding: 6px; min-height: 56px; }
-  .plt-slot-free { height: 22px; box-sizing: border-box; border: 1px solid #EDEAF2; border-radius: 7px; margin-bottom: 4px; background: #F7F5FA; display: flex; align-items: center; justify-content: space-between; padding: 0 5px; }
-  .plt-cap { display: none; align-items: center; gap: 6px; background: rgba(255,255,255,0.92); border: 1px solid #DEDEE4; border-radius: 999px; padding: 2px 8px; font-size: 10px; font-weight: 700; color: #6B6B73; white-space: nowrap; }
+  .plt-slot-free { min-height: 22px; height: auto; box-sizing: border-box; border: 1px solid #EDEAF2; border-radius: 7px; margin-bottom: 4px; background: #F7F5FA; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; row-gap: 3px; padding: 2px 5px; }
+  .plt-cap { display: none; align-items: center; gap: 5px; background: rgba(255,255,255,0.92); border: 1px solid #DEDEE4; border-radius: 999px; padding: 2px 7px; font-size: 9.5px; font-weight: 700; color: #6B6B73; white-space: nowrap; max-width: 100%; overflow: hidden; }
   .plt-cap .sep { color: #B9B9C2; }
-  .plt-cap .bar { width: 34px; height: 5px; border-radius: 4px; background: #E4E4EA; overflow: hidden; }
-  .plt-cap .bar > i { display: block; height: 100%; background: #B4B4BD; }
+  .plt-cap .bar { display: none; }
   .plt-cell:hover .plt-cap { display: inline-flex; }
-  .plt-goday { display: none; align-items: center; gap: 4px; border: 0; background: var(--fit-purple); color: #fff; border-radius: 999px; padding: 3px 9px; font-size: 10px; font-weight: 700; cursor: pointer; white-space: nowrap; font-family: var(--body); line-height: 1.3; flex-shrink: 0; }
+  .plt-goday { display: none; align-items: center; gap: 3px; border: 0; background: var(--fit-purple); color: #fff; border-radius: 999px; padding: 2.5px 8px; font-size: 9.5px; font-weight: 700; cursor: pointer; white-space: nowrap; font-family: var(--body); line-height: 1.3; flex-shrink: 0; max-width: 100%; }
   .plt-goday:hover { background: var(--fit-purple-deep, #3C1D6E); }
   .plt-goday i { font-size: 12px; }
   .plt-cell:hover .plt-goday { display: inline-flex; }
-  .plt-slot-free.is-ghost { border-color: transparent; background: transparent; height: 20px; margin-bottom: 0; }
+  .plt-slot-free.is-ghost { border-color: transparent; background: transparent; min-height: 20px; height: auto; margin-bottom: 0; }
   .plt-cell:hover .plt-slot-free.is-ghost { border-color: #EDEAF2; background: #F7F5FA; }
 
   /* ── Plantilla móvil: día-a-día con swipe (concepto agenda Terapias) ── */
@@ -14537,14 +14536,14 @@ function pltRenderGrid() {
       if (occ > 0 && free > 0) {
         const pct = Math.min(100, Math.round(occ / cap * 100));
         const capInner = `<div class="plt-cap"><span>${occ} de ${cap}</span><span class="sep">·</span><span>${free} libres</span><span class="bar"><i style="width:${pct}%"></i></span></div>`;
-        const goBtn = `<button class="plt-goday" onclick="event.stopPropagation(); pltGoToMiDia(${d.n}, ${h})" title="Abrir esta hora en Mi día de esta sede"><i class="ti ti-arrow-right"></i> Ir a Mi día</button>`;
+        const goBtn = `<button class="plt-goday" onclick="event.stopPropagation(); pltGoToMiDia(${d.n}, ${h})" title="Abrir esta hora en Mi día de esta sede"><i class="ti ti-arrow-right"></i> Mi día</button>`;
         for (let i = 0; i < free; i++) {
           cell += `<div class="plt-slot-free">${i === free - 1 ? capInner + goBtn : ''}</div>`;
         }
       } else if (occ > 0) {
         // Celda llena: fila fantasma (invisible salvo en hover) con "lleno" + Ir a Mi día
         const capInner = `<div class="plt-cap"><span>${occ} de ${cap}</span><span class="sep">·</span><span style="color:#B3263B;">lleno</span></div>`;
-        const goBtn = `<button class="plt-goday" onclick="event.stopPropagation(); pltGoToMiDia(${d.n}, ${h})" title="Abrir esta hora en Mi día de esta sede"><i class="ti ti-arrow-right"></i> Ir a Mi día</button>`;
+        const goBtn = `<button class="plt-goday" onclick="event.stopPropagation(); pltGoToMiDia(${d.n}, ${h})" title="Abrir esta hora en Mi día de esta sede"><i class="ti ti-arrow-right"></i> Mi día</button>`;
         cell += `<div class="plt-slot-free is-ghost">${capInner}${goBtn}</div>`;
       }
       // 3) Sin paquete · 4) Congelados (no ocupan cama)

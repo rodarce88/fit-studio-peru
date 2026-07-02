@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>FIT Studio · Mi cuenta</title>
-<meta name="app-build" content="b26-2026-07-01">
+<meta name="app-build" content="b27-2026-07-02">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400..700;1,400..600&family=Mulish:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -205,8 +205,12 @@
   .btn:disabled{ opacity:.45; box-shadow:none; }
   .cv-hint{ font-size:calc(12px*var(--scale)); color:var(--ink-mute); text-align:center; margin-top:8px; }
   .cklist{ display:flex; flex-direction:column; gap:10px; margin:16px 0 4px; }
-  .ckrow{ width:100%; background:#fff; border:1px solid var(--line); border-radius:16px; padding:14px 15px; display:flex; align-items:center; gap:14px; cursor:pointer; text-align:left; font-family:var(--body); }
-  .ckrow.off{ opacity:.5; }
+  .ckrow{ width:100%; box-sizing:border-box; background:#fff; border:1px solid var(--line); border-radius:16px; padding:14px 15px; display:flex; align-items:center; gap:14px; cursor:pointer; text-align:left; font-family:var(--body); -webkit-tap-highlight-color:transparent; }
+  .ckrow.off{ opacity:.5; cursor:default; }
+  .ckdp{ display:block; color:var(--ink-soft); font-size:calc(13px*var(--scale)); margin-top:3px; }
+  .ck-rate{ color:#B8860B; font-weight:700; white-space:nowrap; }
+  .ck-rate .st{ color:#F0B429; }
+  .ck-rate i{ font-style:normal; color:var(--ink-mute); font-weight:600; }
   .ck{ width:30px; height:30px; border-radius:9px; flex:none; display:flex; align-items:center; justify-content:center; font-size:18px; font-weight:800; }
   .ck.on{ background:var(--purple); color:#fff; } .ck.no{ background:#fff; border:2px solid var(--line); }
   .ckd{ flex:1; min-width:0; } .ckdd{ display:block; font-family:var(--display); font-weight:600; font-size:calc(16px*var(--scale)); } .ckdm{ display:block; color:var(--ink-mute); font-size:calc(13.5px*var(--scale)); margin-top:2px; }
@@ -291,7 +295,7 @@
   .pkg-card{ border:1.5px solid var(--line); border-radius:18px; background:#fff; margin-top:14px; overflow:hidden; }
   .pkg-card.is-active{ border-color:#CBB4E8; }
   .pkg-card.open{ box-shadow:0 4px 14px rgba(91,42,143,.07); }
-  .pkg-head{ width:100%; border:0; background:transparent; display:flex; align-items:center; justify-content:space-between; gap:12px; padding:16px; cursor:pointer; text-align:left; font-family:var(--body); color:var(--ink); -webkit-appearance:none; appearance:none; }
+  .pkg-head{ width:100%; box-sizing:border-box; border:0; background:transparent; display:flex; align-items:center; justify-content:space-between; gap:12px; padding:16px; cursor:pointer; text-align:left; font-family:var(--body); color:var(--ink); -webkit-appearance:none; appearance:none; -webkit-tap-highlight-color:transparent; user-select:none; }
   .pkg-head:active{ background:var(--purple-pale,#F4EEFB); }
   .pkg-head-txt{ min-width:0; }
   .pkg-chev{ width:20px; height:20px; flex:none; color:var(--purple); transition:transform .2s ease; }
@@ -534,7 +538,7 @@
   async function fetchAll(){
     if(fetching) return; fetching = true;
     try{
-      const [insR, locR, pkgR, bkR, atR, spR, rtR] = await Promise.all([
+      const [insR, locR, pkgR, bkR, atR, spR, rtR, irR] = await Promise.all([
         sb.from('instructors').select('id, first_name'),
         sb.from('locations').select('id, name, color'),
         sb.from('packages').select('id, name'),
@@ -542,6 +546,7 @@
         sb.from('attendance').select('id, session_id, status, student_package_id'),
         sb.from('student_packages').select('id, classes_total, classes_used, status, is_active, is_frozen, purchase_date, expiration_date, closed_at, replaces_id, package_id'),
         sb.from('class_ratings').select('session_id, rating, created_at'),
+        sb.rpc('instructor_ratings_summary'),
       ]);
       const inst={}; (insR.data||[]).forEach(i=>inst[i.id]=i.first_name);
       const locs={}, locColor={}; (locR.data||[]).forEach(l=>{ locs[l.id]=l.name; locColor[l.id]=l.color||'#5B2A8F'; });
@@ -552,6 +557,8 @@
       DATA.packages = spR.data||[];
       const ratings={}; (rtR.data||[]).forEach(r=>ratings[r.session_id]={rating:r.rating, created_at:r.created_at});
       DATA.ratings = ratings;
+      const ir={}; ((irR&&irR.data)||[]).forEach(r=>ir[r.instructor_id]={avg:r.avg_rating, count:r.rating_count});
+      DATA.instRatings = ir;
       const ids = [...new Set([...DATA.bookings.map(b=>b.session_id), ...DATA.attendance.map(a=>a.session_id)].filter(Boolean))];
       const sessById={};
       if(ids.length){
@@ -1003,7 +1010,7 @@
       else { label='Paquete anterior'; sub=`${total} clases · completado`; }
       const open = (pid===activeId);
       html += `<div class="pkg-card${open?' open':''}${pid===activeId?' is-active':''}" id="card-${pid}">`;
-      html += `<button class="pkg-head${open?' open':''}" onclick="togglePkg('${pid}', this)"><div class="pkg-head-txt"><div class="group-h">${label}</div><div class="group-sub" style="margin-bottom:0;">${sub}</div></div><span class="pkg-chev-wrap"><svg class="pkg-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></span></button>`;
+      html += `<div class="pkg-head${open?' open':''}" role="button" tabindex="0" onclick="togglePkg('${pid}', this)"><div class="pkg-head-txt"><div class="group-h">${label}</div><div class="group-sub" style="margin-bottom:0;">${sub}</div></div><span class="pkg-chev-wrap"><svg class="pkg-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></span></div>`;
       html += `<div class="pkg-body${open?'':' collapsed'}" id="body-${pid}">`;
       if(rows.length===0){ html+=`<div class="empty">Sin clases registradas todavía.</div>`; }
       rows.forEach((r,i)=>{
@@ -1566,7 +1573,14 @@
         const cls = full ? 'ckrow off' : 'ckrow';
         const act = DP.mode==='move' ? `dpConfirmMove('${iso}',${s.hour})` : `dpConfirmAdd('${iso}',${s.hour})`;
         const right = full ? `<span class="ck-tag aviso">${free<=0?'Lleno':'Pasó'}</span>` : `<span class="pill todo">Elegir</span>`;
-        rows+=`<button class="${cls}" ${full?'':`onclick="${act}"`}><span class="ckd"><span class="ckdd">${fmtHour(s.hour)}</span><span class="ckdm">${cupo}</span></span>${right}</button>`;
+        // Profesor del horario + su calificación promedio (estilo Google/Uber:
+        // promedio aritmético a 1 decimal + cantidad; solo se muestra si es ≥ 4.0)
+        const instName = s.instructor_id ? (DATA.inst[s.instructor_id]||null) : null;
+        const rt = s.instructor_id ? (DATA.instRatings||{})[s.instructor_id] : null;
+        const starBit = (rt && Number(rt.avg) >= 4)
+          ? ` · <span class="ck-rate"><span class="st">★</span> ${Number(rt.avg).toFixed(1)} <i>(${rt.count})</i></span>` : '';
+        const profBit = instName ? `<span class="ckdp">con ${esc(instName)}${starBit}</span>` : '';
+        rows+=`<div class="${cls}" role="button" ${full?'':`onclick="${act}"`}><span class="ckd"><span class="ckdd">${fmtHour(s.hour)}</span><span class="ckdm">${cupo}</span>${profBit}</span>${right}</div>`;
       });
     }
     openSheet(`<div class="sh-h">${dayFull(iso)}</div><div class="sh-sub">Elige tu horario</div>
