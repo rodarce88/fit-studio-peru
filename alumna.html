@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>FIT Studio · Mi cuenta</title>
-<meta name="app-build" content="b24-2026-07-01">
+<meta name="app-build" content="b25-2026-07-01">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400..700;1,400..600&family=Mulish:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -49,6 +49,9 @@
   .rc-more .btn{ margin-top:10px; padding:15px 20px; font-size:calc(17px*var(--scale)); }
   .rc-skip{ text-align:center; color:var(--ink-soft); font-size:calc(15px*var(--scale)); padding:12px 0 2px; cursor:pointer; }
   .rc-thanks{ text-align:center; font-weight:700; color:#1D9E75; font-size:calc(17px*var(--scale)); padding:10px 0; }
+  .mini-stars{ display:inline-flex; gap:1.5px; vertical-align:-2px; margin-left:3px; }
+  .mini-stars svg{ width:calc(13px*var(--scale)); height:calc(13px*var(--scale)); stroke-width:1.8; }
+  .rated-note{ color:#00AA6C; font-size:calc(12.5px*var(--scale)); font-weight:600; margin-top:3px; }
   .btn.confirmed{ background:#0E7A4F; box-shadow:0 8px 20px rgba(14,122,79,.26); }
   .btn:disabled{ opacity:.65; cursor:default; }
   .sbox{ width:100%; border-radius:16px; padding:17px 18px; font-weight:700; font-size:calc(18px*var(--scale)); text-align:center; }
@@ -538,7 +541,7 @@
         sb.from('session_bookings').select('id, session_id, cancelled_at, confirmed_at, cancel_requested_at'),
         sb.from('attendance').select('id, session_id, status, student_package_id'),
         sb.from('student_packages').select('id, classes_total, classes_used, status, is_active, is_frozen, purchase_date, expiration_date, closed_at, replaces_id, package_id'),
-        sb.from('class_ratings').select('session_id, rating'),
+        sb.from('class_ratings').select('session_id, rating, created_at'),
       ]);
       const inst={}; (insR.data||[]).forEach(i=>inst[i.id]=i.first_name);
       const locs={}, locColor={}; (locR.data||[]).forEach(l=>{ locs[l.id]=l.name; locColor[l.id]=l.color||'#5B2A8F'; });
@@ -547,7 +550,7 @@
       DATA.bookings = bkR.data||[];
       DATA.attendance = atR.data||[];
       DATA.packages = spR.data||[];
-      const ratings={}; (rtR.data||[]).forEach(r=>ratings[r.session_id]=r.rating);
+      const ratings={}; (rtR.data||[]).forEach(r=>ratings[r.session_id]={rating:r.rating, created_at:r.created_at});
       DATA.ratings = ratings;
       const ids = [...new Set([...DATA.bookings.map(b=>b.session_id), ...DATA.attendance.map(a=>a.session_id)].filter(Boolean))];
       const sessById={};
@@ -643,6 +646,15 @@
   // Al tocar una estrella aparecen el comentario opcional y Enviar; sin estrella,
   // solo "Ahora no". Guarda vía RPC student_rate_class (valida asistencia real).
   const RATE = { sid:null, val:0 };
+  // Estrellitas inline (tamaño de la mayúscula del texto) + "Calificado hace…"
+  const _miniStars = (n)=>{ let s=''; for(let i=1;i<=5;i++){ s+=`<svg viewBox="0 0 24 24" style="fill:${i<=n?'#F0B429':'none'};stroke:${i<=n?'#F0B429':'#C9BFD6'}"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>`; } return `<span class="mini-stars">${s}</span>`; };
+  const _ratedWhen = (iso)=>{
+    if(!iso) return '';
+    const mins = Math.max(0, (Date.now() - new Date(iso).getTime()) / 60000);
+    if(mins < 60) return 'hace un momento';
+    if(mins < 24*60) { const hh=Math.floor(mins/60); return `hace ${hh} ${hh===1?'hora':'horas'}`; }
+    return 'el ' + dayShort(iso.slice(0,10));
+  };
   function _rateSkipKey(sid){ return 'fit_rate_skip_'+sid; }
   function rateHomeCard(){
     try{
@@ -679,7 +691,8 @@
     try{
       const { error } = await sb.rpc('student_rate_class', { p_session_id: RATE.sid, p_rating: RATE.val, p_comment: ($('rc-comment')?.value||'') });
       if(error) throw error;
-      DATA.ratings = DATA.ratings||{}; DATA.ratings[RATE.sid]=RATE.val;
+      DATA.ratings = DATA.ratings||{}; DATA.ratings[RATE.sid]={rating:RATE.val, created_at:new Date().toISOString()};
+      try{ renderPaquete(); }catch(e){}
       const card=$('rate-card');
       if(card){ card.innerHTML = `<div class="rc-thanks">✓ ¡Gracias por tu calificación!</div>`; setTimeout(()=>{ card.style.display='none'; }, 2200); }
     }catch(e){ toast('No se pudo enviar. Intenta de nuevo.'); if(btn){ btn.disabled=false; btn.textContent='Enviar'; } }
@@ -995,7 +1008,10 @@
         let cls,label2;
         if(r.prox){ if(r.s.id===nextId){ cls='prox'; label2='Próxima'; } else { cls='sched'; label2='Agendada'; } }
         else { [cls,label2]=stateChip(r.att.status); }
-        html += `<div class="row${i===0?' first':''}"><div class="when"><div class="d">${dayFull(r.s.session_date)}</div><div class="s">${fmtHour(r.s.hour)} · ${esc(DATA.locs[r.s.location_id]||'—')} · con ${esc(DATA.inst[r.s.instructor_id]||'—')}</div></div><span class="chk ${cls}">${label2}</span></div>`;
+        const rt = !r.prox ? (DATA.ratings||{})[r.s.id] : null;
+        const starsBit = rt ? ' ' + _miniStars(rt.rating) : '';
+        const ratedNote = rt ? `<div class="rated-note">Calificado ${_ratedWhen(rt.created_at)}</div>` : '';
+        html += `<div class="row${i===0?' first':''}"><div class="when"><div class="d">${dayFull(r.s.session_date)}</div><div class="s">${fmtHour(r.s.hour)} · ${esc(DATA.locs[r.s.location_id]||'—')} · con ${esc(DATA.inst[r.s.instructor_id]||'—')}${starsBit}</div>${ratedNote}</div><span class="chk ${cls}">${label2}</span></div>`;
       });
       html += `</div></div>`;
     });
