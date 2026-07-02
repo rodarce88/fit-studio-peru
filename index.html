@@ -516,8 +516,11 @@
   /* Card resumen (estado minimizado): una sola tarjeta con 3 líneas */
   .midia-resumen { background:#fff; border:1px solid var(--line); border-radius:var(--radius-lg,22px); margin-bottom:16px; cursor:pointer; overflow:hidden; transition:border-color .12s, box-shadow .12s; }
   .midia-resumen:hover { border-color:var(--fit-purple-soft); box-shadow:0 4px 16px rgba(0,0,0,0.05); }
-  .midia-resumen .mr-head { display:flex; align-items:center; gap:10px; padding:13px 18px; border-bottom:1px solid var(--line); }
-  .midia-resumen .mr-head .mr-t { font-size:11px; text-transform:uppercase; letter-spacing:.12em; color:var(--ink-mute); font-weight:600; flex:1; }
+  .midia-resumen .mr-head { display:flex; align-items:center; gap:10px; padding:13px 18px; border-bottom:1px solid var(--line); flex-wrap:wrap; }
+  .midia-resumen .mr-head .mr-t { font-size:11px; text-transform:uppercase; letter-spacing:.12em; color:var(--ink-mute); font-weight:600; flex:0 0 auto; }
+  .midia-resumen .mr-head .midia-sede-chips.is-mini { gap:6px; }
+  .midia-resumen .mr-head .midia-sede-chips.is-mini .msc { padding:5px 11px; font-size:12px; }
+  .midia-resumen .mr-head .mr-expand { margin-left:auto; }
   .midia-resumen .mr-head .mr-expand { font-size:12px; font-weight:600; color:var(--fit-purple); }
   .midia-resumen-row { display:flex; align-items:center; gap:11px; padding:12px 18px; border-bottom:1px solid var(--line-soft); }
   .midia-resumen-row:last-child { border-bottom:none; }
@@ -2171,6 +2174,12 @@
   /* Empty slot */
   .inst-empty-slot { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-top: 1px dashed var(--line); color: var(--ink-mute); font-size: 12px; cursor: pointer; transition: all 0.15s; }
   .inst-empty-slot:hover { background: var(--fit-lavender-pale); color: var(--fit-purple); }
+  /* Feedback táctil (móvil): el tap marca el elemento ANTES de navegar (via instTapGo) */
+  .inst-empty-slot:active, .inst-empty-slot.is-pressed { background: var(--fit-lavender-pale); color: var(--fit-purple); }
+  .inst-empty-slot.is-pressed .inst-empty-slot-icon { border-color: var(--fit-purple); background: var(--fit-purple); color: #fff; }
+  .inst-tap { -webkit-tap-highlight-color: transparent; transition: background .12s; }
+  .inst-tap:active, .inst-tap.is-pressed { background: var(--fit-lavender-pale) !important; }
+  .inst-tap.is-pressed { box-shadow: inset 3px 0 0 var(--fit-purple); }
   .inst-empty-slot-icon { width: 28px; height: 28px; border-radius: 50%; border: 1px dashed var(--line); display: flex; align-items: center; justify-content: center; font-size: 14px; }
 
   /* Empty state */
@@ -3685,7 +3694,7 @@
     </div>
     <!-- Card resumen: aparece al "Minimizar todo" en lugar de 3 tarjetas colapsadas -->
     <div id="midia-resumen" class="midia-resumen" style="display:none;" onclick="toggleCollapseAllMw()" role="button" tabindex="0" aria-label="Expandir widgets">
-      <div class="mr-head"><span class="mr-t">Resumen del mes</span><span class="mr-expand">Expandir ▾</span></div>
+      <div class="mr-head"><span class="mr-t">Resumen del mes</span><div id="midia-sede-chips-min" class="midia-sede-chips is-mini" onclick="event.stopPropagation()"></div><span class="mr-expand">Expandir ▾</span></div>
       <div class="midia-resumen-row"><span class="mr-dot" style="background:var(--fit-purple);"></span><span class="mr-label">Cobranza del mes</span><span class="mr-val" id="mr-cob">—</span></div>
       <div class="midia-resumen-row"><span class="mr-dot" style="background:var(--danger-bright);"></span><span class="mr-label">Deuda acumulada</span><span class="mr-val" id="mr-debt">—</span></div>
       <div class="midia-resumen-row"><span class="mr-dot" style="background:var(--good-medium,#1D9E75);"></span><span class="mr-label">Alumnos activos</span><span class="mr-val" id="mr-active">—</span></div>
@@ -6839,11 +6848,14 @@ function renderDashboard() {
 let MIDIA_SEDE = 'all'; // 'all' | locationId
 function midiaSedeName() { if (MIDIA_SEDE === 'all') return 'todas las sedes'; const l = (STATE.locations || []).find(x => x.id === MIDIA_SEDE); return l ? l.name : '—'; }
 function renderMiDiaSedeChips() {
-  const box = document.getElementById('midia-sede-chips'); if (!box) return;
   const chip = (v, label, color) => `<button class="msc ${MIDIA_SEDE === v ? 'on' : ''}" onclick="setMiDiaSede('${v}')">${color ? `<span class="d" style="background:${color}"></span>` : ''}${label}</button>`;
   let html = chip('all', 'Todas las sedes', null);
   (STATE.locations || []).forEach(l => { html += chip(l.id, l.name, l.color || 'var(--fit-purple)'); });
-  box.innerHTML = html;
+  // Se pinta en dos lugares: la toolbar (widgets expandidos) y el head del
+  // resumen (widgets minimizados) — así los filtros viven DENTRO del recuadro
+  // que controlan y se entiende que manejan esos datos.
+  const box = document.getElementById('midia-sede-chips'); if (box) box.innerHTML = html;
+  const boxMin = document.getElementById('midia-sede-chips-min'); if (boxMin) boxMin.innerHTML = html;
 }
 function setMiDiaWidgetsLoading() {
   // Skeleton DIRIGIDO solo a los widgets del filtro de sede global.
@@ -6898,6 +6910,9 @@ function renderMiDiaResumen() {
 function setMiDiaMinimized(min) {
   MW_IDS.forEach(id => { const el = document.getElementById(id); if (el) el.style.display = min ? 'none' : ''; });
   const res = document.getElementById('midia-resumen'); if (res) res.style.display = min ? '' : 'none';
+  // Minimizado: la toolbar entera se oculta — los chips de sede se muestran DENTRO
+  // del recuadro del resumen (junto a "Resumen del mes") y el card entero expande al click.
+  const tb = document.querySelector('.midia-toolbar'); if (tb) tb.style.display = min ? 'none' : '';
   const btn = document.getElementById('mw-collapse-all'); if (btn) { btn.textContent = min ? 'Expandir todo' : 'Minimizar todo'; btn.dataset.mode = min ? 'expand' : 'collapse'; }
   try { localStorage.setItem('fit_mw_min', min ? '1' : '0'); } catch (e) {}
   if (min) renderMiDiaResumen();
@@ -8395,7 +8410,7 @@ function renderTimeline() {
         <div class="class-header">
           <div>
             <div class="class-time">${formatHour(h)} ${d.isCancelled ? '<span style="font-size:11px;color:var(--err);background:#fef2f2;padding:2px 8px;border-radius:999px;margin-left:6px;">✗ CANCELADA</span>' : ''}</div>
-            <div class="class-time-end">${d.isCancelled ? (d.session && d.session.notes ? escape(d.session.notes) : 'Clase cancelada') : 'hasta ' + formatHour(h) + ':50'}</div>
+            <div class="class-time-end">${d.isCancelled ? (d.session && d.session.notes ? escape(d.session.notes) : 'Clase cancelada') : 'hasta las ' + ((h % 12 === 0) ? 12 : h % 12) + ':50 ' + (h >= 12 ? 'pm' : 'am')}</div>
           </div>
           <div class="class-instructor" onclick="event.stopPropagation(); openChangeInstructorModal(${h}, ${dow})" style="cursor: pointer;" title="Click para cambiar profesor">
             <div class="instructor-avatar" style="--inst-color: ${instColor}; ${inst._isUnassigned ? 'border: 2px dashed var(--warn);' : ''}">${inst.initials}</div>
@@ -15375,9 +15390,26 @@ async function loadStudioActivityFeed(days) {
     .select('*').gte('created_at', since.toISOString())
     .order('created_at', { ascending: false }).limit(100);
   if (!acts || !acts.length) return [];
-  const needName = acts.filter(a => !a.student_name && a.student_id).map(a => a.student_id);
+  // Nombre corto para el feed: "Carolina H." (primer nombre + inicial del primer apellido).
+  // Se consulta first_name + last_name de TODAS las alumnas del feed (no solo las que
+  // no traen student_name) para armar el corto con datos reales y no adivinando.
+  const allIds = [...new Set(acts.filter(a => a.student_id).map(a => a.student_id))];
   const sMap = new Map();
-  if (needName.length) { try { const { data: ss } = await sb.from('students').select('id, first_name').in('id', [...new Set(needName)]); (ss || []).forEach(s => sMap.set(s.id, s.first_name)); } catch(e){} }
+  if (allIds.length) {
+    try {
+      const { data: ss } = await sb.from('students').select('id, first_name, last_name').in('id', allIds);
+      (ss || []).forEach(s => {
+        const ini = (s.last_name || '').trim().charAt(0).toUpperCase();
+        sMap.set(s.id, `${(s.first_name || '').trim()}${ini ? ` ${ini}.` : ''}`.trim());
+      });
+    } catch(e){}
+  }
+  // Fallback si la alumna ya no existe: acortar el student_name guardado en el evento
+  const shortFromFull = (full) => {
+    const t = (full || '').trim().split(/\s+/);
+    if (t.length < 2) return full || '';
+    return `${t[0]} ${t[1].charAt(0).toUpperCase()}.`;
+  };
   const instIds = new Set();
   acts.forEach(a => { (a.frequent_instructor_ids || []).forEach(id => instIds.add(id)); if (a.trial_instructor_id) instIds.add(a.trial_instructor_id); });
   const have = new Set((STATE.instructors || []).map(i => i.id));
@@ -15398,7 +15430,7 @@ async function loadStudioActivityFeed(days) {
     const raw = rByAct.get(a.id) || [];
     const byEmoji = new Map();
     raw.forEach(r => { const g = byEmoji.get(r.emoji) || { emoji: r.emoji, count: 0, mine: false, names: [] }; g.count++; if (r.user_id === myUid) g.mine = true; if (r.user_name) g.names.push(r.user_name); byEmoji.set(r.emoji, g); });
-    return { ...a, _name: a.student_name || sMap.get(a.student_id) || 'una alumna', _profs: profs, _trialProf: trialProf, _coord: _actCoordInfo(a), _reactions: [...byEmoji.values()] };
+    return { ...a, _name: sMap.get(a.student_id) || shortFromFull(a.student_name) || 'una alumna', _profs: profs, _trialProf: trialProf, _coord: _actCoordInfo(a), _reactions: [...byEmoji.values()] };
   });
 }
 
@@ -15414,7 +15446,8 @@ function renderActivityRow(ev, viewerId, lastSeen) {
   ).join('');
   const whoLine = (ev._reactions && ev._reactions.length)
     ? `<div class="actf-who">${ev._reactions.map(r => `${r.emoji} ${escape(r.names.join(', '))}`).join('  ·  ')}</div>` : '';
-  const reactsBlock = `<div class="actf-reacts">${rx}<button class="actf-rxadd" onclick="openReactionSheet('${ev.id}')">+ reaccionar</button></div>${whoLine}`;
+  const timeLbl = `<span class="actf-time" style="margin-left:auto; margin-top:0; flex-shrink:0;">${_actTimeLabel(ev.created_at)}</span>`;
+  const reactsBlock = `<div class="actf-reacts">${rx}<button class="actf-rxadd" onclick="openReactionSheet('${ev.id}')">+ reaccionar</button>${timeLbl}</div>${whoLine}`;
 
   // ── HITO: tarjeta especial, festiva ──────────────────────────────
   if (ev.type === 'hito') {
@@ -15437,7 +15470,6 @@ function renderActivityRow(ev, viewerId, lastSeen) {
       </div>
       <div class="actf-hito-title">${name} llegó a <span class="actf-hito-num">${num}</span> clases en FIT</div>
       <div class="actf-hito-sub">${profLine} <span class="actf-hito-cheer">¡A celebrarlo! 🎉</span></div>
-      <div class="actf-hito-time">${_actTimeLabel(ev.created_at)}</div>
       ${reactsBlock}
     </div>`;
   }
@@ -15491,7 +15523,6 @@ function renderActivityRow(ev, viewerId, lastSeen) {
     <div class="actf-body">
       <div class="actf-lead">${lead}${sedeTag}</div>
       <div class="actf-text">${text}${rel ? ` <span class="actf-rel">${rel}</span>` : ''}</div>
-      <div class="actf-time">${_actTimeLabel(ev.created_at)}</div>
       ${reactsBlock}
     </div>
   </div>`;
@@ -21584,7 +21615,7 @@ function renderInstructorClassCard(c, ctx) {
        </div>`
     : '';
   const addFlexBtn = (!isCancelled && !isNotDelivered)
-    ? `<div class="inst-empty-slot" onclick="instructorOpenAddStudent('${c.dateIso}', ${c.hour}, '${c.location.id}')">
+    ? `<div class="inst-empty-slot" onclick="instTapGo(this, function(){ instructorOpenAddStudent('${c.dateIso}', ${c.hour}, '${c.location.id}'); })">
          <div class="inst-empty-slot-icon">+</div>
          <span>${studentsCount === 0 ? 'Sin alumnos · tap para agregar' : 'Agregar alumno flexible'}</span>
        </div>`
@@ -22995,8 +23026,19 @@ function _instAddCtxLabel() {
   return `${dayLabels[dateObj.getDay()]} ${dateObj.getDate()} · ${formatHour(ctx.hour)} · ${ctx.locationName || ''}`;
 }
 
-function instructorRenderResults(query) {
-  const results = document.getElementById('inst-add-results');
+// Feedback táctil para móvil: marca el elemento como presionado (fondo lavanda)
+// y ejecuta la acción 150ms después, para que el usuario VEA que su tap registró
+// antes de que cambie la pantalla. Sin esto la navegación es instantánea y no
+// hay ninguna señal visual de que el toque funcionó.
+window.instTapGo = function(el, fn) {
+  if (el && el.classList) el.classList.add('is-pressed');
+  setTimeout(fn, 150);
+};
+// Truco iOS Safari: un listener touchstart (aunque vacío) habilita los estados
+// :active en elementos no-button al hacer tap.
+if (typeof document !== 'undefined') document.addEventListener('touchstart', function(){}, { passive: true });
+
+function instructorRenderResults(query) {  const results = document.getElementById('inst-add-results');
   if (!results) return;
   // Helper de normalización local (también usado para highlight). El filtrado
   // se centraliza en `studentMatchesSearch` (ver doc bloque al inicio de helpers).
@@ -23047,7 +23089,7 @@ function instructorRenderResults(query) {
     const phone = s.phone || '';
     const meta = phone || (s.email || '');
     return `
-      <div class="inst-tap" onclick="instructorPickStudent('${s.id}')" style="display: flex; align-items: center; gap: 12px; padding: 12px 16px; cursor: pointer; border-top: 1px solid var(--line);">
+      <div class="inst-tap" onclick="instTapGo(this, function(){ instructorPickStudent('${s.id}'); })" style="display: flex; align-items: center; gap: 12px; padding: 12px 16px; cursor: pointer; border-top: 1px solid var(--line);">
         <div class="student-avatar" style="width: 38px; height: 38px; font-size: 12px; flex-shrink: 0; ${studentSedeAvatarStyle(s)}">${initials(s)}</div>
         <div style="flex: 1; min-width: 0;">
           <div style="font-size: 14px; font-weight: 500; color: var(--ink);">${highlight(fullName)} ${isTrial ? '<span style="font-size: 9px; padding: 2px 6px; background: #EEEDFE; color: #3C3489; border-radius: 999px; margin-left: 4px; font-weight: 600;">invitada</span>' : ''}</div>
