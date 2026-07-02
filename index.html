@@ -780,6 +780,45 @@
   .plt-cell:hover .plt-goday { display: inline-flex; }
   .plt-slot-free.is-ghost { border-color: transparent; background: transparent; height: 20px; margin-bottom: 0; }
   .plt-cell:hover .plt-slot-free.is-ghost { border-color: #EDEAF2; background: #F7F5FA; }
+
+  /* ── Plantilla móvil: día-a-día con swipe (concepto agenda Terapias) ── */
+  #plt-grid.is-mobile { display: block; }
+  .plt-m-days { display: flex; gap: 3px; margin: 2px 0 10px; }
+  .plt-m-day { flex: 1; min-width: 0; border: 0; background: transparent; border-radius: 14px; padding: 7px 0 6px; text-align: center; font-family: var(--body); cursor: pointer; color: var(--ink-mute); -webkit-tap-highlight-color: transparent; }
+  .plt-m-day .dl { display: block; font-size: 10.5px; letter-spacing: .02em; }
+  .plt-m-day .dn { display: block; font-size: 17px; font-weight: 600; color: var(--ink); margin-top: 1px; }
+  .plt-m-day.is-today:not(.on) .dn { color: var(--fit-purple); }
+  .plt-m-day.on { background: var(--fit-purple); }
+  .plt-m-day.on .dl, .plt-m-day.on .dn { color: #fff; }
+  .plt-m-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 9px; }
+  .plt-m-hint { font-size: 11px; color: var(--ink-mute); }
+  .plt-m-allbtn { border: 1px solid var(--line); background: #fff; border-radius: 999px; padding: 7px 14px; font-size: 12px; font-weight: 700; color: var(--ink-mute); font-family: var(--body); cursor: pointer; }
+  .plt-m-carousel { display: flex; overflow-x: auto; scroll-snap-type: x mandatory; -webkit-overflow-scrolling: touch; scrollbar-width: none; margin: 0 -10px; }
+  .plt-m-carousel::-webkit-scrollbar { display: none; }
+  .plt-m-page { flex: 0 0 100%; min-width: 0; scroll-snap-align: start; scroll-snap-stop: always; padding: 0 10px 20px; box-sizing: border-box; }
+  .plt-m-hour { background: #fff; border: 1px solid var(--line); border-radius: 14px; margin-bottom: 8px; overflow: hidden; }
+  .plt-m-hour.is-empty { opacity: .6; }
+  .plt-m-hh { display: flex; align-items: center; gap: 8px; padding: 10px 11px; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+  .plt-m-hh:active { background: var(--fit-lavender-pale); }
+  .plt-m-time { font-family: var(--display); font-style: italic; font-size: 18px; color: var(--ink); min-width: 50px; flex-shrink: 0; }
+  .plt-m-occ { font-size: 11px; font-weight: 700; color: #6B6B73; background: #F4F2F7; border-radius: 999px; padding: 3px 8px; white-space: nowrap; }
+  .plt-m-occ.full { color: #B3263B; background: #FBE9EC; }
+  .plt-m-occ.empty { color: #B9B9C2; background: transparent; font-weight: 600; }
+  .plt-m-goday { display: inline-flex !important; margin-left: auto; }
+  .plt-m-chev { color: var(--ink-mute); font-size: 16px; transition: transform .18s; flex-shrink: 0; }
+  .plt-m-hour.open .plt-m-chev { transform: rotate(180deg); }
+  .plt-m-hour.is-empty .plt-m-chev { visibility: hidden; }
+  .plt-m-body { display: none; padding: 2px 10px 10px; border-top: 1px dashed var(--line); }
+  .plt-m-hour.open .plt-m-body { display: block; }
+  .plt-m-body .plt-chip { width: 100%; box-sizing: border-box; margin-top: 6px; font-size: 13px; padding-top: 8px; padding-bottom: 8px; }
+  .plt-m-free { font-size: 11.5px; color: #A9A4B3; padding: 9px 2px 2px; font-weight: 600; }
+  @media (max-width: 720px) {
+    .plt-screen { padding: 10px 10px 30px; }
+    .plt-head { flex-wrap: wrap; gap: 10px; }
+    .plt-controls { flex-wrap: wrap; width: 100%; gap: 8px; }
+    .plt-sedes { overflow-x: auto; scrollbar-width: none; max-width: 100%; }
+    .plt-legend { display: none; }
+  }
   .plt-grid > .plt-cell:nth-child(8n) { border-right: none; }
   .plt-colh { position: sticky; top: var(--topbar-h); z-index: 5; background: var(--fit-cream); text-align: center; padding: 9px 4px; border-bottom: 1px solid var(--line); }
   .plt-colh .d { font-size: 12px; font-weight: 600; color: var(--ink); text-transform: uppercase; letter-spacing: 0.03em; }
@@ -5454,6 +5493,10 @@ body:not(.doctor-mode) .doc-bottomnav{ display:none; }
       <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="7" r="4"/><path d="M16 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/></svg>
       <span class="mob-menu-link-text">Profesores</span>
       <span class="mob-menu-badge neutral" id="mob-link-instructors-count">—</span>
+    </button>
+    <button class="mob-menu-link" type="button" onclick="mobileNavGoto('plantilla')">
+      <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+      <span class="mob-menu-link-text">Plantilla semanal</span>
     </button>
     <button class="mob-menu-link" type="button" onclick="mobileNavGoto('schedule')">
       <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
@@ -14383,9 +14426,71 @@ function pltStudentState(s) {
   if (pkgs.some(p => p.is_frozen)) return 'frozen';
   return 'nopkg';
 }
+// Orden dentro de cada celda (día · hora), de lo más resuelto a lo menos:
+// 1 no molestar (cualquier estado) · 2 confirmado en Mi día · 3 en Mi día falta confirmar
+// · 4 esperando respuesta (no en Mi día) · 5 por confirmar (blanco).
+// (sin paquete y congelado se separan aparte y van al fondo).
+// Compartidos por la grilla desktop y la vista móvil día-a-día.
+function pltSortKey(s, h, dn) {
+  const st = pltStudentState(s);
+  if (st === 'noconfirm') return 1;
+  if (st === 'nopkg') return 7;
+  if (st === 'frozen') return 8;
+  const booked = PLT_BOOKED.has(`${s.id}|${dn}|${h}`);
+  if (booked) {
+    const confirmed = PLT_CONFIRMED.has(`${s.id}|${dn}|${h}`);
+    return confirmed ? 2 : 3;
+  }
+  const dateIso = dateToIsoLocal(pltDayToDate(dn));
+  const waiting = PLT_WAITING.has(pltWaitingKey(s.id, dateIso, h));
+  return waiting ? 4 : 5;
+}
+// Constructor de chip reutilizable (mismo markup en desktop y móvil)
+function pltChipHtml(s, dn, h) {
+  const st = pltStudentState(s);
+  const key = `${s.id}|${dn}|${h}`;
+  const booked = PLT_BOOKED.has(key);
+  const confirmed = PLT_CONFIRMED.has(key);
+  const dateIso = dateToIsoLocal(pltDayToDate(dn));
+  const waiting = PLT_WAITING.has(pltWaitingKey(s.id, dateIso, h));
+  const appNotice = booked && !confirmed && PLT_APPNOTICE.has(key);
+  const noshow = appNotice || (!booked && PLT_NOSHOW.has(pltNoShowKey(s.id, dateIso, h)));
+  const nm = `${s.first_name || ''} ${s.last_name || ''}`.trim();
+  const appConf = confirmed && PLT_APPCONF.has(key);
+  const appTag = appConf ? '<span class="apptag" title="Confirmó por su app">APP</span>' : '';
+  let leftMarker = '';
+  let marker = '';
+  if (confirmed) {
+    marker = appConf
+      ? '<span class="ok" title="Confirmada por la alumna desde su app">✓</span>'
+      : '<span class="ok" title="Confirmada · en Mi día">✓</span>';
+  } else if (appNotice) {
+    marker = '<span class="ok noshow" title="Avisó por su app que no viene"><i class="ti ti-x"></i></span>';
+  } else if (booked) {
+    marker = '<span class="ok pending" title="En Mi día · falta confirmar"><i class="ti ti-circle-check"></i></span>';
+    if (waiting) leftMarker = '<span class="wait-left" title="Ya le escribí · esperando confirmación"><i class="ti ti-clock"></i></span>';
+  } else if (noshow) {
+    marker = '<span class="ok noshow" title="Avisó que no viene"><i class="ti ti-x"></i></span>';
+  } else if (waiting) {
+    marker = '<span class="ok wait" title="Esperando respuesta"><i class="ti ti-clock"></i></span>';
+  }
+  const cls = 'plt-chip st-' + st + (confirmed ? ' is-confirmed' : '') + (noshow ? ' is-noshow' : '');
+  return `<div class="${cls}" data-sid="${s.id}" data-day="${dn}" data-hour="${h}" onclick="pltOpenChipMenu('${s.id}', ${dn}, ${h}, event)" onmouseenter="pltHover('${s.id}',1)" onmouseleave="pltHover('${s.id}',0)" title="${escape((s.first_name || '') + ' ' + (s.last_name || ''))}">${leftMarker}<span class="nm">${escape(nm)}</span>${appTag}${marker}</div>`;
+}
+function pltSortStuds(arr, hh, dn) {
+  return arr.slice().sort((a, b) => {
+    const ka = pltSortKey(a, hh, dn), kb = pltSortKey(b, hh, dn);
+    if (ka !== kb) return ka - kb;
+    return (`${a.first_name} ${a.last_name}`).localeCompare(`${b.first_name} ${b.last_name}`, 'es');
+  });
+}
+
 function pltRenderGrid() {
   const grid = document.getElementById('plt-grid');
   if (!grid) return;
+  // Móvil: vista día-a-día con swipe (concepto de la agenda de Terapias)
+  if (window.innerWidth <= 720) { pltRenderMobile(grid); return; }
+  grid.classList.remove('is-mobile');
   const studs = pltFixedStudents();
   if (!studs.length) {
     grid.innerHTML = '<div class="plt-empty-state" style="grid-column:1/-1;">Aún no hay alumnos fijos con horario en esta sede.<br><span style="font-size:12px;">Agrega el horario preferido desde el perfil del alumno.</span></div>';
@@ -14394,24 +14499,7 @@ function pltRenderGrid() {
     pltRenderPending();
     return;
   }
-  // Orden dentro de cada celda (día · hora), de lo más resuelto a lo menos:
-  // 1 no molestar (cualquier estado) · 2 confirmado en Mi día · 3 en Mi día falta confirmar
-  // · 4 esperando respuesta (no en Mi día) · 5 por confirmar (blanco).
-  // (sin paquete y congelado se separan aparte y van al fondo).
-  const pltSortKey = (s, h, dn) => {
-    const st = pltStudentState(s);
-    if (st === 'noconfirm') return 1;
-    if (st === 'nopkg') return 7;
-    if (st === 'frozen') return 8;
-    const booked = PLT_BOOKED.has(`${s.id}|${dn}|${h}`);
-    if (booked) {
-      const confirmed = PLT_CONFIRMED.has(`${s.id}|${dn}|${h}`);
-      return confirmed ? 2 : 3;
-    }
-    const dateIso = dateToIsoLocal(pltDayToDate(dn));
-    const waiting = PLT_WAITING.has(pltWaitingKey(s.id, dateIso, h));
-    return waiting ? 4 : 5;
-  };
+  // Orden dentro de cada celda: ver pltSortKey (nivel de módulo)
   const _loc = (STATE.locations || []).find(l => l.id === PLT_SEDE);
   const cap = (_loc && _loc.capacity) ? _loc.capacity : 8;
   const todayDow = (new Date().getDay() + 6) % 7 + 1;
@@ -14421,43 +14509,6 @@ function pltRenderGrid() {
     const dt = pltDayToDate(d.n);
     const today = isCurWeek && d.n === todayDow;
     html += `<div class="plt-colh ${today ? 'is-today' : ''}"><div class="d">${d.lbl}</div><div class="dt">${dt.getDate()}</div></div>`;
-  });
-  // Constructor de chip reutilizable
-  const pltChipHtml = (s, dn, h) => {
-    const st = pltStudentState(s);
-    const key = `${s.id}|${dn}|${h}`;
-    const booked = PLT_BOOKED.has(key);
-    const confirmed = PLT_CONFIRMED.has(key);
-    const dateIso = dateToIsoLocal(pltDayToDate(dn));
-    const waiting = PLT_WAITING.has(pltWaitingKey(s.id, dateIso, h));
-    const appNotice = booked && !confirmed && PLT_APPNOTICE.has(key);
-    const noshow = appNotice || (!booked && PLT_NOSHOW.has(pltNoShowKey(s.id, dateIso, h)));
-    const nm = `${s.first_name || ''} ${s.last_name || ''}`.trim();
-    const appConf = confirmed && PLT_APPCONF.has(key);
-    const appTag = appConf ? '<span class="apptag" title="Confirmó por su app">APP</span>' : '';
-    let leftMarker = '';
-    let marker = '';
-    if (confirmed) {
-      marker = appConf
-        ? '<span class="ok" title="Confirmada por la alumna desde su app">✓</span>'
-        : '<span class="ok" title="Confirmada · en Mi día">✓</span>';
-    } else if (appNotice) {
-      marker = '<span class="ok noshow" title="Avisó por su app que no viene"><i class="ti ti-x"></i></span>';
-    } else if (booked) {
-      marker = '<span class="ok pending" title="En Mi día · falta confirmar"><i class="ti ti-circle-check"></i></span>';
-      if (waiting) leftMarker = '<span class="wait-left" title="Ya le escribí · esperando confirmación"><i class="ti ti-clock"></i></span>';
-    } else if (noshow) {
-      marker = '<span class="ok noshow" title="Avisó que no viene"><i class="ti ti-x"></i></span>';
-    } else if (waiting) {
-      marker = '<span class="ok wait" title="Esperando respuesta"><i class="ti ti-clock"></i></span>';
-    }
-    const cls = 'plt-chip st-' + st + (confirmed ? ' is-confirmed' : '') + (noshow ? ' is-noshow' : '');
-    return `<div class="${cls}" data-sid="${s.id}" data-day="${dn}" data-hour="${h}" onclick="pltOpenChipMenu('${s.id}', ${dn}, ${h}, event)" onmouseenter="pltHover('${s.id}',1)" onmouseleave="pltHover('${s.id}',0)" title="${escape((s.first_name || '') + ' ' + (s.last_name || ''))}">${leftMarker}<span class="nm">${escape(nm)}</span>${appTag}${marker}</div>`;
-  };
-  const pltSortStuds = (arr, hh, dn) => arr.slice().sort((a, b) => {
-    const ka = pltSortKey(a, hh, dn), kb = pltSortKey(b, hh, dn);
-    if (ka !== kb) return ka - kb;
-    return (`${a.first_name} ${a.last_name}`).localeCompare(`${b.first_name} ${b.last_name}`, 'es');
   });
   FIXED_HOURS.forEach(h => {
     html += `<div class="plt-hourh">${fixedHourLabel(h)}</div>`;
@@ -14504,6 +14555,144 @@ function pltRenderGrid() {
   if (pill) pill.innerHTML = nopkg ? `<span class="plt-nopkg-pill"><i class="ti ti-alert-triangle" style="font-size:13px;"></i> ${nopkg} sin paquete</span>` : '';
   pltRenderPending();
 }
+
+// ============================================
+// PLANTILLA MÓVIL (≤720px) — vista día-a-día con swipe
+// Mismo concepto que la agenda de Terapias: selector de días arriba,
+// swipe izquierda/derecha cambia el día (scroll-snap), y el día activo
+// se actualiza arriba al deslizar. Horas colapsadas por defecto con
+// "Expandir todo / Minimizar todo". "Mi día" SIEMPRE visible (no hay hover).
+// ============================================
+let PLT_M_DAY = null;            // día activo (1=Lun … 7=Dom)
+let PLT_M_OPEN = new Set();      // horas abiertas manualmente `${day}|${hour}`
+let PLT_M_ALLOPEN = false;
+
+function pltRenderMobile(grid) {
+  grid.classList.add('is-mobile');
+  const studs = pltFixedStudents();
+  const _loc = (STATE.locations || []).find(l => l.id === PLT_SEDE);
+  const cap = (_loc && _loc.capacity) ? _loc.capacity : 8;
+  const todayDow = (new Date().getDay() + 6) % 7 + 1;
+  const isCurWeek = pltMonday(new Date()).getTime() === PLT_WEEK_START.getTime();
+  if (PLT_M_DAY == null) PLT_M_DAY = isCurWeek ? todayDow : 1;
+
+  const daysHtml = FIXED_DAYS.map(d => {
+    const dt = pltDayToDate(d.n);
+    const on = d.n === PLT_M_DAY;
+    const today = isCurWeek && d.n === todayDow;
+    return `<button type="button" class="plt-m-day${on ? ' on' : ''}${today ? ' is-today' : ''}" onclick="pltMGoDay(${d.n}, true)"><span class="dl">${d.lbl}</span><span class="dn">${dt.getDate()}</span></button>`;
+  }).join('');
+
+  let pages = '';
+  FIXED_DAYS.forEach(d => { pages += `<div class="plt-m-page" data-day="${d.n}">${pltMDayHtml(d, studs, cap)}</div>`; });
+
+  grid.innerHTML = `
+    <div class="plt-m-days">${daysHtml}</div>
+    <div class="plt-m-toolbar">
+      <span class="plt-m-hint">Desliza para cambiar de día</span>
+      <button type="button" class="plt-m-allbtn" onclick="pltMToggleAll()">${PLT_M_ALLOPEN ? 'Minimizar todo' : 'Expandir todo'}</button>
+    </div>
+    <div class="plt-m-carousel" id="plt-m-carousel">${pages}</div>`;
+
+  const car = document.getElementById('plt-m-carousel');
+  if (car) {
+    car.addEventListener('scroll', pltMOnScroll, { passive: true });
+    // Posicionar en el día activo sin animación (tras el layout)
+    requestAnimationFrame(() => { car.scrollLeft = (PLT_M_DAY - 1) * car.clientWidth; });
+  }
+  pltRenderPending();
+}
+
+function pltMDayHtml(d, studs, cap) {
+  let html = '';
+  FIXED_HOURS.forEach(h => {
+    const here = pltSortStuds(
+      studs.filter(s => (s.fixed_schedule || []).some(sl => sl.day === d.n && sl.hour === h)),
+      h, d.n
+    );
+    const active = [], nopkgArr = [], frozenArr = [];
+    here.forEach(s => {
+      const st = pltStudentState(s);
+      if (st === 'frozen') frozenArr.push(s);
+      else if (st === 'nopkg') nopkgArr.push(s);
+      else active.push(s);
+    });
+    const occ = active.length;
+    const free = Math.max(0, cap - occ);
+    const isEmpty = here.length === 0;
+    const key = `${d.n}|${h}`;
+    const open = !isEmpty && (PLT_M_ALLOPEN || PLT_M_OPEN.has(key));
+    let summary;
+    if (isEmpty) summary = `<span class="plt-m-occ empty">sin fijos</span>`;
+    else if (free === 0) summary = `<span class="plt-m-occ full">${occ} de ${cap} · lleno</span>`;
+    else summary = `<span class="plt-m-occ">${occ} de ${cap} · ${free} libres</span>`;
+    const goBtn = `<button type="button" class="plt-goday plt-m-goday" onclick="event.stopPropagation(); pltGoToMiDia(${d.n}, ${h})"><i class="ti ti-arrow-right"></i> Mi día</button>`;
+    let body = '';
+    active.forEach(s => { body += pltChipHtml(s, d.n, h); });
+    if (!isEmpty && free > 0) body += `<div class="plt-m-free">${free} ${free === 1 ? 'cama libre' : 'camas libres'}</div>`;
+    nopkgArr.forEach(s => { body += pltChipHtml(s, d.n, h); });
+    frozenArr.forEach(s => { body += pltChipHtml(s, d.n, h); });
+    html += `<div class="plt-m-hour${open ? ' open' : ''}${isEmpty ? ' is-empty' : ''}" id="pltm-${d.n}-${h}">
+      <div class="plt-m-hh" onclick="pltMToggleHour(${d.n}, ${h})">
+        <span class="plt-m-time">${fixedHourLabel(h)}</span>${summary}${goBtn}<i class="ti ti-chevron-down plt-m-chev"></i>
+      </div>
+      <div class="plt-m-body">${body}</div>
+    </div>`;
+  });
+  return html;
+}
+
+window.pltMToggleHour = function(dn, h) {
+  const el = document.getElementById(`pltm-${dn}-${h}`);
+  if (!el || el.classList.contains('is-empty')) return;
+  const key = `${dn}|${h}`;
+  const nowOpen = el.classList.toggle('open');
+  if (nowOpen) PLT_M_OPEN.add(key); else { PLT_M_OPEN.delete(key); PLT_M_ALLOPEN = false; }
+};
+
+window.pltMToggleAll = function() {
+  PLT_M_ALLOPEN = !PLT_M_ALLOPEN;
+  PLT_M_OPEN = new Set();
+  document.querySelectorAll('.plt-m-hour:not(.is-empty)').forEach(el => el.classList.toggle('open', PLT_M_ALLOPEN));
+  const b = document.querySelector('.plt-m-allbtn');
+  if (b) b.textContent = PLT_M_ALLOPEN ? 'Minimizar todo' : 'Expandir todo';
+};
+
+window.pltMGoDay = function(dn, smooth) {
+  PLT_M_DAY = dn;
+  const car = document.getElementById('plt-m-carousel');
+  if (car) car.scrollTo({ left: (dn - 1) * car.clientWidth, behavior: smooth ? 'smooth' : 'auto' });
+  document.querySelectorAll('.plt-m-day').forEach((b, i) => b.classList.toggle('on', i === dn - 1));
+};
+
+// Al deslizar: detectar la página visible y marcar el día arriba (debounce corto)
+window.pltMOnScroll = (function() {
+  let t;
+  return function() {
+    clearTimeout(t);
+    t = setTimeout(() => {
+      const car = document.getElementById('plt-m-carousel');
+      if (!car || !car.clientWidth) return;
+      const dn = Math.min(7, Math.max(1, Math.round(car.scrollLeft / car.clientWidth) + 1));
+      if (dn !== PLT_M_DAY) {
+        PLT_M_DAY = dn;
+        document.querySelectorAll('.plt-m-day').forEach((b, i) => b.classList.toggle('on', i === dn - 1));
+      }
+    }, 90);
+  };
+})();
+
+// Cambio de tamaño cruzando el breakpoint → repintar la Plantilla si está activa
+window.addEventListener('resize', (function() {
+  let t;
+  return function() {
+    clearTimeout(t);
+    t = setTimeout(() => {
+      const v = document.getElementById('view-plantilla');
+      if (v && v.classList.contains('is-active')) pltRenderGrid();
+    }, 200);
+  };
+})());
 
 // "Ir a Mi día" desde un slot de la Plantilla: cambia a Mi día de ESA sede,
 // en ESA fecha (de la semana mostrada), hace scroll a la hora y la expande.
