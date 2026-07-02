@@ -11357,7 +11357,10 @@ function openStudentModal(id) {
   const isEdit = !!id;
   const s = isEdit ? STATE.students.find(x => x.id === id) : null;
 
-  document.getElementById('student-modal-title').innerHTML = isEdit ? `Editar <em>${escape(s.first_name)}</em>` : 'Nuevo <em>alumno</em>';
+  const createdLbl = (isEdit && s?.created_at)
+    ? `<div style="font-size:11.5px;color:var(--ink-mute);font-family:var(--body);font-style:normal;font-weight:400;margin-top:3px;">Perfil creado el ${new Date(s.created_at).toLocaleDateString('es-PE', { day: 'numeric', month: 'long', year: 'numeric' })}</div>`
+    : '';
+  document.getElementById('student-modal-title').innerHTML = (isEdit ? `Editar <em>${escape(s.first_name)}</em>` : 'Nuevo <em>alumno</em>') + createdLbl;
   document.getElementById('student-delete-btn').style.display = isEdit ? 'inline-flex' : 'none';
 
   f('f-student-id').value = s?.id || '';
@@ -30742,6 +30745,18 @@ function renderReportsHubHTML() {
         <div style="color: #fff; font-size: 12.5px; font-weight: 700; background: rgba(255,255,255,0.14); border-radius: 999px; padding: 8px 16px; white-space: nowrap;">Abrir Revenue →</div>
       </div>
 
+      <div onclick="REPORTS_STATE.subView='census'; renderReportsView();"
+           style="background: white; border: 1px solid var(--line); border-radius: 14px; padding: 24px; cursor: pointer; transition: all 0.15s;"
+           onmouseover="this.style.borderColor='var(--fit-purple-soft)'; this.style.transform='translateY(-2px)';"
+           onmouseout="this.style.borderColor='var(--line)'; this.style.transform='';">
+        <div style="width: 48px; height: 48px; border-radius: 12px; background: var(--fit-lavender-pale); display: flex; align-items: center; justify-content: center; margin-bottom: 14px; font-size: 24px;">🧭</div>
+        <h3 style="font-family: var(--display); font-style: italic; font-size: 22px; color: var(--fit-purple); margin: 0 0 6px; font-weight: 500;">Censo de alumnas</h3>
+        <div style="color: var(--ink-mute); font-size: 13px; line-height: 1.5;">
+          Todas las alumnas del sistema clasificadas en una sola categoría por actividad real. Marca categorías para sumar, abre las listas y filtra por sede, modalidad, género y app.
+        </div>
+        <div style="margin-top: 14px; color: var(--fit-purple); font-size: 12.5px; font-weight: 500;">Ver censo →</div>
+      </div>
+
       <div onclick="REPORTS_STATE.subView='daily'; renderReportsView();"
            style="background: white; border: 1px solid var(--line); border-radius: 14px; padding: 24px; cursor: pointer; transition: all 0.15s;"
            onmouseover="this.style.borderColor='var(--fit-purple-soft)'; this.style.transform='translateY(-2px)';"
@@ -32743,6 +32758,141 @@ async function rvExpDel(id) {
   catch (e) { showToast('No se pudo eliminar','error'); }
 }
 
+// ============================================
+// CENSO DE ALUMNAS (Reportes) — cada alumna en UNA sola categoría por
+// actividad real + estado del paquete; la suma SIEMPRE cuadra con el total.
+// Checkboxes suman categorías; clic en la tarjeta abre la lista de alumnas.
+// ============================================
+var CENSUS_STATE = { month: null, data: null, sel: {}, open: {}, f: { sede: 'all', mod: 'all', gen: 'all', app: 'all', baja: 'all' } };
+const CENSUS_CATS = [
+  { k: 'A1_activas', sec: 'ACTIVAS', t: 'Activas · paquete vigente', d: 'Paquete vigente (no completado) con clases en el mes o después.', tag: 'SALUDABLE', tc: '#0E7A4F', tb: '#E9F6EE' },
+  { k: 'A2_congelada_con_clase', sec: 'ACTIVAS', t: 'Congeladas · con clase en el mes', d: 'Paquete congelado pero tuvieron clase dentro del mes.', tag: 'EN PAUSA', tc: '#6B6B73', tb: '#F0EDF6' },
+  { k: 'F_post_mes', sec: 'ACTIVAS', t: 'Actividad después del mes elegido', d: 'Su actividad más reciente es posterior al mes, sin paquete vigente.', tag: 'RECIENTE', tc: '#6B6B73', tb: '#F0EDF6' },
+  { k: 'D1_completaron', sec: 'DEJARON DE VENIR', t: 'Última clase en el mes · sin renovar', d: 'Su último paquete cerró su actividad dentro del mes y no compraron otro.', tag: '🔥 RENOVAR', tc: '#B3263B', tb: '#FDE8EC' },
+  { k: 'D2_antes_del_mes', sec: 'DEJARON DE VENIR', t: 'Última clase antes del mes', d: 'Su actividad más reciente es anterior al mes (o compraron y nunca vinieron).', tag: 'REACTIVAR', tc: '#B45309', tb: '#FEF3E2' },
+  { k: 'D3_congelada_sin_clase', sec: 'DEJARON DE VENIR', t: 'Congeladas · sin clase en el mes', d: 'Paquete en pausa y sin actividad dentro del mes.', tag: 'EN PAUSA', tc: '#6B6B73', tb: '#F0EDF6' },
+  { k: 'D4_prueba', sec: 'NUNCA ARRANCARON', t: 'Solo clase de prueba', d: 'Probaron y nunca compraron un paquete. Objetivo de conversión.', tag: 'CONVERTIR', tc: '#B45309', tb: '#FEF3E2' },
+  { k: 'D5_monkeyfit', sec: 'NUNCA ARRANCARON', t: 'Pase MonkeyFit (convenio)', d: 'Solo tienen pases MonkeyFit, sin paquetes propios.', tag: 'CONVENIO', tc: '#6B6B73', tb: '#F0EDF6' },
+  { k: 'E_registradas', sec: 'NUNCA ARRANCARON', t: 'Solo registradas', d: 'Sin paquete y sin clases: solo se les ingresó al sistema.', tag: 'LEAD', tc: '#6B6B73', tb: '#F0EDF6' },
+];
+function censusMonthOptions() {
+  const out = []; const now = new Date();
+  for (let i = 0; i < 9; i++) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const v = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    out.push({ v, t: `${RV_MESES[d.getMonth()]} ${d.getFullYear()}${i === 0 ? ' (en curso)' : ''}` });
+  }
+  return out;
+}
+async function renderCensusReport() {
+  const c = document.getElementById('reports-container');
+  if (!c) return;
+  if (!isOnline) { c.innerHTML = '<div style="padding:40px;text-align:center;color:var(--ink-mute)">Conexión requerida.</div>'; return; }
+  if (!CENSUS_STATE.month) { const d = new Date(); const p = new Date(d.getFullYear(), d.getMonth() - 1, 1); CENSUS_STATE.month = `${p.getFullYear()}-${String(p.getMonth() + 1).padStart(2, '0')}`; }
+  c.innerHTML = '<div style="padding:40px;text-align:center;color:var(--ink-mute)">Clasificando a todas las alumnas…</div>';
+  const [yy, mm] = CENSUS_STATE.month.split('-').map(Number);
+  const from = `${yy}-${String(mm).padStart(2, '0')}-01`;
+  const to = `${yy}-${String(mm).padStart(2, '0')}-${String(new Date(yy, mm, 0).getDate()).padStart(2, '0')}`;
+  try {
+    const { data, error } = await sb.rpc('student_census', { p_from: from, p_to: to });
+    if (error) throw error;
+    CENSUS_STATE.data = data;
+  } catch (e) {
+    c.innerHTML = '<div style="padding:40px;text-align:center;color:var(--danger)">No se pudo cargar: ' + escape(e.message || '') + '</div>';
+    return;
+  }
+  censusPaint();
+}
+function _censusFilteredRows() {
+  const f = CENSUS_STATE.f;
+  return (CENSUS_STATE.data.rows || []).filter(r =>
+    (f.sede === 'all' || r.loc === f.sede) &&
+    (f.mod === 'all' || r.mod === f.mod) &&
+    (f.gen === 'all' || (r.gen || 'nd') === f.gen) &&
+    (f.app === 'all' || String(!!r.app) === f.app) &&
+    (f.baja === 'all' || String(!!r.baja) === f.baja)
+  );
+}
+function censusPaint() {
+  const c = document.getElementById('reports-container');
+  const rows = _censusFilteredRows();
+  const byCat = {}; rows.forEach(r => { (byCat[r.cat] = byCat[r.cat] || []).push(r); });
+  const knownKeys = CENSUS_CATS.map(x => x.k);
+  const unknown = rows.filter(r => !knownKeys.includes(r.cat));
+  const total = rows.length;
+  const clasificadas = total - unknown.length;
+  const selKeys = Object.keys(CENSUS_STATE.sel).filter(k => CENSUS_STATE.sel[k]);
+  const selCount = selKeys.reduce((a, k) => a + (byCat[k] ? byCat[k].length : 0), 0);
+  const monthLbl = (() => { const [y, m] = CENSUS_STATE.month.split('-').map(Number); return `${RV_MESES[m - 1]} ${y}`; })();
+  const cuadra = clasificadas === total;
+  const selOpt = (opts, cur) => opts.map(o => `<option value="${o.v}" ${String(cur) === String(o.v) ? 'selected' : ''}>${o.t}</option>`).join('');
+  const sedes = [{ v: 'all', t: 'Todas las sedes' }].concat((STATE.locations || []).map(l => ({ v: l.id, t: l.name })));
+  const fSel = (id, opts, cur) => `<select class="btn btn-ghost" style="padding:7px 11px;font-size:12px;" onchange="CENSUS_STATE.f.${id}=this.value; censusPaint();">${selOpt(opts, cur)}</select>`;
+
+  const secOrder = ['ACTIVAS', 'DEJARON DE VENIR', 'NUNCA ARRANCARON'];
+  let cards = '';
+  secOrder.forEach(sec => {
+    cards += `<div style="font-size:10.5px;font-weight:800;letter-spacing:.1em;color:var(--ink-mute);margin:16px 0 8px;">${sec}${sec === 'DEJARON DE VENIR' ? ` · SEGÚN EL MES ELEGIDO (${monthLbl.toUpperCase()})` : ''}</div>`;
+    cards += `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:10px;">`;
+    CENSUS_CATS.filter(x => x.sec === sec).forEach(cat => {
+      const list = byCat[cat.k] || [];
+      const on = !!CENSUS_STATE.sel[cat.k];
+      const open = !!CENSUS_STATE.open[cat.k];
+      let listHtml = '';
+      if (open) {
+        listHtml = `<div style="margin-top:10px;border-top:1px dashed var(--line);max-height:300px;overflow-y:auto;">` +
+          (list.length ? list.map(r => {
+            const loc = (STATE.locations || []).find(l => l.id === r.loc);
+            return `<div onclick="event.stopPropagation(); openStudentDetail('${r.id}')" style="display:flex;align-items:center;gap:8px;padding:7px 2px;border-bottom:1px solid var(--line-soft);cursor:pointer;font-size:12px;" onmouseover="this.style.background='var(--fit-cream)'" onmouseout="this.style.background=''">
+              <span style="width:8px;height:8px;border-radius:50%;background:${(loc && loc.color) || '#999'};flex-shrink:0;"></span>
+              <span style="font-weight:600;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escape(r.nombre)}${r.baja ? ' <span style="font-size:9px;color:var(--ink-mute);">(baja)</span>' : ''}${r.app ? ' <span style="background:#5B2A8F;color:#fff;font-size:8px;font-weight:800;padding:1px 5px;border-radius:999px;">APP</span>' : ''}</span>
+              <span style="color:var(--ink-mute);flex-shrink:0;">${r.ultima ? r.ultima.slice(5) : '—'}</span>
+              <span style="color:var(--ink-mute);flex-shrink:0;max-width:90px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escape(r.pkg || '')}</span>
+            </div>`;
+          }).join('') : `<div style="padding:12px;color:var(--ink-mute);font-size:12px;">Ninguna alumna con los filtros actuales.</div>`) + `</div>`;
+      }
+      cards += `<div onclick="CENSUS_STATE.open['${cat.k}']=!CENSUS_STATE.open['${cat.k}']; censusPaint();"
+        style="background:${on ? 'linear-gradient(135deg,#FBF8FF,#fff)' : '#fff'};border:1.5px solid ${on ? 'var(--fit-purple-soft)' : 'var(--line)'};border-radius:15px;padding:13px 15px;cursor:pointer;position:relative;${on ? 'box-shadow:0 4px 14px rgba(91,42,143,.13);' : ''}">
+        <div style="display:flex;gap:11px;align-items:flex-start;">
+          <div onclick="event.stopPropagation(); CENSUS_STATE.sel['${cat.k}']=!CENSUS_STATE.sel['${cat.k}']; censusPaint();"
+            style="width:20px;height:20px;border-radius:6px;border:2px solid ${on ? 'var(--fit-purple-soft)' : '#C9BFD6'};background:${on ? 'var(--fit-purple-soft)' : '#fff'};flex-shrink:0;margin-top:1px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:12px;">${on ? '✓' : ''}</div>
+          <div style="min-width:0;">
+            <div style="font-family:var(--display);font-size:25px;line-height:1;">${list.length}</div>
+            <div style="font-size:12.5px;font-weight:700;margin:3px 0 2px;line-height:1.3;">${cat.t}</div>
+            <div style="font-size:10.5px;color:var(--ink-mute);line-height:1.4;">${cat.d}</div>
+          </div>
+          <span style="position:absolute;top:11px;right:13px;font-size:8.5px;font-weight:800;border-radius:999px;padding:2.5px 8px;letter-spacing:.04em;background:${cat.tb};color:${cat.tc};">${cat.tag}</span>
+        </div>${listHtml}</div>`;
+    });
+    cards += `</div>`;
+  });
+  if (unknown.length) {
+    cards += `<div style="margin-top:12px;background:#FDE8EC;border:1.5px solid #B3263B;border-radius:12px;padding:12px 16px;color:#B3263B;font-weight:700;font-size:13px;">⚠ ${unknown.length} alumnas sin clasificar — revisar datos.</div>`;
+  }
+
+  c.innerHTML = `
+    <div onclick="reportsBackToHub()" style="color:var(--fit-purple);font-size:13px;cursor:pointer;margin-bottom:14px;">← Volver a Reportes</div>
+    <div style="display:flex;align-items:center;flex-wrap:wrap;gap:12px;">
+      <h2 style="font-family:var(--display);font-weight:400;font-size:26px;margin:0;">Censo de <em style="color:var(--fit-purple)">alumnas</em></h2>
+      <span style="display:inline-flex;align-items:center;gap:7px;background:${cuadra ? '#E9F6EE' : '#FDE8EC'};color:${cuadra ? '#0E7A4F' : '#B3263B'};font-weight:700;font-size:12.5px;border-radius:999px;padding:7px 15px;">${cuadra ? '✓' : '⚠'} ${clasificadas} de ${total} clasificadas${cuadra ? ' · el censo cuadra' : ''}</span>
+    </div>
+    <div style="color:var(--ink-mute);font-size:12px;margin:5px 0 12px;">Clasificación por actividad real (asistencias y reservas) + estado del paquete. Cada alumna cae en exactamente una categoría. Marca el checkbox para sumar · clic en la tarjeta abre la lista.</div>
+    <div style="display:flex;gap:7px;flex-wrap:wrap;margin-bottom:6px;">
+      <select class="btn btn-ghost" style="padding:7px 11px;font-size:12px;" onchange="CENSUS_STATE.month=this.value; renderCensusReport();">${selOpt(censusMonthOptions(), CENSUS_STATE.month)}</select>
+      ${fSel('sede', sedes, CENSUS_STATE.f.sede)}
+      ${fSel('mod', [{ v: 'all', t: 'Modalidad: todas' }, { v: 'fixed', t: 'Fijas' }, { v: 'flexible', t: 'Flexibles' }], CENSUS_STATE.f.mod)}
+      ${fSel('gen', [{ v: 'all', t: 'Género: todos' }, { v: 'F', t: 'Femenino' }, { v: 'M', t: 'Masculino' }, { v: 'nd', t: 'Sin dato' }], CENSUS_STATE.f.gen)}
+      ${fSel('app', [{ v: 'all', t: 'App: todas' }, { v: 'true', t: 'Usan la app' }, { v: 'false', t: 'No usan la app' }], CENSUS_STATE.f.app)}
+      ${fSel('baja', [{ v: 'all', t: 'Bajas: incluir' }, { v: 'false', t: 'Sin las de baja' }, { v: 'true', t: 'Solo las de baja' }], CENSUS_STATE.f.baja)}
+    </div>
+    ${cards}
+    <div style="position:sticky;bottom:12px;margin-top:16px;background:var(--fit-purple);color:#fff;border-radius:15px;padding:14px 20px;display:flex;align-items:center;gap:16px;box-shadow:0 10px 30px rgba(60,29,110,.35);">
+      <div><div style="font-family:var(--display);font-size:26px;">${selCount}</div><div style="font-size:11px;opacity:.85;">alumnas en tu selección</div></div>
+      <div style="font-size:12px;line-height:1.5;opacity:.92;flex:1;">${selKeys.length ? selKeys.map(k => { const cc = CENSUS_CATS.find(x => x.k === k); return `${cc ? cc.t : k} (${(byCat[k] || []).length})`; }).join(' + ') : 'Marca una o más categorías para sumarlas.'}</div>
+      <span style="background:rgba(255,255,255,.15);border-radius:999px;padding:7px 14px;font-weight:700;font-size:12px;white-space:nowrap;">${total ? Math.round(selCount * 100 / total) : 0}% del censo</span>
+    </div>`;
+}
+
 async function renderReportsView() {
   initReportsState();
   const container = document.getElementById('reports-container');
@@ -32782,6 +32932,10 @@ async function renderReportsView() {
   if (REPORTS_STATE.subView === 'unmarked') {
     UNMARKED_STATE.embed = false;
     await renderUnmarkedReport();
+    return;
+  }
+  if (REPORTS_STATE.subView === 'census') {
+    await renderCensusReport();
     return;
   }
   // subView === 'monthly' — reporte mensual original
