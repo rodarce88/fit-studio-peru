@@ -4179,12 +4179,14 @@
         <h1 class="page-title">Revenue <em>Management</em></h1>
         <div class="page-sub">Ingreso por clase, ocupación y rentabilidad — con técnicas de revenue de hotelería.</div>
       </div>
-      <div class="page-actions">
-        <select id="rv-period" class="btn btn-ghost" onchange="RV_STATE.days=+this.value; renderRevenueView();" style="padding:8px 12px;">
-          <option value="30">Últimos 30 días</option>
-          <option value="60">Últimos 60 días</option>
-          <option value="90">Últimos 90 días</option>
-        </select>
+      <div class="page-actions" style="flex-wrap:wrap; align-items:center;">
+        <select id="rv-period" class="btn btn-ghost" onchange="rvSetPeriod(this.value)" style="padding:8px 12px;"></select>
+        <span id="rv-custom" style="display:none; align-items:center; gap:6px;">
+          <input type="date" id="rv-from" class="btn btn-ghost" style="padding:7px 10px;">
+          <span style="color:var(--ink-mute); font-size:12px;">a</span>
+          <input type="date" id="rv-to" class="btn btn-ghost" style="padding:7px 10px;">
+          <button class="btn btn-primary" style="padding:8px 14px;" onclick="rvApplyCustom()">Aplicar</button>
+        </span>
         <button class="btn btn-ghost" onclick="renderRevenueView()">↻ Actualizar</button>
       </div>
     </div>
@@ -23301,11 +23303,23 @@ function instructorRenderResults(query) {  const results = document.getElementBy
   }).join('');
 
   if (q && matches.length === 0) {
+    const toks = q.trim().split(/\s+/).filter(Boolean);
+    let sug = '';
+    if (toks.length > 1) {
+      // Búsqueda combinada sin match → sugerir buscar por cada palabra suelta
+      sug = `<div style="font-size: 11px; color: var(--ink-mute); margin: 14px 0 8px;">Prueba buscando por partes:</div>
+        <div style="display:flex; gap:8px; justify-content:center; flex-wrap:wrap;">` +
+        toks.slice(0, 3).map(t => `<button onclick="var i=document.getElementById('inst-add-search'); if(i){ i.value='${escape(t)}'; } instructorRenderResults('${escape(t)}');" style="background:#fff; border:1.5px solid var(--fit-purple-soft); color:var(--fit-purple); border-radius:999px; padding:8px 14px; font-size:12px; font-weight:600; cursor:pointer; font-family:var(--body);">Solo «${escape(t)}»</button>`).join('') +
+        `</div>`;
+    } else {
+      sug = `<div style="font-size: 11px; color: var(--ink-mute); margin-top: 10px;">Prueba con el apellido, con otro nombre, o con su número de teléfono.</div>`;
+    }
     html = `
       <div style="padding: 30px 20px; text-align: center;">
         <div style="font-size: 28px; margin-bottom: 8px;">🔍</div>
         <div style="font-family: var(--display); font-style: italic; font-size: 16px; color: var(--fit-purple-deep); margin-bottom: 4px;">Sin resultados para "${escape(q)}"</div>
-        <div style="font-size: 12px; color: var(--ink-mute);">¿Es alguien nuevo? Regístrala como invitada abajo.</div>
+        <div style="font-size: 12px; color: var(--ink-mute);">Puede estar guardada con otro nombre o apellido.</div>
+        ${sug}
       </div>
     `;
   }
@@ -23532,18 +23546,17 @@ async function instructorRenderCase(info, stud) {
   }
 }
 
+var INVITE_WIZ = { step: 1, first: '', last: '' };
 function instructorRenderInviteForm(prefillName) {
-  // Si recibe un prefill (lo que escribió en búsqueda), intentar split "Nombre Apellido"
-  // Aplicamos toTitleCase desde el inicio para que aparezca capitalizado en los inputs.
+  // Prefill desde lo que buscó: primera palabra = nombre, resto = apellido
   let prefFirst = '', prefLast = '';
   if (prefillName) {
-    const trimmed = prefillName.trim();
-    const parts = trimmed.split(/\s+/);
+    const parts = prefillName.trim().split(/\s+/);
     prefFirst = toTitleCase(parts[0] || '');
     if (parts.length > 1) prefLast = toTitleCase(parts.slice(1).join(' '));
   }
+  INVITE_WIZ = { step: 1, first: prefFirst, last: prefLast };
 
-  // Si el header está en modo search, restaurarlo a modo simple para esta pantalla
   const modalHeader = document.querySelector('#instructor-add-modal .modal-header');
   if (modalHeader) {
     modalHeader.innerHTML = `
@@ -23555,52 +23568,91 @@ function instructorRenderInviteForm(prefillName) {
       <button class="modal-close" onclick="closeModals()">✕</button>
     `;
   }
-
+  inviteWizPaint();
+}
+function _inviteChip(label, value, backStep) {
+  return `<div onclick="INVITE_WIZ.step=${backStep}; inviteWizPaint();" style="display:flex; align-items:center; gap:8px; background:#E9F6EE; border:1.5px solid #BBE3CC; border-radius:12px; padding:10px 14px; margin: 0 18px 10px; cursor:pointer;">
+    <span style="color:var(--good); font-weight:800;">✓</span>
+    <span style="flex:1; font-size:13px;"><span style="color:var(--ink-mute); font-size:10.5px; text-transform:uppercase; letter-spacing:.08em;">${label}</span><br><b>${escape(value)}</b></span>
+    <span style="font-size:11px; color:var(--ink-mute); text-decoration:underline;">editar</span>
+  </div>`;
+}
+function inviteWizPaint() {
   const body = document.getElementById('inst-add-body');
-  body.innerHTML = `
-    <div style="margin: 14px 18px; padding: 12px 14px; background: var(--fit-lavender-pale); border-radius: 10px;">
+  if (!body) return;
+  const stepDots = `<div style="display:flex; gap:6px; justify-content:center; padding: 14px 0 4px;">${[1,2,3].map(n => `<span style="width:8px;height:8px;border-radius:50%;background:${n <= INVITE_WIZ.step ? 'var(--fit-purple)' : '#DDD6E8'};"></span>`).join('')}</div>`;
+
+  if (INVITE_WIZ.step === 1) {
+    body.innerHTML = `${stepDots}
+      <div style="padding: 10px 18px 6px; text-align:center;">
+        <div style="font-family: var(--display); font-style: italic; font-size: 19px;">¿Cuál es su <em style="color:var(--fit-purple)">nombre</em>?</div>
+        <div style="font-size: 11.5px; color: var(--ink-mute); margin-top: 3px;">Lo llenamos con lo que buscaste — corrígelo si hace falta.</div>
+      </div>
+      <div style="padding: 10px 18px 12px;">
+        <input id="wiz-first" placeholder="Ej. María" autocomplete="off" value="${escape(INVITE_WIZ.first)}"
+          onblur="this.value = toTitleCase(this.value)"
+          style="width: 100%; padding: 14px; font-size: 17px; text-align:center; border: 1.5px solid var(--fit-purple-soft); border-radius: 12px; box-sizing: border-box; font-family: var(--body); -webkit-appearance: none;" />
+      </div>
+      <div style="padding: 0 18px 20px;">
+        <button onclick="inviteWizNext(1)" style="width: 100%; padding: 14px; font-size: 14px; background: var(--fit-purple); color: white; border: none; border-radius: 12px; font-weight: 600; cursor: pointer; font-family: var(--body);">Confirmar nombre →</button>
+      </div>`;
+    setTimeout(() => document.getElementById('wiz-first')?.focus(), 60);
+    return;
+  }
+  if (INVITE_WIZ.step === 2) {
+    body.innerHTML = `${stepDots}
+      ${_inviteChip('Nombre', INVITE_WIZ.first, 1)}
+      <div style="padding: 4px 18px 6px; text-align:center;">
+        <div style="font-family: var(--display); font-style: italic; font-size: 19px;">¿Y su <em style="color:var(--fit-purple)">apellido</em>?</div>
+      </div>
+      <div style="padding: 10px 18px 12px;">
+        <input id="wiz-last" placeholder="Ej. Rodríguez" autocomplete="off" value="${escape(INVITE_WIZ.last)}"
+          onblur="this.value = toTitleCase(this.value)"
+          style="width: 100%; padding: 14px; font-size: 17px; text-align:center; border: 1.5px solid var(--fit-purple-soft); border-radius: 12px; box-sizing: border-box; font-family: var(--body); -webkit-appearance: none;" />
+      </div>
+      <div style="padding: 0 18px 20px;">
+        <button onclick="inviteWizNext(2)" style="width: 100%; padding: 14px; font-size: 14px; background: var(--fit-purple); color: white; border: none; border-radius: 12px; font-weight: 600; cursor: pointer; font-family: var(--body);">Confirmar apellido →</button>
+      </div>`;
+    setTimeout(() => document.getElementById('wiz-last')?.focus(), 60);
+    return;
+  }
+  // Paso 3: teléfono + referencia + registrar (mantiene los ids que usa instructorConfirmInvite)
+  body.innerHTML = `${stepDots}
+    ${_inviteChip('Nombre', INVITE_WIZ.first, 1)}
+    ${_inviteChip('Apellido', INVITE_WIZ.last || '—', 2)}
+    <input type="hidden" id="invite-first-name" value="${escape(INVITE_WIZ.first)}">
+    <input type="hidden" id="invite-last-name" value="${escape(INVITE_WIZ.last)}">
+    <div style="margin: 4px 18px 12px; padding: 12px 14px; background: var(--fit-lavender-pale); border-radius: 10px;">
       <div style="font-size: 12.5px; font-weight: 600; color: #3C3489; margin-bottom: 3px;">💜 Clase de prueba</div>
       <div style="font-size: 11px; color: #534AB7; line-height: 1.4;">Aparecerá en el dashboard de la coordinadora como pendiente de cobro.</div>
     </div>
-
-    <div style="padding: 0 18px 12px;">
-      <div style="font-size: 11px; color: var(--ink-mute); text-transform: uppercase; letter-spacing: 0.12em; font-weight: 600; margin-bottom: 6px;">Nombre <span style="color: var(--danger);">*</span></div>
-      <input id="invite-first-name" placeholder="Ej. María" autocomplete="off" value="${escape(prefFirst)}"
-        onblur="this.value = toTitleCase(this.value)"
-        style="width: 100%; padding: 11px 14px; font-size: 14px; border: 1px solid var(--line); border-radius: 10px; box-sizing: border-box; font-family: var(--body); -webkit-appearance: none;" />
-    </div>
-
-    <div style="padding: 0 18px 12px;">
-      <div style="font-size: 11px; color: var(--ink-mute); text-transform: uppercase; letter-spacing: 0.12em; font-weight: 600; margin-bottom: 6px;">Apellido</div>
-      <input id="invite-last-name" placeholder="Ej. Rodríguez" autocomplete="off" value="${escape(prefLast)}"
-        onblur="this.value = toTitleCase(this.value)"
-        style="width: 100%; padding: 11px 14px; font-size: 14px; border: 1px solid var(--line); border-radius: 10px; box-sizing: border-box; font-family: var(--body); -webkit-appearance: none;" />
-    </div>
-
     <div style="padding: 0 18px 12px;">
       <div style="font-size: 11px; color: var(--ink-mute); text-transform: uppercase; letter-spacing: 0.12em; font-weight: 600; margin-bottom: 6px;">Teléfono (WhatsApp) <span style="color: var(--danger);">*</span></div>
       ${renderPhoneFieldHtml('invite', '', { placeholder: '999 999 999' })}
-      <div style="font-size: 10.5px; color: var(--ink-mute); margin-top: 4px; line-height: 1.4;">
-        💡 Si pegas un número con código (ej. +51 947 519 295), el país se detecta automático.
-      </div>
     </div>
-
     <div style="padding: 0 18px 16px;">
       <div style="font-size: 11px; color: var(--ink-mute); text-transform: uppercase; letter-spacing: 0.12em; font-weight: 600; margin-bottom: 6px;">Cómo nos conoció <span style="color: var(--ink-faint); text-transform: none; letter-spacing: 0; font-weight: 400;">(opcional)</span></div>
       <input id="invite-referral" placeholder="Instagram, referida, etc." autocomplete="off"
         style="width: 100%; padding: 11px 14px; font-size: 14px; border: 1px solid var(--line); border-radius: 10px; box-sizing: border-box; font-family: var(--body); -webkit-appearance: none;" />
     </div>
-
     <div style="padding: 0 18px 16px;">
       <button onclick="instructorConfirmInvite()" style="width: 100%; padding: 13px; font-size: 14px; background: var(--fit-purple); color: white; border: none; border-radius: 12px; font-weight: 500; cursor: pointer; font-family: var(--body);">Registrar y marcar asistida</button>
     </div>
-
     <div style="padding: 0 18px 20px; font-size: 11px; color: var(--ink-mute); line-height: 1.5; text-align: center;">
       Después podrás agendarle clases o convertirla en alumna regular desde su perfil.
-    </div>
-  `;
-  setTimeout(() => document.getElementById('invite-first-name')?.focus(), 50);
+    </div>`;
 }
+window.inviteWizNext = function(step) {
+  if (step === 1) {
+    const v = toTitleCase((document.getElementById('wiz-first')?.value || '').trim());
+    if (!v) { showToast('Escribe su nombre', 'warn'); return; }
+    INVITE_WIZ.first = v; INVITE_WIZ.step = 2;
+  } else if (step === 2) {
+    INVITE_WIZ.last = toTitleCase((document.getElementById('wiz-last')?.value || '').trim());
+    INVITE_WIZ.step = 3;
+  }
+  inviteWizPaint();
+};
 
 async function instructorEnsureSession(ctx) {
   let { data: session } = await sb.from('class_sessions')
@@ -32464,7 +32516,7 @@ function ccResolveInstructor(locationId, date, dow, hour) {
 // ============================================================
 // REVENUE MANAGEMENT (reporte + tutorial + egresos + proyecciones)
 // ============================================================
-var RV_STATE = { tab: 'reporte', days: 30, data: null, expenses: [] };
+var RV_STATE = { tab: 'reporte', mode: 'lastmonth', from: null, to: null, lastAppliedMode: null, data: null, expenses: [] };
 var _rvSaveTimer = null;
 
 function rvMoney(n, dec) { const v = Number(n) || 0; return 'S/' + v.toLocaleString('es-PE', { minimumFractionDigits: dec || 0, maximumFractionDigits: dec || 0 }); }
@@ -32472,15 +32524,80 @@ function rvPct(x) { return Math.round((Number(x) || 0) * 1000) / 10 + '%'; }
 function rvHourLabel(h) { const ap = h < 12 ? 'am' : 'pm'; let hh = h % 12; if (hh === 0) hh = 12; return hh + ap; }
 const RV_DOW = { 1: 'Lunes', 2: 'Martes', 3: 'Miércoles', 4: 'Jueves', 5: 'Viernes', 6: 'Sábado', 7: 'Domingo' };
 
+// ── Períodos del Revenue: meses calendario COMPLETOS o rango libre ──
+const RV_MESES = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+function _rvIso(d) { return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
+function rvPeriodRange(mode) {
+  const now = new Date(); const y = now.getFullYear(), m = now.getMonth();
+  const firstOf = (yy, mm) => new Date(yy, mm, 1);
+  const lastOf = (yy, mm) => new Date(yy, mm + 1, 0);
+  if (mode === 'thismonth') return { from: firstOf(y, m), to: now };
+  if (mode === 'lastmonth') return { from: firstOf(y, m - 1), to: lastOf(y, m - 1) };
+  if (mode === 'last3')     return { from: firstOf(y, m - 3), to: lastOf(y, m - 1) };
+  if (mode === 'last6')     return { from: firstOf(y, m - 6), to: lastOf(y, m - 1) };
+  if (mode === 'custom' && RV_STATE.from && RV_STATE.to) return { from: new Date(RV_STATE.from + 'T00:00:00'), to: new Date(RV_STATE.to + 'T00:00:00') };
+  const f = new Date(now); f.setDate(f.getDate() - 30); const t = new Date(now); t.setDate(t.getDate() - 1);
+  return { from: f, to: t };
+}
+function rvPeriodOptions() {
+  const now = new Date(); const m = now.getMonth();
+  const mn = (mm) => RV_MESES[((mm % 12) + 12) % 12];
+  return [
+    { v: 'thismonth', t: `Este mes · ${mn(m)} (parcial)` },
+    { v: 'lastmonth', t: `Mes pasado · ${mn(m - 1)}` },
+    { v: 'last3', t: `Últimos 3 meses · ${mn(m - 3)}–${mn(m - 1)}` },
+    { v: 'last6', t: `Últimos 6 meses · ${mn(m - 6)}–${mn(m - 1)}` },
+    { v: 'days30', t: 'Últimos 30 días' },
+    { v: 'custom', t: 'Rango personalizado…' },
+  ];
+}
+window.rvSetPeriod = function(mode) {
+  RV_STATE.mode = mode;
+  const cust = document.getElementById('rv-custom');
+  if (mode === 'custom') {
+    if (cust) cust.style.display = 'inline-flex';
+    const r = rvPeriodRange(RV_STATE.lastAppliedMode || 'lastmonth');
+    const fi = document.getElementById('rv-from'), ti = document.getElementById('rv-to');
+    if (fi && !fi.value) fi.value = _rvIso(r.from);
+    if (ti && !ti.value) ti.value = _rvIso(r.to);
+    return;
+  }
+  if (cust) cust.style.display = 'none';
+  renderRevenueView();
+};
+window.rvApplyCustom = function() {
+  const f = document.getElementById('rv-from')?.value, t = document.getElementById('rv-to')?.value;
+  if (!f || !t) { showToast('Elige ambas fechas', 'warn'); return; }
+  if (t < f) { showToast('La fecha final debe ser posterior a la inicial', 'warn'); return; }
+  RV_STATE.from = f; RV_STATE.to = t; RV_STATE.mode = 'custom';
+  renderRevenueView();
+};
+function rvRangeLabel(d) {
+  if (!d || !d.period_from) return `${(d && d.period_days) || ''} días`;
+  const f = new Date(d.period_from + 'T00:00:00'), t = new Date(d.period_to + 'T00:00:00');
+  const fmt = (x) => `${x.getDate()} ${RV_MESES[x.getMonth()].slice(0,3)}`;
+  if (f.getDate() === 1 && t.getMonth() === f.getMonth() && t.getFullYear() === f.getFullYear() && t.getDate() === new Date(t.getFullYear(), t.getMonth()+1, 0).getDate()) {
+    return `${RV_MESES[f.getMonth()]} ${f.getFullYear()}`;
+  }
+  return `${fmt(f)} – ${fmt(t)} ${t.getFullYear()}`;
+}
+
 async function renderRevenueView() {
   const c = document.getElementById('rv-container');
   if (!c) return;
-  const sel = document.getElementById('rv-period'); if (sel) sel.value = String(RV_STATE.days);
+  const sel = document.getElementById('rv-period');
+  if (sel) {
+    sel.innerHTML = rvPeriodOptions().map(o => `<option value="${o.v}" ${RV_STATE.mode === o.v ? 'selected' : ''}>${o.t}</option>`).join('');
+    const cust = document.getElementById('rv-custom');
+    if (cust) cust.style.display = RV_STATE.mode === 'custom' ? 'inline-flex' : 'none';
+  }
   if (!isOnline) { c.innerHTML = '<div style="padding:40px;text-align:center;color:var(--ink-mute)">Necesitas conexión para ver Revenue Management.</div>'; return; }
   c.innerHTML = '<div style="padding:40px;text-align:center;color:var(--ink-mute)">Calculando métricas de revenue…</div>';
   try {
+    const r = rvPeriodRange(RV_STATE.mode);
+    RV_STATE.lastAppliedMode = RV_STATE.mode;
     const [rep, exp] = await Promise.all([
-      sb.rpc('revenue_report', { p_days: RV_STATE.days }),
+      sb.rpc('revenue_report', { p_from: _rvIso(r.from), p_to: _rvIso(r.to) }),
       sb.from('studio_expenses').select('*').order('sort', { ascending: true })
     ]);
     if (rep.error) throw rep.error;
@@ -32534,7 +32651,7 @@ const RV_HEALTH_COL = { ok: '#0E7A4F', mid: 'var(--warn)', bad: 'var(--danger)' 
 function rvRenderReporte() {
   const d = RV_STATE.data; const o = d.overall; const bk = d.breakage; const st = d.students;
   const kpis = `<div class="rv-kpis">
-    <div class="rv-kpi accent"><div class="k-lab">Ingreso reconocido</div><div class="k-val">${rvMoney(o.ingreso)}</div><div class="k-sub">${d.period_days} días · ${o.consumidas} clases dictadas</div></div>
+    <div class="rv-kpi accent"><div class="k-lab">Ingreso reconocido</div><div class="k-val">${rvMoney(o.ingreso)}</div><div class="k-sub">${rvRangeLabel(d)} · ${o.consumidas} clases dictadas</div></div>
     <div class="rv-kpi"><div class="k-lab">ADR · precio/clase</div><div class="k-val">${rvMoney(o.adr, 1)}</div><div class="k-sub">por asiento ocupado</div></div>
     <div class="rv-kpi"><div class="k-lab">Ocupación</div><div class="k-val">${rvPct(o.ocupacion)}</div><div class="k-sub">${o.consumidas} de ${o.asientos} asientos</div></div>
     <div class="rv-kpi"><div class="k-lab">RevPAS</div><div class="k-val">${rvMoney(o.revpas, 1)}</div><div class="k-sub">ingreso ÷ asiento disponible</div></div>
@@ -32601,7 +32718,7 @@ function rvRenderGuia() {
   const c3 = acc(3, 'ADR — precio promedio por clase', `
     <div class="lbl">Qué es</div>El precio realizado por <b>asiento ocupado</b> (Average Daily Rate, de hotelería).
     <div class="lbl">Cómo se calcula</div><div class="rv-formula">ADR = ingreso reconocido ÷ clases consumidas</div>
-    <div class="lbl">Tu número real</div><div class="rv-ex">En los últimos ${d.period_days} días tu ADR es <b>${rvMoney(o.adr, 1)}</b> por asiento.</div>
+    <div class="lbl">Tu número real</div><div class="rv-ex">En ${rvRangeLabel(d)} tu ADR es <b>${rvMoney(o.adr, 1)}</b> por asiento.</div>
     <div class="lbl">Ojo</div>El ADR no dice si la clase estaba llena. Una clase con ADR alto pero medio vacía rinde poco. Para eso está el RevPAS (punto 5).`);
 
   const c4 = acc(4, 'Ocupación', `
@@ -32681,7 +32798,7 @@ function rvRenderEgresos() {
     ${varc.map(row).join('')}
     <button class="btn btn-ghost" style="margin-top:6px" onclick="rvExpAdd('por_clase')">+ agregar costo por clase</button>
   </div>
-  <div class="rv-card"><h3>Rentabilidad y proyecciones</h3><div class="rv-hint">Estimado mensual, escalando tus últimos ${RV_STATE.data.period_days} días a 30. Se actualiza mientras editas arriba.</div>
+  <div class="rv-card"><h3>Rentabilidad y proyecciones</h3><div class="rv-hint">Estimado mensual, escalando ${rvRangeLabel(RV_STATE.data)} (${RV_STATE.data.period_days} días) a 30. Se actualiza mientras editas arriba.</div>
     <div id="rv-proj-box" class="rv-proj"></div>
     <div id="rv-proj-note"></div>
   </div>`;
@@ -32789,7 +32906,28 @@ async function renderCensusReport() {
   if (!c) return;
   if (!isOnline) { c.innerHTML = '<div style="padding:40px;text-align:center;color:var(--ink-mute)">Conexión requerida.</div>'; return; }
   if (!CENSUS_STATE.month) { const d = new Date(); const p = new Date(d.getFullYear(), d.getMonth() - 1, 1); CENSUS_STATE.month = `${p.getFullYear()}-${String(p.getMonth() + 1).padStart(2, '0')}`; }
-  c.innerHTML = '<div style="padding:40px;text-align:center;color:var(--ink-mute)">Clasificando a todas las alumnas…</div>';
+  // Skeleton + etapas del proceso mientras la RPC clasifica
+  const sk = `<div style="background:#fff;border:1.5px solid var(--line);border-radius:15px;padding:14px 16px;">
+      <div style="width:44px;height:24px;border-radius:6px;background:linear-gradient(90deg,#EFEBF5 25%,#F8F5FC 50%,#EFEBF5 75%);background-size:200% 100%;animation:censk 1.2s infinite;margin-bottom:8px;"></div>
+      <div style="width:70%;height:11px;border-radius:5px;background:linear-gradient(90deg,#EFEBF5 25%,#F8F5FC 50%,#EFEBF5 75%);background-size:200% 100%;animation:censk 1.2s infinite;margin-bottom:6px;"></div>
+      <div style="width:95%;height:9px;border-radius:5px;background:linear-gradient(90deg,#EFEBF5 25%,#F8F5FC 50%,#EFEBF5 75%);background-size:200% 100%;animation:censk 1.2s infinite;"></div>
+    </div>`;
+  c.innerHTML = `<style>@keyframes censk{0%{background-position:200% 0}100%{background-position:-200% 0}}</style>
+    <div onclick="reportsBackToHub()" style="color:var(--fit-purple);font-size:13px;cursor:pointer;margin-bottom:14px;">← Volver a Reportes</div>
+    <h2 style="font-family:var(--display);font-weight:400;font-size:26px;margin:0 0 4px;">Censo de <em style="color:var(--fit-purple)">alumnas</em></h2>
+    <div id="census-stage" style="color:var(--ink-mute);font-size:12.5px;margin-bottom:16px;display:flex;align-items:center;gap:8px;">
+      <span style="width:12px;height:12px;border:2px solid var(--fit-purple);border-top-color:transparent;border-radius:50%;display:inline-block;animation:spin .7s linear infinite;"></span>
+      <span id="census-stage-txt">Cargando alumnas del sistema…</span>
+    </div>
+    <style>@keyframes spin{to{transform:rotate(360deg)}}</style>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:10px;">${sk}${sk}${sk}${sk}${sk}${sk}</div>`;
+  const stages = ['Cargando alumnas del sistema…', 'Revisando asistencias y reservas…', 'Clasificando en categorías…', 'Cuadrando el censo…'];
+  let si = 0;
+  const stageTimer = setInterval(() => {
+    si = Math.min(si + 1, stages.length - 1);
+    const el = document.getElementById('census-stage-txt');
+    if (el) el.textContent = stages[si]; else clearInterval(stageTimer);
+  }, 700);
   const [yy, mm] = CENSUS_STATE.month.split('-').map(Number);
   const from = `${yy}-${String(mm).padStart(2, '0')}-01`;
   const to = `${yy}-${String(mm).padStart(2, '0')}-${String(new Date(yy, mm, 0).getDate()).padStart(2, '0')}`;
@@ -32797,11 +32935,13 @@ async function renderCensusReport() {
     const { data, error } = await sb.rpc('student_census', { p_from: from, p_to: to });
     if (error) throw error;
     CENSUS_STATE.data = data;
+    censusPaint();
   } catch (e) {
-    c.innerHTML = '<div style="padding:40px;text-align:center;color:var(--danger)">No se pudo cargar: ' + escape(e.message || '') + '</div>';
-    return;
+    console.error('[censo]', e);
+    c.innerHTML = '<div onclick="reportsBackToHub()" style="color:var(--fit-purple);font-size:13px;cursor:pointer;margin-bottom:14px;">← Volver a Reportes</div><div style="padding:40px;text-align:center;color:var(--danger)">No se pudo cargar el censo: ' + escape((e && e.message) || String(e)) + '<br><button class="btn btn-ghost" style="margin-top:12px;" onclick="renderCensusReport()">Reintentar</button></div>';
+  } finally {
+    clearInterval(stageTimer);
   }
-  censusPaint();
 }
 function _censusFilteredRows() {
   const f = CENSUS_STATE.f;
