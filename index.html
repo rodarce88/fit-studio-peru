@@ -11839,6 +11839,10 @@ async function saveStudent() {
     needs_confirmation: !f('f-no-confirm').checked,
     fixed_schedule: _fixedSlots.length ? _fixedSlots : null,
     fixed_pref_note: _fixedNote || null,
+    // Si la coordinadora le acaba de definir horario fijo, deja de estar "pendiente"
+    // (no contesta / no reagenda) — sin esto quedaba invisible en la Plantilla aunque
+    // su perfil ya tuviera horario (caso Maria Alejandra Bellido, 2/jul).
+    ...(_fixedSlots.length ? { fixed_pending: false } : {}),
     data_complete: !!(f('f-email').value.trim() && f('f-doc-num').value.trim()),
     status: 'active',
   };
