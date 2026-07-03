@@ -30836,6 +30836,18 @@ function renderReportsHubHTML() {
         <div style="color: #fff; font-size: 12.5px; font-weight: 700; background: rgba(255,255,255,0.14); border-radius: 999px; padding: 8px 16px; white-space: nowrap;">Abrir Revenue →</div>
       </div>
 
+      <div onclick="REPORTS_STATE.subView='stuact'; renderReportsView();"
+           style="background: white; border: 1px solid var(--line); border-radius: 14px; padding: 24px; cursor: pointer; transition: all 0.15s;"
+           onmouseover="this.style.borderColor='var(--fit-purple-soft)'; this.style.transform='translateY(-2px)';"
+           onmouseout="this.style.borderColor='var(--line)'; this.style.transform='';">
+        <div style="width: 48px; height: 48px; border-radius: 12px; background: var(--fit-lavender-pale); display: flex; align-items: center; justify-content: center; margin-bottom: 14px; font-size: 24px;">📱</div>
+        <h3 style="font-family: var(--display); font-style: italic; font-size: 22px; color: var(--fit-purple); margin: 0 0 6px; font-weight: 500;">Actividad de alumnas</h3>
+        <div style="color: var(--ink-mute); font-size: 13px; line-height: 1.5;">
+          Qué hacen en su app: agendan, mueven, confirman, avisan ausencias, califican, editan datos y la agregan a su inicio. Para analizar la adopción.
+        </div>
+        <div style="margin-top: 14px; color: var(--fit-purple); font-size: 12.5px; font-weight: 500;">Ver actividad →</div>
+      </div>
+
       <div onclick="REPORTS_STATE.subView='census'; renderReportsView();"
            style="background: white; border: 1px solid var(--line); border-radius: 14px; padding: 24px; cursor: pointer; transition: all 0.15s;"
            onmouseover="this.style.borderColor='var(--fit-purple-soft)'; this.style.transform='translateY(-2px)';"
@@ -33072,6 +33084,96 @@ function censusPaint() {
     </div>`;
 }
 
+// ============================================
+// ACTIVIDAD DE ALUMNAS EN SU APP (Reportes, solo coordinadoras)
+// Une eventos instrumentados + huellas históricas (confirmó/avisó/calificó).
+// ============================================
+var STUACT_STATE = { days: 14, tipo: 'all', sede: 'all', data: null };
+const STUACT_TIPOS = {
+  agendo_clase:          { t: 'Agendó una clase',            icon: '📅', c: '#0C447C', b: '#E6F1FB' },
+  movio_clase:           { t: 'Movió una clase',             icon: '🔁', c: '#6B21A8', b: '#F3E8FF' },
+  confirmo_asistencia:   { t: 'Confirmó asistencia',         icon: '✅', c: '#0E7A4F', b: '#E9F6EE' },
+  aviso_no_ir:           { t: 'Avisó que no irá',            icon: '🚫', c: '#B3263B', b: '#FDE8EC' },
+  califico:              { t: 'Calificó a su profesor',      icon: '⭐', c: '#B45309', b: '#FEF3E2' },
+  edito_perfil:          { t: 'Editó sus datos',             icon: '✏️', c: '#3C3489', b: '#EDEAFB' },
+  app_inicio_standalone: { t: 'Abrió la app desde su inicio',icon: '📲', c: '#5B2A8F', b: '#F1E8FA' },
+  app_instalada:         { t: 'Instaló la app',              icon: '📲', c: '#5B2A8F', b: '#F1E8FA' },
+};
+async function renderStudentActivityReport() {
+  const c = document.getElementById('reports-container');
+  if (!c) return;
+  if (!isOnline) { c.innerHTML = '<div style="padding:40px;text-align:center;color:var(--ink-mute)">Conexión requerida.</div>'; return; }
+  c.innerHTML = `<div onclick="reportsBackToHub()" style="color:var(--fit-purple);font-size:13px;cursor:pointer;margin-bottom:14px;">← Volver a Reportes</div>
+    <div style="padding:40px;text-align:center;color:var(--ink-mute)"><span style="width:12px;height:12px;border:2px solid var(--fit-purple);border-top-color:transparent;border-radius:50%;display:inline-block;animation:spin .7s linear infinite;vertical-align:-2px;margin-right:8px;"></span>Cargando actividad de las alumnas…</div>`;
+  try {
+    const { data, error } = await sb.rpc('student_app_activity', { p_days: STUACT_STATE.days });
+    if (error) throw error;
+    STUACT_STATE.data = data || [];
+    stuactPaint();
+  } catch (e) {
+    c.innerHTML = '<div onclick="reportsBackToHub()" style="color:var(--fit-purple);font-size:13px;cursor:pointer;margin-bottom:14px;">← Volver a Reportes</div><div style="padding:40px;text-align:center;color:var(--danger)">No se pudo cargar: ' + escape((e && e.message) || '') + '<br><button class="btn btn-ghost" style="margin-top:12px;" onclick="renderStudentActivityReport()">Reintentar</button></div>';
+  }
+}
+function _stuactWhen(iso) {
+  const d = new Date(iso); const mins = Math.max(0, (Date.now() - d.getTime()) / 60000);
+  if (mins < 60) return `hace ${Math.max(1, Math.round(mins))} min`;
+  if (mins < 24 * 60) { const h = Math.floor(mins / 60); return `hace ${h} ${h === 1 ? 'hora' : 'horas'}`; }
+  return `${d.getDate()} ${RV_MESES[d.getMonth()].slice(0, 3)} · ${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`;
+}
+function _stuactDetail(ev) {
+  const d = ev.detail || {};
+  const fh = (f, h) => f ? `${new Date(f + 'T00:00:00').getDate()} ${RV_MESES[new Date(f + 'T00:00:00').getMonth()].slice(0, 3)}${h != null ? ' · ' + formatHour(h) : ''}` : '';
+  if (ev.tipo === 'agendo_clase' || ev.tipo === 'confirmo_asistencia' || ev.tipo === 'aviso_no_ir') return fh(d.fecha, d.hora);
+  if (ev.tipo === 'movio_clase') return `${fh(d.de_fecha, d.de_hora)} → ${fh(d.a_fecha, d.a_hora)}`;
+  if (ev.tipo === 'califico') {
+    const inst = (STATE.instructors || []).find(i => i.id === d.instructor_id);
+    return `${'★'.repeat(d.rating || 0)}${'☆'.repeat(5 - (d.rating || 0))}${inst ? ' a ' + inst.first_name : ''}${d.comment ? ' · "' + escape(String(d.comment).slice(0, 60)) + '"' : ''}`;
+  }
+  return '';
+}
+function stuactPaint() {
+  const c = document.getElementById('reports-container');
+  let rows = STUACT_STATE.data || [];
+  if (STUACT_STATE.sede !== 'all') rows = rows.filter(r => r.loc === STUACT_STATE.sede);
+  if (STUACT_STATE.tipo !== 'all') rows = rows.filter(r => r.tipo === STUACT_STATE.tipo);
+  const alumnas = new Set(rows.map(r => r.sid)).size;
+  const byTipo = {}; rows.forEach(r => byTipo[r.tipo] = (byTipo[r.tipo] || 0) + 1);
+  const sel = (opts, cur, on) => `<select class="btn btn-ghost" style="padding:7px 11px;font-size:12px;" onchange="${on}">${opts.map(o => `<option value="${o.v}" ${String(cur) === String(o.v) ? 'selected' : ''}>${o.t}</option>`).join('')}</select>`;
+  const sedes = [{ v: 'all', t: 'Todas las sedes' }].concat((STATE.locations || []).map(l => ({ v: l.id, t: l.name })));
+  const tipos = [{ v: 'all', t: 'Todos los eventos' }].concat(Object.keys(STUACT_TIPOS).map(k => ({ v: k, t: STUACT_TIPOS[k].t })));
+  const chips = Object.keys(STUACT_TIPOS).filter(k => byTipo[k]).map(k => {
+    const m = STUACT_TIPOS[k];
+    return `<span onclick="STUACT_STATE.tipo='${k}'; stuactPaint();" style="cursor:pointer;background:${m.b};color:${m.c};border-radius:999px;padding:5px 12px;font-size:11.5px;font-weight:700;">${m.icon} ${byTipo[k]} ${m.t.toLowerCase()}</span>`;
+  }).join(' ');
+  const feed = rows.slice(0, 250).map(ev => {
+    const m = STUACT_TIPOS[ev.tipo] || { t: ev.tipo, icon: '•', c: '#6B6B73', b: '#F4F2F7' };
+    const loc = (STATE.locations || []).find(l => l.id === ev.loc);
+    return `<div onclick="openStudentDetail('${ev.sid}')" style="display:flex;align-items:center;gap:12px;padding:11px 14px;background:#fff;border:1px solid var(--line);border-radius:12px;margin-bottom:7px;cursor:pointer;" onmouseover="this.style.borderColor='var(--fit-purple-soft)'" onmouseout="this.style.borderColor='var(--line)'">
+      <span style="width:36px;height:36px;border-radius:10px;background:${m.b};display:flex;align-items:center;justify-content:center;font-size:17px;flex-shrink:0;">${m.icon}</span>
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:13px;"><b>${escape(ev.nombre)}</b>${loc ? ` <span style="background:${loc.color || '#7C3AED'};color:#fff;font-size:8.5px;font-weight:700;padding:1.5px 6px;border-radius:999px;letter-spacing:.05em;vertical-align:1px;">${getLocationInitials(loc)}</span>` : ''} <span style="color:${m.c};font-weight:600;">${m.t.toLowerCase()}</span></div>
+        <div style="font-size:11.5px;color:var(--ink-mute);margin-top:1px;">${_stuactDetail(ev)}</div>
+      </div>
+      <span style="font-size:11px;color:var(--ink-mute);flex-shrink:0;">${_stuactWhen(ev.at)}</span>
+    </div>`;
+  }).join('');
+  c.innerHTML = `
+    <div onclick="reportsBackToHub()" style="color:var(--fit-purple);font-size:13px;cursor:pointer;margin-bottom:14px;">← Volver a Reportes</div>
+    <div style="display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;">
+      <h2 style="font-family:var(--display);font-weight:400;font-size:26px;margin:0;">Actividad de <em style="color:var(--fit-purple)">alumnas</em></h2>
+      <span style="color:var(--ink-mute);font-size:13px;">${rows.length} eventos · ${alumnas} alumnas · últimos ${STUACT_STATE.days} días</span>
+    </div>
+    <div style="display:flex;gap:7px;flex-wrap:wrap;margin:12px 0 10px;">
+      ${sel([{ v: 7, t: 'Últimos 7 días' }, { v: 14, t: 'Últimos 14 días' }, { v: 30, t: 'Últimos 30 días' }, { v: 90, t: 'Últimos 90 días' }], STUACT_STATE.days, 'STUACT_STATE.days=+this.value; renderStudentActivityReport();')}
+      ${sel(sedes, STUACT_STATE.sede, 'STUACT_STATE.sede=this.value; stuactPaint();')}
+      ${sel(tipos, STUACT_STATE.tipo, 'STUACT_STATE.tipo=this.value; stuactPaint();')}
+      ${STUACT_STATE.tipo !== 'all' ? `<button class="btn btn-ghost" style="padding:7px 11px;font-size:12px;" onclick="STUACT_STATE.tipo='all'; stuactPaint();">✕ Quitar filtro</button>` : ''}
+    </div>
+    <div style="display:flex;gap:7px;flex-wrap:wrap;margin-bottom:14px;">${chips}</div>
+    ${feed || '<div style="padding:40px;text-align:center;color:var(--ink-mute)">Sin actividad en este período con los filtros elegidos.</div>'}
+    ${rows.length > 250 ? `<div style="text-align:center;color:var(--ink-mute);font-size:12px;padding:10px;">Mostrando 250 de ${rows.length}. Ajusta los filtros.</div>` : ''}`;
+}
+
 async function renderReportsView() {
   initReportsState();
   const container = document.getElementById('reports-container');
@@ -33115,6 +33217,10 @@ async function renderReportsView() {
   }
   if (REPORTS_STATE.subView === 'census') {
     await renderCensusReport();
+    return;
+  }
+  if (REPORTS_STATE.subView === 'stuact') {
+    await renderStudentActivityReport();
     return;
   }
   // subView === 'monthly' — reporte mensual original

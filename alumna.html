@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>FIT Studio · Mi cuenta</title>
-<meta name="app-build" content="b27-2026-07-02">
+<meta name="app-build" content="b28-2026-07-02">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400..700;1,400..600&family=Mulish:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -573,6 +573,7 @@
   function renderAll(){ renderClases(); renderPaquete(); }
 
   async function loadApp(){
+    try{ setTimeout(logAppAdoption, 1500); }catch(e){}
     view('v-loading'); $('loading-msg').textContent='Cargando tus clases…';
     const me = DATA.me;
     $('t-name').textContent = me.first_name;
@@ -704,6 +705,22 @@
       if(card){ card.innerHTML = `<div class="rc-thanks">✓ ¡Gracias por tu calificación!</div>`; setTimeout(()=>{ card.style.display='none'; }, 2200); }
     }catch(e){ toast('No se pudo enviar. Intenta de nuevo.'); if(btn){ btn.disabled=false; btn.textContent='Enviar'; } }
   };
+  // ── Registro de adopción de la app (solo primera vez, dedupe en servidor) ──
+  // iOS no avisa cuándo la agregan al inicio, pero sí podemos detectar cuando la
+  // ABREN desde el ícono (modo standalone) — que es la señal de adopción real.
+  function logAppAdoption(){
+    try{
+      const standalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+      if(standalone && !localStorage.getItem('fit_app_standalone_logged')){
+        sb.rpc('student_log_app_event', { p_type: 'app_inicio_standalone' }).then(()=>{
+          try{ localStorage.setItem('fit_app_standalone_logged','1'); }catch(e){}
+        });
+      }
+    }catch(e){}
+  }
+  // Android/Chrome sí dispara un evento oficial al instalarla
+  window.addEventListener('appinstalled', ()=>{ try{ sb.rpc('student_log_app_event', { p_type: 'app_instalada' }); }catch(e){} });
+
   window.rateSkip=()=>{
     try{ if(RATE.sid) localStorage.setItem(_rateSkipKey(RATE.sid),'1'); }catch(e){}
     const card=$('rate-card'); if(card) card.style.display='none';
@@ -972,7 +989,7 @@
       let segs=''; for(let i=0;i<total;i++) segs+=`<div class="seg${i<used?' used':''}"></div>`;
       html += `<div class="pkg-num">${remain}</div><div class="pkg-word">clases te quedan</div>
         <div class="pkg-bar" style="grid-template-columns:repeat(${Math.min(total,10)||1},1fr)">${segs}</div>
-        <div class="pkg-info"><b>${esc(pname(active))}</b>${active.expiration_date?` · vence el <b>${dayShort(active.expiration_date)}</b>`:''}</div>`;
+        <div class="pkg-info"><b>${esc(pname(active))}</b>${active.purchase_date?` · adquirido el <b>${dayShort(active.purchase_date)}</b>`:''}</div>`;
     } else {
       html += `<div class="empty">No tienes un paquete con clases disponibles ahora mismo.</div>`;
     }
