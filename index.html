@@ -17456,6 +17456,38 @@ function _getPkgStateFromCache(student) {
   return (max - futureCount > 0) ? 'withCupos' : 'noCupos';
 }
 
+// Asegura que el paquete de UNA alumna esté en el caché aunque sea de otra
+// sede (loadAddFlexData solo precarga la sede activa; al buscar por nombre el
+// profesor puede toparse con alumnas de otras sedes — caso Claudia Vazques).
+async function ensureAddFlexStudent(studentId) {
+  if (!studentId || !isOnline) return;
+  if (ADD_FLEX_PKG_CACHE.pkgsByStudent && ADD_FLEX_PKG_CACHE.pkgsByStudent.has(studentId)) return;
+  if (ADD_FLEX_PKG_CACHE._checked && ADD_FLEX_PKG_CACHE._checked.has(studentId)) return;
+  try {
+    const { data: pkgs } = await sb.from('student_packages')
+      .select('id, student_id, classes_total, classes_used, purchase_date, status, is_frozen')
+      .eq('student_id', studentId).eq('is_frozen', false);
+    const sorted = (pkgs || []).filter(p => (!p.status || p.status === 'active'))
+      .sort((a, b) => (a.purchase_date || '').localeCompare(b.purchase_date || ''));
+    const active = sorted.find(p => (p.classes_used || 0) < (p.classes_total || 0));
+    if (!ADD_FLEX_PKG_CACHE.pkgsByStudent) ADD_FLEX_PKG_CACHE.pkgsByStudent = new Map();
+    if (!ADD_FLEX_PKG_CACHE.futureBookingsByStudent) ADD_FLEX_PKG_CACHE.futureBookingsByStudent = new Map();
+    if (!ADD_FLEX_PKG_CACHE._checked) ADD_FLEX_PKG_CACHE._checked = new Set();
+    if (active) ADD_FLEX_PKG_CACHE.pkgsByStudent.set(studentId, active);
+    // Bookings futuros de esa alumna, para el cálculo de cupo restante
+    const today = dateToIsoLocal(new Date());
+    const { data: bks } = await sb.from('session_bookings')
+      .select('session_id, cancelled_at').eq('student_id', studentId).is('cancelled_at', null);
+    const sids = [...new Set((bks || []).map(b => b.session_id))].filter(Boolean);
+    if (sids.length) {
+      const { data: ss } = await sb.from('class_sessions').select('id, session_date, is_cancelled').in('id', sids);
+      const fut = (ss || []).filter(s => !s.is_cancelled && s.session_date >= today).length;
+      if (fut) ADD_FLEX_PKG_CACHE.futureBookingsByStudent.set(studentId, fut);
+    }
+    ADD_FLEX_PKG_CACHE._checked.add(studentId);
+  } catch (e) { console.warn('[ensureAddFlexStudent]', e); }
+}
+
 function renderFlexibleSearch() {
   const q = (document.getElementById('add-flex-search').value || '').toLowerCase().trim();
   const showAll = document.getElementById('add-flex-show-all')?.checked || false;
