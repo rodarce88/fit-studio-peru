@@ -4014,6 +4014,7 @@
         <button class="filter-chip" data-filter="flexible" onclick="setFilter(this)">↻ Flexible</button>
         <button class="filter-chip" data-filter="incomplete" onclick="setFilter(this)">⚠ Datos faltantes</button>
         <button class="filter-chip" data-filter="unsigned" onclick="setFilter(this)">○ Sin firmar</button>
+        <button class="filter-chip" data-filter="app" onclick="setFilter(this)">📱 APP</button>
       </div>
       <div style="overflow-x: auto;">
         <table class="data-table">
@@ -4023,6 +4024,7 @@
               <th>Email</th>
               <th>Documento</th>
               <th>Modalidad</th>
+              <th>Sexo</th>
               <th>Horario fijo</th>
               <th></th>
             </tr>
@@ -8574,15 +8576,16 @@ function onMiDiaCardClick(event, hour) {
 }
 
 function renderStudents() {
-  const loc = getCurrentLocation();
-  if (!loc) return;
-  let list = STATE.students.filter(s => s.location_id === loc.id);
+  // Directorio GLOBAL: todas las alumnas de todas las sedes, con su tag de sede.
+  let list = STATE.students.slice().sort((a, b) =>
+    (`${a.first_name} ${a.last_name || ''}`).localeCompare(`${b.first_name} ${b.last_name || ''}`, 'es'));
 
   // Filter
   if (STATE.currentFilter === 'fixed') list = list.filter(s => s.modality === 'fixed');
   else if (STATE.currentFilter === 'flexible') list = list.filter(s => s.modality === 'flexible');
   else if (STATE.currentFilter === 'incomplete') list = list.filter(s => !s.data_complete);
   else if (STATE.currentFilter === 'unsigned') list = list.filter(s => !s.consent_signed && !s.consent_signed_at);
+  else if (STATE.currentFilter === 'app') list = list.filter(s => !!s.app_welcomed_at);
 
   // Search (usa helper centralizado: tildes-insensible, multi-token AND)
   const q = document.getElementById('student-search').value || '';
@@ -8590,28 +8593,27 @@ function renderStudents() {
     list = list.filter(s => studentMatchesSearch(s, q));
   }
 
-  document.getElementById('students-sub').textContent = `${list.length} alumnos · sede ${loc.name}`;
+  document.getElementById('students-sub').textContent = `${list.length} alumnos · todas las sedes`;
 
   const tbody = document.getElementById('students-tbody');
   if (list.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 60px; color: var(--ink-mute);">No hay alumnos que coincidan con la búsqueda</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; padding: 60px; color: var(--ink-mute);">No hay alumnos que coincidan con la búsqueda</td></tr>';
     return;
   }
 
-  // Build a quick map of student → fixed slots
-  const slotsByStudent = {};
-  STATE.fixedBookings.forEach(b => {
-    if (!slotsByStudent[b.student_id]) slotsByStudent[b.student_id] = [];
-    slotsByStudent[b.student_id].push(b);
-  });
-
-  const dayLabels = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+  // Horario fijo simplificado: el fixed_schedule del PERFIL (day 1=Lun … 7=Dom)
+  const dayLbl = ['', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
 
   tbody.innerHTML = list.slice(0, 200).map(s => {
-    const slots = slotsByStudent[s.id] || [];
+    const slots = Array.isArray(s.fixed_schedule) ? s.fixed_schedule : [];
     const slotsLabel = slots.length === 0 ? '—' :
-      slots.slice(0, 3).map(b => `${dayLabels[b.day_of_week]} ${formatHour(b.hour)}`).join(', ') +
+      slots.slice(0, 3).map(sl => `${dayLbl[sl.day] || '?'} ${formatHour(sl.hour)}`).join(', ') +
       (slots.length > 3 ? ` +${slots.length - 3}` : '');
+
+    const loc = (STATE.locations || []).find(l => l.id === s.location_id);
+    const sedeTag = loc ? `<span title="${escape(loc.name)}" style="background: ${loc.color || '#7C3AED'}; color: white; font-size: 9px; font-weight: 700; padding: 2px 7px; border-radius: 999px; letter-spacing: .06em; margin-left: 6px; vertical-align: 1px;">${getLocationInitials(loc)}</span>` : '';
+    const appTag = s.app_welcomed_at ? `<span title="Confirmó su cuenta en la app" style="background: #5B2A8F; color: white; font-size: 8.5px; font-weight: 800; padding: 2px 6px; border-radius: 999px; letter-spacing: .06em; margin-left: 4px; vertical-align: 1px;">APP</span>` : '';
+    const sexo = s.gender === 'F' ? 'F' : (s.gender === 'M' ? 'M' : '—');
 
     const modPill = s.modality === 'fixed'
       ? '<span class="modality-pill modality-fixed">★ Fijo</span>'
@@ -8624,7 +8626,7 @@ function renderStudents() {
           <div class="student-cell">
             <div class="student-avatar" style="${studentSedeAvatarStyle(s)}">${initials(s)}</div>
             <div>
-              <div style="font-weight: 500;">${escape(s.first_name)} ${escape(s.last_name || '')} <span style="margin-left: 4px; font-size: 11px;">${getConsentBadge(s)}</span></div>
+              <div style="font-weight: 500;">${escape(s.first_name)} ${escape(s.last_name || '')}${sedeTag}${appTag} <span style="margin-left: 4px; font-size: 11px;">${getConsentBadge(s)}</span></div>
               ${!s.data_complete ? '<div style="font-size: 10px; color: var(--warn); margin-top: 2px;">⚠ Datos incompletos</div>' : ''}
             </div>
           </div>
@@ -8632,6 +8634,7 @@ function renderStudents() {
         <td style="color: var(--ink-soft); font-size: 12px;">${escape(s.email || '—')}</td>
         <td style="font-size: 12px; color: var(--ink-soft);">${s.document_type ? `${s.document_type} ${escape(s.document_number || '')}` : '—'}</td>
         <td>${modPill}</td>
+        <td style="font-size: 12px; color: var(--ink-soft);">${sexo}</td>
         <td style="font-size: 12px; color: var(--ink-soft);">${slotsLabel}</td>
         <td style="white-space: nowrap;">
           <button class="btn btn-ghost" style="padding: 6px 12px; font-size: 11px;" onclick='event.stopPropagation(); openStudentDetail(${JSON.stringify(s.id).replace(/'/g, "&#39;")})'>Ver</button>
@@ -8639,7 +8642,7 @@ function renderStudents() {
         </td>
       </tr>
     `;
-  }).join('') + (list.length > 200 ? `<tr><td colspan="6" style="text-align: center; padding: 16px; color: var(--ink-mute); font-size: 12px;">Mostrando 200 de ${list.length}. Refina la búsqueda para ver más.</td></tr>` : '');
+  }).join('') + (list.length > 200 ? `<tr><td colspan="7" style="text-align: center; padding: 16px; color: var(--ink-mute); font-size: 12px;">Mostrando 200 de ${list.length}. Refina la búsqueda para ver más.</td></tr>` : '');
 }
 
 // ============================================
