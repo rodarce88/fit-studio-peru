@@ -1845,6 +1845,8 @@
   .actf-text{ font-size:14px; line-height:1.42; color:var(--ink); }
   .actf-text b{ font-weight:700; }
   .actf-rel{ color:var(--ink-mute); }
+  .actf-stars{ color:#F0B429; font-size:1.05em; letter-spacing:1px; white-space:nowrap; }
+  .actf-stars .off{ color:#DDD6E8; }
   .actf-time{ font-size:11px; color:var(--ink-mute); margin-top:5px; }
   .actf-empty{ text-align:center; color:var(--ink-mute); font-size:13px; padding:46px 14px; line-height:1.5; }
   .actf-reacts{ display:flex; gap:13px; align-items:center; margin-top:10px; flex-wrap:wrap; }
@@ -15728,6 +15730,20 @@ function renderActivityRow(ev, viewerId, lastSeen) {
       text = `${name} pasó de prueba a ${W.al} ${W.activ} — ¡primer paquete${pkgN}!`;
       rel = coordTxt;
     }
+  } else if (ev.type === 'calificacion') {
+    const profs = ev._profs || [];
+    mine = !!(viewerId && profs.some(p => p.id === viewerId));
+    avatarsHtml = _actAvatars(profs);
+    lead = 'Calificación' + (mine ? ' · a ti' : '');
+    const r5 = Math.max(0, Math.min(5, ev.rating || 0));
+    const stars = `<span class="actf-stars" title="${r5} de 5">${'★'.repeat(r5)}<span class="off">${'★'.repeat(5 - r5)}</span></span>`;
+    if (mine) {
+      text = `${W.tuAl} ${name} te calificó con ${stars} desde su app.`;
+    } else if (profs.length) {
+      text = `${name} calificó a ${_actNamesColored(profs)} con ${stars} desde su app.`;
+    } else {
+      text = `${name} calificó su clase con ${stars} desde su app.`;
+    }
   } else {
     avatarsHtml = _actAvatars(ev._coord ? [{ color: ev._coord.color, initials: ev._coord.initials }] : []);
     lead = 'Alta nueva';
@@ -15874,6 +15890,12 @@ function renderRailRow(ev, viewerId, lastSeen) {
     if (ev._trialProf) parts.push(`prueba con ${_actNamesColored([ev._trialProf])}`);
     if (ev._coord) parts.push(`registró <span style="color:${ev._coord.color};font-weight:600">${escape(ev._coord.name)}</span>`);
     meta = parts.join(' · ');
+  } else if (ev.type === 'calificacion') {
+    lead = 'Calificación';
+    const r5 = Math.max(0, Math.min(5, ev.rating || 0));
+    const stars = `<span class="actf-stars">${'★'.repeat(r5)}<span class="off">${'★'.repeat(5 - r5)}</span></span>`;
+    txt = `${name} calificó${ev._profs && ev._profs.length ? ' a ' + _actNamesColored(ev._profs) : ' su clase'} con ${stars}.`;
+    meta = 'Desde su app 📱';
   } else {
     txt = `${name} se dio de alta — ¡primer paquete${pkgN}!`;
     meta = ev._coord ? `Registró <span style="color:${ev._coord.color};font-weight:600">${escape(ev._coord.name)}</span>` : '';
