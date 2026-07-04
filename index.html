@@ -5259,7 +5259,7 @@ body:not(.doctor-mode) .doc-bottomnav{ display:none; }
       <div class="form-grid">
         <div class="form-row">
           <label>Monto (S/) <span class="req">*</span></label>
-          <input type="number" id="pay-amount" step="0.01" min="0" required />
+          <input type="number" id="pay-amount" step="0.01" min="0" required oninput="onPayAmountInput()" />
         </div>
         <div class="form-row">
           <label>Método <span class="req">*</span></label>
@@ -24650,6 +24650,28 @@ function populateDiscountSelects(selectedReason, selectedAuthBy) {
 // Contexto del modal de pago (compartido entre helpers)
 const PAY_MODAL_CTX = { packagePrice: 0, suggestedAmount: 0 };
 
+// La coordinadora puede EDITAR el monto y ese valor manda:
+// · Sin descuento activo → lo tecleado es la NUEVA BASE (si luego activa
+//   efectivo/descuento, el % se calcula sobre este valor, no sobre el precio
+//   del paquete). Caso Carolina Dongo: 480 → 490 → efectivo = 490 − 10%.
+// · Con descuento activo → lo tecleado es el TOTAL FINAL: el descuento en
+//   soles y el % se derivan hacia atrás desde la base, sin pisarle el número.
+function onPayAmountInput() {
+  const v = parseFloat(document.getElementById('pay-amount').value) || 0;
+  const enabled = document.getElementById('pay-discount-enabled').checked;
+  if (!enabled) {
+    PAY_MODAL_CTX.suggestedAmount = v;
+    return;
+  }
+  const base = PAY_MODAL_CTX.suggestedAmount > 0 ? PAY_MODAL_CTX.suggestedAmount : PAY_MODAL_CTX.packagePrice;
+  if (base > 0) {
+    const disc = Math.max(0, base - v);
+    document.getElementById('pay-discount-amount').value = disc > 0 ? disc.toFixed(2) : '';
+    document.getElementById('pay-discount-pct').value = disc > 0 ? (disc / base * 100).toFixed(1) : '';
+  }
+  recalcPaymentSummary(true);
+}
+
 // Al cambiar método: si es efectivo, activar descuento 10%; otros métodos, no tocar
 function onPaymentMethodChange() {
   const method = document.getElementById('pay-method').value;
@@ -24670,6 +24692,9 @@ function togglePayDiscount() {
   if (!enabled) {
     document.getElementById('pay-discount-pct').value = '';
     document.getElementById('pay-discount-amount').value = '';
+    // Sin descuento: el monto vuelve a la base completa
+    const base = PAY_MODAL_CTX.suggestedAmount > 0 ? PAY_MODAL_CTX.suggestedAmount : PAY_MODAL_CTX.packagePrice;
+    if (base > 0) document.getElementById('pay-amount').value = base.toFixed(2);
   } else if (!document.getElementById('pay-discount-pct').value && !document.getElementById('pay-discount-amount').value) {
     // Si se activa sin valor previo y es efectivo, sugerir 10%
     if (document.getElementById('pay-method').value === 'cash') {
@@ -24699,7 +24724,7 @@ function onDiscountAmountInput() {
   recalcPaymentSummary();
 }
 
-function recalcPaymentSummary() {
+function recalcPaymentSummary(skipAmountWrite) {
   const summary = document.getElementById('pay-discount-summary');
   const enabled = document.getElementById('pay-discount-enabled').checked;
   if (!enabled) { summary.innerHTML = ''; return; }
@@ -24707,9 +24732,11 @@ function recalcPaymentSummary() {
   const discount = parseFloat(document.getElementById('pay-discount-amount').value) || 0;
   const pct = parseFloat(document.getElementById('pay-discount-pct').value) || 0;
   const finalAmount = Math.max(0, base - discount);
-  // Auto-actualizar el campo "Monto" si el usuario no lo ha tocado manualmente
-  const amountInput = document.getElementById('pay-amount');
-  amountInput.value = finalAmount.toFixed(2);
+  // Actualiza el "Monto" salvo que el cambio venga del propio input (evita pisarle el número mientras teclea)
+  if (!skipAmountWrite) {
+    const amountInput = document.getElementById('pay-amount');
+    amountInput.value = finalAmount.toFixed(2);
+  }
 
   if (base > 0) {
     summary.innerHTML = `
