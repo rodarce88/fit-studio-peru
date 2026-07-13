@@ -5330,6 +5330,7 @@ body:not(.doctor-mode) .doc-bottomnav{ display:none; }
             <button type="button" onclick="payNotePill(this, 'POS RUS SR RICARDO')" class="pay-pill">POS RUS SR RICARDO</button>
             <button type="button" onclick="payNotePill(this, 'POS ANDRES')" class="pay-pill">POS ANDRES</button>
             <button type="button" onclick="payNotePill(this, 'POS ANAHI')" class="pay-pill">POS ANAHI</button>
+            <button type="button" onclick="payNotePill(this, 'POS ZW')" class="pay-pill">POS ZW</button>
             <button type="button" onclick="payNotePill(this, 'EFECTIVO SA')" class="pay-pill">EFECTIVO SA</button>
             <button type="button" onclick="payNotePill(this, 'EFECTIVO SC')" class="pay-pill">EFECTIVO SC</button>
             <button type="button" onclick="payNotePill(this, 'EFECTIVO IC')" class="pay-pill">EFECTIVO IC</button>
@@ -8717,7 +8718,7 @@ function renderInstructorsScheduleGrid() {
   const { monday, sunday } = getWeekRange(selDate);
   const todayIso = dateToIsoLocal(new Date());
 
-  const HOURS = [6,7,8,9,10,11,12,16,17,18,19,20];
+  const HOURS = [6,7,8,9,10,11,12,16,17,18,19,20,21];
   const DAYS = [
     { idx: 1, label: 'Lun' },
     { idx: 2, label: 'Mar' },
@@ -9251,7 +9252,7 @@ function renderSchedule() {
     dates.push(d);
   }
   const dayLabels = ['LUN', 'MAR', 'MIÉ', 'JUE', 'VIE', 'SÁB', 'DOM'];
-  const hours = [6, 7, 8, 9, 10, 11, 12, 16, 17, 18, 19, 20];
+  const hours = [6, 7, 8, 9, 10, 11, 12, 16, 17, 18, 19, 20, 21];
   const todayIso = dateToIsoLocal(new Date());
 
   // Estado del drawer expandido (celda actualmente abierta inline, si la hay)
@@ -10089,7 +10090,7 @@ async function confirmAssignStudentToCell() {
 // ============================================
 // STUDENT SCHEDULE EDITOR (calendar full view)
 // ============================================
-const SCHED_HOURS = [6, 7, 8, 9, 10, 11, 12, 16, 17, 18, 19, 20];
+const SCHED_HOURS = [6, 7, 8, 9, 10, 11, 12, 16, 17, 18, 19, 20, 21];
 
 // Devuelve un texto humano para identificar quién está realizando la acción (para logs)
 function getCurrentActorLabel() {
@@ -11326,7 +11327,7 @@ function closeModals() { document.querySelectorAll('.modal-backdrop').forEach(m 
 
 // ===== Horario fijo (Plantilla semanal) =====
 // Horas operativas: 6am-12pm y 4pm-8pm
-const FIXED_HOURS = [6, 7, 8, 9, 10, 11, 12, 16, 17, 18, 19, 20];
+const FIXED_HOURS = [6, 7, 8, 9, 10, 11, 12, 16, 17, 18, 19, 20, 21];
 const FIXED_DAYS = [
   { n: 1, lbl: 'Lun', full: 'Lunes' }, { n: 2, lbl: 'Mar', full: 'Martes' },
   { n: 3, lbl: 'Mié', full: 'Miércoles' }, { n: 4, lbl: 'Jue', full: 'Jueves' },
@@ -12497,7 +12498,7 @@ async function applyInstructorChange() {
   if (scope === 'single') hours = [CHANGE_CTX.hour];
   else if (scope === 'morning') hours = [6,7,8,9,10,11,12];
   else if (scope === 'afternoon') hours = [16,17,18,19,20];
-  else if (scope === 'all-day') hours = [6,7,8,9,10,11,12,16,17,18,19,20];
+  else if (scope === 'all-day') hours = [6,7,8,9,10,11,12,16,17,18,19,20,21];
 
   // Persistir en BD (class_sessions.instructor_id) Y en memoria/localStorage para retro-compat
   for (const h of hours) {
@@ -12949,7 +12950,7 @@ function iseNbHoursForLoc(locId) {
   (STATE.schedules || []).forEach(s => { if (s.location_id === locId) set.add(s.hour); });
   [...NB_CTX.cells].forEach(c => set.add(+c.split('-')[1]));
   let hours = [...set].sort((a, b) => a - b);
-  if (hours.length === 0) hours = [6, 7, 8, 9, 10, 11, 12, 16, 17, 18, 19, 20];
+  if (hours.length === 0) hours = [6, 7, 8, 9, 10, 11, 12, 16, 17, 18, 19, 20, 21];
   return hours;
 }
 
@@ -13728,7 +13729,7 @@ function renderInstructorScheduleEditor() {
   const grid = document.getElementById('schedule-grid-editor');
   const days = [1,2,3,4,5,6,0];
   const dayLabels = ['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'];
-  const hours = [6,7,8,9,10,11,12,16,17,18,19,20];
+  const hours = [6,7,8,9,10,11,12,16,17,18,19,20,21];
 
   let html = `<div style="display: grid; grid-template-columns: 60px repeat(7, 1fr); background: var(--fit-cream); border-bottom: 1px solid var(--line);">
     <div style="padding: 10px; font-size: 11px; color: var(--ink-mute);"></div>`;
