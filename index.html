@@ -12433,6 +12433,16 @@ async function revertStudentConsent(studentId) {
 let CHANGE_CTX = { hour: null, dow: null };
 
 function openChangeInstructorModal(hour, dow) {
+  // BLOQUEO: si la clase ya terminó (:50 de esa hora), no se cambia el profesor.
+  // Refuerzo del trigger en BD (trg_guard_session_instructor) — doble candado.
+  try {
+    const d = new Date(STATE.currentDate);
+    const fin = new Date(d.getFullYear(), d.getMonth(), d.getDate(), hour, 50, 0);
+    if (fin < new Date()) {
+      showToast('Clase finalizada 🔒 — ya no se puede cambiar el profesor', 'warn');
+      return;
+    }
+  } catch (e) {}
   CHANGE_CTX = { hour, dow };
   const loc = getCurrentLocation();
   const days = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
@@ -12499,6 +12509,15 @@ async function applyInstructorChange() {
   else if (scope === 'morning') hours = [6,7,8,9,10,11,12];
   else if (scope === 'afternoon') hours = [16,17,18,19,20,21];
   else if (scope === 'all-day') hours = [6,7,8,9,10,11,12,16,17,18,19,20,21];
+
+  // BLOQUEO: quitar horas cuya clase ya terminó (:50). El trigger en BD también
+  // las rechazaría — este filtro evita errores a media operación en rangos.
+  const _d0 = new Date(STATE.currentDate);
+  hours = hours.filter(h => new Date(_d0.getFullYear(), _d0.getMonth(), _d0.getDate(), h, 50, 0) >= new Date());
+  if (hours.length === 0) {
+    showToast('Clase(s) finalizada(s) 🔒 — ya no se puede cambiar el profesor', 'warn');
+    return;
+  }
 
   // Persistir en BD (class_sessions.instructor_id) Y en memoria/localStorage para retro-compat
   for (const h of hours) {
@@ -21849,6 +21868,7 @@ function renderInstructorClassCard(c, ctx) {
   let labelClass = '';
   if (isCancelled) { subLabel = 'cancelada'; labelClass = ''; }
   else if (isNotDelivered) { subLabel = 'no dictada'; }
+  else if (isDelivered && isPastClass) { subLabel = 'finalizada ✓ 🔒 bloqueada — no puede modificarse'; labelClass = 'is-attended'; }
   else if (isDelivered) { subLabel = 'dictada ✓'; labelClass = 'is-attended'; }
   else if (isPending) { subLabel = '⏰ pendiente de marcar'; labelClass = 'is-warn'; }
   else if (isInProgress) { subLabel = 'en curso'; }
