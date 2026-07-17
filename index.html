@@ -13508,11 +13508,11 @@ function iseRenderDayDetail() {
   // Horas para mostrar: las activas + un buffer alrededor
   const minH = Math.min(...activeHours) - 1;
   const maxH = Math.max(...activeHours) + 1;
-  const hoursToShow = ISE_HOURS_AVAILABLE.filter(h => h >= Math.max(6, minH) && h <= Math.min(20, maxH));
+  const hoursToShow = ISE_HOURS_AVAILABLE.filter(h => h >= Math.max(6, minH) && h <= Math.min(21, maxH));
   // Si el rango es muy chico, mostrar siempre al menos 8 horas
   if (hoursToShow.length < 8) {
     const start = Math.max(6, [...activeHours][0] - 2);
-    for (let h = start; h < start + 8 && h <= 20; h++) {
+    for (let h = start; h < start + 8 && h <= 21; h++) {
       if (!hoursToShow.includes(h)) hoursToShow.push(h);
     }
     hoursToShow.sort((a,b) => a-b);
