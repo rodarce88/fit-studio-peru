@@ -1845,6 +1845,7 @@
   .actf-text{ font-size:14px; line-height:1.42; color:var(--ink); }
   .actf-text b{ font-weight:700; }
   .actf-rel{ color:var(--ink-mute); }
+  .inst-lock-line { display:block; font-size:10.5px; color:#8a8398; font-weight:500; margin-top:2px; white-space:normal; line-height:1.3; }
   .actf-stars{ color:#F0B429; font-size:1.05em; letter-spacing:1px; white-space:nowrap; }
   .actf-stars .off{ color:#DDD6E8; }
   .actf-time{ font-size:11px; color:var(--ink-mute); margin-top:5px; }
@@ -5005,9 +5006,6 @@ body:not(.doctor-mode) .doc-bottomnav{ display:none; }
         <label>Alcance del cambio <span class="req">*</span></label>
         <select id="change-scope" onchange="updateChangeScope()">
           <option value="single">Solo esta clase</option>
-          <option value="morning">Toda la mañana (6am-1pm)</option>
-          <option value="afternoon">Toda la tarde (4pm-9pm)</option>
-          <option value="all-day">Todo el día</option>
         </select>
       </div>
 
@@ -12030,15 +12028,50 @@ async function saveStudent() {
 
 async function deactivateStudent() {
   const id = document.getElementById('f-student-id').value;
+  const _stud = STATE.students.find(s => s.id === id);
+  const _name = _stud ? `${_stud.first_name || ''} ${_stud.last_name || ''}`.trim() : id;
+
+  // GUARD: no se puede desactivar un alumno "vivo" (clases agendadas, paquete
+  // con cupo, o deuda). El INTENTO queda registrado en el log de actividad.
+  if (isOnline) {
+    try {
+      const hoy = dateToIsoLocal(new Date());
+      const [bk, pk, py] = await Promise.all([
+        sb.from('session_bookings').select('id, session_id, class_sessions!inner(session_date)')
+          .eq('student_id', id).is('cancelled_at', null).gte('class_sessions.session_date', hoy),
+        sb.from('student_packages').select('id, classes_total, classes_used, price_paid, is_active, is_frozen, status')
+          .eq('student_id', id),
+        sb.from('payments').select('student_package_id, amount_pen').eq('student_id', id),
+      ]);
+      const agendadas = (bk.data || []).length;
+      const vivos = (pk.data || []).filter(p => p.is_active !== false && !p.is_frozen
+        && (!p.status || p.status === 'active') && (p.classes_used || 0) < (p.classes_total || 0)).length;
+      const pagadoPorPkg = {};
+      (py.data || []).forEach(p => { if (p.student_package_id) pagadoPorPkg[p.student_package_id] = (pagadoPorPkg[p.student_package_id] || 0) + parseFloat(p.amount_pen || 0); });
+      const deuda = (pk.data || []).reduce((s, p) => s + Math.max(0, parseFloat(p.price_paid || 0) - (pagadoPorPkg[p.id] || 0)), 0);
+
+      if (agendadas > 0 || vivos > 0 || deuda > 0.01) {
+        const razones = [];
+        if (agendadas > 0) razones.push(`${agendadas} clase(s) agendada(s)`);
+        if (vivos > 0) razones.push(`paquete activo con cupo`);
+        if (deuda > 0.01) razones.push(`deuda S/ ${deuda.toFixed(2)}`);
+        try {
+          logActivity('student.deactivate_blocked', { table: 'students', id, label: _name },
+            { razones, agendadas, paquetes_vivos: vivos, deuda: deuda.toFixed(2) });
+        } catch(e) {}
+        showToast(`No se puede desactivar: ${razones.join(' · ')}`, 'error');
+        return;
+      }
+    } catch(e) { console.warn('[deactivate guard]', e); }
+  }
+
   if (!confirm('¿Desactivar este alumno? No se borrará, solo se ocultará.')) return;
   if (isOnline) {
     const { error } = await sb.from('students').update({ status: 'inactive' }).eq('id', id);
     if (error) { showToast('Error: ' + error.message, 'error'); return; }
     // Log
     try {
-      const stud = STATE.students.find(s => s.id === id);
-      const studName = stud ? `${stud.first_name || ''} ${stud.last_name || ''}`.trim() : id;
-      logActivity('student.deactivate', { table: 'students', id, label: studName }, null);
+      logActivity('student.deactivate', { table: 'students', id, label: _name }, null);
     } catch(e) {}
   }
   STATE.students = STATE.students.filter(s => s.id !== id);
@@ -18284,6 +18317,16 @@ function openClassMenu(hour, evt) {
   );
   const isCancelled = session && session.is_cancelled;
 
+  // BLOQUEO: clase finalizada → sin acciones (ni cancelar ni quitar profesor)
+  {
+    const _d = new Date(STATE.currentDate);
+    const _fin = new Date(_d.getFullYear(), _d.getMonth(), _d.getDate(), hour, 50, 0);
+    if (_fin < new Date()) {
+      showToast('Clase finalizada 🔒 — sin acciones disponibles', 'warn');
+      return;
+    }
+  }
+
   const menu = document.createElement('div');
   menu.id = 'class-menu';
   menu.style.cssText = `
@@ -19904,9 +19947,60 @@ function deriveCoordInitials(fullName) {
 // ============================================
 // INSTRUCTOR DAY — vista profesor con stats, filtros y agregar alumno
 // ============================================
+// ── Alertas ámbar: avisan al profesor cuando SU clase futura fue reasignada
+// solo por un día (el trigger de la BD las crea; nadie puede evitarlas).
+// Aceptar/Declinar es solo visual (el cambio ya se hizo) pero queda en el log.
+async function _instAlertsMount(instId) {
+  try {
+    const container = document.getElementById('instructor-view-container');
+    if (!container) return;
+    const { data: alerts } = await sb.from('instructor_alerts')
+      .select('*').eq('instructor_id', instId).is('responded_at', null)
+      .order('created_at', { ascending: false }).limit(5);
+    let box = document.getElementById('inst-alerts');
+    if (!alerts || alerts.length === 0) { if (box) box.remove(); return; }
+    if (!box) {
+      box = document.createElement('div');
+      box.id = 'inst-alerts';
+      container.insertBefore(box, container.firstChild);
+    }
+    box.innerHTML = alerts.map(a => `
+      <div id="ia-${a.id}" style="background:#FFF7E6; border:1.5px solid #F0B429; border-left-width:5px; border-radius:12px; padding:12px 14px; margin:0 0 10px; display:flex; gap:10px; align-items:flex-start;">
+        <span style="font-size:18px; flex-shrink:0;">⚠️</span>
+        <div style="flex:1; min-width:0;">
+          <div style="font-size:12px; font-weight:800; color:#8a5b00; letter-spacing:.04em; text-transform:uppercase; margin-bottom:2px;">Cambio en tu clase</div>
+          <div style="font-size:13px; color:#5c4a12; line-height:1.45;">${escape(a.message)}</div>
+          <div style="display:flex; gap:8px; margin-top:9px;">
+            <button onclick="instAlertRespond('${a.id}', 'accepted')" style="background:#F0B429; color:#3d2f00; border:none; border-radius:999px; padding:6px 16px; font-size:12px; font-weight:700; cursor:pointer; font-family:var(--body);">Aceptar</button>
+            <button onclick="instAlertRespond('${a.id}', 'declined')" style="background:transparent; color:#8a5b00; border:1.5px solid #F0B429; border-radius:999px; padding:6px 16px; font-size:12px; font-weight:700; cursor:pointer; font-family:var(--body);">Declinar</button>
+          </div>
+        </div>
+      </div>`).join('');
+  } catch (e) { console.warn('[inst alerts]', e); }
+}
+window.instAlertRespond = async function(alertId, resp) {
+  try {
+    const { error } = await sb.from('instructor_alerts')
+      .update({ responded_at: new Date().toISOString(), response: resp })
+      .eq('id', alertId);
+    if (error) throw error;
+    try {
+      logActivity('instructor.alert_response', { table: 'instructor_alerts', id: alertId,
+        label: resp === 'accepted' ? 'Aceptó el cambio de su clase' : 'Declinó el cambio de su clase' },
+        { response: resp });
+    } catch(e) {}
+    const el = document.getElementById('ia-' + alertId);
+    if (el) { el.style.opacity = '.4'; setTimeout(() => { el.remove();
+      const box = document.getElementById('inst-alerts');
+      if (box && !box.children.length) box.remove(); }, 350); }
+    showToast(resp === 'accepted' ? 'Registrado: aceptaste el cambio' : 'Registrado: declinaste el cambio — coordinación lo verá en el registro', 'success');
+  } catch (e) { showToast('No se pudo registrar tu respuesta', 'error'); }
+};
+
 async function renderInstructorDay() {
   if (!CURRENT_USER || CURRENT_USER.role !== 'instructor') return;
   const inst = CURRENT_USER.record;
+  setTimeout(() => _instAlertsMount(inst.id), 700);
   subscribeCoordRealtime();  // tiempo real: asistencias, movimientos y confirmaciones de sus clases
 
   if (!STATE._actBadgeInit) { STATE._actBadgeInit = true; setTimeout(() => { if (typeof refreshActivityBadge === 'function') refreshActivityBadge(); }, 1200); }
@@ -21839,6 +21933,7 @@ function renderSessionNoteBlock(c) {
   `;
 }
 
+// (estilo de la línea de bloqueo inyectado junto al CSS del profesor)
 const LOCK_SVG = '<svg class="inst-lock" viewBox="0 0 24 24" fill="none" stroke="#9aa0a6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="10.5" width="14" height="9.5" rx="2.2"/><path d="M8 10.5V7a4 4 0 0 1 8 0v3.5"/></svg>';
 function renderInstructorClassCard(c, ctx) {
   const todayIso = dateToIsoLocal(new Date());
@@ -21868,7 +21963,7 @@ function renderInstructorClassCard(c, ctx) {
   let labelClass = '';
   if (isCancelled) { subLabel = 'cancelada'; labelClass = ''; }
   else if (isNotDelivered) { subLabel = 'no dictada'; }
-  else if (isDelivered && isPastClass) { subLabel = 'finalizada ✓ 🔒 bloqueada — no puede modificarse'; labelClass = 'is-attended'; }
+  else if (isDelivered && isPastClass) { subLabel = 'finalizada ✓'; labelClass = 'is-attended'; }
   else if (isDelivered) { subLabel = 'dictada ✓'; labelClass = 'is-attended'; }
   else if (isPending) { subLabel = '⏰ pendiente de marcar'; labelClass = 'is-warn'; }
   else if (isInProgress) { subLabel = 'en curso'; }
@@ -21938,7 +22033,9 @@ function renderInstructorClassCard(c, ctx) {
     // Combinar "Tu clase" con el sub-estado en una sola línea
     const youParts = ['Tu clase'];
     if (subLabel) youParts.push(subLabel);
-    instTag = `<div class="inst-hour-instructor-tag"><span class="you">${youParts.join(' · ')}</span></div>`;
+    const lockLine = (isDelivered && isPastClass)
+      ? `<div class="inst-lock-line">🔒 bloqueada — no puede modificarse</div>` : '';
+    instTag = `<div class="inst-hour-instructor-tag"><span class="you">${youParts.join(' · ')}</span>${lockLine}</div>`;
   }
 
   const donut = _renderInstructorDonut(studentsCount, c.capacity, c.isOtherInstructor ? 'sm' : 'normal');
@@ -24875,6 +24972,15 @@ async function saveEditPayment(paymentId) {
   const discountReason = discountEnabled ? (document.getElementById('pay-discount-reason').value || null) : null;
   const discountAuthBy = discountEnabled ? (document.getElementById('pay-discount-authby').value || null) : null;
 
+  // Capturar el estado ANTERIOR del pago para dejar el detalle del cambio en el log
+  let _prevPay = null;
+  try {
+    const { data: pp } = await sb.from('payments')
+      .select('amount_pen, method, payment_date, reference, notes, discount_amount')
+      .eq('id', paymentId).single();
+    _prevPay = pp || null;
+  } catch(e) {}
+
   if (!amount || amount <= 0) { showToast('Ingresa un monto válido', 'error'); return; }
   if (discountEnabled && discountAmount > 0 && !discountReason) { showToast('Selecciona una razón para el descuento', 'error'); return; }
 
@@ -24900,11 +25006,24 @@ async function saveEditPayment(paymentId) {
   try {
     const stud = STATE.students.find(x => x.id === studentId);
     const studName = stud ? `${stud.first_name || ''} ${stud.last_name || ''}`.trim() : studentId;
+    // Detalle del cambio: qué había ANTES y qué quedó AHORA (solo campos que cambiaron)
+    const _antes = {}, _ahora = {};
+    if (_prevPay) {
+      const _cmp = [
+        ['amount_pen', parseFloat(_prevPay.amount_pen), amount, 'monto'],
+        ['method', _prevPay.method, method, 'metodo'],
+        ['payment_date', _prevPay.payment_date, payDate, 'fecha'],
+        ['reference', _prevPay.reference || null, reference, 'referencia'],
+        ['notes', _prevPay.notes || null, notes, 'notas'],
+        ['discount_amount', parseFloat(_prevPay.discount_amount || 0), discountAmount, 'descuento'],
+      ];
+      _cmp.forEach(([k, a, b, lbl]) => { if (String(a ?? '') !== String(b ?? '')) { _antes[lbl] = a; _ahora[lbl] = b; } });
+    }
     logActivity('payment.update', {
       table: 'payments',
       id: paymentId,
       label: `${studName} · S/ ${amount}`
-    }, { amount, method, discount_pct: discountPct });
+    }, { antes: _antes, ahora: _ahora, amount, method });
   } catch(e) {}
 
   showToast('✓ Pago actualizado', 'success');
@@ -26922,6 +27041,11 @@ async function copyActivationLink(type, recordId) {
 }
 
 async function copyAppLink(studentId, btn) {
+  try {
+    const _s = STATE.students.find(x => x.id === studentId);
+    logActivity('student.copy_app_link', { table: 'students', id: studentId,
+      label: _s ? `${_s.first_name || ''} ${_s.last_name || ''}`.trim() : studentId }, null);
+  } catch(e) {}
   if (!isOnline) { showToast('Conexión requerida', 'error'); return; }
   const s = STATE.students.find(x => x.id === studentId);
   const firstName = s ? (s.first_name || '') : '';
