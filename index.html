@@ -12497,7 +12497,7 @@ async function applyInstructorChange() {
   let hours = [];
   if (scope === 'single') hours = [CHANGE_CTX.hour];
   else if (scope === 'morning') hours = [6,7,8,9,10,11,12];
-  else if (scope === 'afternoon') hours = [16,17,18,19,20];
+  else if (scope === 'afternoon') hours = [16,17,18,19,20,21];
   else if (scope === 'all-day') hours = [6,7,8,9,10,11,12,16,17,18,19,20,21];
 
   // Persistir en BD (class_sessions.instructor_id) Y en memoria/localStorage para retro-compat
@@ -12947,11 +12947,13 @@ function iseMiniNavMonth(delta) {
 // Horas reales que existen en la sede (unión de instructor_schedules) + las ya marcadas.
 function iseNbHoursForLoc(locId) {
   const set = new Set();
+  // Horas base operativas SIEMPRE disponibles para marcar (fix: antes solo se
+  // mostraban horas ya usadas en la sede → imposible estrenar una hora nueva
+  // como las 9pm, porque la fila jamás aparecía. Huevo y gallina.)
+  [6, 7, 8, 9, 10, 11, 12, 16, 17, 18, 19, 20, 21].forEach(h => set.add(h));
   (STATE.schedules || []).forEach(s => { if (s.location_id === locId) set.add(s.hour); });
   [...NB_CTX.cells].forEach(c => set.add(+c.split('-')[1]));
-  let hours = [...set].sort((a, b) => a - b);
-  if (hours.length === 0) hours = [6, 7, 8, 9, 10, 11, 12, 16, 17, 18, 19, 20, 21];
-  return hours;
+  return [...set].sort((a, b) => a - b);
 }
 
 // Convierte un hex #RRGGBB a rgba con alpha
