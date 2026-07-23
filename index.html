@@ -6134,7 +6134,7 @@ async function loadFromSupabase() {
       sb.from('instructors').select('*').eq('is_active', true).order('full_name'),
       sb.from('packages').select('*').eq('is_active', true).order('display_order'),
       sb.from('fixed_bookings').select('*').eq('is_active', true),
-      sb.from('instructor_schedules').select('*').eq('is_active', true),
+      sb.from('instructor_schedules').select('*').eq('is_active', true).limit(10000),
       sb.from('instructor_pay_config').select('*'),
       sb.from('discount_reasons').select('*').eq('is_active', true).order('sort_order'),
       sb.from('users').select('id, full_name, role, handle, location_id'),
@@ -12845,7 +12845,7 @@ async function iseConfirmReplacement() {
 
     // 3. Re-fetch STATE.schedules
     const { data: refreshed, error: fetchErr } = await sb.from('instructor_schedules')
-      .select('*').eq('is_active', true);
+      .select('*').eq('is_active', true).limit(10000);
     if (fetchErr) throw fetchErr;
     STATE.schedules = refreshed || [];
 
@@ -13140,6 +13140,23 @@ async function iseSaveNewBlock() {
   const effFrom = document.getElementById('ise-main-from').value || null;
   const effTo = document.getElementById('ise-main-to').value || null;
 
+  // CANDADO anti-duplicados: si es EXACTAMENTE el mismo bloque que se acaba de
+  // guardar (mismo profe+sede+vigencia+celdas), no volver a guardarlo.
+  const _blockHash = SCHEDULE_CTX.instructorId + '|' + locId + '|' + (effFrom||'') + '|' + (effTo||'') + '|' + [...NB_CTX.cells].sort().join(',');
+  if (window._ISE_LAST_SAVED_HASH === _blockHash) {
+    showToast('Este bloque ya se guardó ✓ — está en la lista de Bloques de horario. No se guardó de nuevo.', 'warn');
+    if (btn) { btn.disabled = false; btn.textContent = 'Guardar bloque'; }
+    return;
+  }
+
+  // Validación: vigencia absurdamente lejana (ej. 2027/2028 por error de tipeo)
+  const _limFut = new Date(); _limFut.setFullYear(_limFut.getFullYear() + 1);
+  if (effFrom && effFrom > dateToIsoLocal(_limFut)) {
+    if (!confirm(`⚠ La vigencia empieza el ${effFrom} — más de un año en el futuro. ¿Seguro que la fecha es correcta?`)) {
+      if (btn) { btn.disabled = false; btn.textContent = 'Guardar bloque'; }
+      return;
+    }
+  }
   // Validación: si hay ambas fechas, desde debe ser <= hasta
   if (effFrom && effTo && effFrom > effTo) {
     showToast('La fecha "desde" no puede ser posterior a "hasta"', 'error');
@@ -13202,12 +13219,13 @@ async function iseSaveNewBlock() {
       if (splitErr) throw splitErr;
     }
 
-    const { error: insErr } = await sb.from('instructor_schedules').insert(rows);
+    const rowsOk = rows.filter(r => !r.effective_from || !r.effective_to || r.effective_from <= r.effective_to);
+    const { error: insErr } = await sb.from('instructor_schedules').insert(rowsOk);
     if (insErr) throw insErr;
 
     // Re-fetch STATE.schedules — todos los consumers verán los cambios
     const { data: refreshed, error: fetchErr } = await sb.from('instructor_schedules')
-      .select('*').eq('is_active', true);
+      .select('*').eq('is_active', true).limit(10000);
     if (fetchErr) throw fetchErr;
     STATE.schedules = refreshed || [];
 
@@ -13216,7 +13234,8 @@ async function iseSaveNewBlock() {
     const clrHours = new Set(rows.map(r => r.hour));
     await iseClearOverridesForRange(SCHEDULE_CTX.instructorId, locId, clrDows, clrHours, effFrom, effTo);
 
-    showToast(`Bloque guardado · ${rows.length} ${rows.length === 1 ? 'clase' : 'clases'}/semana`, 'success');
+    window._ISE_LAST_SAVED_HASH = _blockHash;
+    showToast(`Bloque guardado ✓ · ${rows.length} ${rows.length === 1 ? 'clase' : 'clases'}/semana — ya aparece en Bloques de horario`, 'success');
     if (btn) { btn.disabled = false; btn.textContent = 'Guardar bloque'; }
     iseLoadMarksForWeek();
     iseRenderInstructorsList();
@@ -13509,6 +13528,11 @@ async function iseRender() {
 }
 
 // Lista de bloques (columna derecha). Cada bloque es tocable para cargarlo en la grilla.
+var ISE_SHOW_PAST_BLOCKS = false;
+window.iseTogglePastBlocks = function() {
+  ISE_SHOW_PAST_BLOCKS = !ISE_SHOW_PAST_BLOCKS;
+  iseRenderBlocksList(ISE_CURRENT_BLOCKS);
+};
 function iseRenderBlocksList(blocks) {
   const blocksEl = document.getElementById('ise-blocks-list');
   if (!blocksEl) return;
@@ -13517,10 +13541,9 @@ function iseRenderBlocksList(blocks) {
     return;
   }
   const todayIso = dateToIsoLocal(new Date());
-  blocksEl.innerHTML = blocks.map((b, idx) => {
+  const renderBlock = (b, idx, isActive) => {
     const stats = iseBlockStats(b);
-    const isActive = (!b.from || todayIso >= b.from) && (!b.to || todayIso <= b.to);
-    return `<div class="ise-block ${isActive ? 'is-active' : ''}" style="cursor: pointer;" onclick="iseLoadBlock(${idx})" title="Tocar para editar este bloque en la grilla">
+    return `<div class="ise-block ${isActive ? 'is-active' : ''}" style="cursor: pointer;${isActive ? '' : ' opacity:.75;'}" onclick="iseLoadBlock(${idx})" title="Tocar para editar este bloque en la grilla">
         <div class="ise-block-range"><em>${iseFormatRange(b.from, b.to)}</em></div>
         <div class="ise-block-meta">${iseFormatDows(b.dows)} · ${iseFormatHours(b.hours)}</div>
         <div class="ise-block-stats">
@@ -13528,7 +13551,21 @@ function iseRenderBlocksList(blocks) {
           <span>🕐 ${stats.classes} ${typeof stats.classes === 'number' ? 'clases' : ''}</span>
         </div>
       </div>`;
-  }).join('');
+  };
+  // Vigentes (o futuros) arriba; pasados ocultos tras un toggle para no llenar la lista
+  const vig = [], past = [];
+  blocks.forEach((b, idx) => {
+    const isPast = b.to && b.to < todayIso;
+    (isPast ? past : vig).push({ b, idx });
+  });
+  let html = vig.map(({ b, idx }) => renderBlock(b, idx,
+    (!b.from || todayIso >= b.from) && (!b.to || todayIso <= b.to))).join('');
+  if (!vig.length) html += `<div style="padding: 12px; text-align: center; color: var(--ink-mute); font-size: 12px; font-style: italic;">Sin bloques vigentes ni futuros.</div>`;
+  if (past.length) {
+    html += `<button type="button" onclick="iseTogglePastBlocks()" style="width:100%; background:transparent; border:1px dashed var(--line); border-radius:10px; padding:7px; font-size:11.5px; color:var(--ink-mute); cursor:pointer; font-family:var(--body); margin-top:6px;">${ISE_SHOW_PAST_BLOCKS ? '▲ Ocultar' : '▼ Ver'} ${past.length} bloque(s) pasado(s)</button>`;
+    if (ISE_SHOW_PAST_BLOCKS) html += past.map(({ b, idx }) => renderBlock(b, idx, false)).join('');
+  }
+  blocksEl.innerHTML = html;
 }
 
 function iseRenderDayDetail() {
