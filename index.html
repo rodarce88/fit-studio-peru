@@ -13944,7 +13944,7 @@ async function saveInstructorSchedule() {
   }
 
   // Recargar schedules en STATE
-  const { data } = await sb.from('instructor_schedules').select('*').eq('is_active', true);
+  const { data } = await sb.from('instructor_schedules').select('*').eq('is_active', true).limit(10000);
   STATE.schedules = data || [];
 
   // Recargar class_sessions si hubo cambios
@@ -13972,7 +13972,7 @@ async function deleteAllSchedulesForInstructor() {
 
   if (error) { showToast('Error: ' + error.message, 'error'); return; }
 
-  const { data } = await sb.from('instructor_schedules').select('*').eq('is_active', true);
+  const { data } = await sb.from('instructor_schedules').select('*').eq('is_active', true).limit(10000);
   STATE.schedules = data || [];
   showToast('Horarios eliminados', 'success');
   closeModals();
