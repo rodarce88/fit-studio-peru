@@ -6161,6 +6161,10 @@ async function loadFromSupabase() {
   STATE.packages = packages.data || [];
   STATE.fixedBookings = fixedBookings.data || [];
   STATE.schedules = schedules.data || [];
+  // Si el servidor cortó a 1000, completar con paginación
+  if (STATE.schedules.length >= 1000) {
+    try { STATE.schedules = await fetchAllActiveSchedules(); } catch (e) {}
+  }
   STATE.payConfigs = {};
   (payConfigs.data || []).forEach(c => { STATE.payConfigs[c.instructor_id] = c; });
   STATE.classOverrides = STATE.classOverrides || {};
@@ -6252,6 +6256,23 @@ function getCurrentLocation() {
 // Lookup real basado en fecha + sede + día_semana + hora
 // Aplica fechas de vigencia (effective_from/to)
 // ============================================
+// Trae TODOS los horarios activos paginando en tandas de 1000
+// (Supabase corta cada petición a 1000 filas en el servidor; .limit() no basta)
+async function fetchAllActiveSchedules() {
+  const all = [];
+  const CHUNK = 1000;
+  for (let from = 0; ; from += CHUNK) {
+    const { data, error } = await sb.from('instructor_schedules')
+      .select('*').eq('is_active', true)
+      .order('id', { ascending: true })
+      .range(from, from + CHUNK - 1);
+    if (error) { console.warn('[schedules page]', error); break; }
+    all.push(...(data || []));
+    if (!data || data.length < CHUNK) break;
+  }
+  return all;
+}
+
 function resolveInstructor(locationId, date, dow, hour) {
   const dateKey = dateToIsoLocal(date);
   const overrideKey = `${dateKey}-${locationId}-${hour}`;
@@ -12844,8 +12865,10 @@ async function iseConfirmReplacement() {
     if (insErr) throw insErr;
 
     // 3. Re-fetch STATE.schedules
-    const { data: refreshed, error: fetchErr } = await sb.from('instructor_schedules')
-      .select('*').eq('is_active', true).limit(10000);
+    const { data: refreshed, error: fetchErr } = await (async () => {
+      try { return { data: await fetchAllActiveSchedules(), error: null }; }
+      catch (e) { return { data: null, error: e }; }
+    })();
     if (fetchErr) throw fetchErr;
     STATE.schedules = refreshed || [];
 
@@ -13224,8 +13247,10 @@ async function iseSaveNewBlock() {
     if (insErr) throw insErr;
 
     // Re-fetch STATE.schedules — todos los consumers verán los cambios
-    const { data: refreshed, error: fetchErr } = await sb.from('instructor_schedules')
-      .select('*').eq('is_active', true).limit(10000);
+    const { data: refreshed, error: fetchErr } = await (async () => {
+      try { return { data: await fetchAllActiveSchedules(), error: null }; }
+      catch (e) { return { data: null, error: e }; }
+    })();
     if (fetchErr) throw fetchErr;
     STATE.schedules = refreshed || [];
 
@@ -13944,8 +13969,7 @@ async function saveInstructorSchedule() {
   }
 
   // Recargar schedules en STATE
-  const { data } = await sb.from('instructor_schedules').select('*').eq('is_active', true).limit(10000);
-  STATE.schedules = data || [];
+  STATE.schedules = await fetchAllActiveSchedules();
 
   // Recargar class_sessions si hubo cambios
   if (sessionsSynced > 0) {
@@ -13972,8 +13996,7 @@ async function deleteAllSchedulesForInstructor() {
 
   if (error) { showToast('Error: ' + error.message, 'error'); return; }
 
-  const { data } = await sb.from('instructor_schedules').select('*').eq('is_active', true).limit(10000);
-  STATE.schedules = data || [];
+  STATE.schedules = await fetchAllActiveSchedules();
   showToast('Horarios eliminados', 'success');
   closeModals();
   renderAll();
