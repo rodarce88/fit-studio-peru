@@ -1845,6 +1845,20 @@
   .actf-text{ font-size:14px; line-height:1.42; color:var(--ink); }
   .actf-text b{ font-weight:700; }
   .actf-rel{ color:var(--ink-mute); }
+  /* Píldoras de nota de pago, agrupadas por sede */
+  .pay-pill-group { margin-bottom: 9px; }
+  .pay-pill-label { font-size: 9.5px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
+    color: var(--ink-faint, #9b93a8); margin-bottom: 5px; display: flex; align-items: center; gap: 5px; }
+  .pay-pill-row { display: flex; flex-wrap: wrap; gap: 6px; }
+  .pp-dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; }
+  .pp-dot-ic { background: #16a34a; } .pp-dot-sa { background: #d97706; } .pp-dot-sc { background: #7c3aed; }
+  .pay-pill.pp-gen { border-color: #d9d2e9; }
+  .pay-pill.pp-ic  { border-color: #86efac; color: #14532d; }
+  .pay-pill.pp-ic.on  { background: #16a34a; border-color: #16a34a; color: #fff; }
+  .pay-pill.pp-sa  { border-color: #fcd34d; color: #78350f; }
+  .pay-pill.pp-sa.on  { background: #d97706; border-color: #d97706; color: #fff; }
+  .pay-pill.pp-sc  { border-color: #c4b5fd; color: #4c1d95; }
+  .pay-pill.pp-sc.on  { background: #7c3aed; border-color: #7c3aed; color: #fff; }
   .inst-lock-line { display:block; font-size:10.5px; color:#8a8398; font-weight:500; margin-top:2px; white-space:normal; line-height:1.3; }
   .actf-stars{ color:#F0B429; font-size:1.05em; letter-spacing:1px; white-space:nowrap; }
   .actf-stars .off{ color:#DDD6E8; }
@@ -5323,15 +5337,37 @@ body:not(.doctor-mode) .doc-bottomnav{ display:none; }
         <div class="form-row full">
           <label>Notas</label>
           <div id="pay-notes-pills" style="display:flex; flex-wrap:wrap; gap:6px; margin: 2px 0 8px;">
-            <button type="button" onclick="payNotePill(this, 'CTA ZANUZZI WELLNESS')" class="pay-pill">CTA ZANUZZI WELLNESS</button>
-            <button type="button" onclick="payNotePill(this, 'CTA ANDRES')" class="pay-pill">CTA ANDRES</button>
-            <button type="button" onclick="payNotePill(this, 'POS RUS SR RICARDO')" class="pay-pill">POS RUS SR RICARDO</button>
-            <button type="button" onclick="payNotePill(this, 'POS ANDRES')" class="pay-pill">POS ANDRES</button>
-            <button type="button" onclick="payNotePill(this, 'POS ANAHI')" class="pay-pill">POS ANAHI</button>
-            <button type="button" onclick="payNotePill(this, 'POS ZW')" class="pay-pill">POS ZW</button>
-            <button type="button" onclick="payNotePill(this, 'EFECTIVO SA')" class="pay-pill">EFECTIVO SA</button>
-            <button type="button" onclick="payNotePill(this, 'EFECTIVO SC')" class="pay-pill">EFECTIVO SC</button>
-            <button type="button" onclick="payNotePill(this, 'EFECTIVO IC')" class="pay-pill">EFECTIVO IC</button>
+            <div class="pay-pill-group">
+              <div class="pay-pill-label">Generales</div>
+              <div class="pay-pill-row">
+                <button type="button" onclick="payNotePill(this, 'CTA ZANUZZI WELLNESS')" class="pay-pill pp-gen">CTA ZANUZZI WELLNESS</button>
+                <button type="button" onclick="payNotePill(this, 'POS ZW')" class="pay-pill pp-gen">POS ZW</button>
+                <button type="button" onclick="payNotePill(this, 'CTA ANDRES')" class="pay-pill pp-gen">CTA ANDRES</button>
+              </div>
+            </div>
+            <div class="pay-pill-group">
+              <div class="pay-pill-label"><span class="pp-dot pp-dot-ic"></span>Inmaculado</div>
+              <div class="pay-pill-row">
+                <button type="button" onclick="payNotePill(this, 'POS ZW BOUTIQUE')" class="pay-pill pp-ic">POS ZW BOUTIQUE</button>
+                <button type="button" onclick="payNotePill(this, 'YAPE ETHAN')" class="pay-pill pp-ic">YAPE ETHAN</button>
+                <button type="button" onclick="payNotePill(this, 'EFECTIVO IC')" class="pay-pill pp-ic">EFECTIVO IC</button>
+              </div>
+            </div>
+            <div class="pay-pill-group">
+              <div class="pay-pill-label"><span class="pp-dot pp-dot-sa"></span>San Antonio</div>
+              <div class="pay-pill-row">
+                <button type="button" onclick="payNotePill(this, 'POS ANDRES')" class="pay-pill pp-sa">POS ANDRES</button>
+                <button type="button" onclick="payNotePill(this, 'POS ARTEM')" class="pay-pill pp-sa">POS ARTEM</button>
+                <button type="button" onclick="payNotePill(this, 'EFECTIVO SA')" class="pay-pill pp-sa">EFECTIVO SA</button>
+              </div>
+            </div>
+            <div class="pay-pill-group">
+              <div class="pay-pill-label"><span class="pp-dot pp-dot-sc"></span>Santa Cruz</div>
+              <div class="pay-pill-row">
+                <button type="button" onclick="payNotePill(this, 'POS ZW SC')" class="pay-pill pp-sc">POS ZW SC</button>
+                <button type="button" onclick="payNotePill(this, 'EFECTIVO SC')" class="pay-pill pp-sc">EFECTIVO SC</button>
+              </div>
+            </div>
           </div>
           <textarea id="pay-notes" rows="2"></textarea>
         </div>
@@ -27679,9 +27715,9 @@ function renderDetailSummary(stud) {
     const remaining = Math.max(0, total - used);
     const recoverable = (activePkg && p.id === activePkg.id) ? liveRecoverable : (p.classes_recoverable || 0);
     const price = parseFloat(p.price_paid ?? p.packages?.price_pen ?? 0);
-    // Cobertura y saldo del MISMO motor que la cuenta (no recalcular aquí)
-    const paid = pdfDues.coverageByPkgId.get(p.id) ?? 0;
-    const owed = pdfDues.owedByPkgId.get(p.id) ?? Math.max(0, price - paid);
+    // Cobertura y saldo del motor centralizado (dues, ya calculado arriba en esta vista)
+    const paid = dues.coverageByPkgId.get(p.id) ?? 0;
+    const owed = dues.owedByPkgId.get(p.id) ?? Math.max(0, price - paid);
     const name = escape(p.packages?.name || `Paquete ${total} clases`);
     const isActive = status.key === 'active';
 
