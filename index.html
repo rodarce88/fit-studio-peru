@@ -25936,18 +25936,13 @@ function _pdfBuildHTML(stud, data) {
   // del coordinador, el alumno no debe verlo).
   const visiblePkgs = allPkgsSorted.filter(p => p.status !== 'changed');
 
-  // Saldo total pendiente (suma de owed de paquetes vigentes — excluye cambiados/cancelados/expirados)
-  // Un paquete cambiado o cancelado NO genera deuda: su saldo ya quedó cerrado al hacer el cambio.
+  // ESPEJO DE LA CUENTA: el PDF NO calcula deuda por su cuenta. Usa el MISMO motor
+  // centralizado (computeStudentDues) que alimenta el Resumen del perfil, para que
+  // el PDF y la pantalla muestren siempre el mismo número. Antes el PDF sumaba solo
+  // los pagos tagueados a cada paquete e ignoraba los huérfanos → deuda fantasma.
   const INVALID_PKG_STATUSES = new Set(['changed', 'cancelled', 'expired']);
-  let totalOwed = 0;
-  allPkgsSorted.forEach(p => {
-    if (INVALID_PKG_STATUSES.has(p.status)) return;
-    const price = parseFloat(p.price_paid ?? p.packages?.price_pen ?? 0);
-    const paid = (data.payments || [])
-      .filter(pm => pm.student_package_id === p.id)
-      .reduce((s, pm) => s + parseFloat(pm.amount_pen || pm.amount || 0) + parseFloat(pm.discount_amount || 0), 0);
-    totalOwed += Math.max(0, price - paid);
-  });
+  const pdfDues = computeStudentDues(allPackages, data.payments);
+  const totalOwed = pdfDues.currentDue;
 
   const pkgRows = visiblePkgs.map(p => {
     const used = p.classes_used || 0;
@@ -25958,10 +25953,9 @@ function _pdfBuildHTML(stud, data) {
     const progressPct = total > 0 ? Math.min(100, (used / total) * 100) : 0;
     const fillCls = statusKey === 'completed' ? 'progress-fill done' : 'progress-fill';
     const price = parseFloat(p.price_paid ?? p.packages?.price_pen ?? 0);
-    const paid = (data.payments || [])
-      .filter(pm => pm.student_package_id === p.id)
-      .reduce((s, pm) => s + parseFloat(pm.amount_pen || pm.amount || 0) + parseFloat(pm.discount_amount || 0), 0);
-    const owed = Math.max(0, price - paid);
+    // Cobertura y saldo del MISMO motor que la cuenta (no recalcular aquí)
+    const paid = pdfDues.coverageByPkgId.get(p.id) ?? 0;
+    const owed = pdfDues.owedByPkgId.get(p.id) ?? Math.max(0, price - paid);
     const name = escape(p.packages?.name || `Paquete ${total} clases`);
     const isInvalid = INVALID_PKG_STATUSES.has(p.status);
 
@@ -27685,10 +27679,9 @@ function renderDetailSummary(stud) {
     const remaining = Math.max(0, total - used);
     const recoverable = (activePkg && p.id === activePkg.id) ? liveRecoverable : (p.classes_recoverable || 0);
     const price = parseFloat(p.price_paid ?? p.packages?.price_pen ?? 0);
-    const paid = (data.payments || [])
-      .filter(pm => pm.student_package_id === p.id)
-      .reduce((s, pm) => s + parseFloat(pm.amount_pen || pm.amount || 0) + parseFloat(pm.discount_amount || 0), 0);
-    const owed = Math.max(0, price - paid);
+    // Cobertura y saldo del MISMO motor que la cuenta (no recalcular aquí)
+    const paid = pdfDues.coverageByPkgId.get(p.id) ?? 0;
+    const owed = pdfDues.owedByPkgId.get(p.id) ?? Math.max(0, price - paid);
     const name = escape(p.packages?.name || `Paquete ${total} clases`);
     const isActive = status.key === 'active';
 
