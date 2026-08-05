@@ -26179,9 +26179,7 @@ function _pdfBuildHTML(stud, data) {
   ` : '';
 
   // ============ PAGOS ============
-  const payments = (data.payments || []).slice().sort((a, b) =>
-    (b.payment_date || '').localeCompare(a.payment_date || '')
-  );
+  const payments = sortPaymentsForDisplay(data.payments, data.packages);
   const totalPaid = payments.reduce((s, p) => s + parseFloat(p.amount_pen || p.amount || 0), 0);
 
   const payRows = payments.map(p => {
@@ -28465,9 +28463,23 @@ function setStudentDetailClassFilter(filter) {
   renderStudentDetail();
 }
 
+// Orden de pagos: siempre de lo más reciente a lo más antiguo. Primero por fecha
+// de pago; si dos comparten fecha, por la fecha de compra del paquete al que
+// pertenecen (paquete más nuevo primero), manteniendo la misma dirección.
+function sortPaymentsForDisplay(payments, packages) {
+  const pkgDate = new Map((packages || []).map(p => [p.id, p.purchase_date || p.start_date || '']));
+  return (payments || []).slice().sort((a, b) => {
+    const d = (b.payment_date || '').localeCompare(a.payment_date || '');
+    if (d !== 0) return d;
+    const pa = pkgDate.get(a.student_package_id) || '';
+    const pb = pkgDate.get(b.student_package_id) || '';
+    return pb.localeCompare(pa);
+  });
+}
+
 function renderDetailPayments(stud) {
   const data = STATE.studentDetailData || {};
-  const payments = data.payments || [];
+  const payments = sortPaymentsForDisplay(data.payments, data.packages);
 
   if (payments.length === 0) {
     return `
