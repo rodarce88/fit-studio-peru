@@ -1588,7 +1588,8 @@
         const full = free<=0 || s.started;
         const cupo = s.started ? 'Ya pasó' : (free<=0 ? 'Sin cupo' : (free===1 ? '1 cupo libre' : `${free} cupos libres`));
         const cls = full ? 'ckrow off' : 'ckrow';
-        const act = DP.mode==='move' ? `dpConfirmMove('${iso}',${s.hour})` : `dpConfirmAdd('${iso}',${s.hour})`;
+        const loc = s.location_id || '';
+        const act = DP.mode==='move' ? `dpConfirmMove('${iso}',${s.hour},'${loc}')` : `dpConfirmAdd('${iso}',${s.hour},'${loc}')`;
         const right = full ? `<span class="ck-tag aviso">${free<=0?'Lleno':'Pasó'}</span>` : `<span class="pill todo">Elegir</span>`;
         // Profesor del horario + su calificación promedio (estilo Google/Uber:
         // promedio aritmético a 1 decimal + cantidad; solo se muestra si es ≥ 4.0)
@@ -1597,7 +1598,10 @@
         const starBit = (rt && Number(rt.avg) >= 4)
           ? ` · <span class="ck-rate"><span class="st">★</span> ${Number(rt.avg).toFixed(1)} <i>(${rt.count})</i></span>` : '';
         const profBit = instName ? `<span class="ckdp">con ${esc(instName)}${starBit}</span>` : '';
-        rows+=`<div class="${cls}" role="button" ${full?'':`onclick="${act}"`}><span class="ckd"><span class="ckdd">${fmtHour(s.hour)}</span><span class="ckdm">${cupo}</span>${profBit}</span>${right}</div>`;
+        // Etiqueta de salón: solo cuando el día ofrece más de un salón (sede con salones hijos)
+        const multiLoc = new Set((avail||[]).map(x=>x.location_id).filter(Boolean)).size > 1;
+        const locBit = (multiLoc && s.location_name) ? `<span class="ckdp" style="font-weight:700; color:#059669;">${esc(s.location_name.replace('San Antonio ',''))}</span>` : '';
+        rows+=`<div class="${cls}" role="button" ${full?'':`onclick="${act}"`}><span class="ckd"><span class="ckdd">${fmtHour(s.hour)}</span><span class="ckdm">${cupo}</span>${locBit}${profBit}</span>${right}</div>`;
       });
     }
     openSheet(`<div class="sh-h">${dayFull(iso)}</div><div class="sh-sub">Elige tu horario</div>
@@ -1606,7 +1610,8 @@
   }
   window._renderDatePicker=_renderDatePicker;
 
-  window.dpConfirmMove=(iso,hour)=>{
+  window.dpConfirmMove=(iso,hour,loc)=>{
+    DP.loc = loc || null;
     const info=_bkInfo(DP.bid);
     openSheet(`<div class="sh-h">Confirma el cambio</div><div class="sh-sub">Revisa antes de confirmar.</div>
       <div class="next-rows" style="margin-top:12px;">
@@ -1620,13 +1625,14 @@
   window.doMove=async (iso,hour)=>{
     const btn=$('mvbtn'); if(btn){ btn.disabled=true; btn.textContent='Cambiando…'; }
     try{
-      const { error }=await sb.rpc('student_move_booking', { p_from_booking_id: DP.bid, p_to_date: iso, p_to_hour: hour });
+      const { error }=await sb.rpc('student_move_booking', { p_from_booking_id: DP.bid, p_to_date: iso, p_to_hour: hour, p_location_id: DP.loc || null });
       if(error) throw error;
       closeSheet(); await refresh(true); toast('Listo, cambiaste tu clase');
     }catch(e){ _rpcErr(e, btn, 'Confirmar cambio'); }
   };
 
-  window.dpConfirmAdd=(iso,hour)=>{
+  window.dpConfirmAdd=(iso,hour,loc)=>{
+    DP.loc = loc || null;
     openSheet(`<div class="sh-h">Confirma tu clase</div>
       <div class="next-rows" style="margin-top:12px;">
         <div class="r"><span class="lab">Agregas</span><span class="val">${dayFull(iso)} · ${fmtHour(hour)}</span></div>
@@ -1638,7 +1644,7 @@
   window.doAdd=async (iso,hour)=>{
     const btn=$('addbtn'); if(btn){ btn.disabled=true; btn.textContent='Agregando…'; }
     try{
-      const { error }=await sb.rpc('student_book_class', { p_date: iso, p_hour: hour });
+      const { error }=await sb.rpc('student_book_class', { p_date: iso, p_hour: hour, p_location_id: DP.loc || null });
       if(error) throw error;
       closeSheet(); await refresh(true); toast('Listo, agregaste tu clase');
     }catch(e){ _rpcErr(e, btn, 'Agregar esta clase'); }
