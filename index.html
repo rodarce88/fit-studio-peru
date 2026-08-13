@@ -244,7 +244,7 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    max-width: 140px;
+    max-width: 300px; /* nombres largos como "San Antonio Salón Principal" */
   }
   .location-caret {
     color: var(--ink-mute);
@@ -326,7 +326,7 @@
     .topbar-center { gap: 8px; }
     .location-switcher { padding: 2px 6px; max-width: 180px; }
     .location-label { font-size: 9px; letter-spacing: 1.1px; }
-    .location-name { font-size: 15px; max-width: 130px; }
+    .location-name { font-size: 15px; max-width: 210px; }
     .location-conn-line { width: 6px; height: 6px; }
     .date-display { display: none; }
     .topbar-user { padding: 0; border: none; gap: 0; background: transparent; }
@@ -337,7 +337,7 @@
 
   @media (max-width: 380px) {
     .location-switcher { max-width: 140px; }
-    .location-name { font-size: 14px; max-width: 100px; }
+    .location-name { font-size: 14px; max-width: 165px; }
     .location-label { font-size: 8.5px; }
   }
 
@@ -1524,6 +1524,9 @@
   /* Historial de clases como lista de tarjetas (responsiva en todo ancho) */
   .sd-cls-row { display: grid; grid-template-columns: 96px 84px 52px minmax(100px,1fr) 116px 124px; align-items: center; gap: 10px; padding: 7px 14px; border-bottom: 1px solid var(--line-soft); transition: background .12s ease; }
   .sd-cls-row:last-child { border-bottom: none; }
+  /* Móvil: la tabla del historial se desliza horizontal para ver sede y estado */
+  .sd-cls-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  @media (max-width: 720px) { .sd-cls-scroll > * { min-width: 640px; } }
   .sd-cls-row:hover { background: var(--fit-lavender-pale); }
   .sd-cls-date { font-weight: 600; font-size: 12.5px; color: var(--ink); }
   .sd-cls-day, .sd-cls-hour { font-size: 12px; color: var(--ink-mute); white-space: nowrap; }
@@ -3735,7 +3738,7 @@
         <div class="page-sub" id="dash-sub">Cargando datos...</div>
       </div>
       <div class="page-actions">
-        <button class="btn btn-primary" onclick="openStudentModal()">
+        <button class="btn btn-primary hide-child-salon" onclick="openStudentModal()">
           <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
           Nuevo alumno
         </button>
@@ -4023,7 +4026,7 @@
       </div>
       <div class="page-actions">
         <button class="btn btn-ghost" onclick="openClassReport()">📊 Clases por alumna</button>
-        <button class="btn btn-primary" onclick="openStudentModal()">+ Nuevo alumno</button>
+        <button class="btn btn-primary hide-child-salon" onclick="openStudentModal()">+ Nuevo alumno</button>
       </div>
     </div>
     <div class="table-card">
@@ -6420,6 +6423,10 @@ function renderLocationSwitcher() {
     document.getElementById('current-location-name').textContent = loc.name;
     const dotEl = document.getElementById('current-location-dot');
     if (dotEl) dotEl.style.background = loc.color || 'var(--fit-purple)';
+    // En salones hijos no se crean alumnas (se registran en la sede madre)
+    document.querySelectorAll('.hide-child-salon').forEach(b => {
+      b.style.display = loc.parent_location_id ? 'none' : '';
+    });
   }
 
   const opts = document.getElementById('location-options');
@@ -17692,7 +17699,12 @@ function renderFlexibleSearch() {
     return;
   }
 
-  let list = STATE.students.filter(s => s.location_id === loc.id);
+  // Familia de sedes: en un salón hijo se incluyen las alumnas de la sede madre
+  // (las alumnas se registran solo en la sede principal; los salones son espacios).
+  const famIds = new Set([loc.id]);
+  if (loc.parent_location_id) famIds.add(loc.parent_location_id);
+  (STATE.locations || []).forEach(l => { if (l.parent_location_id === loc.id) famIds.add(l.id); });
+  let list = STATE.students.filter(s => famIds.has(s.location_id));
   if (q) {
     list = list.filter(s => {
       const full = (s.first_name + ' ' + (s.last_name || '')).toLowerCase();
@@ -28418,7 +28430,7 @@ function renderDetailClasses(stud) {
             <div style="font-size:11px; color:var(--ink-mute); margin-top:3px;">comprado ${formatDate(p.purchase_date)} · S/ ${price.toFixed(2)} · ${owed > 0 ? `<span style="color:#8B6F1A; font-weight:500;">debe S/ ${owed.toFixed(2)}</span>` : 'pagado ✓'} · ${usedCnt}/${total} tomadas${restantes > 0 ? ` · ${restantes} restante${restantes === 1 ? '' : 's'}` : ''}</div>
           </div>
         </summary>
-        <div style="border:1px solid var(--line); border-top:none; border-radius:0 0 var(--radius-md) var(--radius-md); overflow:hidden;">
+        <div class="sd-cls-scroll" style="border:1px solid var(--line); border-top:none; border-radius:0 0 var(--radius-md) var(--radius-md);">
           ${headerRow}
           ${renderRows(items)}
         </div>
