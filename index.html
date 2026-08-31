@@ -28751,9 +28751,18 @@ function normalizeTierVersions(c) {
   }
   versions.sort((a, b) => {
     const af = a.from || '0000-00-00', bf = b.from || '0000-00-00';
-    return af < bf ? -1 : (af > bf ? 1 : 0);
+    if (af !== bf) return af < bf ? -1 : 1;
+    // misma fecha: primero el default (sin sede), luego las específicas
+    return (a.location_id ? 1 : 0) - (b.location_id ? 1 : 0);
   });
   return versions;
+}
+
+// Nombre corto de la sede de una versión (para chips y etiquetas)
+function payVersionLocLabel(v) {
+  if (!v || !v.location_id) return 'Todas las sedes';
+  const l = (STATE.locations || []).find(x => x.id === v.location_id);
+  return l ? l.name : 'Sede';
 }
 
 // Dada una fecha, retorna los tiers vigentes ese día (la versión con 'from' más reciente <= fecha).
@@ -29097,6 +29106,10 @@ async function calculateInstructorPayReport(instructorId, startIso, endIso) {
     }
 
     const tierLabel = getTierLabelForCount(cnt.counted, tiers);
+    // ¿Esta clase se pagó con una tarifa propia de su sede? (para mostrarlo en las vistas)
+    const _vers = (config && config.tier_versions) || [];
+    const _hasLocRate = _vers.some(v => v.location_id === cls.location_id && (v.from || '0000-00-00') <= dateIso);
+    const tierLocName = _hasLocRate ? ((STATE.locations.find(l => l.id === cls.location_id) || {}).name || '') : '';
     const isEmpty = cnt.totalRegistered === 0;
 
     byDay[dateIso].classes.push({
@@ -29105,6 +29118,7 @@ async function calculateInstructorPayReport(instructorId, startIso, endIso) {
       pay: realPay,
       projectedPay,
       tierLabel,
+      tierLocName,
       isEmpty
     });
     byDay[dateIso].dayTotal += realPay;
@@ -29906,7 +29920,7 @@ function renderPayClassRow(cls, dateIso, instructorId) {
         <div class="pay-class-hour"><em>${formatHour(cls.hour)}</em></div>
         <div class="pay-class-meta" style="flex:1;">
           <div>${badges.join(' ')}</div>
-          ${cls.tierLabel ? `<div style="margin-top:3px;">${counted} cuenta${counted === 1 ? '' : 'n'} · ${cls.tierLabel}</div>` : `<div style="margin-top:3px;">${counted} cuenta${counted === 1 ? '' : 'n'}</div>`}
+          ${cls.tierLabel ? `<div style="margin-top:3px;">${counted} cuenta${counted === 1 ? '' : 'n'} · ${cls.tierLabel}${cls.tierLocName ? ` · <span style="color:#0f766e; font-weight:600;">tarifa ${escape(cls.tierLocName)}</span>` : ''}</div>` : `<div style="margin-top:3px;">${counted} cuenta${counted === 1 ? '' : 'n'}</div>`}
         </div>
       </div>
       <div class="pay-class-amt">
@@ -29992,6 +30006,8 @@ async function openPayClassDetail(dateIso, hour, instructorId, locationId) {
   const tiers = getTiersForDate(config, dateIso, locationId);
   const pay = getPayForCount(counted, tiers);
   const tierLabel = getTierLabelForCount(counted, tiers);
+  const _cfgVers = (config && config.tier_versions) || [];
+  const _locRate = _cfgVers.some(v => v.location_id === locationId && (v.from || '0000-00-00') <= dateIso);
   const loc = STATE.locations.find(l => l.id === locationId);
 
   const statusLabel = {
@@ -30046,7 +30062,7 @@ async function openPayClassDetail(dateIso, hour, instructorId, locationId) {
           ${cnt.pending > 0 ? `<div style="display:flex; justify-content:space-between; font-size:13px; padding:4px 0; color:var(--warn, #C97C2A);"><span>Pendientes</span><span>${cnt.pending}</span></div>` : ''}
           <div style="height:1px; background:var(--fit-purple-soft, #8B6FC9); opacity:0.3; margin:8px 0;"></div>
           <div style="display:flex; justify-content:space-between; font-size:13px; padding:4px 0; font-weight:500;"><span>Total que cuenta</span><span>${counted} alumno${counted === 1 ? '' : 's'}</span></div>
-          ${tierLabel ? `<div style="display:flex; justify-content:space-between; font-size:12px; padding:2px 0; color:var(--ink-mute);"><span>Aplica ${tierLabel}</span><span></span></div>` : ''}
+          ${tierLabel ? `<div style="display:flex; justify-content:space-between; font-size:12px; padding:2px 0; color:var(--ink-mute);"><span>Aplica ${tierLabel}${_locRate && loc ? ` · tarifa propia de ${escape(loc.name)}` : ''}</span><span></span></div>` : ''}
           <div style="height:1px; background:var(--fit-purple-soft, #8B6FC9); opacity:0.3; margin:8px 0;"></div>
           <div style="display:flex; justify-content:space-between; align-items:baseline; font-weight:500;">
             <span>Pago de esta clase</span>
@@ -30167,6 +30183,8 @@ function payReadForm() {
   const closeMode = document.getElementById('pay-cfg-close').value;
   const fromEl = document.getElementById('pay-version-from');
   const from = fromEl ? (fromEl.value || null) : null; // la versión histórica no tiene input → null
+  const locEl = document.getElementById('pay-version-loc');
+  const locationId = locEl ? (locEl.value || null) : null;
   const tiers = [];
   document.querySelectorAll('#pay-tier-table tbody tr').forEach(tr => {
     const min = tr.querySelector('[data-field=min]').value.trim();
@@ -30176,7 +30194,7 @@ function payReadForm() {
     const max = (maxRaw === '' || maxRaw === '∞') ? null : Number(maxRaw);
     tiers.push({ min: Number(min), max: max, amount: Number(amt) });
   });
-  return { freq, closeMode, from, tiers };
+  return { freq, closeMode, from, tiers, locationId };
 }
 
 function paySortVersions(versions) {
@@ -30213,8 +30231,8 @@ async function payAddVersion(instructorId) {
   const date = prompt('¿Desde qué fecha aplica la nueva tarifa? (AAAA-MM-DD)', defFrom);
   if (!date) return;
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) { showToast('Fecha inválida (usa AAAA-MM-DD)', 'error'); return; }
-  let versions = cfg.tier_versions.map(v => ({ from: v.from, tiers: v.tiers.map(t => ({ ...t })) }));
-  if (versions.some(v => v.from === date)) { showToast('Ya existe una tarifa con esa fecha', 'error'); return; }
+  let versions = cfg.tier_versions.map(v => Object.assign({ from: v.from, tiers: v.tiers.map(t => ({ ...t })) }, v.location_id ? { location_id: v.location_id } : {}));
+  if (versions.some(v => v.from === date && !v.location_id)) { showToast('Ya existe una tarifa general con esa fecha', 'error'); return; }
   const baseTiers = getTiersForDate({ tier_versions: versions }, date).map(t => ({ ...t }));
   versions.push({ from: date, tiers: baseTiers });
   paySortVersions(versions);
@@ -30227,10 +30245,11 @@ async function payAddVersion(instructorId) {
 async function payRemoveVersion(instructorId, idx) {
   if (!isOnline) { showToast('Conexión requerida', 'error'); return; }
   const cfg = getPayConfigFor(instructorId);
-  let versions = cfg.tier_versions.map(v => ({ from: v.from, tiers: v.tiers.map(t => ({ ...t })) }));
+  let versions = cfg.tier_versions.map(v => Object.assign({ from: v.from, tiers: v.tiers.map(t => ({ ...t })) }, v.location_id ? { location_id: v.location_id } : {}));
   if (!versions[idx]) return;
   if (versions.length <= 1) { showToast('Debe quedar al menos una tarifa', 'error'); return; }
-  const label = versions[idx].from ? 'Desde ' + payFmtDate(versions[idx].from) : 'Histórico';
+  const label = (versions[idx].from ? 'Desde ' + payFmtDate(versions[idx].from) : 'Histórico')
+    + (versions[idx].location_id ? ' · ' + payVersionLocLabel(versions[idx]) : '');
   if (!confirm(`¿Eliminar la tarifa "${label}"? Las clases de ese rango volverán a usar la tarifa anterior.`)) return;
   versions.splice(idx, 1);
   try { await payPersistConfig(instructorId, cfg.period_frequency, cfg.period_close_mode, versions); } catch (e) { return; }
@@ -30278,14 +30297,16 @@ function renderCoordPayConfig(instructorId, editingIdx) {
   const todayIso = dateToIsoLocal(new Date());
   // Índice de la versión vigente hoy
   let activeIdx = 0;
-  versions.forEach((v, i) => { if ((v.from || '0000-00-00') <= todayIso) activeIdx = i; });
+  // Vigente hoy = la última versión general (sin sede) <= hoy. Las de sede se marcan aparte.
+  versions.forEach((v, i) => { if (!v.location_id && (v.from || '0000-00-00') <= todayIso) activeIdx = i; });
   // Versión que se está editando (default: la vigente hoy)
   if (editingIdx === undefined || editingIdx === null || !versions[editingIdx]) editingIdx = activeIdx;
   PAY_CFG_STATE = { instructorId: inst.id, versions, editingIdx, activeIdx };
   const editTiers = versions[editingIdx].tiers || [];
 
   const versionChips = versions.map((v, i) => {
-    const label = v.from ? `Desde ${payFmtDate(v.from)}` : 'Histórico';
+    const locTag = v.location_id ? ` · ${payVersionLocLabel(v)}` : '';
+    const label = (v.from ? `Desde ${payFmtDate(v.from)}` : 'Histórico') + locTag;
     const isEditing = i === editingIdx;
     const isActive = i === activeIdx;
     return `<button type="button" onclick="renderCoordPayConfig('${inst.id}', ${i})"
@@ -30344,11 +30365,17 @@ function renderCoordPayConfig(instructorId, editingIdx) {
           </div>
 
           ${versions[editingIdx].from
-            ? `<div style="display:flex; align-items:center; gap:10px; margin-bottom:12px; font-size:13px;">
+            ? `<div style="display:flex; align-items:center; gap:10px; margin-bottom:12px; font-size:13px; flex-wrap:wrap;">
                  <label style="color:var(--ink-mute,#8A8398);">Vigente desde</label>
                  <input type="date" id="pay-version-from" value="${versions[editingIdx].from}" />
+                 <label style="color:var(--ink-mute,#8A8398);">en</label>
+                 <select id="pay-version-loc" style="padding:5px 8px; border:1px solid var(--line,#E5E0EC); border-radius:8px; font-size:13px;">
+                   <option value="">Todas las sedes</option>
+                   ${(STATE.locations || []).map(l => `<option value="${l.id}" ${versions[editingIdx].location_id === l.id ? 'selected' : ''}>${escape(l.name)}</option>`).join('')}
+                 </select>
                  <button class="pay-x-btn" title="Eliminar esta versión" onclick="payRemoveVersion('${inst.id}', ${editingIdx})">✕ eliminar versión</button>
-               </div>`
+               </div>
+               ${versions[editingIdx].location_id ? `<div style="margin-bottom:12px; font-size:12px; color:#0f766e; background:#ecfdf5; border:1px solid #99f6e4; border-radius:8px; padding:7px 10px;">Esta tarifa aplica <strong>solo en ${escape(payVersionLocLabel(versions[editingIdx]))}</strong>. En las demás sedes sigue vigente la tarifa general.</div>` : ''}`
             : `<div style="margin-bottom:12px; font-size:12px; color:var(--ink-mute,#8A8398); font-style:italic;">Tarifa histórica (aplica a todo lo anterior al primer cambio). No tiene fecha de inicio.</div>`}
 
           <table class="pay-tier-table" id="pay-tier-table">
@@ -30425,7 +30452,9 @@ async function saveInstructorPayConfig(instructorId) {
   let versions = (usingState ? st.versions : getPayConfigFor(instructorId).tier_versions)
     .map(v => ({ from: v.from, tiers: v.tiers.map(t => ({ ...t })) }));
   const idx = usingState ? st.editingIdx : versions.length - 1;
-  versions[idx] = { from: form.from, tiers: form.tiers };
+  versions[idx] = form.locationId
+    ? { from: form.from, tiers: form.tiers, location_id: form.locationId }
+    : { from: form.from, tiers: form.tiers };
   paySortVersions(versions);
 
   // Evitar dos versiones con la misma fecha
