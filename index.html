@@ -28757,13 +28757,24 @@ function normalizeTierVersions(c) {
 }
 
 // Dada una fecha, retorna los tiers vigentes ese día (la versión con 'from' más reciente <= fecha).
-function getTiersForDate(config, dateIso) {
+// Resuelve los tiers vigentes para una fecha Y una sede.
+// Cada versión puede llevar location_id: si está, aplica SOLO a esa sede.
+// Regla: gana la versión más reciente <= fecha de ESA sede; si no hay ninguna
+// para esa sede, cae a la más reciente <= fecha SIN sede (default general).
+// Retrocompatible: si ninguna versión tiene location_id, se comporta igual que antes.
+function getTiersForDate(config, dateIso, locationId) {
   const vers = (config && config.tier_versions) ? config.tier_versions : [{ from: null, tiers: (config && config.tiers) || PAY_DEFAULT_TIERS }];
   const d = dateIso || '9999-12-31';
-  let chosen = vers[0];
+  let chosenLoc = null, chosenDef = null;
   for (const v of vers) {
-    if ((v.from || '0000-00-00') <= d) chosen = v;
+    if ((v.from || '0000-00-00') > d) continue;
+    if (v.location_id) {
+      if (locationId && v.location_id === locationId) chosenLoc = v;
+    } else {
+      chosenDef = v;
+    }
   }
+  const chosen = chosenLoc || chosenDef || vers[0];
   return (chosen && chosen.tiers && chosen.tiers.length) ? chosen.tiers : PAY_DEFAULT_TIERS;
 }
 
@@ -29068,7 +29079,7 @@ async function calculateInstructorPayReport(instructorId, startIso, endIso) {
     if (!byDay[dateIso]) byDay[dateIso] = { date: dateIso, classes: [], dayTotal: 0, dayPending: 0, dayStudentsCounted: 0 };
 
     const cnt = countClassForPay(cls);
-    const tiers = getTiersForDate(config, dateIso);
+    const tiers = getTiersForDate(config, dateIso, cls.location_id);
     const realPay = (cnt.totalRegistered === 0) ? 0 : getPayForCount(cnt.counted, tiers);
 
     // PROYECCIÓN: para clases futuras o de hoy con pendientes,
@@ -29978,7 +29989,7 @@ async function openPayClassDetail(dateIso, hour, instructorId, locationId) {
   };
   const counted = cnt.attended + cnt.lost + cnt.no_show;
   const config = getPayConfigFor(instructorId);
-  const tiers = getTiersForDate(config, dateIso);
+  const tiers = getTiersForDate(config, dateIso, locationId);
   const pay = getPayForCount(counted, tiers);
   const tierLabel = getTierLabelForCount(counted, tiers);
   const loc = STATE.locations.find(l => l.id === locationId);
