@@ -26623,11 +26623,11 @@ function _pdfBuildHTML(stud, data) {
 
 const CONFIRM_DEFAULT_TEMPLATE = `¡Hola {nombre}! 💜
 
-Soy {coordinadora} de FIT Studio {sede}. Te recordamos tus clases de Pilates de esta semana:
+Soy {coordinadora} de Reformer Fit {sede}. Te recordamos {tus_clases} de Pilates de esta semana:
 
 {clases}
 
-✨ ¿Nos confirmas a cuáles vas a poder asistir?
+✨ {pregunta}
 
 ¡Te esperamos! 🤍`;
 
@@ -26984,10 +26984,20 @@ function _confirmBuildMessage() {
       .replace(/{hora}/g, formatHour(cs.hour));
   }).join('\n');
 
+  // El texto cambia si es UNA clase o varias (evita el "¿a cuáles?" cuando solo hay una)
+  const nClases = visible.length;
+  const esUna = nClases === 1;
+  const tusClases = esUna ? 'tu clase' : 'tus clases';
+  const pregunta = esUna
+    ? '¿Nos confirmas si vas a poder asistir?'
+    : '¿Nos confirmas a cuáles vas a poder asistir?';
+
   return template
     .replace(/{nombre}/g, stud.first_name || '')
     .replace(/{coordinadora}/g, coordName)
     .replace(/{sede}/g, loc?.name || '')
+    .replace(/{tus_clases}/g, tusClases)
+    .replace(/{pregunta}/g, pregunta)
     .replace(/{clases}/g, lines);
 }
 
@@ -27158,7 +27168,7 @@ async function copyAppLink(studentId, btn) {
     if (s) s.app_token = token;
   }
   const link = `${window.location.origin}/alumna?t=${token}`;
-  const msg = `Hola ${firstName}, te creamos tu cuenta de FIT Studio para que veas tus clases y tu paquete desde el celular. Toca este enlace para entrar: ${link}\n\nQuedará guardado en tu teléfono; cuando quieras volver a entrar, toca el mismo enlace.`;
+  const msg = `Hola ${firstName}, te creamos tu cuenta de Reformer Fit para que veas tus clases y tu paquete desde el celular. Toca este enlace para entrar: ${link}\n\nQuedará guardado en tu teléfono; cuando quieras volver a entrar, toca el mismo enlace.`;
   await copyToClipboard(msg);
   showToast('✓ Mensaje con link copiado. Pégalo en el WhatsApp de la alumna.', 'success');
 }
