@@ -26627,7 +26627,7 @@ Soy {coordinadora} de Reformer Fit {sede}. Te recordamos tus clases de Pilates d
 
 {clases}
 
-✨ ¿Nos confirmas a cuáles vas a poder asistir?
+✨ ¿Nos confirmas tu asistencia?
 
 ¡Te esperamos! 🤍`;
 
@@ -27002,10 +27002,11 @@ function _confirmBuildMessage() {
   // Si es UNA sola clase, ajustar el texto al singular aunque la plantilla
   // (personalizada o no) esté escrita en plural. Así nunca queda "¿a cuáles?"
   // ni marcadores sin reemplazar frente a la alumna.
+  // Cualquier variante de "¿a cuáles vas a poder asistir?" (con o sin tilde,
+  // con o sin signos) se reemplaza por la pregunta simple que pidió coordinación.
+  msg = msg.replace(/\s*¿?\s*a\s+cu[aá]les\s+vas\s+a\s+poder\s+asistir\s*\??/gi, ' tu asistencia?');
   if (esUna) {
     msg = msg
-      .replace(/¿Nos confirmas a cuáles vas a poder asistir\?/gi, '¿Nos confirmas si vas a poder asistir?')
-      .replace(/a cuáles vas a poder asistir/gi, 'si vas a poder asistir')
       .replace(/tus clases de/gi, 'tu clase de')
       .replace(/recordamos tus clases/gi, 'recordamos tu clase');
   }
